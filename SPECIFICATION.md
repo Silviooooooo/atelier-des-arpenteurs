@@ -1,0 +1,590 @@
+# L'Atelier des Arpenteurs — spécification
+
+**Version 0.2 — 28/09/2026.** Ce document fait foi pour le code. Toute décision
+qui le contredit y est reportée, avec une entrée de révision et un numéro de
+version (§ 14). Le nom « L'Atelier des Arpenteurs » est validé par l'auteur ;
+le dépôt s'appelle `atelier-des-arpenteurs`.
+
+---
+
+## 0. Lire ceci d'abord
+
+**Ce qu'est ce programme.** Un site web statique, hébergé par GitHub Pages,
+qui sert aux joueurs et au MJ des *Arpenteurs d'Abrasia* à consulter la banque
+du jeu (blocs, capacités, éléments, adversaires, prétirés) et à créer des
+personnages, des adversaires et des objets, avec une sortie PDF.
+
+**Trois sources, et une seule fait foi pour les règles.**
+
+| Source | Rôle | Lue par le programme ? |
+|---|---|---|
+| `Principe jdr abrasia.docx` (le Word) | **les règles du jeu**, lisibles par un humain qui part de zéro | non |
+| `regles_jdr.xlsx` (classeur des règles) | les données : blocs, capacités, éléments | oui, à l'import |
+| second classeur (lot 2, nom à fixer) | adversaires et prétirés | oui, à l'import |
+
+**Le programme n'invente aucune règle.** Quand un lot a besoin d'une règle que
+le Word ne dit pas, on ne la devine pas : on l'inscrit au § 12 comme « à
+écrire dans le Word, section … », et on s'arrête sur ce point. L'auteur ne
+répond pas aux questions de règles en conversation ; il les écrit dans le Word.
+
+**Les cinq interdits.**
+
+1. **Aucun classeur réel dans le dépôt.** Le dépôt est public. Seuls les
+   classeurs d'essai fictifs de `essais/` y entrent (§ 10.3).
+2. **Aucune donnée réelle en clair dans le dépôt.** La banque publiée est
+   chiffrée (§ 7) ; un contrôle le vérifie.
+3. **Aucune clé ni aucun mot de passe dans le code** ni dans un fichier
+   versionné. Ils se saisissent dans la page, sur l'appareil de la personne.
+4. **Aucune écriture dans un classeur.** Le programme les lit, rien d'autre.
+5. **Aucune dépendance sans justification écrite** au § 10.2. La cible est
+   zéro : le navigateur fournit la décompression, le XML, le chiffrement.
+
+**Méthode.** Le plan avant le code : exposer les fichiers à créer et attendre
+la validation. Une todo visible, remontrée à chaque pas. Les questions
+groupées à la fin. Un défaut se mesure avant de se corriger. Un contrôle
+nouveau se vérifie armé puis désarmé : un contrôle qui ne peut pas échouer ne
+prouve rien. Le code, les commentaires, les identifiants et les messages sont
+en français.
+
+---
+
+## 1. Le projet
+
+**Pour qui.** Une dizaine de personnes : l'auteur (Silvio Abbaz), ses joueurs
+et ses MJ. Sur ordinateur et sur téléphone.
+
+**Ce qu'il fait, à terme.**
+
+1. Une **banque** consultable : blocs, capacités, éléments, adversaires,
+   prétirés, avec leurs renvois dans les deux sens.
+2. Un **créateur d'adversaire** (lot 2).
+3. Un **créateur d'objets, de sorts et d'équipement** (lot 3).
+4. Un **créateur de personnage** (lot 4).
+5. L'**export PDF** de chaque création, depuis un ordinateur ; la vue d'un
+   personnage sur téléphone, adaptée à l'écran et zoomable.
+
+**Hors périmètre.** Serveur, base de données, comptes utilisateurs. Écriture
+dans un classeur. PDF sur téléphone en première version (lot 5). Tout lien
+avec Book of Abrasia ou World Anvil : ce projet en est indépendant.
+
+---
+
+## 2. Les décisions, et pourquoi
+
+| Décision | Raison |
+|---|---|
+| Site statique sur **GitHub Pages** | gratuit, rien à entretenir, utilisable depuis un téléphone ; choix de l'auteur, sur le modèle d'un site existant |
+| **Code public, données chiffrées** par un mot de passe de table | GitHub Pages gratuit exige un dépôt public ; l'auteur veut des données privées ; une dizaine d'utilisateurs se partagent un mot de passe sans difficulté |
+| **Calculs en JavaScript**, dans le navigateur | seul langage que GitHub Pages fait tourner |
+| **Modules JavaScript natifs, sans framework ni étape de construction** | GitHub Pages sert les fichiers tels quels ; pas d'outillage à installer pour l'auteur |
+| **Bouton « Importer un classeur »** dans la page | idée de l'auteur : il choisit le fichier (depuis OneDrive sur ordinateur ou téléphone), voit le rapport, publie ; aucune pièce mobile en dehors de la page |
+| **Seul le JSON chiffré entre dans le dépôt**, jamais le classeur | le dépôt est public ; un JSON montre ses changements ligne par ligne dans l'historique |
+| **Le texte d'origine de chaque cellule est conservé** dans la banque | un lot futur pourra réinterpréter les données sans nouvel import ; rien ne se perd |
+| **Deux classeurs** : règles d'un côté, adversaires et prétirés de l'autre | choix de l'auteur, pour ne pas mélanger ; le contrôle vérifie les renvois entre les deux |
+| **Le Word fait foi** pour les règles | l'auteur veut que n'importe qui puisse comprendre le jeu en relisant le Word depuis zéro |
+| **PDF par l'impression du navigateur**, sur ordinateur | aucune dépendance ; le PDF sur téléphone n'est pas une priorité |
+
+---
+
+## 3. L'architecture
+
+### 3.1 Le circuit
+
+```
+Auteur : classeur Excel (OneDrive)
+  └─ page, espace auteur : « Importer un classeur »
+       ├─ lecture du .xlsx sur l'appareil (rien n'est envoyé)
+       ├─ analyse de la notation → banque (§ 5, § 6)
+       ├─ contrôle de cohérence → rapport, différences avec la version publiée
+       ├─ chiffrement par le mot de passe de table (§ 7)
+       └─ enregistrement dans le dépôt par l'API GitHub (§ 8)
+            └─ GitHub Pages republie le site (≈ 1 à 2 minutes)
+                 └─ joueurs : mot de passe une fois par appareil → consultation, créations
+```
+
+### 3.2 Le dépôt
+
+```
+index.html                  la page unique ; les écrans sont des routes (#/…)
+css/
+  jetons.css                toutes les valeurs de mise en page en variables
+  ecran.css                 l'interface, pensée pour le téléphone d'abord
+js/
+  application.js            démarrage, routes, chargement de la banque
+  lecture/
+    zip.js                  lecteur d'archive ZIP (DecompressionStream)
+    xlsx.js                 feuilles, chaînes partagées, cellules → tableaux
+  banque/
+    notation.js             analyse de la notation des classeurs (§ 6.2)
+    importation.js          classeur → banque
+    controle.js             contrôle de cohérence → anomalies (§ 6.3)
+    differences.js          banque publiée ↔ banque importée
+    chargement.js           téléchargement et déchiffrement de la banque
+  securite/
+    chiffrement.js          PBKDF2 + AES-GCM (WebCrypto)
+    coffre.js               clés gardées sur l'appareil (IndexedDB)
+  publication/
+    github.js               API GitHub : lecture de l'empreinte, écriture
+  ecrans/
+    accueil.js  mot_de_passe.js  liste.js  fiche_bloc.js
+    fiche_capacite.js  fiche_element.js  anomalies.js  espace_auteur.js
+donnees/
+  banque.chiffree.json      la seule donnée réelle du dépôt, chiffrée
+essais/
+  classeur_essai.xlsx       classeur FICTIF, contenu inventé, pour les contrôles
+tests/
+  *.test.js                 contrôles, lancés par `node --test`
+.github/workflows/
+  controles.yml             lance les contrôles à chaque envoi
+.gitignore                  *.xlsx sauf essais/*.xlsx ; tout JSON en clair de donnees/
+.nojekyll                   fichier vide : GitHub Pages sert les fichiers tels quels, sans Jekyll
+CLAUDE.md                   consignes pour Claude Code
+SPECIFICATION.md            ce document
+```
+
+---
+
+## 4. Les sources
+
+### 4.1 Le classeur des règles — état relevé le 28/09/2026
+
+Quatre feuilles. **Les colonnes se retrouvent par leur en-tête, jamais par
+leur position** : l'auteur réordonne ses feuilles.
+
+| Feuille | En-têtes (ligne 1) | Lignes |
+|---|---|---|
+| `lisez_moi` | aucune ; colonne A = rubrique (Syntaxe, nb, directions), B = texte | 20 |
+| `Blocs` | Nom · Eléments transmis aux capacités · capacites · Paramètres transmis aux capacités · Infos | 67 blocs |
+| `Eléments` | Nom · Paramètres reçus · description | 19 éléments |
+| `Capacites` | origine · Nom · puissance · Coût en souffle · Coût en lien · Eléments propres · description | 71 lignes, 69 noms |
+
+La correspondance des en-têtes ignore casse, accents et espaces
+(« capacites » = « Capacités »). Un en-tête attendu introuvable est une erreur
+d'import (§ 6.3, E1).
+
+Les colonnes `origine` (Capacites) et `Infos` (Blocs) n'ont, selon
+`lisez_moi`, « aucune valeur légale ». Elles sont conservées et affichées
+comme **notes de conception**, jamais interprétées.
+
+### 4.2 Le second classeur
+
+Adversaires et prétirés. Sa structure est définie au lot 2, à partir du
+gabarit de fiche d'adversaire et de la section « Caractéristiques d'un
+adversaire » du Word (§ 12).
+
+### 4.3 Le Word
+
+Il n'est pas lu par le programme. La spécification le cite par section.
+
+---
+
+## 5. La banque
+
+### 5.1 Le format en clair (avant chiffrement)
+
+```json
+{
+  "format": 1,
+  "publiee_le": "2026-09-27T14:32:00+02:00",
+  "sources": [
+    { "classeur": "regles", "fichier": "regles_jdr.xlsx", "empreinte": "sha256:…" }
+  ],
+  "blocs": [
+    {
+      "nom": "Epée longue",
+      "elements": [ { "nom": "Arme" }, { "nom": "Agile" } ],
+      "capacites": [
+        { "forme": "simple", "nom": "Attaque de base" },
+        { "forme": "choix", "options": ["Loup solitaire", "Attaque de meute"] },
+        { "forme": "facultatif", "options": ["Cheville foulée", "Doigt coupé"] }
+      ],
+      "parametres": [
+        { "nom": "degats", "valeur": "5/10/15", "cible": null },
+        { "nom": "portee", "valeur": "0", "cible": null }
+      ],
+      "notes": "Aoe, visée",
+      "brut": { "feuille": "Blocs", "ligne": 39, "cellules": { "Nom": "…", "…": "…" } }
+    }
+  ],
+  "capacites": [
+    {
+      "nom": "Sphère de Makith",
+      "variantes": [
+        { "puissance": "1", "cout_souffle": "1", "cout_lien": "1",
+          "elements": [ { "nom": "Centré" } ],
+          "description": "…", "notes": "Primordial", "brut": { "…": "…" } }
+      ]
+    }
+  ],
+  "elements": [
+    { "nom": "Portée", "parametres_recus": ["portee"], "description": "…", "brut": { "…": "…" } }
+  ],
+  "lisez_moi": [ { "rubrique": "Syntaxe", "texte": "…" } ],
+  "anomalies": [
+    { "gravite": "erreur", "code": "E4", "feuille": "Blocs", "ligne": 14,
+      "message": "Le bloc « Artisan » cite la capacité « Représailles », introuvable dans Capacites." }
+  ]
+}
+```
+
+**Règles de forme.**
+
+- Toutes les valeurs restent des **chaînes**, telles qu'écrites : `"N"`,
+  `"5*N"`, `"X"`, `"{force}*0,5"`. Le programme ne calcule rien au lot 1. Un
+  nombre de cellule s'écrit sans décimale inutile (`10`, jamais `10.0`).
+- Les noms sont débarrassés de leurs espaces de bord ; le nom d'origine reste
+  dans `brut`.
+- Une **capacité peut avoir plusieurs variantes**, une par puissance : la
+  Sphère de Makith occupe trois lignes de même nom (puissances 1, 2, 3).
+  Deux lignes de même nom **et** de même puissance sont une erreur (E3). Cette
+  lecture contredit la phrase de `lisez_moi` « le nom est l'identifiant
+  unique » ; elle est inscrite au § 12 pour que la source le dise.
+- Les **anomalies** voyagent avec la banque : ce qui a été publié malgré une
+  erreur reste visible de tous (§ 9, écran Anomalies).
+
+### 5.2 Le nom affiché d'un paramètre
+
+Le Word distingue le nom transmis (`{portee:1}`) du nom affiché (`Portée[1]`).
+Règle retenue : **le nom affiché est celui de l'élément qui reçoit ce
+paramètre** (colonne « Paramètres reçus » de `Eléments`). Un paramètre qu'aucun
+élément ne reçoit s'affiche sous son nom brut, et produit l'avertissement A2.
+
+---
+
+## 6. L'import (lot 1)
+
+### 6.1 La lecture du fichier
+
+L'auteur choisit un `.xlsx` par le sélecteur de fichiers du système : sur
+Windows il atteint son dossier OneDrive, sur téléphone l'application OneDrive.
+**Rien ne quitte l'appareil avant la publication.**
+
+Le `.xlsx` est une archive ZIP. `zip.js` lit le répertoire central et
+décompresse avec `DecompressionStream("deflate-raw")`, natif dans les
+navigateurs actuels et dans Node 22. `xlsx.js` lit `workbook.xml` et ses
+relations pour nommer les feuilles, puis `sharedStrings.xml` (texte enrichi :
+concaténer les `<t>` des `<r>`), puis les cellules : `t="s"`, `t="inlineStr"`,
+`t="str"`, nombres. Les retours à la ligne internes aux cellules sont gardés.
+Le XML se lit avec `DOMParser` (navigateur) ; dans Node, les contrôles
+fournissent un analyseur XML minimal écrit pour eux.
+
+Un fichier qui n'est pas un `.xlsx` lisible produit un message clair, jamais
+une page blanche.
+
+### 6.2 La notation
+
+La notation est décrite dans `lisez_moi` ; `notation.js` la lit sans jamais
+lever d'exception. Ce qu'il ne comprend pas, il le **garde en brut et le
+signale** (E6), il ne l'avale pas.
+
+| Où | Forme | Exemple réel | Résultat |
+|---|---|---|---|
+| Blocs · capacites | liste séparée par des virgules | `Attaque de base, choc, visée` | trois capacités simples |
+| | choix obligatoire `( a \| b )` | `(Loup solitaire \| Attaque de meute)` | `forme: "choix"` |
+| | ensemble facultatif `[ a \| b ]` | `[Cheville foulée \| Doigt coupé]` | `forme: "facultatif"` |
+| Blocs · éléments | liste, cible éventuelle entre parenthèses | `Dégâts(Attaque à mains nues)` | élément Dégâts, `cible: "Attaque à mains nues"` |
+| Blocs · paramètres | `{nom:valeur}` séparés par des virgules | `{degats:5/10/15}, {portee:0}` | deux paramètres |
+| | valeur composée par `/` | `{armure:40/0/0/0/0/0}` | valeur gardée en chaîne |
+| | valeur contenant des accolades | `{degats:{force}*0,5/{force}/{force}*2}` | **accolades imbriquées** : compter la profondeur |
+| | cible entre parenthèses après l'accolade | `{…}(Attaque à mains nues)` | `cible` |
+| Capacites · éléments propres | nom, valeur éventuelle entre crochets | `Portee[1]` | élément Portée, `valeur: "1"` |
+| Descriptions | `[N]`, `[N*{degats}]`, `{portee}` | — | gardées telles quelles au lot 1 |
+
+**Une ligne de la feuille ne se découpe jamais sur une virgule située entre
+accolades, crochets ou parenthèses** : `{force}*0,5` contient une virgule
+décimale.
+
+Un choix peut apparaître dans la colonne des paramètres (Constellation de
+Neru). Il est lu, conservé en brut, et produit l'avertissement A7.
+
+### 6.3 Le contrôle de cohérence
+
+Les noms se comparent d'abord **exactement**, puis, à défaut, **sans casse,
+sans accents et sans espaces** : un renvoi retrouvé de la seconde façon est
+résolu, mais signalé (A1).
+
+| Code | Gravité | Ce qui est vérifié |
+|---|---|---|
+| E1 | bloquante | feuille ou en-tête attendu absent : l'import s'arrête |
+| E2 | erreur | ligne non vide sans nom |
+| E3 | erreur | doublon : bloc, élément, ou capacité de même nom et même puissance |
+| E4 | erreur | capacité citée par un bloc, introuvable |
+| E5 | erreur | élément cité (Blocs ou Capacites), introuvable |
+| E6 | erreur | notation illisible : délimiteur non fermé, paramètre sans `:` |
+| E7 | erreur | même paramètre transmis deux fois par un bloc, sans cible qui les distingue |
+| A1 | avertissement | renvoi qui ne diffère que par la casse, les accents ou les espaces |
+| A2 | avertissement | paramètre transmis qu'aucun élément ne reçoit (`lisez_moi` : un paramètre implique son élément) |
+| A3 | avertissement | capacité rattachée à aucun bloc |
+| A4 | avertissement | élément défini, porté par rien |
+| A5 | avertissement | paramètre invoqué dans une description (`{portee}`) que ni la capacité ni ses blocs ne portent |
+| A6 | avertissement | bloc sans capacité |
+| A7 | avertissement | choix de capacités écrit hors de la colonne des capacités |
+| I1 | information | espaces de bord retirés d'un nom |
+| I2 | information | description vide |
+
+**Publier malgré des erreurs** (validé par l'auteur le 28/09/2026). Une erreur
+bloque la publication par défaut.
+L'auteur peut l'accepter : une case « Je publie en connaissance de cause » ne
+s'active qu'après affichage de la liste complète. Les anomalies sont alors
+publiées avec la banque et visibles de tous. Raison : les règles sont en
+cours d'écriture, et une banque incomplète vaut mieux qu'aucune banque, à
+condition que rien ne soit caché. E1 ne s'accepte jamais.
+
+**Mesure de référence, classeur relevé le 28/09/2026.** Sur le classeur réel, le
+contrôle doit trouver **au moins** :
+
+- E4 : 9 capacités citées introuvables (12 citations) — Boire, Enduire arme,
+  Maîtrise du combat précise, Représailles, Savoir acquis, fureur, lancer
+  grenade, redécouverte, trouvé ! ;
+- E7 : Hache légère transmet `{portee:0}` et `{portee:1}` sans cible ;
+- A1 : 21 renvois de capacités qui ne diffèrent que par la casse, les accents
+  ou les espaces ;
+- A2 : 3 paramètres sans élément — `archetype`, `consommable`, `defense` ;
+- A3 : 2 capacités orphelines — Maîtrise du combat précis, Constellation
+  d'Enaël ;
+- I1 : 15 noms à espace de bord.
+
+Ce banc se lance **en local, hors dépôt**, par l'auteur ou par Claude Code
+sur une copie du classeur : `node tests/banc_classeur_reel.js
+chemin/vers/regles_jdr.xlsx`. Il affiche les comptes ; il n'écrit rien.
+
+### 6.4 Le rapport et les différences
+
+Avant publication, l'espace auteur montre :
+
+1. le **rapport** d'anomalies, trié par gravité puis par feuille et ligne ;
+2. les **différences** avec la banque publiée (déchiffrée avec le mot de
+   passe de table) : blocs, capacités et éléments ajoutés, modifiés (champ par
+   champ), retirés ;
+3. un résumé d'une ligne, qui devient le message de commit (§ 8).
+
+---
+
+## 7. Le chiffrement
+
+### 7.1 Le schéma
+
+- **Dérivation** : PBKDF2-SHA256, **600 000 itérations**, sel aléatoire de
+  16 octets, **renouvelé à chaque publication**.
+- **Chiffrement** : AES-GCM 256 bits, IV aléatoire de 12 octets.
+- **Tout par WebCrypto** : aucune bibliothèque.
+
+Le fichier `donnees/banque.chiffree.json` :
+
+```json
+{
+  "format": 1,
+  "publiee_le": "2026-09-27T14:32:00+02:00",
+  "empreinte": "sha256 de la banque en clair",
+  "kdf": { "nom": "PBKDF2-SHA256", "iterations": 600000, "sel": "base64…" },
+  "chiffre": { "nom": "AES-GCM", "iv": "base64…", "donnees": "base64…" }
+}
+```
+
+L'en-tête est en clair (date, empreinte, paramètres) ; il ne révèle aucun
+contenu. L'empreinte permet à la page de savoir si sa copie est à jour.
+
+### 7.2 Sur les appareils
+
+- Le mot de passe se saisit **une fois par appareil**. La page garde la clé
+  dérivée, non extractible, dans IndexedDB (`coffre.js`), jamais le mot de
+  passe lui-même.
+- Un bouton « Oublier le mot de passe sur cet appareil » efface la clé.
+- La dérivation prend de l'ordre d'une seconde sur un téléphone : à mesurer au
+  lot 1, et afficher une attente.
+
+### 7.3 Les limites, à dire à l'auteur et dans le guide
+
+- **La force du mot de passe est toute la protection.** Le fichier chiffré
+  est public : n'importe qui peut essayer des mots de passe hors ligne. Une
+  phrase de **quatre ou cinq mots tirés au hasard** résiste ; « abrasia » ou
+  un prénom se trouvent en secondes. L'espace auteur refuse un mot de passe
+  de moins de 20 signes.
+- **L'historique garde les anciennes versions**, chiffrées avec le mot de
+  passe de leur époque. Changer de mot de passe protège les publications
+  suivantes, pas les précédentes : un joueur qui part garde l'accès à ce
+  qu'il a déjà pu lire.
+- **Changer de mot de passe** : l'auteur republie avec le nouveau, puis le
+  transmet. L'espace auteur le propose en une action.
+- **Le code est public** : il révèle la structure des données (noms des
+  champs), jamais leur contenu.
+
+---
+
+## 8. La publication
+
+### 8.1 La clé GitHub
+
+L'auteur crée un **jeton à portée fine** (*fine-grained personal access
+token*), limité **à ce seul dépôt**, permission **Contents : lecture et
+écriture**, avec une date d'expiration. Il le saisit une fois dans l'espace
+auteur de chaque appareil dont il publie ; la page le garde dans IndexedDB.
+**Sans clé, l'espace auteur n'affiche que la saisie de la clé** : un joueur
+ne peut rien publier. Un appareil perdu : le jeton se révoque sur GitHub.
+
+### 8.2 L'écriture
+
+1. `GET /repos/{proprietaire}/{depot}/contents/donnees/banque.chiffree.json`
+   pour obtenir le `sha` de la version en place.
+2. `PUT` du même chemin avec le contenu, le `sha` et le message
+   `Publication du classeur des règles — 28/09/2026 14:32 — 3 capacités
+   ajoutées, 2 modifiées, 0 retirée`.
+3. Un refus pour `sha` périmé (publication concurrente depuis un autre
+   appareil) : recharger, refaire les différences, redemander confirmation.
+4. Un seul fichier, donc un seul commit par publication.
+
+### 8.3 Le délai
+
+GitHub Pages republie en une à deux minutes, puis son cache garde l'ancien
+fichier jusqu'à une dizaine de minutes. La page télécharge donc la banque avec
+un paramètre unique (`?v=<horodatage>`) et compare l'empreinte de l'en-tête à
+celle qu'elle détient ; l'espace auteur affiche « publiée — visible par tous
+d'ici quelques minutes ».
+
+---
+
+## 9. Les écrans du lot 1
+
+**Pensés pour le téléphone d'abord** : une colonne, cibles tactiles de 44 px
+au moins, **zoom jamais interdit** (pas de `user-scalable=no`). Sur un grand
+écran, la liste et la fiche se placent côte à côte.
+
+| Écran | Contenu |
+|---|---|
+| Mot de passe | un champ, « se souvenir sur cet appareil » coché par défaut, une attente pendant la dérivation |
+| Accueil | date de la banque publiée, comptes (blocs, capacités, éléments), lien vers les anomalies s'il y en a |
+| Listes | Blocs, Capacités, Éléments ; recherche instantanée sur les noms et les descriptions, sans casse ni accents |
+| Fiche d'un bloc | éléments (liens), capacités (liens ; « au choix : … », « facultatif : … »), paramètres sous leur nom affiché (§ 5.2), notes de conception en retrait |
+| Fiche d'une capacité | variantes par puissance, coûts, éléments propres, description ; **« octroyée par »** : les blocs qui la citent |
+| Fiche d'un élément | paramètres reçus, description ; **« porté par »** : blocs et capacités |
+| Anomalies | le rapport publié avec la banque |
+| Espace auteur | clé GitHub ; import ; rapport ; différences ; publication ; changement de mot de passe |
+
+Chaque fiche a une adresse (`#/capacite/Attaque%20de%20base`) qu'on peut
+envoyer à un joueur. Un renvoi cassé s'affiche comme tel (texte barré, lien
+vers l'anomalie), jamais comme un lien mort.
+
+---
+
+## 10. Conventions
+
+### 10.1 Le code
+
+- Français partout : identifiants, commentaires, messages, clés JSON.
+- Chaque module s'ouvre sur un commentaire qui dit ce qu'il fait, pourquoi il
+  existe, et le § de cette spécification qui le fonde.
+- Un commentaire dit une contrainte que le code ne montre pas, jamais ce que
+  fait la ligne suivante.
+- Toute la mise en page vit dans les variables de `css/jetons.css`.
+- Une donnée inattendue est signalée (anomalie ou message), jamais avalée.
+
+### 10.2 Les dépendances
+
+Aucune au lot 1. Le navigateur fournit `DecompressionStream`, `DOMParser`,
+`crypto.subtle`, `indexedDB`, `fetch`. Les contrôles demandent **Node 22 ou
+plus récent**, sur la machine de développement seulement. Toute dépendance
+future est justifiée ici, avant son arrivée.
+
+### 10.3 Le dépôt et Git
+
+- `.gitignore` : `*.xlsx` avec l'exception `!essais/*.xlsx` ; tout JSON en
+  clair de `donnees/`.
+- `essais/classeur_essai.xlsx` : **contenu inventé**, qui reproduit chaque
+  forme de la notation et chaque anomalie du § 6.3. Il sert aux contrôles
+  automatiques.
+- Messages de commit en prose française : un titre, puis ce qui a changé, ce
+  qui a été mesuré, ce qui a été laissé.
+- **Le dépôt est public, l'historique aussi** : chaque commit porte le nom et
+  l'adresse de son auteur. L'adresse configurée pour ce dépôt
+  (`git config user.email`, sans `--global`) est l'adresse privée fournie
+  par GitHub (`…@users.noreply.github.com`), jamais une adresse personnelle.
+  Un contrôle vérifie que l'historique n'en contient pas d'autre.
+- Sans `.nojekyll`, GitHub Pages passe le dépôt dans Jekyll, qui ignore les
+  fichiers commençant par `_` et retarde chaque publication.
+
+---
+
+## 11. Les contrôles
+
+Lancés par `node --test`, en local et par GitHub Actions à chaque envoi.
+Chaque contrôle nouveau se vérifie **armé puis désarmé**.
+
+| Domaine | Contrôles minimaux |
+|---|---|
+| Lecture | le classeur d'essai donne les feuilles, en-têtes et cellules attendus ; un fichier qui n'est pas un ZIP donne un message, pas une exception |
+| Notation | chaque ligne du tableau du § 6.2, dont les accolades imbriquées et la virgule décimale ; une notation cassée donne E6 et garde le brut |
+| Contrôle | le classeur d'essai déclenche **chaque** code du § 6.3, et un classeur propre n'en déclenche aucun |
+| Chiffrement | aller-retour ; mauvais mot de passe refusé proprement ; sel et IV différents à chaque chiffrement |
+| Dépôt | aucun `.xlsx` hors `essais/` ; aucun JSON en clair dans `donnees/` ; aucune chaîne ressemblant à un jeton GitHub (`github_pat_`, `ghp_`) dans les fichiers suivis ; aucune adresse d'auteur autre que `…@users.noreply.github.com` dans l'historique |
+| Différences | ajout, modification champ par champ, retrait |
+
+---
+
+## 12. Ce que les sources doivent contenir
+
+Au fil des lots, ce qui manque dans le Word ou les classeurs pour que le
+programme puisse avancer. **L'auteur l'écrit dans la source, pas en
+conversation.**
+
+**Pour le lot 1 (recommandé, non bloquant)**
+
+- `lisez_moi` : une capacité à plusieurs puissances peut occuper plusieurs
+  lignes de même nom ; la clé est alors (nom, puissance) (§ 5.1).
+- `Blocs` : une **colonne de type légale** (Espèce, Archétype, Style de
+  combat, Constellation, Primordial, Arme, Armure, Consommable, Équipement,
+  Blessure, État, Base), sans quoi les listes ne peuvent pas regrouper les
+  blocs par type.
+- La notation vit à la fois dans `lisez_moi` et dans le chapitre « Système »
+  du Word. Un seul endroit : une annexe du Word, vers laquelle `lisez_moi`
+  renvoie.
+
+**Pour le lot 2 — créateur d'adversaire**, section « Caractéristiques d'un
+adversaire » du Word : ce que sont son attaque et sa défense ; son nombre
+d'actions ; ses dégâts ; son armure, sa résistance et son corps par zone ; la
+règle de construction d'une grille de localisation propre ; le sort de ses
+blessures.
+
+**Pour le lot 3 — objets, sorts, équipement** : ce qu'est un sort (le mot
+n'apparaît pas dans le Word) ; la grammaire des expressions (opérateurs,
+virgule décimale, `N`, `X`, arrondis) ; le type de bloc.
+
+**Pour le lot 4 — personnage** : la procédure de création complète (la
+section « Création et progression » s'interrompt) ; l'équipement de départ ;
+le primordial lié et la jauge initiale ; le dé de défense sans armure ;
+l'articulation entre montée de niveau et points d'expérience.
+
+---
+
+## 13. Les lots
+
+| Lot | Contenu | Attend |
+|---|---|---|
+| **1 — Socle** | lecture, notation, contrôle, chiffrement, publication, consultation, contrôles, GitHub Actions | rien |
+| 2 — Adversaire | second classeur, créateur, assistant de calibrage, PDF quatre par feuille | § 12, lot 2 |
+| 3 — Objets, sorts, équipement | créateur, « Copier comme lignes Excel » | § 12, lot 3 |
+| 4 — Personnage | créateur, vue téléphone, vue fiche zoomable, code QR vers le téléphone, PDF | § 12, lot 4 |
+| 5 — Finitions | fiche de jeu à compteurs, PDF sur téléphone, annulation d'une publication | — |
+
+**Le lot 1 est terminé quand** : l'auteur a publié le classeur réel depuis
+son ordinateur ; un joueur l'a ouvert sur son téléphone avec le mot de passe ;
+le banc du § 6.3 trouve au moins les comptes de référence ; tous les
+contrôles passent, et chacun a été vu échouer une fois.
+
+**Ce qui ne dépend que de l'auteur, au lot 1** : créer le compte GitHub et le
+dépôt public ; activer GitHub Pages (branche `main`, racine) ; créer le jeton
+à portée fine ; choisir le mot de passe de table et le transmettre aux
+joueurs.
+
+---
+
+## 14. Révisions
+
+**0.2 — 28/09/2026.** Nom validé (« L'Atelier des Arpenteurs », dépôt
+`atelier-des-arpenteurs`) ; publication malgré des erreurs validée (§ 6.3) ;
+fichier `.nojekyll` (§ 3.2) ; adresse privée GitHub pour les commits et son
+contrôle (§ 10.3, § 11) ; dates corrigées (le relevé du classeur est du
+28/09).
+
+**0.1 — 28/09/2026.** Création. Architecture (GitHub Pages, code public,
+données chiffrées, import dans la page, deux classeurs, Word qui fait foi) ;
+détail du lot 1 ; mesure de référence du classeur.
