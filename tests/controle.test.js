@@ -20,11 +20,19 @@ const ANNONCEES = [
   ["E6", "Blocs", 10], ["E7", "Blocs", 11], ["E3", "Blocs", 16], ["E2", "Blocs", 17],
   ["E3", "Eléments", 10], ["E2", "Eléments", 11],
   ["E3", "Capacites", 8], ["E5", "Capacites", 15], ["E6", "Capacites", 18], ["E2", "Capacites", 20],
-  ["A1", "Blocs", 6], ["A1", "Blocs", 6], ["A2", "Blocs", 12], ["A6", "Blocs", 13], ["A6", "Blocs", 14], ["A7", "Blocs", 14],
+  ["A1", "Blocs", 6], ["A1", "Blocs", 6], ["A2", "Blocs", 12], ["A7", "Blocs", 14],
   ["A4", "Eléments", 9],
   ["A5", "Capacites", 16], ["A3", "Capacites", 19],
-  ["I1", "Blocs", 15], ["I1", "Eléments", 7], ["I2", "Eléments", 8], ["I1", "Capacites", 13], ["I2", "Capacites", 17],
+  ["I3", "Blocs", 13], ["I3", "Blocs", 14], ["I1", "Blocs", 15], ["I1", "Eléments", 7], ["I2", "Eléments", 8], ["I1", "Capacites", 13], ["I2", "Capacites", 17],
 ];
+
+// Le tableau du § 6.3, lu dans la spécification elle-même : la table du code
+// s'y confronte, et un code retiré du tableau ne peut survivre dans le code.
+function gravitesDeLaSpecification() {
+  const texte = readFileSync(new URL("../SPECIFICATION.md", import.meta.url), "utf8");
+  const section = texte.slice(texte.indexOf("### 6.3"), texte.indexOf("### 6.4"));
+  return Object.fromEntries([...section.matchAll(/^\| ([EAI]\d) \| (\S+) \|/gm)].map(([, code, gravite]) => [code, gravite]));
+}
 
 async function importer(description) {
   const resultat = await importerFichier(description ? fabriquerClasseur(description) : ESSAI, "classeur.xlsx");
@@ -79,12 +87,9 @@ test("contrôle — un classeur propre ne déclenche aucune anomalie", async () 
 });
 
 test("contrôle — gravité de chaque code, tri par gravité puis feuille puis ligne", async () => {
-  // Le tableau du § 6.3, recopié ici pour que la table du code s'y confronte.
-  const gravites = { E1: "bloquante", I1: "information", I2: "information" };
-  for (const n of [2, 3, 4, 5, 6, 7]) gravites[`E${n}`] = "erreur";
-  for (const n of [1, 2, 3, 4, 5, 6, 7]) gravites[`A${n}`] = "avertissement";
-  assert.deepEqual({ ...GRAVITES }, Object.fromEntries(Object.keys(GRAVITES).map((code) => [code, gravites[code]])));
-  assert.equal(Object.keys(GRAVITES).length, 16);
+  const gravites = gravitesDeLaSpecification();
+  assert.equal(Object.keys(gravites).length, 16);
+  assert.deepEqual({ ...GRAVITES }, gravites);
   const { anomalies } = await importer();
   for (const a of anomalies) assert.equal(a.gravite, gravites[a.code], a.code);
   const rang = (a) => [["bloquante", "erreur", "avertissement", "information"].indexOf(a.gravite), ["lisez_moi", "Blocs", "Eléments", "Capacites"].indexOf(a.feuille), a.ligne];

@@ -251,7 +251,9 @@ Il n'est pas lu par le programme. La spécification le cite par section.
 
 - Toutes les valeurs restent des **chaînes**, telles qu'écrites : `"N"`,
   `"5*N"`, `"X"`, `"{force}*0,5"`. Le programme ne calcule rien au lot 1. Un
-  nombre de cellule s'écrit sans décimale inutile (`10`, jamais `10.0`).
+  nombre de cellule s'écrit sans décimale inutile (`10`, jamais `10.0`), et
+  avec une **virgule** décimale (`0,5`, jamais `0.5`), comme Excel en français
+  et comme les expressions du classeur (décision de l'auteur, 28/09/2026).
 - Les noms sont débarrassés de leurs espaces de bord ; le nom d'origine reste
   dans `brut`.
 - Une **capacité peut avoir plusieurs variantes**, une par puissance : la
@@ -298,8 +300,8 @@ ignorant les annotations phonétiques `<rPh>`), puis les cellules : `t="s"`,
 `t="inlineStr"`, `t="str"`, booléens, erreurs, nombres. Chaque cellule devient
 une chaîne, au plus près de ce qu'Excel affiche :
 
-- un nombre à 15 chiffres significatifs, comme Excel, et sans décimale
-  inutile (§ 5.1) ;
+- un nombre à 15 chiffres significatifs, comme Excel, sans décimale inutile
+  et avec une virgule décimale (`0,5`) (§ 5.1) ;
 - un booléen `VRAI` ou `FAUX`, comme Excel en français ;
 - une erreur de formule sous son code (`#N/A`) ;
 - les caractères qu'Excel écrit `_xHHHH_`, le retour chariot notamment,
@@ -384,10 +386,10 @@ résolu, mais signalé (A1).
 | A3 | avertissement | capacité rattachée à aucun bloc : citée dans la colonne des capacités d'aucun bloc (une cible ne rattache pas, un choix gardé en brut non plus) |
 | A4 | avertissement | élément défini, porté par rien : cité par aucun bloc ni aucune capacité, et reçu d'aucun paramètre transmis (`lisez_moi` : un bloc qui transmet un paramètre porte l'élément lié) |
 | A5 | avertissement | paramètre invoqué dans une description (`{portee}`) que ni la capacité ni ses blocs ne portent : ni un élément propre qui le reçoit, ni un bloc qui la cite et le transmet ou porte un élément qui le reçoit, sans cible ou avec elle pour cible |
-| A6 | avertissement | bloc sans capacité |
 | A7 | avertissement | choix de capacités écrit hors de la colonne des capacités |
 | I1 | information | espaces de bord retirés d'un nom |
 | I2 | information | description vide |
+| I3 | information | bloc sans capacité (décision de l'auteur, 28/09/2026 : ce fut A6, avertissement, jusqu'à la 0.6 ; le code A6 ne sera pas réutilisé) |
 
 **Publier malgré des erreurs** (validé par l'auteur le 28/09/2026). Une erreur
 bloque la publication par défaut.
@@ -419,7 +421,7 @@ trouve aussi ce que la référence ne mesurait pas :
 - A1 : 35 renvois d'éléments, dont `Portee` pour Portée ;
 - E5 : 5 ;
 - A4 : 4 ;
-- A6 : 30 blocs sans capacité ;
+- I3 : 30 blocs sans capacité (A6 dans la 0.6) ;
 - A7 : 1, la Constellation de Neru ;
 - I2 : 2 ;
 - aucun E2, E3, E6 ni A5.
@@ -698,7 +700,8 @@ conversation.**
 - `Blocs` : une **colonne de type légale** (Espèce, Archétype, Style de
   combat, Constellation, Primordial, Arme, Armure, Consommable, Équipement,
   Blessure, État, Base), sans quoi les listes ne peuvent pas regrouper les
-  blocs par type.
+  blocs par type. Quand elle existera, le bloc sans capacité (I3) remontera
+  en avertissement pour certains types seulement, que l'auteur désignera.
 - La notation vit à la fois dans `lisez_moi` et dans le chapitre « Système »
   du Word. Un seul endroit : une annexe du Word, vers laquelle `lisez_moi`
   renvoie.

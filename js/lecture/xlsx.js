@@ -3,8 +3,9 @@
 // Rend les feuilles de calcul du classeur, dans leur ordre, chacune avec ses
 // lignes non vides et leur numéro dans Excel. Chaque cellule y est une chaîne,
 // au plus près de ce qu'Excel affiche : un texte enrichi réduit à son texte,
-// les retours à la ligne gardés, un nombre sans décimale inutile. Rien n'est
-// interprété ici : en-têtes et notation relèvent de l'import (§ 6.2).
+// les retours à la ligne gardés, un nombre sans décimale inutile et à
+// virgule. Rien n'est interprété ici : en-têtes et notation relèvent de
+// l'import (§ 6.2).
 //
 // lireClasseur ne lève jamais d'exception : un fichier illisible donne
 // { erreur } avec un message clair, jamais une page blanche.
@@ -93,11 +94,12 @@ function texteRiche(element) {
 }
 
 // Excel affiche au plus 15 chiffres significatifs ; String retire ensuite
-// toute décimale inutile (10, jamais 10.0).
+// toute décimale inutile (10, jamais 10.0), et la virgule remplace le point,
+// comme dans Excel en français et dans les expressions du classeur (0,5).
 function nombre(brut) {
   const valeur = Number(brut);
   if (brut.trim() === "" || !Number.isFinite(valeur)) return brut;
-  return String(Number(valeur.toPrecision(15)));
+  return String(Number(valeur.toPrecision(15))).replace(".", ",");
 }
 
 function valeurCellule(cellule, chaines) {

@@ -107,9 +107,9 @@ test("classeur — texte enrichi, texte en ligne, retours à la ligne, formule, 
   assert.equal(cellule(classeur, "Capacites", 4, 5), "Lance du sel à {distance} pas.\nPuis recommence.");
 });
 
-test("classeur — nombres sans décimale inutile, à 15 chiffres significatifs comme Excel", async () => {
+test("classeur — nombres sans décimale inutile, à 15 chiffres significatifs et à virgule, comme Excel en français", async () => {
   const classeur = await lireEssai();
-  assert.deepEqual([1, 2, 3, 4, 5].map((colonne) => cellule(classeur, "Formes de cellules", 11, colonne)), ["0.5", "10", "1234.5678", "-3", "0.3"]);
+  assert.deepEqual([1, 2, 3, 4, 5].map((colonne) => cellule(classeur, "Formes de cellules", 11, colonne)), ["0,5", "10", "1234,5678", "-3", "0,3"]);
   assert.deepEqual([5, 6, 7].map((numero) => cellule(classeur, "Capacites", numero, 1)), ["1", "2", "3"]);
   assert.equal(cellule(classeur, "Capacites", 2, 1), "0");
 });

@@ -1,6 +1,7 @@
 // Contrôle de cohérence de la banque (SPECIFICATION.md, § 6.3).
 //
-// Les seize codes du § 6.3 sont définis ici, avec leur gravité. L'import en
+// Les seize codes du § 6.3 sont définis ici, avec leur gravité (A6, retiré,
+// ne revient pas : le bloc sans capacité est devenu I3). L'import en
 // relève cinq en lisant les lignes (E1, E2, E6, A7, I1) ; ce module relève
 // les autres sur la banque : doublons, renvois, paramètres, rattachements,
 // descriptions. Il ne corrige rien et n'ajoute aucune règle du jeu : là où
@@ -22,10 +23,10 @@ export const GRAVITES = {
   A3: "avertissement",
   A4: "avertissement",
   A5: "avertissement",
-  A6: "avertissement",
   A7: "avertissement",
   I1: "information",
   I2: "information",
+  I3: "information",
 };
 
 /** Une anomalie, au format du § 5.1. */
@@ -121,7 +122,7 @@ export function controler(banque) {
         ajouter(citeesPar, trouve.nom, bloc);
       } else signaler("E4", lieu, `${lieu.sujet} cite la capacité « ${nom} », introuvable dans Capacites${ambigu(trouve)}.`);
     }
-    if (bloc.capacites.length === 0) signaler("A6", lieu, `${lieu.sujet} n'a aucune capacité.`);
+    if (bloc.capacites.length === 0) signaler("I3", lieu, `${lieu.sujet} n'a aucune capacité.`);
 
     for (const element of bloc.elements.filter((item) => item.nom)) {
       const trouve = resoudre(elements, element.nom, lieu, "l'élément");
