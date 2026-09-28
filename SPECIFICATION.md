@@ -1,6 +1,6 @@
 # L'Atelier des Arpenteurs — spécification
 
-**Version 0.6 — 28/09/2026.** Ce document fait foi pour le code. Toute décision
+**Version 0.7 — 28/09/2026.** Ce document fait foi pour le code. Toute décision
 qui le contredit y est reportée, avec une entrée de révision et un numéro de
 version (§ 14). Le nom « L'Atelier des Arpenteurs » est validé par l'auteur ;
 le dépôt s'appelle `atelier-des-arpenteurs`.
@@ -904,6 +904,34 @@ les étapes (décision de l'auteur, 28/09/2026).
 ---
 
 ## 14. Révisions
+
+**0.7 — 28/09/2026.** Groupe 2 du lot 1. Désormais, un numéro de version
+par groupe, à la fin du groupe (§ 13).
+
+- Étape 0 : un nombre de cellule s'écrit avec une virgule décimale (§ 5.1,
+  § 6.1). Le bloc sans capacité passe en information, sous le code I3 ; A6
+  est retiré et ne sera pas réutilisé (§ 6.3). Il remontera en
+  avertissement pour certains types, avec la colonne de type (§ 12). Le
+  contrôle des gravités lit le tableau du § 6.3.
+- Étape E : le mot de passe se normalise ; l'empreinte se vérifie après le
+  déchiffrement ; un fichier abîmé ou un mot de passe faux donnent un
+  message (§ 7.1). Le coffre garde la clé non extractible avec son sel, ses
+  itérations et la durée de sa dérivation ; la clé réelle et celle de la
+  démonstration séparément ; le jeton à part ; la mémoire seule sans
+  IndexedDB (§ 7.2). Les 20 signes se comptent après normalisation (§ 7.3).
+- Étape F : ce que comparent les différences, et comment elles
+  s'affichent ; le résumé d'une ligne et ses accords (§ 6.4). Lecture sans
+  cache, et en brut au-delà d'un mégaoctet ; sha périmé par 409, ou par 422
+  sans sha ; trois essais ; en-têtes et messages (§ 8.2). `dates.js`
+  (§ 3.2).
+- Étape G : aspect sobre, jetons et contrastes ; écrans précisés ; espace
+  auteur ; écran d'accueil du téléphone, avec un manifeste sans
+  `start_url` et le monogramme « AA » ; diagnostic ; démonstration, dont
+  le mot de passe public est la seule exception à l'interdit 3 (§ 0, § 9).
+  Politique de sécurité détaillée ; contrôle des insertions de HTML étendu
+  aux fichiers du site et aux outils (§ 10.1). Outils sans dépendance
+  (§ 10.2), nouveaux fichiers (§ 3.2). Contrôles Préparation, Routes et
+  fiches, Site (§ 11). Déroulement du groupe 2 (§ 13).
 
 **0.6 — 28/09/2026.** Étape D, import et contrôle. Ce que visent E3, E4
 (cibles comprises), E7 (un paramètre sans cible vaut pour toutes les

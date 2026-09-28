@@ -27,7 +27,8 @@ répond pas aux questions de règles en conversation.
 1. Aucun classeur réel dans le dépôt (public) : seuls `essais/*.xlsx`, fictifs.
 2. Aucune donnée réelle en clair dans le dépôt, hors les exemples de la
    spécification, réels mais non confidentiels.
-3. Aucune clé ni aucun mot de passe dans le code ou un fichier suivi.
+3. Aucune clé ni aucun mot de passe dans le code ou un fichier suivi,
+   hors le mot de passe public de la démonstration (§ 9).
 4. Aucune écriture dans un classeur de l'auteur ; seul l'outil des essais
    (`tests/outils/`) fabrique le classeur fictif d'`essais/`.
 5. Aucune dépendance sans justification écrite dans la spécification.
@@ -37,8 +38,9 @@ répond pas aux questions de règles en conversation.
 - Code, commentaires, identifiants, messages et clés JSON **en français**.
 - Un défaut se mesure avant de se corriger.
 - Un contrôle nouveau se vérifie **armé puis désarmé**.
-- **La spécification s'amende avec le code** : réécrire le paragraphe, ajouter
-  une entrée en tête du § 14, passer le numéro de version.
+- **La spécification s'amende avec le code** : réécrire le paragraphe à
+  chaque étape. **Un numéro de version par groupe, à la fin du groupe** :
+  une entrée en tête du § 14, qui détaille les étapes du groupe.
 - Commits en prose française : un titre, puis ce qui a changé, ce qui a été
   mesuré, ce qui a été laissé.
 - **Le dépôt est public** : `git config user.email` (sans `--global`) est
