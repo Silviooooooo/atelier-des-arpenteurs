@@ -463,6 +463,10 @@ Avant publication, l'espace auteur montre :
 - **Chiffrement** : AES-GCM 256 bits, IV aléatoire de 12 octets, **neuf à
   chaque publication** : c'est lui qu'AES-GCM exige unique pour une même clé.
 - **Tout par WebCrypto** : aucune bibliothèque.
+- **Le mot de passe se normalise** avant la dérivation : forme Unicode NFC,
+  espaces de bord retirés. Un « é » s'écrit en un ou deux caractères selon
+  l'appareil, et un clavier de téléphone ajoute volontiers une espace en fin
+  de mot : le même mot de passe doit donner la même clé partout.
 
 **Pourquoi le sel ne change qu'avec le mot de passe** (relevé du 28/09/2026,
 dans Chromium et dans Node 24). Une clé dérivée avec un sel ne déchiffre pas
@@ -485,15 +489,25 @@ Le fichier `donnees/banque.chiffree.json` :
 ```
 
 L'en-tête est en clair (date, empreinte, paramètres) ; il ne révèle aucun
-contenu. L'empreinte permet à la page de savoir si sa copie est à jour.
+contenu. L'empreinte est celle du JSON en clair tel qu'il est chiffré ; elle
+permet à la page de savoir si sa copie est à jour, et se vérifie après le
+déchiffrement. Un fichier abîmé, d'un format inconnu, ou un mot de passe faux
+donnent un message, jamais une exception.
 
 ### 7.2 Sur les appareils
 
 - Le mot de passe se saisit **une fois par appareil**. La page garde la clé
-  dérivée, non extractible, **avec le sel qui l'a produite**, dans IndexedDB
-  (`coffre.js`), jamais le mot de passe lui-même.
-- Un sel gardé qui diffère de celui de la banque publiée signifie que le mot
-  de passe de table a changé : la page le dit et redemande le mot de passe.
+  dérivée, non extractible, **avec le sel qui l'a produite**, le nombre
+  d'itérations et la durée de la dérivation, dans IndexedDB (`coffre.js`),
+  jamais le mot de passe lui-même. Le coffre refuse une clé extractible.
+- La clé de la banque réelle et celle de la **démonstration** (§ 9) se
+  gardent **séparément** : garder ou oublier l'une ne touche jamais l'autre.
+  Le jeton GitHub (§ 8.1) se garde et s'oublie à part.
+- Sans IndexedDB (navigation privée de certains navigateurs), la clé vit en
+  mémoire le temps de la visite, et la page le dit.
+- Un sel ou un nombre d'itérations gardés qui diffèrent de ceux de la banque
+  publiée signifient que le mot de passe de table a changé : la page le dit
+  et redemande le mot de passe.
 - L'auteur publie avec la clé qu'il a gardée, sans ressaisir la phrase de
   passe.
 - Un bouton « Oublier le mot de passe sur cet appareil » efface la clé.
@@ -507,7 +521,7 @@ contenu. L'empreinte permet à la page de savoir si sa copie est à jour.
   est public : n'importe qui peut essayer des mots de passe hors ligne. Une
   phrase de **quatre ou cinq mots tirés au hasard** résiste ; « abrasia » ou
   un prénom se trouvent en secondes. L'espace auteur refuse un mot de passe
-  de moins de 20 signes.
+  de moins de 20 signes, comptés après la normalisation du § 7.1.
 - **L'historique garde les anciennes versions**, chiffrées avec le mot de
   passe de leur époque. Changer de mot de passe protège les publications
   suivantes, pas les précédentes : un joueur qui part garde l'accès à ce
@@ -672,7 +686,7 @@ Chaque contrôle nouveau se vérifie **armé puis désarmé**.
 | Notation | chaque ligne du tableau du § 6.2, dont les accolades imbriquées et la virgule décimale ; une notation cassée donne E6 et garde le brut |
 | Import | la banque du classeur d'essai a le format du § 5.1 ; colonnes retrouvées malgré la casse, les accents et l'ordre des en-têtes ; valeurs en chaînes, telles qu'écrites ; brut et `lisez_moi` ; ligne sans nom exclue ; fichier illisible : un message |
 | Contrôle | le classeur d'essai déclenche **chaque** code du § 6.3 (E1 sur ses variantes, § 10.3), et exactement les anomalies qu'il annonce, ligne par ligne ; un classeur propre n'en déclenche aucun ; gravités du § 6.3 et tri du § 6.4 |
-| Chiffrement | aller-retour ; mauvais mot de passe refusé proprement ; IV différent à chaque chiffrement ; sel inchangé tant que le mot de passe ne change pas ; la clé gardée déchiffre la publication suivante (§ 7.1) |
+| Chiffrement | aller-retour, au format du § 7.1 ; mauvais mot de passe refusé proprement ; fichier abîmé ou inconnu : un message ; IV différent à chaque chiffrement ; sel inchangé tant que le mot de passe ne change pas ; la clé gardée déchiffre la publication suivante (§ 7.1), et un sel renouvelé la rend inutilisable ; normalisation du mot de passe ; 20 signes au moins ; coffre : clé non extractible, clés réelle et de démonstration séparées, jeton à part (§ 7.2) |
 | Publication | corps de la requête ; auteur et committer explicites, en adresse privée (§ 8.2) ; refus pour `sha` périmé ; **première publication** : fichier absent, réponse 404, écriture sans `sha` |
 | Dépôt | aucun `.xlsx` hors `essais/` ; **aucun `.docx`** ; `donnees/` ne contient que `banque.chiffree.json`, sans autre champ que ceux du § 7.1 ; aucun **jeton GitHub entier** : un préfixe (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`) suivi d'au moins 36 caractères alphanumériques ou soulignés, le contrôle fabriquant son faux jeton au moment de l'essai ; dans l'historique, des **auteurs** en `…@users.noreply.github.com`, des **committers** aussi ou en `noreply@github.com` (commits faits sur le site de GitHub), la ligne `Co-Authored-By` d'un message n'étant pas une adresse d'auteur ; ni `innerHTML`, ni `outerHTML`, ni `insertAdjacentHTML`, ni `document.write` dans `js/` (§ 10.1) |
 | Différences | ajout, modification champ par champ, retrait |

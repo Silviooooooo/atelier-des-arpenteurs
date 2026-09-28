@@ -12,6 +12,7 @@
 // avec la banque (§ 5.1).
 
 import { lireClasseur } from "../lecture/xlsx.js";
+import { empreinte } from "../securite/chiffrement.js";
 import { anomalie, controler, trier } from "./controle.js";
 import { cle } from "./noms.js";
 import { lireCapacites, lireElements, lireElementsPropres, lireParametres, lireParametresRecus } from "./notation.js";
@@ -173,11 +174,6 @@ export function importerClasseur(classeur, source = null) {
   };
   banque.anomalies = trier([...anomalies, ...controler(banque)]);
   return { banque, anomalies: banque.anomalies };
-}
-
-async function empreinte(octets) {
-  const condense = new Uint8Array(await crypto.subtle.digest("SHA-256", octets));
-  return `sha256:${Array.from(condense, (octet) => octet.toString(16).padStart(2, "0")).join("")}`;
 }
 
 /**
