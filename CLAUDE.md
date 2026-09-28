@@ -80,8 +80,13 @@ répond pas aux questions de règles en conversation.
 - Pendant le travail, ne lancer que les contrôles de l'étape ; la suite
   complète en fin d'étape.
 - Filtrer les sorties longues (`tail`, `grep`) plutôt que les lire entières.
-- Un seul agent. Sous-agent seulement pour dépouiller une sortie très
-  longue ; jamais pour relire.
+- Un seul agent pour le travail. Sous-agent pour dépouiller une sortie très
+  longue, ou pour relire dans le cadre suivant.
+- **Relecture par plusieurs agents** (décision de l'auteur, 28/09/2026) :
+  **autorisée**, dans ce cadre : à la fin d'un groupe (ou, dans ce groupe,
+  au début, comme revue de sécurité) ; **trois relecteurs au plus**, chacun
+  avec un angle distinct ; **une seule liste consolidée** ; c'est l'agent
+  principal qui corrige ; le compte rendu dit ce qu'ils ont trouvé.
 
 ## OneDrive
 
