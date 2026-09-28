@@ -9,7 +9,23 @@
 
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
+import { GRAVITES } from "../js/banque/controle.js";
+import { importerFichier } from "../js/banque/importation.js";
 import { lireClasseur } from "../js/lecture/xlsx.js";
+
+// Mesure de référence du 28/09/2026 (§ 6.3) : le contrôle doit trouver au
+// moins ceci.
+const REFERENCE = {
+  E4: {
+    citations: 12,
+    noms: ["Boire", "Enduire arme", "Maîtrise du combat précise", "Représailles", "Savoir acquis", "fureur", "lancer grenade", "redécouverte", "trouvé !"],
+  },
+  E7: ["Hache légère"],
+  A1: 21,
+  A2: ["archetype", "consommable", "defense"],
+  A3: ["Maîtrise du combat précis", "Constellation d'Enaël"],
+  I1: 15,
+};
 
 // État du classeur relevé le 28/09/2026 (§ 4.1).
 const RELEVE = [
@@ -83,6 +99,73 @@ function bancDeLecture(classeur) {
   }
 }
 
+// Les noms qu'une famille d'anomalies désigne, tirés de leurs messages
+// (controle.js en fixe la forme).
+function noms(anomalies, code, motif) {
+  return anomalies.filter((a) => a.code === code).map((a) => motif.exec(a.message)?.[1]).filter(Boolean);
+}
+
+function comparer(titre, trouves, attendus) {
+  const uniques = [...new Set(trouves)];
+  const manquants = attendus.filter((nom) => !uniques.includes(nom));
+  const enPlus = uniques.filter((nom) => !attendus.includes(nom));
+  console.log(`  ${titre} : ${uniques.length} trouvé(s), ${attendus.length} attendu(s) au moins.`);
+  if (manquants.length) console.log(`    absents : ${manquants.join(" · ")}`);
+  if (enPlus.length) console.log(`    en plus : ${enPlus.join(" · ")}`);
+}
+
+async function bancComplet(octets, fichier) {
+  const { banque, anomalies, erreur } = await importerFichier(octets, fichier);
+  console.log("\nBanc complet — import et contrôle");
+  if (erreur) {
+    console.log(`  Import impossible : ${erreur}`);
+    return;
+  }
+  if (!banque) {
+    console.log("  Import arrêté (E1) :");
+    for (const a of anomalies) console.log(`    ${a.message}`);
+    return;
+  }
+  const variantes = banque.capacites.reduce((total, capacite) => total + capacite.variantes.length, 0);
+  console.log(
+    `  Banque : ${banque.blocs.length} blocs, ${banque.capacites.length} capacités (${variantes} variantes), ` +
+      `${banque.elements.length} éléments, ${banque.lisez_moi.length} lignes de lisez_moi ; ${anomalies.length} anomalies.`,
+  );
+
+  const citees = noms(anomalies, "E4", /cite la capacité « (.+?) », introuvable/);
+  const cibles = noms(anomalies, "E4", /vise la capacité « (.+?) »/);
+  const a1 = (genre) => anomalies.filter((a) => a.code === "A1" && a.message.includes(`pour ${genre} «`)).length;
+  const reference = {
+    E4: `≥ ${REFERENCE.E4.citations} citations, ${REFERENCE.E4.noms.length} noms`,
+    E7: `≥ ${REFERENCE.E7.length}`,
+    A1: `≥ ${REFERENCE.A1} renvois de capacités`,
+    A2: `≥ ${REFERENCE.A2.length} paramètres`,
+    A3: `≥ ${REFERENCE.A3.length} capacités`,
+    I1: `≥ ${REFERENCE.I1} noms`,
+  };
+  const mesure = {
+    E4: `${citees.length} citations, ${new Set(citees).size} noms ; + ${cibles.length} cible(s)`,
+    A1: `${a1("la capacité")} de capacités, ${a1("l'élément")} d'éléments, ${a1("le paramètre")} de paramètres`,
+    A2: `${new Set(noms(anomalies, "A2", /transmet le paramètre (.+?), qu'aucun/)).size} paramètres`,
+  };
+  const lignes = [["code", "gravité", "anomalies", "détail", "référence § 6.3"]];
+  for (const code of Object.keys(GRAVITES)) {
+    const nombre = anomalies.filter((a) => a.code === code).length;
+    lignes.push([code, GRAVITES[code], nombre, mesure[code] ?? "", reference[code] ?? "—"]);
+  }
+  console.log("");
+  tableau(lignes);
+
+  console.log("\nComparaison avec la mesure de référence :");
+  comparer("E4, capacités citées introuvables", citees, REFERENCE.E4.noms);
+  if (cibles.length) console.log(`    cibles introuvables (hors référence) : ${[...new Set(cibles)].join(" · ")}`);
+  comparer("E7, blocs", noms(anomalies, "E7", /Le bloc « (.+?) » transmet/), REFERENCE.E7);
+  comparer("A2, paramètres sans élément", noms(anomalies, "A2", /transmet le paramètre (.+?), qu'aucun/), REFERENCE.A2);
+  comparer("A3, capacités orphelines", noms(anomalies, "A3", /La capacité « (.+?) » n'est rattachée/), REFERENCE.A3);
+  console.log(`  A1, renvois de capacités : ${a1("la capacité")} trouvés, ${REFERENCE.A1} attendus au moins.`);
+  console.log(`  I1, noms à espaces de bord : ${anomalies.filter((a) => a.code === "I1").length} trouvés, ${REFERENCE.I1} attendus au moins.`);
+}
+
 const chemin = process.argv[2];
 if (!chemin) {
   console.error("Usage : node tests/banc_classeur_reel.js chemin/vers/regles_jdr.xlsx");
@@ -96,3 +179,4 @@ if (classeur.erreur) {
   process.exit(1);
 }
 bancDeLecture(classeur);
+await bancComplet(octets, basename(chemin));

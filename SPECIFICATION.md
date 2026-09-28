@@ -1,6 +1,6 @@
 # L'Atelier des Arpenteurs — spécification
 
-**Version 0.5 — 28/09/2026.** Ce document fait foi pour le code. Toute décision
+**Version 0.6 — 28/09/2026.** Ce document fait foi pour le code. Toute décision
 qui le contredit y est reportée, avec une entrée de révision et un numéro de
 version (§ 14). Le nom « L'Atelier des Arpenteurs » est validé par l'auteur ;
 le dépôt s'appelle `atelier-des-arpenteurs`.
@@ -261,6 +261,13 @@ Il n'est pas lu par le programme. La spécification le cite par section.
   unique » ; elle est inscrite au § 12 pour que la source le dise.
 - Les **anomalies** voyagent avec la banque : ce qui a été publié malgré une
   erreur reste visible de tous (§ 9, écran Anomalies).
+- Une ligne non vide sans nom (E2) n'entre pas dans la banque ; l'anomalie
+  donne sa feuille et sa ligne.
+- `lisez_moi` garde la rubrique et le texte tels qu'écrits : la rubrique
+  n'étant écrite que sur la première ligne de chacune, les suivantes ont une
+  rubrique vide.
+- `sources` porte le nom du fichier importé et l'empreinte SHA-256 de ses
+  octets.
 
 ### 5.2 Le nom affiché d'un paramètre
 
@@ -367,16 +374,16 @@ résolu, mais signalé (A1).
 |---|---|---|
 | E1 | bloquante | feuille ou en-tête attendu absent : l'import s'arrête |
 | E2 | erreur | ligne non vide sans nom |
-| E3 | erreur | doublon : bloc, élément, ou capacité de même nom et même puissance |
-| E4 | erreur | capacité citée par un bloc, introuvable |
+| E3 | erreur | doublon : bloc, élément, ou capacité de même nom et même puissance (noms comparés exactement, espaces de bord retirés) |
+| E4 | erreur | capacité citée par un bloc, introuvable ; la cible d'un élément ou d'un paramètre compte comme une citation |
 | E5 | erreur | élément cité (Blocs ou Capacites), introuvable |
 | E6 | erreur | notation illisible : délimiteur non fermé, paramètre sans `:`… (liste au § 6.2) |
-| E7 | erreur | même paramètre transmis deux fois par un bloc, sans cible qui les distingue |
-| A1 | avertissement | renvoi qui ne diffère que par la casse, les accents ou les espaces |
+| E7 | erreur | même paramètre transmis deux fois par un bloc, sans cible qui les distingue : un paramètre sans cible vaut pour toutes les capacités du bloc, et seules deux cibles différentes distinguent deux transmissions (§ 12) |
+| A1 | avertissement | renvoi qui ne diffère que par la casse, les accents ou les espaces : capacité, cible, élément ou paramètre |
 | A2 | avertissement | paramètre transmis qu'aucun élément ne reçoit (`lisez_moi` : un paramètre implique son élément) |
-| A3 | avertissement | capacité rattachée à aucun bloc |
-| A4 | avertissement | élément défini, porté par rien |
-| A5 | avertissement | paramètre invoqué dans une description (`{portee}`) que ni la capacité ni ses blocs ne portent |
+| A3 | avertissement | capacité rattachée à aucun bloc : citée dans la colonne des capacités d'aucun bloc (une cible ne rattache pas, un choix gardé en brut non plus) |
+| A4 | avertissement | élément défini, porté par rien : cité par aucun bloc ni aucune capacité, et reçu d'aucun paramètre transmis (`lisez_moi` : un bloc qui transmet un paramètre porte l'élément lié) |
+| A5 | avertissement | paramètre invoqué dans une description (`{portee}`) que ni la capacité ni ses blocs ne portent : ni un élément propre qui le reçoit, ni un bloc qui la cite et le transmet ou porte un élément qui le reçoit, sans cible ou avec elle pour cible |
 | A6 | avertissement | bloc sans capacité |
 | A7 | avertissement | choix de capacités écrit hors de la colonne des capacités |
 | I1 | information | espaces de bord retirés d'un nom |
@@ -403,6 +410,19 @@ contrôle doit trouver **au moins** :
 - A3 : 2 capacités orphelines — Maîtrise du combat précis, Constellation
   d'Enaël ;
 - I1 : 15 noms à espace de bord.
+
+**Banc complet du 28/09/2026**, sur le même classeur (modifié le 24/09) : il
+retrouve exactement ces comptes et ces noms, sans absent ni nom en plus. Il
+trouve aussi ce que la référence ne mesurait pas :
+
+- E4 : une cible de paramètre introuvable, celle de Hache légère ;
+- A1 : 35 renvois d'éléments, dont `Portee` pour Portée ;
+- E5 : 5 ;
+- A4 : 4 ;
+- A6 : 30 blocs sans capacité ;
+- A7 : 1, la Constellation de Neru ;
+- I2 : 2 ;
+- aucun E2, E3, E6 ni A5.
 
 **Les bancs sur le classeur réel.** Ils se lancent **en local, hors dépôt**,
 par l'auteur ou par Claude Code : `node tests/banc_classeur_reel.js
@@ -648,7 +668,8 @@ Chaque contrôle nouveau se vérifie **armé puis désarmé**.
 |---|---|
 | Lecture | le lecteur XML : entités, CDATA, noms locaux, fins de ligne, XML mal formé et DOCTYPE refusés ; le classeur d'essai donne les feuilles, en-têtes et cellules attendus, dont le texte enrichi, les retours à la ligne et les nombres ; un fichier qui n'est pas un ZIP, une archive tronquée, chiffrée, ZIP64 ou d'une méthode inconnue, un CRC faux, un classeur protégé par mot de passe, un XML abîmé donnent un message, pas une exception ; le classeur suivi correspond à sa description (`tests/outils/`) |
 | Notation | chaque ligne du tableau du § 6.2, dont les accolades imbriquées et la virgule décimale ; une notation cassée donne E6 et garde le brut |
-| Contrôle | le classeur d'essai déclenche **chaque** code du § 6.3 (E1 sur ses variantes, § 10.3), et un classeur propre n'en déclenche aucun |
+| Import | la banque du classeur d'essai a le format du § 5.1 ; colonnes retrouvées malgré la casse, les accents et l'ordre des en-têtes ; valeurs en chaînes, telles qu'écrites ; brut et `lisez_moi` ; ligne sans nom exclue ; fichier illisible : un message |
+| Contrôle | le classeur d'essai déclenche **chaque** code du § 6.3 (E1 sur ses variantes, § 10.3), et exactement les anomalies qu'il annonce, ligne par ligne ; un classeur propre n'en déclenche aucun ; gravités du § 6.3 et tri du § 6.4 |
 | Chiffrement | aller-retour ; mauvais mot de passe refusé proprement ; IV différent à chaque chiffrement ; sel inchangé tant que le mot de passe ne change pas ; la clé gardée déchiffre la publication suivante (§ 7.1) |
 | Publication | corps de la requête ; auteur et committer explicites, en adresse privée (§ 8.2) ; refus pour `sha` périmé ; **première publication** : fichier absent, réponse 404, écriture sans `sha` |
 | Dépôt | aucun `.xlsx` hors `essais/` ; **aucun `.docx`** ; `donnees/` ne contient que `banque.chiffree.json`, sans autre champ que ceux du § 7.1 ; aucun **jeton GitHub entier** : un préfixe (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`) suivi d'au moins 36 caractères alphanumériques ou soulignés, le contrôle fabriquant son faux jeton au moment de l'essai ; dans l'historique, des **auteurs** en `…@users.noreply.github.com`, des **committers** aussi ou en `noreply@github.com` (commits faits sur le site de GitHub), la ligne `Co-Authored-By` d'un message n'étant pas une adresse d'auteur ; ni `innerHTML`, ni `outerHTML`, ni `insertAdjacentHTML`, ni `document.write` dans `js/` (§ 10.1) |
@@ -681,6 +702,12 @@ conversation.**
 - La notation vit à la fois dans `lisez_moi` et dans le chapitre « Système »
   du Word. Un seul endroit : une annexe du Word, vers laquelle `lisez_moi`
   renvoie.
+- À écrire dans le Word, chapitre « Système », ou dans `lisez_moi` : quand un
+  bloc transmet un paramètre sans cible et le même paramètre avec une cible
+  (cas de Hache légère, `{portee:…}` deux fois), lequel vaut pour la capacité
+  visée ? Tant que ce n'est pas écrit, le contrôle signale l'ambiguïté (E7).
+  Et une cible doit-elle être une capacité du bloc ? Celle de Hache légère
+  n'est pas une capacité (E4).
 
 **Pour le lot 2 — créateur d'adversaire**, section « Caractéristiques d'un
 adversaire » du Word : ce que sont son attaque et sa défense ; son nombre
@@ -732,6 +759,14 @@ jamais entre deux étapes d'un même groupe.
 ---
 
 ## 14. Révisions
+
+**0.6 — 28/09/2026.** Étape D, import et contrôle. Ce que visent E3, E4
+(cibles comprises), E7 (un paramètre sans cible vaut pour toutes les
+capacités du bloc), A1, A3, A4 (paramètre transmis) et A5 (§ 6.3). Résultat
+du banc complet : la mesure de référence est retrouvée exactement (§ 6.3).
+Ligne sans nom, `lisez_moi` tel qu'écrit, empreinte de la source (§ 5.1).
+Contrôles d'import et de contrôle (§ 11). La question de Hache légère est à
+écrire dans le Word (§ 12).
 
 **0.5 — 28/09/2026.** Étape C, notation (§ 6.2). La colonne « Paramètres
 reçus » s'écrit `{nom}`, comme dans le classeur réel. Espaces de bord

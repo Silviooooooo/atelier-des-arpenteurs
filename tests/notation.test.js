@@ -88,10 +88,10 @@ test("paramètres — accolades imbriquées et virgule décimale", () => {
 
 test("paramètres — cible entre parenthèses après l'accolade", () => {
   assert.deepEqual(
-    lireParametres("{degats:{force}*0,5/{force}/{force}*2}(Attaque à mains nues), {portee:1}(lancer)"),
+    lireParametres("{degats:{force}*0,5/{force}/{force}*2}(Attaque à mains nues), {portee:1}(Attaque de base)"),
     sansAnomalie([
       { nom: "degats", valeur: "{force}*0,5/{force}/{force}*2", cible: "Attaque à mains nues" },
-      { nom: "portee", valeur: "1", cible: "lancer" },
+      { nom: "portee", valeur: "1", cible: "Attaque de base" },
     ]),
   );
 });

@@ -127,6 +127,48 @@ export const CLASSEUR_ESSAI = {
   ],
 };
 
+// Un classeur propre, fabriqué au moment de l'essai : il ne doit déclencher
+// aucune anomalie. Il garde des formes délicates, que le contrôle doit
+// accepter : deux paramètres de même nom à cibles différentes, un élément
+// porté par le seul paramètre qu'il reçoit, des variantes de puissance.
+export const CLASSEUR_PROPRE = {
+  feuilles: [
+    { nom: "lisez_moi", lignes: [_, ["Syntaxe", "Classeur propre : aucune anomalie attendue."]] },
+    {
+      nom: "Blocs",
+      lignes: [
+        ["Nom", "Eléments transmis aux capacités", "capacites", "Paramètres transmis aux capacités", "Infos"],
+        ["Louche", "Tranchant, Brûlant(Coup)", "Coup, Jet, (Recette | Tradition), [Brûlure | Pincement]", "{chaleur:1}(Coup), {chaleur:2}(Jet), {distance:0}", "Propre"],
+        ["Tablier", _, "Rempart", "{epaisseur:40/0/0}", _],
+      ],
+    },
+    {
+      nom: "Eléments",
+      lignes: [
+        ["Nom", "Paramètres reçus", "description"],
+        ["Tranchant", _, "Coupe."],
+        ["Brûlant", "{chaleur}", "Brûle de {chaleur}."],
+        ["Distance", "{distance}", "Porte à {distance}."],
+        ["Épais", "{epaisseur}", "Protège de {epaisseur}."],
+      ],
+    },
+    {
+      nom: "Capacites",
+      lignes: [
+        ["origine", "Nom", "puissance", "Coût en souffle", "Coût en lien", "Eléments propres", "description"],
+        [_, "Coup", 0, 1, _, "Tranchant", "Frappe de {chaleur}."],
+        [_, "Jet", "N", "5*N", _, _, "Lance à {distance}, [N*{chaleur}] points."],
+        [_, "Recette", 0, _, _, _, "Un secret."],
+        [_, "Tradition", 0, _, _, _, "Une habitude."],
+        [_, "Brûlure", 1, _, _, "Brûlant", "[N] brûlure."],
+        [_, "Brûlure", 2, _, _, "Brûlant", "[N] brûlures."],
+        [_, "Pincement", 0, _, _, _, "Pince."],
+        [_, "Rempart", 0, _, 1, "Épais[2]", "Protège de {epaisseur}."],
+      ],
+    },
+  ],
+};
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const cible = fileURLToPath(new URL("../../essais/classeur_essai.xlsx", import.meta.url));
   writeFileSync(cible, fabriquerClasseur(CLASSEUR_ESSAI));
