@@ -1,0 +1,30 @@
+# Lance les contrôles à chaque envoi et à chaque demande de fusion
+# (SPECIFICATION.md, § 11). Les deux actions sont les seules dépendances du
+# dépôt ; elles sont fixées sur un commit précis, relevé le 28/09/2026 (§ 10.2).
+name: Contrôles
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  controles:
+    name: node --test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Récupérer le dépôt et tout son historique
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Le contrôle des adresses lit tout l'historique.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Installer Node 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Lancer les contrôles
+        run: node --test

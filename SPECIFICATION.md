@@ -1,6 +1,6 @@
 # L'Atelier des Arpenteurs — spécification
 
-**Version 0.2 — 28/09/2026.** Ce document fait foi pour le code. Toute décision
+**Version 0.3 — 28/09/2026.** Ce document fait foi pour le code. Toute décision
 qui le contredit y est reportée, avec une entrée de révision et un numéro de
 version (§ 14). Le nom « L'Atelier des Arpenteurs » est validé par l'auteur ;
 le dépôt s'appelle `atelier-des-arpenteurs`.
@@ -31,16 +31,22 @@ répond pas aux questions de règles en conversation ; il les écrit dans le Wor
 
 1. **Aucun classeur réel dans le dépôt.** Le dépôt est public. Seuls les
    classeurs d'essai fictifs de `essais/` y entrent (§ 10.3).
-2. **Aucune donnée réelle en clair dans le dépôt.** La banque publiée est
-   chiffrée (§ 7) ; un contrôle le vérifie.
+2. **Aucune donnée réelle en clair dans le dépôt**, hors les exemples de
+   cette spécification, réels mais non confidentiels (décision de l'auteur,
+   28/09/2026). La banque publiée est chiffrée (§ 7) ; un contrôle le vérifie.
 3. **Aucune clé ni aucun mot de passe dans le code** ni dans un fichier
    versionné. Ils se saisissent dans la page, sur l'appareil de la personne.
-4. **Aucune écriture dans un classeur.** Le programme les lit, rien d'autre.
+4. **Aucune écriture dans un classeur de l'auteur.** Le programme les lit,
+   rien d'autre ; seul l'outil des essais (`tests/outils/`) fabrique le
+   classeur fictif d'`essais/`.
 5. **Aucune dépendance sans justification écrite** au § 10.2. La cible est
-   zéro : le navigateur fournit la décompression, le XML, le chiffrement.
+   zéro : le navigateur fournit la décompression et le chiffrement ; le XML
+   se lit avec un lecteur écrit pour le projet (§ 6.1).
 
 **Méthode.** Le plan avant le code : exposer les fichiers à créer et attendre
-la validation. Une todo visible, remontrée à chaque pas. Les questions
+la validation. Un lot se découpe en étapes, réunies en groupes : l'auteur
+valide à la fin de chaque groupe, pas entre ses étapes (§ 13). Une todo
+visible, remontrée à chaque pas. Les questions
 groupées à la fin. Un défaut se mesure avant de se corriger. Un contrôle
 nouveau se vérifie armé puis désarmé : un contrôle qui ne peut pas échouer ne
 prouve rien. Le code, les commentaires, les identifiants et les messages sont
@@ -83,6 +89,9 @@ avec Book of Abrasia ou World Anvil : ce projet en est indépendant.
 | **Deux classeurs** : règles d'un côté, adversaires et prétirés de l'autre | choix de l'auteur, pour ne pas mélanger ; le contrôle vérifie les renvois entre les deux |
 | **Le Word fait foi** pour les règles | l'auteur veut que n'importe qui puisse comprendre le jeu en relisant le Word depuis zéro |
 | **PDF par l'impression du navigateur**, sur ordinateur | aucune dépendance ; le PDF sur téléphone n'est pas une priorité |
+| Le dossier du dépôt reste dans **OneDrive** | choix de l'auteur ; précautions au § 10.3 |
+| Un **lecteur XML écrit pour le projet**, le même dans la page et dans les contrôles | avec deux lecteurs, les contrôles vérifieraient un code que la page n'exécute pas (§ 6.1) |
+| Le **sel** du chiffrement ne change qu'avec le mot de passe | la clé gardée sur un appareil doit déchiffrer les publications suivantes (§ 7.1) |
 
 ---
 
@@ -106,6 +115,7 @@ Auteur : classeur Excel (OneDrive)
 
 ```
 index.html                  la page unique ; les écrans sont des routes (#/…)
+package.json                { "type": "module" } et rien d'autre : Node lit les .js comme modules
 css/
   jetons.css                toutes les valeurs de mise en page en variables
   ecran.css                 l'interface, pensée pour le téléphone d'abord
@@ -113,8 +123,10 @@ js/
   application.js            démarrage, routes, chargement de la banque
   lecture/
     zip.js                  lecteur d'archive ZIP (DecompressionStream)
+    xml.js                  lecteur XML du projet, le même pour la page et les contrôles
     xlsx.js                 feuilles, chaînes partagées, cellules → tableaux
   banque/
+    noms.js                 comparaison des noms : exacte, puis sans casse, accents ni espaces
     notation.js             analyse de la notation des classeurs (§ 6.2)
     importation.js          classeur → banque
     controle.js             contrôle de cohérence → anomalies (§ 6.3)
@@ -131,12 +143,14 @@ js/
 donnees/
   banque.chiffree.json      la seule donnée réelle du dépôt, chiffrée
 essais/
-  classeur_essai.xlsx       classeur FICTIF, contenu inventé, pour les contrôles
+  classeur_essai.xlsx       classeur FICTIF, contenu inventé, fabriqué par tests/outils/
 tests/
   *.test.js                 contrôles, lancés par `node --test`
+  outils/                   fabrique de classeurs et description du classeur d'essai
+  banc_classeur_reel.js     bancs sur le classeur réel (§ 6.3), lancés à la main
 .github/workflows/
   controles.yml             lance les contrôles à chaque envoi
-.gitignore                  *.xlsx sauf essais/*.xlsx ; tout JSON en clair de donnees/
+.gitignore                  classeurs, Word, JSON en clair de donnees/, documents de travail (§ 10.3)
 .nojekyll                   fichier vide : GitHub Pages sert les fichiers tels quels, sans Jekyll
 CLAUDE.md                   consignes pour Claude Code
 SPECIFICATION.md            ce document
@@ -259,17 +273,29 @@ L'auteur choisit un `.xlsx` par le sélecteur de fichiers du système : sur
 Windows il atteint son dossier OneDrive, sur téléphone l'application OneDrive.
 **Rien ne quitte l'appareil avant la publication.**
 
-Le `.xlsx` est une archive ZIP. `zip.js` lit le répertoire central et
-décompresse avec `DecompressionStream("deflate-raw")`, natif dans les
-navigateurs actuels et dans Node 22. `xlsx.js` lit `workbook.xml` et ses
-relations pour nommer les feuilles, puis `sharedStrings.xml` (texte enrichi :
-concaténer les `<t>` des `<r>`), puis les cellules : `t="s"`, `t="inlineStr"`,
-`t="str"`, nombres. Les retours à la ligne internes aux cellules sont gardés.
-Le XML se lit avec `DOMParser` (navigateur) ; dans Node, les contrôles
-fournissent un analyseur XML minimal écrit pour eux.
+Le `.xlsx` est une archive ZIP. `zip.js` lit le répertoire central, puis les
+en-têtes locaux, et décompresse avec `DecompressionStream("deflate-raw")`,
+natif dans les navigateurs actuels et dans Node 22. Il accepte les méthodes
+« stockée » et « deflate » et les noms en UTF-8, et vérifie le CRC-32 de
+chaque entrée lue.
+
+`xlsx.js` lit `workbook.xml` et ses relations pour nommer les feuilles, puis
+`sharedStrings.xml` (texte enrichi : concaténer les `<t>` des `<r>`, en
+ignorant les annotations phonétiques `<rPh>`), puis les cellules : `t="s"`,
+`t="inlineStr"`, `t="str"`, booléens, erreurs, nombres. Un nombre s'écrit sans
+décimale inutile (§ 5.1). Les retours à la ligne internes aux cellules sont
+gardés. Chaque ligne garde son numéro dans Excel.
+
+Le XML se lit avec `xml.js`, un lecteur écrit pour le projet, **le même dans la
+page et dans les contrôles** : avec deux lecteurs, les contrôles et le banc
+vérifieraient un code que la page n'exécute pas. Il compare les balises **par
+leur nom local**, sans préfixe d'espace de noms (`x:row` = `row`), car
+certains logiciels préfixent tout le XML d'un classeur. Il refuse les
+DOCTYPE, qu'un classeur ne contient pas.
 
 Un fichier qui n'est pas un `.xlsx` lisible produit un message clair, jamais
-une page blanche.
+une page blanche. Il en va de même d'une archive tronquée, chiffrée, au format
+ZIP64 ou dont le CRC est faux.
 
 ### 6.2 La notation
 
@@ -344,9 +370,20 @@ contrôle doit trouver **au moins** :
   d'Enaël ;
 - I1 : 15 noms à espace de bord.
 
-Ce banc se lance **en local, hors dépôt**, par l'auteur ou par Claude Code
-sur une copie du classeur : `node tests/banc_classeur_reel.js
-chemin/vers/regles_jdr.xlsx`. Il affiche les comptes ; il n'écrit rien.
+**Les bancs sur le classeur réel.** Ils se lancent **en local, hors dépôt**,
+par l'auteur ou par Claude Code : `node tests/banc_classeur_reel.js
+chemin/vers/regles_jdr.xlsx`. Le classeur se lit là où il est, sans être
+copié ; le banc affiche des comptes et n'écrit rien.
+
+- **Banc de lecture**, dès que `xlsx.js` existe et avant la notation : les
+  feuilles, leurs en-têtes et le nombre de lignes non vides de chacune,
+  comparés au § 4.1. Quand Python répond sur le poste, une lecture
+  indépendante par sa bibliothèque standard (`zipfile`, `xml.etree`), dans un
+  script hors dépôt, compare en plus chaque cellule.
+- **Banc complet** : import et contrôle, et les comptes par code, à côté de la
+  mesure de référence ci-dessus. L'auteur modifie son classeur : un écart
+  n'est pas un échec. Il s'explique par les éléments qui le causent, sans que
+  rien ne soit « corrigé » dans les données.
 
 ### 6.4 Le rapport et les différences
 
@@ -365,9 +402,19 @@ Avant publication, l'espace auteur montre :
 ### 7.1 Le schéma
 
 - **Dérivation** : PBKDF2-SHA256, **600 000 itérations**, sel aléatoire de
-  16 octets, **renouvelé à chaque publication**.
-- **Chiffrement** : AES-GCM 256 bits, IV aléatoire de 12 octets.
+  16 octets, **tiré avec le mot de passe de table et gardé jusqu'au
+  suivant**.
+- **Chiffrement** : AES-GCM 256 bits, IV aléatoire de 12 octets, **neuf à
+  chaque publication** : c'est lui qu'AES-GCM exige unique pour une même clé.
 - **Tout par WebCrypto** : aucune bibliothèque.
+
+**Pourquoi le sel ne change qu'avec le mot de passe** (relevé du 28/09/2026,
+dans Chromium et dans Node 24). Une clé dérivée avec un sel ne déchiffre pas
+ce qu'a chiffré une clé dérivée avec un autre sel. Un sel renouvelé à chaque
+publication obligerait chaque joueur à ressaisir le mot de passe après chaque
+publication : le « une fois par appareil » du § 7.2 ne tiendrait pas. La
+sécurité ne baisse pas : le sel empêche les tables précalculées, et toutes les
+versions partagent de toute façon le même mot de passe.
 
 Le fichier `donnees/banque.chiffree.json` :
 
@@ -387,11 +434,16 @@ contenu. L'empreinte permet à la page de savoir si sa copie est à jour.
 ### 7.2 Sur les appareils
 
 - Le mot de passe se saisit **une fois par appareil**. La page garde la clé
-  dérivée, non extractible, dans IndexedDB (`coffre.js`), jamais le mot de
-  passe lui-même.
+  dérivée, non extractible, **avec le sel qui l'a produite**, dans IndexedDB
+  (`coffre.js`), jamais le mot de passe lui-même.
+- Un sel gardé qui diffère de celui de la banque publiée signifie que le mot
+  de passe de table a changé : la page le dit et redemande le mot de passe.
+- L'auteur publie avec la clé qu'il a gardée, sans ressaisir la phrase de
+  passe.
 - Un bouton « Oublier le mot de passe sur cet appareil » efface la clé.
-- La dérivation prend de l'ordre d'une seconde sur un téléphone : à mesurer au
-  lot 1, et afficher une attente.
+- La dérivation prend 63 ms dans Chromium et 77 ms dans Node 24 sur le PC de
+  l'auteur (relevé du 28/09/2026). Sur un téléphone, elle reste à mesurer au
+  lot 1 (étape H) ; la page affiche une attente.
 
 ### 7.3 Les limites, à dire à l'auteur et dans le guide
 
@@ -408,6 +460,16 @@ contenu. L'empreinte permet à la page de savoir si sa copie est à jour.
   transmet. L'espace auteur le propose en une action.
 - **Le code est public** : il révèle la structure des données (noms des
   champs), jamais leur contenu.
+- **L'origine est réservée à l'Atelier.** Tous les sites GitHub Pages d'un
+  compte partagent l'origine `https://silviooooooo.github.io`, et IndexedDB
+  est cloisonné par origine, pas par chemin : la clé de table et le jeton
+  GitHub seraient lisibles par tout autre site Pages du compte. Relevé du
+  28/09/2026 : aucun autre site Pages sur ce compte. S'il en fallait un jour
+  un autre, l'Atelier passerait sur une organisation GitHub dédiée (gratuite)
+  ou sur un domaine propre.
+- **Safari peut effacer les données d'un site non visité depuis sept jours**,
+  sauf s'il est ajouté à l'écran d'accueil. C'est la limite du « une fois par
+  appareil » sur iPhone, à écrire dans le guide des joueurs.
 
 ---
 
@@ -425,13 +487,20 @@ ne peut rien publier. Un appareil perdu : le jeton se révoque sur GitHub.
 ### 8.2 L'écriture
 
 1. `GET /repos/{proprietaire}/{depot}/contents/donnees/banque.chiffree.json`
-   pour obtenir le `sha` de la version en place.
-2. `PUT` du même chemin avec le contenu, le `sha` et le message
-   `Publication du classeur des règles — 28/09/2026 14:32 — 3 capacités
-   ajoutées, 2 modifiées, 0 retirée`.
-3. Un refus pour `sha` périmé (publication concurrente depuis un autre
+   pour obtenir le `sha` de la version en place. **Première publication** :
+   le fichier n'existe pas encore, la réponse est 404, et l'écriture se fait
+   sans `sha`.
+2. `PUT` du même chemin avec le contenu, le `sha` (sauf à la première
+   publication) et le message `Publication du classeur des règles —
+   28/09/2026 14:32 — 3 capacités ajoutées, 2 modifiées, 0 retirée`.
+3. Le `PUT` porte **un auteur et un committer explicites** : le nom de
+   l'auteur et l'adresse privée du compte
+   (`id+login@users.noreply.github.com`). Sans ces champs, GitHub prend
+   l'identité du compte, peut-être avec l'adresse personnelle, et
+   l'historique public la garderait.
+4. Un refus pour `sha` périmé (publication concurrente depuis un autre
    appareil) : recharger, refaire les différences, redemander confirmation.
-4. Un seul fichier, donc un seul commit par publication.
+5. Un seul fichier, donc un seul commit par publication.
 
 ### 8.3 Le délai
 
@@ -477,20 +546,49 @@ vers l'anomalie), jamais comme un lien mort.
   fait la ligne suivante.
 - Toute la mise en page vit dans les variables de `css/jetons.css`.
 - Une donnée inattendue est signalée (anomalie ou message), jamais avalée.
+- `index.html` porte une **politique de sécurité**
+  (`Content-Security-Policy`) : tout vient du site lui-même, et seules les
+  connexions vers le site et vers `api.github.com` sont permises. **Aucune donnée n'est insérée comme HTML** :
+  ni `innerHTML`, ni `outerHTML`, ni `insertAdjacentHTML`, ni
+  `document.write` dans `js/`, et un contrôle le vérifie (§ 11). Raison : la
+  clé et le jeton vivent dans IndexedDB, et une cellule de classeur contenant
+  du HTML ne doit jamais s'exécuter.
 
 ### 10.2 Les dépendances
 
-Aucune au lot 1. Le navigateur fournit `DecompressionStream`, `DOMParser`,
-`crypto.subtle`, `indexedDB`, `fetch`. Les contrôles demandent **Node 22 ou
-plus récent**, sur la machine de développement seulement. Toute dépendance
-future est justifiée ici, avant son arrivée.
+Aucune au lot 1. Le navigateur fournit `DecompressionStream`,
+`crypto.subtle`, `indexedDB`, `fetch` ; le XML se lit avec `js/lecture/xml.js`
+(§ 6.1). Les contrôles demandent **Node 22 ou plus récent** (24 conseillé,
+version LTS active), sur la machine de développement seulement ; l'outil des
+essais emploie `node:zlib`, fourni avec Node (22.2 au moins, pour
+`zlib.crc32`).
+
+GitHub Actions emploie deux actions, **seules dépendances du dépôt** :
+`actions/checkout` (récupérer le dépôt et son historique) et
+`actions/setup-node` (installer Node). Elles sont publiées par GitHub et
+**fixées sur un commit précis**, pour qu'une version nouvelle n'entre pas sans
+relecture.
+
+Toute dépendance future est justifiée ici, avant son arrivée.
 
 ### 10.3 Le dépôt et Git
 
-- `.gitignore` : `*.xlsx` avec l'exception `!essais/*.xlsx` ; tout JSON en
-  clair de `donnees/`.
+- `.gitignore` : `*.xlsx`, avec l'exception `!essais/*.xlsx` ; `*.docx` (le
+  Word des règles) ; tout JSON de `donnees/`, sauf `banque.chiffree.json` ;
+  les documents de travail `ressources/` et `plans/` ; `système/`, le dossier
+  du classeur réel, s'il venait dans le dépôt ; les fichiers que déposent
+  Windows, OneDrive et Office (`desktop.ini`, `Thumbs.db`, les verrous `~$…`).
+- **Le dépôt vit dans OneDrive** (décision de l'auteur). Le classeur réel et
+  le Word restent hors du dépôt, dans le dossier `Système` voisin, et n'y sont
+  jamais copiés. En cas d'erreur de verrou (`index.lock`, « Permission
+  denied », fichier en cours d'utilisation) : s'arrêter, ne jamais effacer un
+  verrou ni relancer en boucle, demander à l'auteur de suspendre la
+  synchronisation OneDrive, puis réessayer une fois.
 - `essais/classeur_essai.xlsx` : **contenu inventé**, qui reproduit chaque
-  forme de la notation et chaque anomalie du § 6.3. Il sert aux contrôles
+  forme de la notation et chaque anomalie du § 6.3. Il est **fabriqué par un
+  script** (`tests/outils/`), jamais saisi dans Excel (interdit 4). E1, qui
+  arrête l'import, se déclenche sur des variantes que les contrôles fabriquent
+  eux-mêmes : une feuille ôtée, un en-tête renommé. Il sert aux contrôles
   automatiques.
 - Messages de commit en prose française : un titre, puis ce qui a changé, ce
   qui a été mesuré, ce qui a été laissé.
@@ -511,12 +609,21 @@ Chaque contrôle nouveau se vérifie **armé puis désarmé**.
 
 | Domaine | Contrôles minimaux |
 |---|---|
-| Lecture | le classeur d'essai donne les feuilles, en-têtes et cellules attendus ; un fichier qui n'est pas un ZIP donne un message, pas une exception |
+| Lecture | le classeur d'essai donne les feuilles, en-têtes et cellules attendus, dont le texte enrichi, les retours à la ligne et les nombres ; un fichier qui n'est pas un ZIP, une archive tronquée, chiffrée ou ZIP64, un CRC faux donnent un message, pas une exception ; le classeur suivi correspond à sa description (`tests/outils/`) |
 | Notation | chaque ligne du tableau du § 6.2, dont les accolades imbriquées et la virgule décimale ; une notation cassée donne E6 et garde le brut |
-| Contrôle | le classeur d'essai déclenche **chaque** code du § 6.3, et un classeur propre n'en déclenche aucun |
-| Chiffrement | aller-retour ; mauvais mot de passe refusé proprement ; sel et IV différents à chaque chiffrement |
-| Dépôt | aucun `.xlsx` hors `essais/` ; aucun JSON en clair dans `donnees/` ; aucune chaîne ressemblant à un jeton GitHub (`github_pat_`, `ghp_`) dans les fichiers suivis ; aucune adresse d'auteur autre que `…@users.noreply.github.com` dans l'historique |
+| Contrôle | le classeur d'essai déclenche **chaque** code du § 6.3 (E1 sur ses variantes, § 10.3), et un classeur propre n'en déclenche aucun |
+| Chiffrement | aller-retour ; mauvais mot de passe refusé proprement ; IV différent à chaque chiffrement ; sel inchangé tant que le mot de passe ne change pas ; la clé gardée déchiffre la publication suivante (§ 7.1) |
+| Publication | corps de la requête ; auteur et committer explicites, en adresse privée (§ 8.2) ; refus pour `sha` périmé ; **première publication** : fichier absent, réponse 404, écriture sans `sha` |
+| Dépôt | aucun `.xlsx` hors `essais/` ; **aucun `.docx`** ; `donnees/` ne contient que `banque.chiffree.json`, sans autre champ que ceux du § 7.1 ; aucun **jeton GitHub entier** : un préfixe (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`) suivi d'au moins 36 caractères alphanumériques ou soulignés, le contrôle fabriquant son faux jeton au moment de l'essai ; dans l'historique, des **auteurs** en `…@users.noreply.github.com`, des **committers** aussi ou en `noreply@github.com` (commits faits sur le site de GitHub), la ligne `Co-Authored-By` d'un message n'étant pas une adresse d'auteur ; ni `innerHTML`, ni `outerHTML`, ni `insertAdjacentHTML`, ni `document.write` dans `js/` (§ 10.1) |
 | Différences | ajout, modification champ par champ, retrait |
+
+Les contrôles du dépôt portent sur les fichiers suivis et sur ceux que Git
+suivrait, c'est-à-dire non ignorés : une faute se voit avant d'être commitée.
+
+**Les bancs** (§ 6.3) ne font pas partie de `node --test` : ils demandent le
+classeur réel, qui n'est pas dans le dépôt. Le banc de lecture se lance dès que
+`xlsx.js` existe, avant la notation ; le banc complet, une fois l'import et le
+contrôle écrits.
 
 ---
 
@@ -571,13 +678,38 @@ le banc du § 6.3 trouve au moins les comptes de référence ; tous les
 contrôles passent, et chacun a été vu échouer une fois.
 
 **Ce qui ne dépend que de l'auteur, au lot 1** : créer le compte GitHub et le
-dépôt public ; activer GitHub Pages (branche `main`, racine) ; créer le jeton
-à portée fine ; choisir le mot de passe de table et le transmettre aux
-joueurs.
+dépôt public (fait) ; activer GitHub Pages, branche `main`, racine (fait le
+28/09/2026) ; créer le jeton à portée fine ; choisir le mot de passe de table
+et le transmettre aux joueurs.
+
+**Le déroulement du lot 1** (plan validé par l'auteur le 28/09/2026). Huit
+étapes, réunies en trois groupes. L'auteur valide à la fin de chaque groupe,
+jamais entre deux étapes d'un même groupe.
+
+| Groupe | Étapes |
+|---|---|
+| 1 | A — socle du dépôt et spécification 0.3 ; B — lecture du classeur ; C — notation ; D — import, contrôle et banc |
+| 2 | E — chiffrement et coffre ; F — différences et publication ; G — écrans |
+| 3 | H — mise en service : jeton, mot de passe de table, première publication, essai sur téléphone |
 
 ---
 
 ## 14. Révisions
+
+**0.3 — 28/09/2026.** Plan du lot 1 validé, en trois groupes d'étapes
+(§ 0, § 13). Interdits 2 et 4 précisés : exemples réels non confidentiels,
+classeur d'essai fabriqué par script (§ 0, § 10.3). Sel gardé jusqu'au
+changement de mot de passe, IV neuf à chaque publication, clé gardée avec son
+sel (§ 7.1, § 7.2). Origine réservée à l'Atelier et limite de Safari (§ 7.3).
+Auteur et committer explicites, première publication sans `sha` (§ 8.2). Un
+seul lecteur XML, qui compare les balises par leur nom local (§ 6.1).
+Politique de sécurité, aucune insertion de HTML (§ 10.1). Actions de GitHub
+fixées sur un commit, Node 24 conseillé (§ 10.2). Dépôt dans OneDrive et ses
+précautions ; `.gitignore` étendu au Word, aux documents de travail, à
+`système/` et aux fichiers de Windows et d'Office (§ 10.3). Nouveaux fichiers
+(§ 3.2). Contrôles : jetons entiers, adresses des auteurs et des committers,
+`.docx`, insertions de HTML, publication, bancs de lecture et complet (§ 6.3,
+§ 11). GitHub Pages activé (§ 13). Trois décisions en tableau (§ 2).
 
 **0.2 — 28/09/2026.** Nom validé (« L'Atelier des Arpenteurs », dépôt
 `atelier-des-arpenteurs`) ; publication malgré des erreurs validée (§ 6.3) ;

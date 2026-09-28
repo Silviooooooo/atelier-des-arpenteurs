@@ -25,9 +25,11 @@ répond pas aux questions de règles en conversation.
 ## Les cinq interdits
 
 1. Aucun classeur réel dans le dépôt (public) : seuls `essais/*.xlsx`, fictifs.
-2. Aucune donnée réelle en clair dans le dépôt.
+2. Aucune donnée réelle en clair dans le dépôt, hors les exemples de la
+   spécification, réels mais non confidentiels.
 3. Aucune clé ni aucun mot de passe dans le code ou un fichier suivi.
-4. Aucune écriture dans un classeur.
+4. Aucune écriture dans un classeur de l'auteur ; seul l'outil des essais
+   (`tests/outils/`) fabrique le classeur fictif d'`essais/`.
 5. Aucune dépendance sans justification écrite dans la spécification.
 
 ## La méthode
@@ -42,6 +44,52 @@ répond pas aux questions de règles en conversation.
 - **Le dépôt est public** : `git config user.email` (sans `--global`) est
   l'adresse privée GitHub de l'auteur (`…@users.noreply.github.com`), jamais
   son adresse personnelle.
-- Contrôles : `node --test` (Node 22 ou plus récent).
+- Contrôles : `node --test` (Node 22 ou plus récent, 24 conseillé).
 - Banc sur le classeur réel, **hors dépôt** :
   `node tests/banc_classeur_reel.js chemin/vers/regles_jdr.xlsx`.
+
+## Circuit de travail
+
+- Les instructions viennent de Claude (conversation claude.ai), par
+  l'auteur, sous la forme `plans/instruction_<groupe>.md`. Elles ne
+  contiennent aucun choix ouvert : ne pas les rouvrir.
+- Pas de validation entre les étapes d'un même groupe. S'arrêter avant la
+  fin du groupe seulement pour : une contradiction avec la spécification ;
+  une règle du jeu absente du Word ; un contrôle impossible à faire passer
+  après deux approches différentes ; une erreur de verrou Git ; une
+  consommation manifestement anormale.
+- À chaque arrêt : écrire `plans/compte_rendu_<groupe>.md` selon le modèle
+  ci-dessous, puis s'arrêter.
+
+## Modèle du compte rendu (deux pages au plus, aucun code recopié)
+
+1. Fait : étapes, commits (sha court et titre).
+2. Contrôles : nombre, échecs, contrôles vus armés puis désarmés.
+3. Mesures, dont les bancs sur le classeur réel.
+4. Écarts à la spécification : amendements faits, version.
+5. Choix faits seul (réversibles).
+6. Points à trancher, chacun avec une recommandation.
+7. Suite prévue.
+8. Consommation : laisser « relevé /usage : à compléter par l'auteur ».
+
+## Économie
+
+- Ne lire de la spécification que les § utiles à l'étape.
+- Pendant le travail, ne lancer que les contrôles de l'étape ; la suite
+  complète en fin d'étape.
+- Filtrer les sorties longues (`tail`, `grep`) plutôt que les lire entières.
+- Un seul agent. Sous-agent seulement pour dépouiller une sortie très
+  longue ; jamais pour relire.
+
+## OneDrive
+
+Le dépôt est dans OneDrive (décision de l'auteur). En cas d'erreur de verrou
+(`index.lock`, « Permission denied », fichier en cours d'utilisation) :
+s'arrêter ; ne jamais effacer un verrou ni relancer en boucle ; demander à
+l'auteur de suspendre la synchronisation OneDrive, puis réessayer une fois.
+
+## Consignes de résumé
+
+En cas de résumé du contexte, garder : l'étape en cours, les fichiers
+modifiés depuis le dernier commit, les contrôles en échec et leur cause,
+les choix faits seul, la prochaine action.
