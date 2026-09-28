@@ -130,7 +130,8 @@ js/
     notation.js             analyse de la notation des classeurs (§ 6.2)
     importation.js          classeur → banque
     controle.js             contrôle de cohérence → anomalies (§ 6.3)
-    differences.js          banque publiée ↔ banque importée
+    differences.js          banque publiée ↔ banque importée, résumé d'une ligne
+    dates.js                date de publication (§ 5.1) et date lisible
     chargement.js           téléchargement et déchiffrement de la banque
   securite/
     chiffrement.js          PBKDF2 + AES-GCM (WebCrypto)
@@ -451,6 +452,25 @@ Avant publication, l'espace auteur montre :
    champ), retirés ;
 3. un résumé d'une ligne, qui devient le message de commit (§ 8).
 
+**Les différences** (`differences.js`). Blocs, capacités et éléments se
+reconnaissent à leur nom : un nom changé est un retrait suivi d'un ajout ;
+deux entrées de même nom (E3) se distinguent par leur rang. Les champs se
+comparent sur leur **valeur lue**, si bien que l'ordre des lignes et deux
+écritures de la même notation (`a,b` et `a, b`) ne font pas de différence ;
+ils s'affichent **tels que l'auteur les a écrits** (`brut`), sous le nom de
+leur colonne. Une capacité à une seule variante de part et d'autre compare
+sa puissance comme un champ ; à plusieurs variantes, elle se compare
+puissance par puissance, et une variante ajoutée ou retirée est une
+modification. Un `lisez_moi` modifié est signalé.
+
+**Le résumé d'une ligne** : `Publication du classeur des règles — 28/09/2026
+14:32 — 3 capacités ajoutées, 2 modifiées, 0 retirée`. Les catégories
+viennent dans l'ordre blocs, capacités, éléments, séparées par « ; » ; une
+catégorie sans changement est tue ; zéro et un s'accordent au singulier.
+Sans changement : « aucune différence ». La première publication donne les
+totaux (« première publication : 67 blocs, 69 capacités, 19 éléments ») ; une
+publication malgré des erreurs finit par « — publiée malgré 12 erreurs ».
+
 ---
 
 ## 7. Le chiffrement
@@ -556,9 +576,12 @@ ne peut rien publier. Un appareil perdu : le jeton se révoque sur GitHub.
 
 ### 8.2 L'écriture
 
-1. `GET /repos/{proprietaire}/{depot}/contents/donnees/banque.chiffree.json`
-   pour obtenir le `sha` de la version en place. **Première publication** :
-   le fichier n'existe pas encore, la réponse est 404, et l'écriture se fait
+1. `GET /repos/{proprietaire}/{depot}/contents/donnees/banque.chiffree.json?ref=main`,
+   sans cache du navigateur, pour obtenir le `sha` de la version en place et
+   la banque publiée, dont l'espace auteur tire les différences. Au-delà d'un
+   mégaoctet, l'API ne donne le contenu qu'en brut : il se relit alors avec
+   `Accept: application/vnd.github.raw+json`. **Première publication** : le
+   fichier n'existe pas encore, la réponse est 404, et l'écriture se fait
    sans `sha`.
 2. `PUT` du même chemin avec le contenu, le `sha` (sauf à la première
    publication) et le message `Publication du classeur des règles —
@@ -570,7 +593,16 @@ ne peut rien publier. Un appareil perdu : le jeton se révoque sur GitHub.
    l'historique public la garderait.
 4. Un refus pour `sha` périmé (publication concurrente depuis un autre
    appareil) : recharger, refaire les différences, redemander confirmation.
-5. Un seul fichier, donc un seul commit par publication.
+   GitHub le signale par un 409, ou par un 422 quand l'écriture était sans
+   `sha` (une première publication doublée). Le circuit recommence trois fois
+   au plus.
+5. Un seul fichier, donc un seul commit par publication. Le JSON s'y écrit
+   indenté, suivi d'un retour à la ligne.
+6. Chaque requête porte `Authorization: Bearer <jeton>` et
+   `X-GitHub-Api-Version: 2022-11-28`. Une clé refusée (401), des droits
+   insuffisants (403, ou 404 à l'écriture), une panne du réseau ou un
+   fichier illisible donnent un message qui dit quoi faire, avec le code et
+   le motif de GitHub pour le diagnostic ; jamais une exception.
 
 ### 8.3 Le délai
 
@@ -687,9 +719,9 @@ Chaque contrôle nouveau se vérifie **armé puis désarmé**.
 | Import | la banque du classeur d'essai a le format du § 5.1 ; colonnes retrouvées malgré la casse, les accents et l'ordre des en-têtes ; valeurs en chaînes, telles qu'écrites ; brut et `lisez_moi` ; ligne sans nom exclue ; fichier illisible : un message |
 | Contrôle | le classeur d'essai déclenche **chaque** code du § 6.3 (E1 sur ses variantes, § 10.3), et exactement les anomalies qu'il annonce, ligne par ligne ; un classeur propre n'en déclenche aucun ; gravités du § 6.3 et tri du § 6.4 |
 | Chiffrement | aller-retour, au format du § 7.1 ; mauvais mot de passe refusé proprement ; fichier abîmé ou inconnu : un message ; IV différent à chaque chiffrement ; sel inchangé tant que le mot de passe ne change pas ; la clé gardée déchiffre la publication suivante (§ 7.1), et un sel renouvelé la rend inutilisable ; normalisation du mot de passe ; 20 signes au moins ; coffre : clé non extractible, clés réelle et de démonstration séparées, jeton à part (§ 7.2) |
-| Publication | corps de la requête ; auteur et committer explicites, en adresse privée (§ 8.2) ; refus pour `sha` périmé ; **première publication** : fichier absent, réponse 404, écriture sans `sha` |
+| Publication | `fetch` simulé, **aucun appel réel à GitHub** : adresses, en-têtes et corps de la requête ; auteur et committer explicites, en adresse privée (§ 8.2) ; **première publication** : fichier absent, réponse 404, écriture sans `sha` ; mise à jour avec le `sha` lu ; refus pour `sha` périmé (409, ou 422 sans `sha`) : rechargement, nouvelles différences, nouvelle confirmation ; clé refusée (401), droits, réseau, JSON illisible : un message ; contenu de plus d'un mégaoctet relu en brut |
 | Dépôt | aucun `.xlsx` hors `essais/` ; **aucun `.docx`** ; `donnees/` ne contient que `banque.chiffree.json`, sans autre champ que ceux du § 7.1 ; aucun **jeton GitHub entier** : un préfixe (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`) suivi d'au moins 36 caractères alphanumériques ou soulignés, le contrôle fabriquant son faux jeton au moment de l'essai ; dans l'historique, des **auteurs** en `…@users.noreply.github.com`, des **committers** aussi ou en `noreply@github.com` (commits faits sur le site de GitHub), la ligne `Co-Authored-By` d'un message n'étant pas une adresse d'auteur ; ni `innerHTML`, ni `outerHTML`, ni `insertAdjacentHTML`, ni `document.write` dans `js/` (§ 10.1) |
-| Différences | ajout, modification champ par champ, retrait |
+| Différences | ajout, modification champ par champ, retrait ; variantes de puissance ; ordre des lignes et écriture d'une même notation sans effet ; doublons ; résumé d'une ligne et ses accords ; dates |
 
 Les contrôles du dépôt portent sur les fichiers suivis et sur ceux que Git
 suivrait, c'est-à-dire non ignorés : une faute se voit avant d'être commitée.

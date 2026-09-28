@@ -18,7 +18,7 @@ import { cle } from "./noms.js";
 import { lireCapacites, lireElements, lireElementsPropres, lireParametres, lireParametresRecus } from "./notation.js";
 
 // En-têtes attendus (§ 4.1), par feuille ; lisez_moi n'en a pas.
-const COLONNES = {
+export const COLONNES = {
   Blocs: {
     nom: "Nom",
     elements: "Eléments transmis aux capacités",
