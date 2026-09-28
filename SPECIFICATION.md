@@ -648,7 +648,7 @@ visuelle propre à Abrasia au lot 1.
 
 | Écran | Contenu |
 |---|---|
-| Mot de passe | un champ, « se souvenir sur cet appareil » coché par défaut, une attente pendant la dérivation ; après chaque saisie réussie, la page demande un stockage durable (`navigator.storage.persist()`) |
+| Mot de passe | un champ, « se souvenir sur cet appareil » coché par défaut, une attente pendant la dérivation, qui ne dépend pas de la peinture de la fenêtre (une fenêtre masquée ne peint pas) ; après chaque saisie réussie, la page demande un stockage durable (`navigator.storage.persist()`) |
 | Accueil | date de la banque publiée, comptes (blocs, capacités, éléments), lien vers les anomalies s'il y en a ; « Vérifier les mises à jour » (§ 8.3) ; « Oublier le mot de passe sur cet appareil » (§ 7.2) ; l'aide pour l'écran d'accueil ; le diagnostic |
 | Listes | Blocs, Capacités, Éléments, dans l'ordre alphabétique ; recherche instantanée sur les noms et les descriptions, sans casse ni accents (`œ` vaut `oe`), chaque mot de la recherche devant se trouver |
 | Fiche d'un bloc | éléments (liens), capacités (liens ; « au choix : … », « facultatif : … »), paramètres sous leur nom affiché (§ 5.2), par exemple `Brûlant[5/10/15]`, suivis de leur écriture transmise, notes de conception en retrait |
@@ -815,7 +815,7 @@ Chaque contrôle nouveau se vérifie **armé puis désarmé**.
 | Différences | ajout, modification champ par champ, retrait ; variantes de puissance ; ordre des lignes et écriture d'une même notation sans effet ; doublons ; résumé d'une ligne et ses accords ; dates |
 | Préparation | première publication, mise à jour sous le même secret ; mot de passe à choisir, à saisir ou changé ; E1 refusé ; changement de mot de passe ; circuit complet, de l'import à la lecture par un joueur |
 | Routes et fiches | décodage des adresses de fiche (`#/capacite/Attaque%20de%20base`) et aller-retour des noms difficiles ; adresses abîmées ; recherche sans casse ni accents, sur les noms et les descriptions ; renvois résolus comme au contrôle ; « octroyée par », « porté par », nom affiché ; anomalies d'une ligne |
-| Site | politique de sécurité du `<meta>`, avant scripts et styles ; zoom permis ; ni script, ni style, ni gestionnaire en ligne ; chaque fichier appelé existe ; le graphe des modules se résout et atteint les huit écrans ; manifeste, couleurs des jetons, icônes aux tailles dites, telles que les dessine leur outil ; contrastes ; valeurs de `ecran.css` tirées des jetons, aucune police téléchargée ; la banque de démonstration se déchiffre et vient du classeur d'essai ; chargement : absente, présente, abîmée, `?v=`, clé gardée, mot de passe requis ou changé, stockage durable |
+| Site | politique de sécurité du `<meta>`, avant scripts et styles ; zoom permis ; ni script, ni style, ni gestionnaire en ligne ; chaque fichier appelé existe ; le graphe des modules se résout et atteint les huit écrans ; manifeste, couleurs des jetons, icônes aux tailles dites, telles que les dessine leur outil ; contrastes ; valeurs de `ecran.css` tirées des jetons, aucune police téléchargée ; la banque de démonstration se déchiffre et vient du classeur d'essai ; chargement : absente, présente, abîmée, `?v=`, clé gardée, mot de passe requis ou changé, stockage durable ; l'attente du mot de passe ne dépend pas de la peinture de la fenêtre |
 
 Les contrôles du dépôt portent sur les fichiers suivis et sur ceux que Git
 suivrait, c'est-à-dire non ignorés : une faute se voit avant d'être commitée.

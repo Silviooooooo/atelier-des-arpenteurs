@@ -8,8 +8,15 @@
 import { MOT_DE_PASSE_DEMO } from "../banque/chargement.js";
 import { el, titre } from "./dom.js";
 
-// Laisse le navigateur afficher l'attente avant le calcul de la clé.
-const laisserPeindre = () => new Promise((resoudre) => requestAnimationFrame(() => setTimeout(resoudre, 0)));
+// Laisse le navigateur afficher l'attente avant le calcul de la clé. Une
+// fenêtre cachée ou masquée ne peint pas, et requestAnimationFrame y attend
+// indéfiniment : un délai court prend alors le relais (relevé du 28/09/2026).
+export function laisserPeindre() {
+  return new Promise((resoudre) => {
+    requestAnimationFrame(() => setTimeout(resoudre, 0));
+    setTimeout(resoudre, 100);
+  });
+}
 
 export function afficher(contexte) {
   const { etat } = contexte;

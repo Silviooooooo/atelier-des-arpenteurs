@@ -273,3 +273,12 @@ test("chargement — stockage durable, mode, empreinte courte", async () => {
   for (const recherche of ["", "?demo=0", "?demo=oui", "?autre=1"]) assert.equal(modeDe(recherche), "reel");
   assert.equal(empreinteCourte("sha256:89b31f2f9a5d3a39d7a0"), "89b31f2f9a5d");
 });
+
+test("mot de passe — l'attente ne dépend pas de la peinture de la fenêtre", async () => {
+  // Une fenêtre masquée ne peint pas : requestAnimationFrame n'y rappelle jamais.
+  globalThis.requestAnimationFrame = () => 0;
+  const { laisserPeindre } = await import("../js/ecrans/mot_de_passe.js");
+  const issue = await Promise.race([laisserPeindre().then(() => "repris"), new Promise((resoudre) => setTimeout(() => resoudre("bloqué"), 1000))]);
+  assert.equal(issue, "repris");
+  delete globalThis.requestAnimationFrame;
+});
