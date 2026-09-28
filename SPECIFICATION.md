@@ -1,6 +1,6 @@
 # L'Atelier des Arpenteurs — spécification
 
-**Version 0.3 — 28/09/2026.** Ce document fait foi pour le code. Toute décision
+**Version 0.4 — 28/09/2026.** Ce document fait foi pour le code. Toute décision
 qui le contredit y est reportée, avec une entrée de révision et un numéro de
 version (§ 14). Le nom « L'Atelier des Arpenteurs » est validé par l'auteur ;
 le dépôt s'appelle `atelier-des-arpenteurs`.
@@ -167,10 +167,16 @@ leur position** : l'auteur réordonne ses feuilles.
 
 | Feuille | En-têtes (ligne 1) | Lignes |
 |---|---|---|
-| `lisez_moi` | aucune ; colonne A = rubrique (Syntaxe, nb, directions), B = texte | 20 |
+| `lisez_moi` | aucune ; colonne A = rubrique (Syntaxe, nb, directions), écrite sur la première ligne de chacune, B = texte | 19 lignes non vides, de la ligne 2 à la ligne 20 ; la ligne 1 est vide |
 | `Blocs` | Nom · Eléments transmis aux capacités · capacites · Paramètres transmis aux capacités · Infos | 67 blocs |
 | `Eléments` | Nom · Paramètres reçus · description | 19 éléments |
 | `Capacites` | origine · Nom · puissance · Coût en souffle · Coût en lien · Eléments propres · description | 71 lignes, 69 noms |
+
+Le banc de lecture du 28/09/2026 (§ 6.3) retrouve ces feuilles, ces en-têtes
+et ces comptes. Une lecture indépendante par Python trouve les mêmes 678
+cellules non vides, sans un écart. Le classeur ne contient que des chaînes
+partagées et des nombres entiers : ni formule, ni texte enrichi, ni retour à
+la ligne.
 
 La correspondance des en-têtes ignore casse, accents et espaces
 (« capacites » = « Capacités »). Un en-tête attendu introuvable est une erreur
@@ -282,9 +288,22 @@ chaque entrée lue.
 `xlsx.js` lit `workbook.xml` et ses relations pour nommer les feuilles, puis
 `sharedStrings.xml` (texte enrichi : concaténer les `<t>` des `<r>`, en
 ignorant les annotations phonétiques `<rPh>`), puis les cellules : `t="s"`,
-`t="inlineStr"`, `t="str"`, booléens, erreurs, nombres. Un nombre s'écrit sans
-décimale inutile (§ 5.1). Les retours à la ligne internes aux cellules sont
-gardés. Chaque ligne garde son numéro dans Excel.
+`t="inlineStr"`, `t="str"`, booléens, erreurs, nombres. Chaque cellule devient
+une chaîne, au plus près de ce qu'Excel affiche :
+
+- un nombre à 15 chiffres significatifs, comme Excel, et sans décimale
+  inutile (§ 5.1) ;
+- un booléen `VRAI` ou `FAUX`, comme Excel en français ;
+- une erreur de formule sous son code (`#N/A`) ;
+- les caractères qu'Excel écrit `_xHHHH_`, le retour chariot notamment,
+  rendus tels quels.
+
+Les retours à la ligne internes aux cellules sont gardés. Chaque ligne garde
+son numéro dans Excel.
+
+Un classeur protégé par un mot de passe, ou enregistré à l'ancien format
+`.xls`, n'est pas une archive ZIP. Son message dit comment l'enregistrer en
+`.xlsx`.
 
 Le XML se lit avec `xml.js`, un lecteur écrit pour le projet, **le même dans la
 page et dans les contrôles** : avec deux lecteurs, les contrôles et le banc
@@ -589,7 +608,10 @@ Toute dépendance future est justifiée ici, avant son arrivée.
   script** (`tests/outils/`), jamais saisi dans Excel (interdit 4). E1, qui
   arrête l'import, se déclenche sur des variantes que les contrôles fabriquent
   eux-mêmes : une feuille ôtée, un en-tête renommé. Il sert aux contrôles
-  automatiques.
+  automatiques. Deux autres traits y figurent : une feuille écrite en XML
+  préfixé (`x:row`), et une cinquième feuille, que l'import ignore, avec les
+  formes de cellule qu'Excel n'écrit pas toujours (texte en ligne, texte
+  enrichi, formule, booléen, erreur).
 - Messages de commit en prose française : un titre, puis ce qui a changé, ce
   qui a été mesuré, ce qui a été laissé.
 - **Le dépôt est public, l'historique aussi** : chaque commit porte le nom et
@@ -609,7 +631,7 @@ Chaque contrôle nouveau se vérifie **armé puis désarmé**.
 
 | Domaine | Contrôles minimaux |
 |---|---|
-| Lecture | le classeur d'essai donne les feuilles, en-têtes et cellules attendus, dont le texte enrichi, les retours à la ligne et les nombres ; un fichier qui n'est pas un ZIP, une archive tronquée, chiffrée ou ZIP64, un CRC faux donnent un message, pas une exception ; le classeur suivi correspond à sa description (`tests/outils/`) |
+| Lecture | le lecteur XML : entités, CDATA, noms locaux, fins de ligne, XML mal formé et DOCTYPE refusés ; le classeur d'essai donne les feuilles, en-têtes et cellules attendus, dont le texte enrichi, les retours à la ligne et les nombres ; un fichier qui n'est pas un ZIP, une archive tronquée, chiffrée, ZIP64 ou d'une méthode inconnue, un CRC faux, un classeur protégé par mot de passe, un XML abîmé donnent un message, pas une exception ; le classeur suivi correspond à sa description (`tests/outils/`) |
 | Notation | chaque ligne du tableau du § 6.2, dont les accolades imbriquées et la virgule décimale ; une notation cassée donne E6 et garde le brut |
 | Contrôle | le classeur d'essai déclenche **chaque** code du § 6.3 (E1 sur ses variantes, § 10.3), et un classeur propre n'en déclenche aucun |
 | Chiffrement | aller-retour ; mauvais mot de passe refusé proprement ; IV différent à chaque chiffrement ; sel inchangé tant que le mot de passe ne change pas ; la clé gardée déchiffre la publication suivante (§ 7.1) |
@@ -695,6 +717,14 @@ jamais entre deux étapes d'un même groupe.
 ---
 
 ## 14. Révisions
+
+**0.4 — 28/09/2026.** Étape B, lecture du classeur. `lisez_moi` compte 19
+lignes non vides, de la ligne 2 à la ligne 20 ; le « 20 » de la 0.3 était le
+numéro de la dernière ligne (§ 4.1). Résultat du banc de lecture et de la
+lecture indépendante par Python (§ 4.1). Forme des cellules : 15 chiffres
+significatifs, `VRAI`/`FAUX`, code d'erreur, `_xHHHH_` ; message du classeur
+protégé ou au format `.xls` (§ 6.1). Contenu du classeur d'essai (§ 10.3) et
+contrôles de lecture (§ 11).
 
 **0.3 — 28/09/2026.** Plan du lot 1 validé, en trois groupes d'étapes
 (§ 0, § 13). Interdits 2 et 4 précisés : exemples réels non confidentiels,
