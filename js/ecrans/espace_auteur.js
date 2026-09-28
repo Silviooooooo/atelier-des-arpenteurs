@@ -3,7 +3,9 @@
 // La clé GitHub ; l'import d'un classeur, lu sur l'appareil ; le rapport ;
 // les différences avec la banque publiée ; la publication ; le changement
 // de mot de passe. Sans clé GitHub, il n'affiche que la saisie de la clé
-// (§ 8.1). Une erreur bloque la publication, sauf si l'auteur coche « Je
+// (§ 8.1), et le bouton « Publier », inactif. Ce bouton est toujours là,
+// dans une barre collée au bas de l'écran ; inactif, il dit pourquoi en une
+// ligne (§ 9). Une erreur bloque la publication, sauf si l'auteur coche « Je
 // publie en connaissance de cause », sous la liste complète (§ 6.3).
 //
 // En démonstration, rien n'est publié et aucune clé GitHub n'est demandée :
@@ -20,11 +22,13 @@ import { compte, el, titre } from "./dom.js";
 
 const BESOINS = ["nouveau_mot_de_passe", "mot_de_passe_requis", "sel_change"];
 
-// L'état de l'espace auteur survit aux changements d'écran.
+// L'état de l'espace auteur survit aux changements d'écran. La clé de table
+// n'y est pas : sa seule copie en mémoire est celle de l'application
+// (ctx.etat.secret), que « Oublier le mot de passe » efface (§ 7.2).
 const auteur = {
   jeton: undefined, // undefined : pas encore lu ; null : aucune clé
   fichier: null, // { nom, banque, anomalies } ou { nom, erreur }
-  secret: null, // le secret du mot de passe de table, en mémoire
+  circuit: 0, // le numéro du circuit en cours ; l'annuler en ouvre un autre
   publiee: null, // la dernière lecture : { sha, enveloppe }
   besoin: null, // l'un des BESOINS : un mot de passe à saisir
   confirmation: null, // { preparation, essai, resoudre }
@@ -68,7 +72,7 @@ function saisieDuJeton() {
       el("li", {}, "Sur GitHub : Settings, Developer settings, Personal access tokens, Fine-grained tokens, puis Generate new token."),
       el("li", {}, `Repository access : Only select repositories, et le seul dépôt ${DEPOT.nom}.`),
       el("li", {}, "Permissions : Contents, en Read and write. Rien d'autre."),
-      el("li", {}, "Une date d'expiration, puis Generate token : copiez la clé ici."),
+      el("li", {}, "Expiration : un an (Custom, à la date d'aujourd'hui dans un an), puis Generate token : copiez la clé ici."),
     ),
     el(
       "form",
@@ -103,10 +107,12 @@ function etatDuJeton() {
         {
           type: "button",
           classe: "bouton secondaire",
+          // Pendant une écriture, le jeton est déjà parti : on attend sa fin.
+          disabled: Boolean(auteur.attente),
           onclick: async () => {
+            annulerCircuit();
             await ctx.etat.coffre.oublierJeton();
             auteur.jeton = null;
-            auteur.resultat = null;
             rendre();
           },
         },
@@ -168,8 +174,35 @@ function rapport() {
 // Le circuit : lecture, différences, confirmation, écriture (§ 8.2)
 
 async function secretGarde() {
-  auteur.secret ??= ctx.etat.secret ?? (await ctx.etat.coffre.lireCle(ctx.etat.mode));
-  return auteur.secret;
+  if (ctx.etat.secret) return ctx.etat.secret;
+  const circuit = auteur.circuit;
+  const garde = await ctx.etat.coffre.lireCle(ctx.etat.mode);
+  // Un oubli pendant la lecture : la clé lue juste avant ne revient pas.
+  if (circuit === auteur.circuit) ctx.etat.secret = garde;
+  return garde;
+}
+
+// La clé se garde sur l'appareil, sauf si l'écran du mot de passe a décoché
+// « Se souvenir sur cet appareil » : elle vit alors en mémoire (§ 7.2).
+async function garder(secret) {
+  if (ctx.etat.garder !== false) await ctx.etat.coffre.garderCle(ctx.etat.mode, secret);
+  ctx.etat.secret = secret;
+}
+
+// Annule le circuit en cours : une confirmation en attente se referme sans
+// rien écrire, et ce qu'il a lu ou déchiffré quitte l'écran. Un circuit
+// annulé qui se poursuit (un calcul déjà lancé) ne touche plus à rien.
+function annulerCircuit() {
+  const enCours = auteur.confirmation;
+  auteur.circuit += 1;
+  Object.assign(auteur, { confirmation: null, besoin: null, attente: null, nouveau: null, publiee: null, resultat: null });
+  enCours?.resoudre(false);
+}
+
+/** « Oublier le mot de passe sur cet appareil » (§ 7.2) : l'accueil l'appelle. */
+export function oublier() {
+  annulerCircuit();
+  rendre();
 }
 
 async function preparer(publiee) {
@@ -189,39 +222,51 @@ function confirmer(preparation, { essai }) {
   });
 }
 
-async function circuitDemo() {
-  const preparation = await preparer({ sha: null, enveloppe: ctx.etat.chargement?.enveloppe ?? null });
+async function circuitDemo(preparerIci, confirmerIci) {
+  const preparation = await preparerIci({ sha: null, enveloppe: ctx.etat.chargement?.enveloppe ?? null });
   if (preparation.erreur) return preparation;
-  await confirmer(preparation, { essai: 1 });
+  await confirmerIci(preparation, { essai: 1 });
   return { annulee: true, demo: true };
 }
 
 async function lancer(genre) {
+  auteur.circuit += 1;
+  const circuit = auteur.circuit;
+  const courant = () => circuit === auteur.circuit;
+  // Un circuit annulé ne prépare ni ne confirme plus rien.
+  const preparerIci = (publiee) => (courant() ? preparer(publiee) : Promise.resolve({ annulee: true }));
+  const confirmerIci = (preparation, options) => (courant() ? confirmer(preparation, options) : Promise.resolve(false));
   Object.assign(auteur, { genre, resultat: null, besoin: null, confirmation: null, attente: "Lecture de la banque publiée…" });
   rendre();
   let resultat;
   try {
-    resultat = demo() ? await circuitDemo() : await publier({ jeton: auteur.jeton, preparer, confirmer });
+    resultat = demo() ? await circuitDemo(preparerIci, confirmerIci) : await publier({ jeton: auteur.jeton, preparer: preparerIci, confirmer: confirmerIci });
   } catch (erreur) {
     resultat = { erreur: `Erreur inattendue : ${erreur.message}` };
   }
+  if (!courant()) return;
   auteur.attente = null;
   auteur.confirmation = null;
   if (BESOINS.includes(resultat.code)) {
     auteur.besoin = resultat.code;
-    if (resultat.code === "sel_change") auteur.secret = null;
+    if (resultat.code === "sel_change") ctx.etat.secret = null;
   } else if (resultat.annulee) {
     auteur.resultat = resultat.demo ? null : { message: "Publication annulée : rien n'a été écrit." };
   } else if (resultat.erreur) {
     auteur.resultat = resultat;
   } else {
+    let avertissement = null;
     if (genre === "changement") {
-      await ctx.etat.coffre.garderCle(ctx.etat.mode, auteur.nouveau);
-      auteur.secret = auteur.nouveau;
+      try {
+        await garder(auteur.nouveau);
+      } catch (erreur) {
+        ctx.etat.secret = auteur.nouveau;
+        avertissement = `La nouvelle clé n'a pas pu être gardée sur cet appareil (${erreur.message}) : elle vit en mémoire le temps de la visite.`;
+      }
       auteur.nouveau = null;
     }
-    ctx.publiee(resultat.preparation, auteur.secret);
-    auteur.resultat = { publie: true, commit: resultat.commit, message: resultat.preparation.message };
+    ctx.publiee(resultat.preparation, ctx.etat.secret);
+    auteur.resultat = { publie: true, commit: resultat.commit, message: resultat.preparation.message, avertissement };
   }
   rendre();
 }
@@ -260,42 +305,11 @@ function listeDesDifferences(d) {
   return parties.length ? parties : [el("p", {}, "Aucune différence de contenu.")];
 }
 
-function confirmation() {
-  const { preparation, essai, resoudre } = auteur.confirmation;
+// accepte : la case « en connaissance de cause », ou null sans erreur.
+function confirmation(accepte) {
+  const { preparation, essai } = auteur.confirmation;
   const { erreurs } = preparation;
   const changement = auteur.genre === "changement";
-  const accepte = el("input", { type: "checkbox", id: "connaissance" });
-  const bouton = el(
-    "button",
-    {
-      type: "button",
-      classe: "bouton",
-      disabled: demo() || erreurs > 0,
-      onclick: () => {
-        auteur.confirmation = null;
-        auteur.attente = "Publication en cours…";
-        rendre();
-        resoudre(true);
-      },
-    },
-    changement ? "Republier sous le nouveau mot de passe" : "Publier",
-  );
-  accepte.addEventListener("change", () => {
-    bouton.disabled = !accepte.checked;
-  });
-  const annuler = el(
-    "button",
-    {
-      type: "button",
-      classe: "bouton secondaire",
-      onclick: () => {
-        auteur.confirmation = null;
-        rendre();
-        resoudre(false);
-      },
-    },
-    demo() ? "Fermer" : "Annuler",
-  );
   const pluriel = erreurs > 1;
   return [
     essai > 1
@@ -307,7 +321,7 @@ function confirmation() {
       : listeDesDifferences(preparation.differences),
     el("h3", {}, "Message de la publication"),
     el("p", { classe: "resume" }, preparation.message),
-    erreurs > 0 && !demo()
+    accepte
       ? el(
           "div",
           { classe: "formulaire" },
@@ -319,9 +333,85 @@ function confirmation() {
           ),
         )
       : null,
-    demo() ? el("p", { classe: "message" }, "Démonstration : la publication est désactivée.") : null,
-    el("div", { classe: "boutons" }, bouton, annuler),
   ];
+}
+
+// Le bouton « Publier » (§ 9)
+
+/**
+ * Pourquoi le bouton « Publier » est inactif, en une ligne, ou null s'il
+ * est actif. La première raison qui tient l'emporte ; pendant une attente,
+ * c'est l'attente elle-même.
+ */
+function raisonDeNePasPublier(accepte) {
+  if (demo()) return "Démonstration : rien n'est publié.";
+  if (auteur.jeton === undefined) return "Lecture du coffre…";
+  if (!auteur.jeton) return "Clé GitHub absente : saisissez-la d'abord.";
+  if (auteur.attente) return auteur.attente;
+  if (auteur.confirmation) return accepte && !accepte.checked ? "Cochez la case « Je publie en connaissance de cause »." : null;
+  if (!auteur.fichier?.banque) return "Importez d'abord un classeur.";
+  return "Comparez d'abord.";
+}
+
+/**
+ * La barre de publication, collée au bas de l'écran : le rapport d'un
+ * classeur réel est long, et le bouton « Publier » ne doit jamais se perdre
+ * dessous. Elle porte aussi « Comparer », ou « Annuler » pendant la
+ * confirmation, et la raison du bouton inactif.
+ */
+function barreDePublication(accepte = null) {
+  const confirmation = auteur.confirmation;
+  const raison = el("p", { id: "raison-publier", classe: "raison-publier", role: "status" });
+  const publierLibelle = confirmation && auteur.genre === "changement" ? "Republier sous le nouveau mot de passe" : "Publier";
+  const bouton = el(
+    "button",
+    {
+      type: "button",
+      classe: "bouton",
+      "aria-describedby": "raison-publier",
+      onclick: () => {
+        if (!auteur.confirmation) return;
+        const { resoudre } = auteur.confirmation;
+        auteur.confirmation = null;
+        auteur.attente = "Publication en cours…";
+        rendre();
+        resoudre(true);
+      },
+    },
+    publierLibelle,
+  );
+  const mettreAJour = () => {
+    const pourquoi = raisonDeNePasPublier(accepte);
+    bouton.disabled = pourquoi !== null;
+    raison.textContent = pourquoi ?? "";
+    raison.hidden = pourquoi === null;
+  };
+  accepte?.addEventListener("change", mettreAJour);
+  mettreAJour();
+  let autre = null;
+  if (confirmation) {
+    autre = el(
+      "button",
+      {
+        type: "button",
+        classe: "bouton secondaire",
+        onclick: () => {
+          auteur.confirmation = null;
+          rendre();
+          confirmation.resoudre(false);
+        },
+      },
+      demo() ? "Fermer" : "Annuler",
+    );
+  } else if ((demo() || auteur.jeton) && !auteur.attente && !auteur.besoin) {
+    autre = el(
+      "button",
+      { type: "button", classe: "bouton", disabled: !auteur.fichier?.banque, onclick: () => lancer("publication") },
+      demo() ? "Comparer avec la banque de démonstration" : "Comparer avec la banque publiée",
+    );
+  }
+  const boutons = confirmation ? [bouton, autre] : [autre, bouton];
+  return el("div", { classe: "barre-publication" }, el("div", { classe: "boutons" }, boutons), raison);
 }
 
 function formulaireMotDePasse() {
@@ -352,20 +442,26 @@ function formulaireMotDePasse() {
         }
         auteur.attente = "Calcul de la clé…";
         rendre();
-        let secret;
-        if (nouveau) secret = await nouveauSecret(premier.value);
-        else {
-          const ouverte = await ouvrirAvecMotDePasse(auteur.publiee.enveloppe, premier.value);
-          if (ouverte.erreur) {
-            auteur.attente = null;
-            auteur.resultat = { erreur: ouverte.code === "mot_de_passe" ? "Ce mot de passe n'ouvre pas la banque publiée." : ouverte.erreur };
-            rendre();
-            return;
+        try {
+          let secret;
+          if (nouveau) secret = await nouveauSecret(premier.value);
+          else {
+            const ouverte = await ouvrirAvecMotDePasse(auteur.publiee.enveloppe, premier.value);
+            if (ouverte.erreur) {
+              auteur.attente = null;
+              auteur.resultat = { erreur: ouverte.code === "mot_de_passe" ? "Ce mot de passe n'ouvre pas la banque publiée." : ouverte.erreur };
+              rendre();
+              return;
+            }
+            secret = ouverte.secret;
           }
-          secret = ouverte.secret;
+          await garder(secret);
+        } catch (erreur) {
+          auteur.attente = null;
+          auteur.resultat = { erreur: `Erreur inattendue : ${erreur.message}` };
+          rendre();
+          return;
         }
-        await ctx.etat.coffre.garderCle(ctx.etat.mode, secret);
-        auteur.secret = secret;
         auteur.besoin = null;
         lancer(auteur.genre);
       },
@@ -409,6 +505,7 @@ function resultat() {
       el("p", {}, r.message),
       r.commit ? el("p", { classe: "petit" }, el("a", { href: adresse, rel: "noreferrer" }, `Voir le commit ${r.commit.slice(0, 7)} sur GitHub`)) : null,
       auteur.genre === "changement" ? el("p", {}, "Transmettez maintenant le nouveau mot de passe aux joueurs.") : null,
+      r.avertissement ? el("p", {}, r.avertissement) : null,
     );
   }
   return el(
@@ -422,9 +519,9 @@ function resultat() {
             type: "button",
             classe: "bouton secondaire",
             onclick: async () => {
+              annulerCircuit();
               await ctx.etat.coffre.oublierJeton();
               auteur.jeton = null;
-              auteur.resultat = null;
               rendre();
             },
           },
@@ -434,28 +531,16 @@ function resultat() {
   );
 }
 
-function publication() {
-  const parties = [el("h2", {}, demo() ? "Différences" : "Publication")];
+// Ce que le circuit montre : l'attente, le mot de passe, les différences, le
+// résultat. « Comparer » et « Publier » sont dans la barre de publication.
+function publication(accepte) {
+  const parties = [];
   if (auteur.attente) parties.push(el("p", { classe: "attente", role: "status" }, auteur.attente));
   if (auteur.besoin) parties.push(formulaireMotDePasse());
-  if (auteur.confirmation) parties.push(...confirmation());
+  if (auteur.confirmation) parties.push(...confirmation(accepte));
   parties.push(resultat());
-  if (!auteur.attente && !auteur.besoin && !auteur.confirmation) {
-    const pret = Boolean(auteur.fichier?.banque);
-    parties.push(
-      el(
-        "div",
-        { classe: "boutons" },
-        el(
-          "button",
-          { type: "button", classe: "bouton", disabled: !pret, onclick: () => lancer("publication") },
-          demo() ? "Comparer avec la banque de démonstration" : "Comparer avec la banque publiée",
-        ),
-      ),
-    );
-    if (!pret) parties.push(el("p", { classe: "secondaire-texte" }, "Importez d'abord un classeur."));
-  }
-  return parties;
+  const presentes = noeuds(parties);
+  return presentes.length ? [el("h2", {}, demo() ? "Différences" : "Publication"), ...presentes] : [];
 }
 
 // Le changement de mot de passe, en une action (§ 7.3)
@@ -487,7 +572,14 @@ function changement() {
           }
           auteur.attente = "Calcul de la nouvelle clé…";
           rendre();
-          auteur.nouveau = await nouveauSecret(premier.value);
+          try {
+            auteur.nouveau = await nouveauSecret(premier.value);
+          } catch (erreur) {
+            auteur.attente = null;
+            auteur.resultat = { erreur: `Erreur inattendue : ${erreur.message}` };
+            rendre();
+            return;
+          }
           lancer("changement");
         },
       },
@@ -512,12 +604,15 @@ function contenu() {
       ),
     );
   } else if (auteur.jeton === undefined) {
-    return [...parties, el("p", { classe: "attente" }, "Lecture du coffre…")];
+    return [...parties, el("p", { classe: "attente" }, "Lecture du coffre…"), barreDePublication()];
   } else if (auteur.jeton === null) {
-    return [...parties, ...saisieDuJeton()];
+    return [...parties, ...saisieDuJeton(), barreDePublication()];
   } else parties.push(etatDuJeton());
-  parties.push(...importation(), ...rapport(), ...publication());
+  // La case n'existe qu'en confirmation d'une publication avec des erreurs.
+  const accepte = auteur.confirmation?.preparation.erreurs > 0 && !demo() ? el("input", { type: "checkbox", id: "connaissance" }) : null;
+  parties.push(...importation(), ...rapport(), ...publication(accepte));
   if (!demo()) parties.push(...changement());
+  parties.push(barreDePublication(accepte));
   return parties;
 }
 

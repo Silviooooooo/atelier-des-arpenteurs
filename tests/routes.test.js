@@ -40,7 +40,9 @@ test("routes — accueil, listes, anomalies, auteur, et les adresses abîmées",
   assert.deepEqual(lireRoute(adresseAnomalies("Eléments", 3)), { ecran: "anomalies", feuille: "Eléments", ligne: 3 });
   assert.equal(adresseAnomalies(), "#/anomalies");
   assert.deepEqual(lireRoute("#/auteur"), { ecran: "auteur" });
-  for (const abimee of ["#/bloc/%E0%A4%A", "#/bloc/", "#/sorts", "#/anomalies/Blocs/x", "#/anomalies/Inconnue/3", "#/auteur/cle"]) {
+  // Les noms d'Object.prototype ne sont ni des listes ni des fiches.
+  const prototype = ["#/constructor", "#/__proto__", "#/__proto__/x", "#/toString", "#/hasOwnProperty", "#/valueOf/abc", "#/anomalies/constructor/3"];
+  for (const abimee of ["#/bloc/%E0%A4%A", "#/bloc/", "#/sorts", "#/anomalies/Blocs/x", "#/anomalies/Inconnue/3", "#/auteur/cle", ...prototype]) {
     assert.equal(lireRoute(abimee).ecran, "introuvable", abimee);
   }
 });

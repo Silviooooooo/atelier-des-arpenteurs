@@ -17,6 +17,9 @@ function aide() {
     "section",
     { classe: "aide-ecran-accueil" },
     el("h2", {}, "Ajouter l'Atelier à l'écran d'accueil"),
+    // Le manifeste n'a pas de start_url : l'icône rouvre la page d'où on l'a
+    // ajoutée (§ 9).
+    el("p", {}, "Faites-le depuis cet accueil de l'Atelier, et non depuis une fiche : l'icône rouvre toujours la page d'où on l'a ajoutée."),
     el(
       "ul",
       {},

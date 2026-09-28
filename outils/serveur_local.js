@@ -3,8 +3,13 @@
 //
 // Les modules JavaScript ne se chargent pas depuis un fichier ouvert
 // directement (file://) : il faut un serveur. Celui-ci sert les fichiers du
-// dépôt comme GitHub Pages, sans dépendance, en lecture seule, et à la seule
+// site comme GitHub Pages, sans dépendance, en lecture seule, et à la seule
 // machine (127.0.0.1). WebCrypto y fonctionne : localhost compte comme sûr.
+//
+// Il ne sert que les fichiers du site : ni .git/, ni les documents de
+// travail, ni un classeur posé un moment dans le dossier. Il refuse une
+// requête dont l'en-tête Host n'est pas la machine elle-même : une page
+// hostile dont le nom se résout vers 127.0.0.1 (rebinding DNS) ne lit rien.
 //
 // Usage : node outils/serveur_local.js [port], puis ouvrir
 // http://localhost:8080/ ou http://localhost:8080/?demo=1
@@ -12,10 +17,11 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const RACINE = fileURLToPath(new URL("../", import.meta.url));
-const PORT = Number(process.argv[2] ?? 8080);
+
+// Les seuls types servis : ceux du site. Un JSON n'est servi que chiffré.
 const TYPES = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -24,27 +30,51 @@ const TYPES = {
   ".webmanifest": "application/manifest+json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
-  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 };
+const TRAVAIL = /^\/(?:plans|ressources|système|tests)\//i;
 
-createServer(async (requete, reponse) => {
-  let chemin;
-  try {
-    chemin = decodeURIComponent(new URL(requete.url, "http://localhost").pathname);
-  } catch {
-    reponse.writeHead(400).end();
-    return;
-  }
-  let fichier = normalize(join(RACINE, chemin.endsWith("/") ? `${chemin}index.html` : chemin));
-  if (!fichier.startsWith(RACINE.endsWith(sep) ? RACINE : RACINE + sep)) {
-    reponse.writeHead(403).end();
-    return;
-  }
-  try {
-    const contenu = await readFile(fichier);
-    reponse.writeHead(200, { "Content-Type": TYPES[extname(fichier)] ?? "application/octet-stream", "Cache-Control": "no-store" });
-    reponse.end(contenu);
-  } catch {
-    reponse.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }).end("Introuvable");
-  }
-}).listen(PORT, "127.0.0.1", () => console.log(`L'Atelier est servi à http://localhost:${PORT}/ (démonstration : ?demo=1).`));
+function servi(chemin) {
+  if (chemin.split("/").some((segment) => segment.startsWith("."))) return false;
+  if (TRAVAIL.test(chemin.normalize("NFC"))) return false;
+  const extension = extname(chemin);
+  if (!Object.hasOwn(TYPES, extension)) return false;
+  return extension !== ".json" || chemin.endsWith(".chiffree.json");
+}
+
+/** Le serveur, à lancer par listen(port, "127.0.0.1"). */
+export function creerServeur(racine = RACINE) {
+  const base = racine.endsWith(sep) ? racine : racine + sep;
+  const serveur = createServer(async (requete, reponse) => {
+    const { port } = serveur.address();
+    if (![`localhost:${port}`, `127.0.0.1:${port}`, `[::1]:${port}`].includes(requete.headers.host)) {
+      reponse.writeHead(403).end();
+      return;
+    }
+    let chemin;
+    try {
+      chemin = decodeURIComponent(new URL(requete.url, "http://localhost").pathname);
+    } catch {
+      reponse.writeHead(400).end();
+      return;
+    }
+    if (chemin.endsWith("/")) chemin += "index.html";
+    const fichier = normalize(join(base, chemin));
+    if (!fichier.startsWith(base) || !servi(chemin)) {
+      reponse.writeHead(403).end();
+      return;
+    }
+    try {
+      const contenu = await readFile(fichier);
+      reponse.writeHead(200, { "Content-Type": TYPES[extname(fichier)], "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+      reponse.end(contenu);
+    } catch {
+      reponse.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" }).end("Introuvable");
+    }
+  });
+  return serveur;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const port = Number(process.argv[2] ?? 8080);
+  creerServeur().listen(port, "127.0.0.1", () => console.log(`L'Atelier est servi à http://localhost:${port}/ (démonstration : ?demo=1).`));
+}

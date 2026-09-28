@@ -11,6 +11,9 @@
 // les fonctions rendent { erreur, code }, avec un message à afficher.
 
 export const ITERATIONS = 600_000;
+// À la lecture, un en-tête peut annoncer plus (une hausse future), jamais
+// moins, ni un nombre qui ferait patienter des heures (§ 7.1).
+export const ITERATIONS_MAX = 10 * ITERATIONS;
 export const LONGUEUR_MINIMALE = 20;
 const OCTETS_SEL = 16;
 const OCTETS_IV = 12;
@@ -89,6 +92,7 @@ export function nouveauSecret(motDePasse) {
  */
 export async function chiffrer(banque, { cle, sel, iterations }) {
   if (typeof banque.publiee_le !== "string") throw new TypeError("La banque à chiffrer n'a pas de date de publication.");
+  if (!(iterations >= ITERATIONS && iterations <= ITERATIONS_MAX)) throw new RangeError(`Une clé de ${iterations} itérations ne chiffre pas : il en faut ${ITERATIONS} au moins.`);
   const clair = new TextEncoder().encode(JSON.stringify(banque));
   const iv = crypto.getRandomValues(new Uint8Array(OCTETS_IV));
   const donnees = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, cle, clair));
@@ -102,14 +106,34 @@ export async function chiffrer(banque, { cle, sel, iterations }) {
 }
 
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+// L'étiquette d'AES-GCM compte 16 octets : des données chiffrées ne sont
+// jamais plus courtes.
+const OCTETS_ETIQUETTE = 16;
 
-/** Lit l'en-tête en clair d'un fichier chiffré : { sel, iterations } ou { erreur }. */
+// Le nombre d'octets d'un texte base64 complet, ou null s'il ne se décode pas.
+function octetsBase64(texte) {
+  if (typeof texte !== "string" || !BASE64.test(texte) || texte.length % 4 !== 0) return null;
+  try {
+    return depuisBase64(texte).length;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Lit l'en-tête en clair d'un fichier chiffré : { sel, iterations } ou { erreur }.
+ * Hors des bornes du § 7.1 (itérations, sel de 16 octets, IV de 12, données
+ * plus longues que l'étiquette), le fichier est abîmé : un message, jamais
+ * une exception plus loin.
+ */
 export function lireEnTete(enveloppe) {
   const { format, kdf, chiffre } = enveloppe ?? {};
   const abime = { erreur: "Le fichier de la banque est abîmé ou d'un format inconnu.", code: "format" };
   if (format !== 1 || kdf?.nom !== "PBKDF2-SHA256" || chiffre?.nom !== "AES-GCM") return abime;
-  if (!Number.isInteger(kdf.iterations) || kdf.iterations < 1) return abime;
-  if (![kdf.sel, chiffre.iv, chiffre.donnees].every((valeur) => typeof valeur === "string" && BASE64.test(valeur))) return abime;
+  if (!Number.isInteger(kdf.iterations) || kdf.iterations < ITERATIONS || kdf.iterations > ITERATIONS_MAX) return abime;
+  if (octetsBase64(kdf.sel) !== OCTETS_SEL || octetsBase64(chiffre.iv) !== OCTETS_IV) return abime;
+  const donnees = chiffre.donnees;
+  if (typeof donnees !== "string" || !BASE64.test(donnees) || donnees.length % 4 !== 0 || donnees.length < (OCTETS_ETIQUETTE / 3) * 4) return abime;
   return { sel: kdf.sel, iterations: kdf.iterations };
 }
 
@@ -153,7 +177,13 @@ export async function ouvrir(enveloppe, { cle, sel, iterations }) {
 export async function ouvrirAvecMotDePasse(enveloppe, motDePasse) {
   const enTete = lireEnTete(enveloppe);
   if (enTete.erreur) return enTete;
-  const secret = await deriverCle(motDePasse, enTete.sel, enTete.iterations);
+  let secret;
+  try {
+    secret = await deriverCle(motDePasse, enTete.sel, enTete.iterations);
+  } catch (erreur) {
+    // Les bornes de l'en-tête sont vérifiées : reste un navigateur qui refuse.
+    return { erreur: `La clé n'a pas pu être calculée sur cet appareil (${erreur.message}).`, code: "derivation" };
+  }
   const resultat = await dechiffrer(enveloppe, secret.cle);
   return resultat.erreur ? { ...resultat, duree: secret.duree } : { ...resultat, secret };
 }

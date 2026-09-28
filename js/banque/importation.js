@@ -55,7 +55,9 @@ function cellulesParEntete(ligne, entetes) {
     if (!entete && valeur === "") continue;
     let cleCellule = entete || `colonne ${lettres(i)}`;
     if (Object.hasOwn(cellules, cleCellule)) cleCellule += ` (colonne ${lettres(i)})`;
-    cellules[cleCellule] = valeur;
+    // defineProperty : une colonne « __proto__ » se garde comme les autres,
+    // au lieu de toucher au prototype et de disparaître en silence.
+    Object.defineProperty(cellules, cleCellule, { value: valeur, enumerable: true, writable: true, configurable: true });
   }
   return cellules;
 }

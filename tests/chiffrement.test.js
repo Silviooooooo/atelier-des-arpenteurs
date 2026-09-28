@@ -16,6 +16,7 @@ import {
   nouveauSecret,
   ouvrir,
   ouvrirAvecMotDePasse,
+  versBase64,
 } from "../js/securite/chiffrement.js";
 import { creerCoffre, magasinMemoire } from "../js/securite/coffre.js";
 
@@ -64,6 +65,49 @@ test("chiffrement — un fichier abîmé ou inconnu donne un message, pas une ex
   for (const inconnu of [null, {}, { ...fichier, format: 2 }, { ...fichier, kdf: { ...fichier.kdf, sel: "pas du base64 !" } }]) {
     assert.equal(lireEnTete(inconnu).code, "format");
     assert.equal((await ouvrirAvecMotDePasse(inconnu, MOT_DE_PASSE)).code, "format");
+  }
+});
+
+test("chiffrement — un en-tête hors des bornes du § 7.1 donne un message, jamais une exception", async () => {
+  const secret = await nouveauSecret(MOT_DE_PASSE);
+  const fichier = await chiffrer(BANQUE, secret);
+  const avec = (kdf, chiffre = {}) => ({ ...fichier, kdf: { ...fichier.kdf, ...kdf }, chiffre: { ...fichier.chiffre, ...chiffre } });
+  const abimes = {
+    "sel d'un signe": avec({ sel: "A" }),
+    "sel mal complété": avec({ sel: "AB=" }),
+    "sel de 15 octets": avec({ sel: versBase64(new Uint8Array(15)) }),
+    "IV d'un signe": avec({}, { iv: "A" }),
+    "IV de 11 octets": avec({}, { iv: versBase64(new Uint8Array(11)) }),
+    "données de 3 octets": avec({}, { donnees: "AAAA" }),
+    "1 itération": avec({ iterations: 1 }),
+    "une itération de moins": avec({ iterations: ITERATIONS - 1 }),
+    "dix fois trop, plus une": avec({ iterations: 10 * ITERATIONS + 1 }),
+    "2^32 itérations": avec({ iterations: 2 ** 32 }),
+    "10^12 itérations": avec({ iterations: 1e12 }),
+  };
+  for (const [cas, abime] of Object.entries(abimes)) {
+    assert.equal(lireEnTete(abime).code, "format", cas);
+    assert.equal((await ouvrirAvecMotDePasse(abime, MOT_DE_PASSE)).code, "format", cas);
+    assert.equal((await ouvrir(abime, secret)).code, "format", cas);
+  }
+  // Les bornes elles-mêmes passent : une hausse future reste lisible.
+  assert.deepEqual(lireEnTete(avec({ iterations: 10 * ITERATIONS })), { sel: fichier.kdf.sel, iterations: 10 * ITERATIONS });
+  // Une clé sous le plancher ne chiffre rien.
+  await assert.rejects(chiffrer(BANQUE, { ...secret, iterations: 1 }), /itérations/);
+});
+
+test("chiffrement — un navigateur qui refuse la dérivation donne un message, pas une exception", async () => {
+  const fichier = await chiffrer(BANQUE, await nouveauSecret(MOT_DE_PASSE));
+  const original = crypto.subtle.deriveKey;
+  crypto.subtle.deriveKey = async () => {
+    throw new Error("opération refusée");
+  };
+  try {
+    const resultat = await ouvrirAvecMotDePasse(fichier, MOT_DE_PASSE);
+    assert.equal(resultat.code, "derivation");
+    assert.match(resultat.erreur, /opération refusée/);
+  } finally {
+    crypto.subtle.deriveKey = original;
   }
 });
 
@@ -136,6 +180,15 @@ test("coffre — la clé réelle et la clé de démonstration se gardent sépar�
   assert.equal(await coffre.lireCle("reel"), null);
   assert.equal((await coffre.lireCle("demo")).sel, demo.sel);
   await assert.rejects(coffre.lireCle("autre"), TypeError);
+});
+
+test("coffre — ne garde qu'une clé AES-GCM, non extractible, et rien d'autre", async () => {
+  const coffre = creerCoffre(magasinMemoire());
+  const hmac = await crypto.subtle.generateKey({ name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  for (const faux of [{ extractable: false }, { extractable: false, algorithm: { name: "AES-GCM" } }, hmac]) {
+    await assert.rejects(coffre.garderCle("reel", { cle: faux, sel: "c2Vs", iterations: ITERATIONS, duree: 1 }), /non extractible/);
+  }
+  assert.equal(await coffre.lireCle("reel"), null);
 });
 
 test("coffre — ne garde qu'une clé non extractible ; le jeton à part", async () => {

@@ -12,14 +12,22 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { CLASSEUR_ESSAI } from "./outils/classeur_essai.js";
+import { fabriquerClasseur } from "./outils/fabrique_classeur.js";
 
 const RACINE = fileURLToPath(new URL("..", import.meta.url));
 
 function git(...parametres) {
-  return execFileSync("git", parametres, { cwd: RACINE, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  return gitDans(RACINE, ...parametres);
+}
+
+// core.quotePath=false : un chemin accentué (« Système/ ») reste lisible.
+function gitDans(dossier, ...parametres) {
+  return execFileSync("git", ["-c", "core.quotePath=false", ...parametres], { cwd: dossier, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 }
 
 function cheminsDuDepot() {
@@ -47,6 +55,34 @@ function classeursHorsEssais(chemins) {
   return chemins.filter((chemin) => /\.xlsx$/i.test(chemin) && !/^essais\/[^/]+\.xlsx$/i.test(chemin));
 }
 
+// Interdit 1 : un classeur d'essais/ est un classeur que l'outil des essais
+// fabrique, octet pour octet, depuis une description connue. Un classeur
+// réel posé dans essais/, quel que soit son nom, ne passe pas.
+const CLASSEURS_D_ESSAI = { "essais/classeur_essai.xlsx": CLASSEUR_ESSAI };
+
+function classeursInconnus(chemins, lireOctets) {
+  return chemins
+    .filter((chemin) => /\.xlsx$/i.test(chemin) && /^essais\//i.test(chemin))
+    .filter((chemin) => !Object.hasOwn(CLASSEURS_D_ESSAI, chemin) || !fabriquerClasseur(CLASSEURS_D_ESSAI[chemin]).equals(lireOctets(chemin)));
+}
+
+// Les autres formats d'un classeur ou d'un document (un « Enregistrer
+// sous », un export PDF), et tout JSON hors de cette liste, restent hors du
+// dépôt : une banque en clair gardée pour déboguer ne passe pas.
+const FORMATS_INTERDITS = /\.(?:xls|xlsm|xlsb|ods|csv|doc|docm|odt|pdf)$/i;
+const JSON_PERMIS = ["package.json", "essais/banque_demo.chiffree.json", "donnees/banque.chiffree.json"];
+
+function fichiersHorsListe(chemins) {
+  return chemins.filter((chemin) => FORMATS_INTERDITS.test(chemin) || (/\.json$/i.test(chemin) && !JSON_PERMIS.includes(chemin)));
+}
+
+// § 10.1 : GitHub Pages sert chaque fichier du dépôt dans l'origine de
+// l'Atelier, sans la politique de sécurité de index.html. La seule page est
+// index.html, la seule image SVG l'icône, que dessine son outil.
+function pagesEnTrop(chemins) {
+  return chemins.filter((chemin) => /\.(?:html?|xhtml|xml|svg)$/i.test(chemin) && !["index.html", "icones/icone.svg"].includes(chemin));
+}
+
 // Le Word des règles, comme tout document Word, reste hors du dépôt.
 function documentsWord(chemins) {
   return chemins.filter((chemin) => /\.docx$/i.test(chemin));
@@ -63,6 +99,23 @@ const CHAMPS = {
   chiffre: ["nom", "iv", "donnees"],
 };
 
+// Les octets d'un texte base64 complet, ou null.
+function octetsBase64(texte) {
+  if (typeof texte !== "string" || !BASE64.test(texte) || texte.length % 4 !== 0) return null;
+  return Buffer.from(texte, "base64");
+}
+
+// Des données chiffrées ne se lisent pas comme du texte : une banque en clair
+// seulement encodée en base64 se lirait.
+function seLitCommeDuTexte(octets) {
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(octets);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function defautDeFormeChiffree(texte) {
   let banque;
   try {
@@ -77,18 +130,20 @@ function defautDeFormeChiffree(texte) {
     if (enTrop.length) return `champs hors du § 7.1 : ${enTrop.join(", ")}`;
   }
   const { kdf, chiffre } = banque;
-  if (kdf.nom !== "PBKDF2-SHA256" || !Number.isInteger(kdf.iterations) || !BASE64.test(kdf.sel ?? "")) {
-    return "dérivation (kdf) incomplète";
+  if (kdf.nom !== "PBKDF2-SHA256" || kdf.iterations !== 600000 || octetsBase64(kdf.sel)?.length !== 16) {
+    return "dérivation (kdf) hors du § 7.1";
   }
-  if (chiffre.nom !== "AES-GCM" || !BASE64.test(chiffre.iv ?? "") || !BASE64.test(chiffre.donnees ?? "")) {
+  const donnees = octetsBase64(chiffre.donnees);
+  if (chiffre.nom !== "AES-GCM" || octetsBase64(chiffre.iv)?.length !== 12 || !donnees || donnees.length < 16) {
     return "données chiffrées incomplètes";
   }
+  if (seLitCommeDuTexte(donnees)) return "données en clair, seulement encodées en base64";
   return null;
 }
 
 function donneesEnClair(chemins, lireTexte) {
   const fautes = [];
-  for (const chemin of chemins.filter((c) => c.startsWith("donnees/"))) {
+  for (const chemin of chemins.filter((c) => c.toLowerCase().startsWith("donnees/"))) {
     const defaut = chemin === BANQUE ? defautDeFormeChiffree(lireTexte(chemin)) : `seule ${BANQUE} a sa place ici`;
     if (defaut) fautes.push(`${chemin} : ${defaut}`);
   }
@@ -100,8 +155,57 @@ function donneesEnClair(chemins, lireTexte) {
 // jamais le jeton, que le journal de GitHub Actions rendrait public.
 const JETON = /(?:gh[pousr]_|github_pat_)[A-Za-z0-9_]{36,}/;
 
+// Sans ses octets nuls, un texte UTF-16 (ce qu'écrit « > » dans Windows
+// PowerShell 5.1) se lit comme de l'ASCII : un jeton y reste visible.
 function jetonsEntiers(fichiers) {
-  return lignesFautives(fichiers, JETON);
+  return lignesFautives(
+    fichiers.map(({ chemin, contenu }) => ({ chemin, contenu: contenu.replaceAll("\0", "") })),
+    JETON,
+  );
+}
+
+// L'historique aussi : un fichier ajouté puis retiré reste public.
+function cheminsDeLHistorique(dossier = RACINE) {
+  return [...new Set(gitDans(dossier, "log", "--all", "--name-only", "--format=").split("\n").filter(Boolean))];
+}
+
+// Les révisions où un fichier porte un jeton entier : « sha:chemin »,
+// jamais le jeton, que le journal de GitHub Actions rendrait public.
+function jetonsDansLHistorique(dossier = RACINE) {
+  const revisions = gitDans(dossier, "rev-list", "--all").split("\n").filter(Boolean);
+  try {
+    return gitDans(dossier, "grep", "-l", "--text", "-E", "(gh[pousr]_|github_pat_)[A-Za-z0-9_]{36,}", ...revisions).split("\n").filter(Boolean);
+  } catch (erreur) {
+    if (erreur.status === 1) return [];
+    throw erreur;
+  }
+}
+
+// Tout ce qu'un chemin seul suffit à interdire, pour l'historique.
+function cheminsInterdits(chemins) {
+  return [
+    ...classeursHorsEssais(chemins),
+    ...chemins.filter((chemin) => /^essais\/[^/]+\.xlsx$/i.test(chemin) && !Object.hasOwn(CLASSEURS_D_ESSAI, chemin)),
+    ...documentsWord(chemins),
+    ...fichiersHorsListe(chemins),
+    ...pagesEnTrop(chemins),
+    ...chemins.filter((chemin) => chemin.toLowerCase().startsWith("donnees/") && chemin !== BANQUE),
+  ];
+}
+
+// § 10.2 : le workflow n'emploie que des actions fixées sur un commit, avec
+// les droits les plus faibles, sans jeton gardé ni texte venu d'un tiers.
+function defautsDuWorkflow(texte) {
+  const fautes = [];
+  for (const [, action, suite] of texte.matchAll(/^\s*(?:-\s*)?uses:\s*(\S+)(.*)$/gm)) {
+    if (!/^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/.test(action) || !/^\s+#\s*v\d/.test(suite)) fautes.push(`action non fixée : ${action}`);
+  }
+  if (!/^permissions:[ ]*\n[ ]+contents:[ ]*read[ ]*$/m.test(texte)) fautes.push("permissions : contents: read attendu au niveau du workflow");
+  if (/:\s*write\b/.test(texte)) fautes.push("une permission en écriture");
+  if (!/persist-credentials:\s*false/.test(texte)) fautes.push("persist-credentials: false attendu");
+  if (/pull_request_target|workflow_run/.test(texte)) fautes.push("déclencheur qui donne des droits à un tiers");
+  if (/\$\{\{\s*github\.event/.test(texte)) fautes.push("texte d'un événement recopié dans le workflow");
+  return fautes;
 }
 
 // § 10.3 : l'historique public ne porte que des adresses privées GitHub. Les
@@ -158,23 +262,129 @@ test("Word — aucun document Word dans le dépôt", () => {
   assert.deepEqual(documentsWord(cheminsDuDepot()), []);
 });
 
+test("interdit 1 — repère un classeur d'essais/ qui n'est pas fabriqué par l'outil des essais", () => {
+  const vrai = readFileSync(join(RACINE, "essais/classeur_essai.xlsx"));
+  const octets = { "essais/classeur_essai.xlsx": vrai, "essais/regles_jdr.xlsx": vrai, "essais/Classeur_Essai.XLSX": vrai };
+  assert.deepEqual(classeursInconnus(Object.keys(octets), (c) => octets[c]), ["essais/regles_jdr.xlsx", "essais/Classeur_Essai.XLSX"]);
+  assert.deepEqual(classeursInconnus(["essais/classeur_essai.xlsx"], () => Buffer.from("un autre classeur")), ["essais/classeur_essai.xlsx"]);
+});
+
+test("interdit 1 — chaque classeur d'essais/ est fabriqué par l'outil des essais", () => {
+  assert.deepEqual(classeursInconnus(cheminsDuDepot(), (chemin) => readFileSync(join(RACINE, chemin))), []);
+});
+
+test(".gitignore — ignore les classeurs, documents et données en clair, pas les fichiers du site", () => {
+  const ignores = [
+    "regles_jdr.xlsx", "essais/regles_jdr.xlsx", "essais/sous/copie.xlsx", "Système/regles_jdr.xlsx", "système/x.xlsx",
+    "regles.xlsm", "regles.xls", "regles.xlsb", "regles.ods", "regles.csv",
+    "Principe jdr abrasia.docx", "principe.doc", "principe.docm", "principe.odt", "principe.pdf",
+    "donnees/banque.json", "donnees/sous/clair.json", "banque.json", "essais/banque_claire.json", "tests/banque.json",
+    "plans/instruction.md", "ressources/notes.md", "desktop.ini", "Thumbs.db", "~$regles_jdr.xlsx", "essais/~$classeur_essai.xlsx",
+  ];
+  const suivis = ["essais/classeur_essai.xlsx", "essais/banque_demo.chiffree.json", "donnees/banque.chiffree.json", "package.json", "index.html", "js/application.js", "icones/icone.svg"];
+  let sortie = "";
+  try {
+    sortie = git("check-ignore", "--no-index", "--", ...ignores, ...suivis);
+  } catch (erreur) {
+    if (erreur.status !== 1) throw erreur;
+  }
+  const vus = sortie.split("\n").filter(Boolean);
+  assert.deepEqual(ignores.filter((chemin) => !vus.includes(chemin)), [], "à ignorer");
+  assert.deepEqual(suivis.filter((chemin) => vus.includes(chemin)), [], "à suivre");
+});
+
+test("formats — repère un autre format de classeur ou de document, un JSON hors liste, une page en trop", () => {
+  const chemins = ["regles.xlsm", "regles.CSV", "principe.pdf", "Principe.doc", "tests/banque.json", "package.json", "essais/banque_demo.chiffree.json", "js/lecture/xlsx.js"];
+  assert.deepEqual(fichiersHorsListe(chemins), chemins.slice(0, 5));
+  const pages = ["index.html", "icones/icone.svg", "guide.html", "docs/schema.svg", "a.xhtml", "b.XML", "c.htm", "SPECIFICATION.md"];
+  assert.deepEqual(pagesEnTrop(pages), pages.slice(2, 7));
+});
+
+test("formats — aucun autre format de classeur ou de document, aucun JSON hors liste, aucune page en trop", () => {
+  assert.deepEqual(fichiersHorsListe(cheminsDuDepot()), []);
+  assert.deepEqual(pagesEnTrop(cheminsDuDepot()), []);
+});
+
+test("historique — repère un classeur ou un jeton ajouté puis retiré", () => {
+  const essai = mkdtempSync(join(tmpdir(), "atelier-historique-"));
+  try {
+    const g = (...parametres) => gitDans(essai, "-c", "user.name=Essai", "-c", "user.email=essai@users.noreply.github.com", "-c", "commit.gpgsign=false", ...parametres);
+    g("init", "-q");
+    writeFileSync(join(essai, "regles_jdr.xlsx"), "un faux classeur");
+    writeFileSync(join(essai, "note.txt"), `jeton : ${"ghp_" + "A1b2".repeat(9)}`);
+    writeFileSync(join(essai, "propre.txt"), "rien");
+    g("add", "-A");
+    g("commit", "-q", "-m", "ajout");
+    g("rm", "-q", "regles_jdr.xlsx", "note.txt");
+    g("commit", "-q", "-m", "retrait");
+    assert.deepEqual(cheminsInterdits(cheminsDeLHistorique(essai)), ["regles_jdr.xlsx"]);
+    const trouves = jetonsDansLHistorique(essai);
+    assert.equal(trouves.length, 1);
+    assert.match(trouves[0], /^[0-9a-f]{40}:note\.txt$/);
+  } finally {
+    rmSync(essai, { recursive: true, force: true });
+  }
+});
+
+test("historique — aucun fichier interdit, aucun jeton, dans tout l'historique", () => {
+  const chemins = cheminsDeLHistorique();
+  assert.ok(chemins.includes("SPECIFICATION.md"), "historique vide : le contrôle ne prouverait rien");
+  assert.deepEqual(cheminsInterdits(chemins), []);
+  assert.deepEqual(jetonsDansLHistorique(), []);
+});
+
+test("workflow — repère une action non fixée, des droits en écriture, un déclencheur dangereux", () => {
+  const vrai = readFileSync(join(RACINE, ".github/workflows/controles.yml"), "utf8");
+  assert.deepEqual(defautsDuWorkflow(vrai), []);
+  const variantes = {
+    "action non fixée": vrai.replace(/actions\/checkout@[0-9a-f]{40}/, "actions/checkout@v7"),
+    "sans version": vrai.replace("# v7.0.1", ""),
+    "écriture": vrai.replace("contents: read", "contents: write"),
+    "écriture en plus": vrai.replace("  contents: read", "  contents: read\n  pull-requests: write"),
+    "sans permissions": vrai.replace(/permissions:[ ]*\r?\n[ ]+contents: read\r?\n/, ""),
+    "jeton gardé": vrai.replace("persist-credentials: false", "persist-credentials: true"),
+    "tiers": vrai.replace("  pull_request:", "  pull_request_target:"),
+    "injection": vrai.replace("run: node --test", "run: echo \"${{ github.event.head_commit.message }}\" && node --test"),
+  };
+  for (const [cas, variante] of Object.entries(variantes)) {
+    assert.notEqual(variante, vrai, `${cas} : la variante n'a rien changé`);
+    assert.notDeepEqual(defautsDuWorkflow(variante), [], cas);
+  }
+});
+
+test("workflow — les workflows du dépôt sont sûrs (§ 10.2)", () => {
+  const workflows = cheminsDuDepot().filter((chemin) => chemin.startsWith(".github/workflows/"));
+  assert.ok(workflows.length >= 1);
+  for (const chemin of workflows) assert.deepEqual(defautsDuWorkflow(lire(chemin, "utf8")), [], chemin);
+});
+
 test("interdit 2 — repère des données en clair dans donnees/", () => {
   const enTete = { format: 1, publiee_le: "2026-09-28T14:32:00+02:00", empreinte: "sha256:00" };
-  const kdf = { nom: "PBKDF2-SHA256", iterations: 600000, sel: "c2Vs" };
-  const chiffre = { nom: "AES-GCM", iv: "aXY=", donnees: "ZG9ubsOpZXM=" };
+  const kdf = { nom: "PBKDF2-SHA256", iterations: 600000, sel: Buffer.alloc(16, 7).toString("base64") };
+  // Des octets qui ne se lisent pas comme du texte, comme un vrai chiffré.
+  const chiffre = { nom: "AES-GCM", iv: Buffer.alloc(12, 9).toString("base64"), donnees: Buffer.alloc(32, 0x9c).toString("base64") };
+  const clair = Buffer.from(JSON.stringify({ format: 1, blocs: [{ nom: "Secret du MJ" }] })).toString("base64");
   const essais = [
     [{ ...enTete, kdf, chiffre }, 0],
     [{ ...enTete, kdf, chiffre, blocs: [] }, 1],
     [{ ...enTete, kdf: { ...kdf, capacites: [] }, chiffre }, 1],
     [{ ...enTete, kdf, chiffre: { ...chiffre, donnees: '{"blocs":[]}' } }, 1],
     [{ ...enTete, kdf }, 1],
+    [{ ...enTete, kdf, chiffre: { ...chiffre, donnees: clair } }, 1],
+    [{ ...enTete, kdf: { ...kdf, iterations: 1000 }, chiffre }, 1],
+    [{ ...enTete, kdf: { ...kdf, sel: "c2Vs" }, chiffre }, 1],
+    [{ ...enTete, kdf, chiffre: { ...chiffre, iv: "aXY=" } }, 1],
   ];
   for (const [banque, nombre] of essais) {
     const fautes = donneesEnClair([BANQUE], () => JSON.stringify(banque));
     assert.equal(fautes.length, nombre, JSON.stringify(banque));
   }
   assert.equal(donneesEnClair([BANQUE], () => "{ pas du JSON").length, 1);
-  assert.equal(donneesEnClair(["donnees/banque.json", "donnees/copie.csv"], () => "{}").length, 2);
+  assert.equal(donneesEnClair(["donnees/banque.json", "donnees/copie.csv", "Donnees/clair.json"], () => "{}").length, 3);
+});
+
+test("interdit 2 — la banque de démonstration a la forme chiffrée du § 7.1", () => {
+  assert.equal(defautDeFormeChiffree(lire("essais/banque_demo.chiffree.json", "utf8")), null);
 });
 
 test("interdit 2 — donnees/ ne contient que la banque chiffrée", () => {
@@ -189,8 +399,9 @@ test("interdit 3 — repère un jeton entier, pas un préfixe cité", () => {
     { chemin: "b.md", contenu: "les préfixes `github_pat_` et `ghp_` sont interdits" },
     { chemin: "c.txt", contenu: `\n\n${aPorteeFine}` },
     { chemin: "d.txt", contenu: "ghp_" + "trop_court" },
+    { chemin: "e.txt", contenu: Buffer.from(`\uFEFFnote\r\n${classique}\r\n`, "utf16le").toString("latin1") },
   ];
-  assert.deepEqual(jetonsEntiers(fichiers), ["a.js, ligne 1", "c.txt, ligne 3"]);
+  assert.deepEqual(jetonsEntiers(fichiers), ["a.js, ligne 1", "c.txt, ligne 3", "e.txt, ligne 2"]);
 });
 
 test("interdit 3 — aucun jeton GitHub dans le dépôt", () => {

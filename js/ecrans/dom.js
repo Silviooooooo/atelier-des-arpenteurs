@@ -6,16 +6,26 @@
 
 import { CATEGORIES, adresseAnomalies, adresseFiche } from "../routes.js";
 
+// Une adresse est une route de l'Atelier (#/…), la démonstration (?…), ou
+// une page https : jamais javascript:, data: ni une adresse sans schéma.
+const ADRESSE_PERMISE = /^(?:#\/|\?|https:\/\/)/;
+
 /**
  * el("a", { href: "#/", classe: "marque", onclick: f }, "texte", noeud…).
- * Un attribut null, undefined ou false est omis ; true s'écrit vide.
+ * Un attribut null, undefined ou false est omis ; true s'écrit vide. Un
+ * gestionnaire est toujours une fonction, jamais du texte ; ni style ni
+ * srcdoc : la politique de sécurité n'est pas la seule barrière (§ 10.1).
  */
 export function el(balise, attributs = {}, ...enfants) {
   const noeud = document.createElement(balise);
   for (const [nom, valeur] of Object.entries(attributs)) {
     if (valeur === null || valeur === undefined || valeur === false) continue;
     if (nom === "classe") noeud.className = valeur;
-    else if (nom.startsWith("on") && typeof valeur === "function") noeud.addEventListener(nom.slice(2), valeur);
+    else if (nom.startsWith("on")) {
+      if (typeof valeur !== "function") throw new TypeError(`Le gestionnaire ${nom} doit être une fonction.`);
+      noeud.addEventListener(nom.slice(2), valeur);
+    } else if (nom === "style" || nom === "srcdoc") throw new TypeError(`L'attribut ${nom} n'est pas permis.`);
+    else if ((nom === "href" || nom === "src") && !ADRESSE_PERMISE.test(String(valeur))) throw new TypeError(`Adresse refusée : ${String(valeur).slice(0, 40)}`);
     else noeud.setAttribute(nom, valeur === true ? "" : String(valeur));
   }
   for (const enfant of enfants.flat(Infinity)) {
@@ -74,14 +84,19 @@ export function brut(texte, lieu) {
   return el("span", {}, el("span", { classe: "valeur" }, texte), " (", versAnomalie(lieu, "notation non comprise, voir l'anomalie"), ")");
 }
 
-/** Une fiche demandée par un nom qui n'existe pas ; le nom approché s'il y en a un. */
+/**
+ * Une fiche demandée par un nom qui n'existe pas ; le nom approché s'il y en
+ * a un. Le nom vient de l'adresse, que n'importe qui peut forger : il est
+ * cité, coupé, et jamais mis en titre de la page.
+ */
 export function introuvable(index, categorie, nom) {
   const proche = index.resoudre(categorie, nom);
+  const cite = [...nom].length > 80 ? `${[...nom].slice(0, 80).join("")}…` : nom;
   return el(
     "article",
     { classe: "fiche" },
-    titre(nom),
-    el("p", { classe: "message" }, `Rien ne porte ce nom parmi les ${CATEGORIES[categorie].titre.toLowerCase()}.`),
+    titre("Fiche introuvable"),
+    el("p", { classe: "message" }, `Rien ne porte le nom « ${cite} » parmi les ${CATEGORIES[categorie].titre.toLowerCase()}.`),
     proche && proche !== nom ? el("p", {}, "Vouliez-vous dire ", el("a", { href: adresseFiche(categorie, proche) }, proche), " ?") : null,
   );
 }

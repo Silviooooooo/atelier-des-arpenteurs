@@ -25,7 +25,10 @@ export function creerCoffre(magasin) {
       return (await magasin.lire(cleDuMode(mode))) ?? null;
     },
     async garderCle(mode, { cle, sel, iterations, duree }, date = new Date()) {
-      if (cle?.extractable !== false) throw new TypeError("Le coffre ne garde qu'une clé non extractible.");
+      // Une vraie clé WebCrypto d'AES-GCM, pas un objet qui en aurait l'air.
+      if (!(cle instanceof CryptoKey) || cle.extractable !== false || cle.algorithm?.name !== "AES-GCM") {
+        throw new TypeError("Le coffre ne garde qu'une clé AES-GCM non extractible.");
+      }
       await magasin.ecrire(cleDuMode(mode), { cle, sel, iterations, duree, gardee_le: date.toISOString() });
     },
     async oublierCle(mode) {

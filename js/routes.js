@@ -26,8 +26,9 @@ export function lireRoute(adresse) {
   const chemin = String(adresse ?? "").replace(/^#/, "").replace(/^\/+/, "");
   const [tete, ...reste] = chemin.split("/");
   if (tete === "" && reste.length === 0) return { ecran: "accueil" };
-  if (CATEGORIES[tete] && reste.length === 0) return { ecran: "liste", categorie: tete };
-  if (PAR_FICHE[tete] && reste.length > 0) {
+  // Object.hasOwn : « constructor » ou « __proto__ » ne sont pas des catégories.
+  if (Object.hasOwn(CATEGORIES, tete) && reste.length === 0) return { ecran: "liste", categorie: tete };
+  if (Object.hasOwn(PAR_FICHE, tete) && reste.length > 0) {
     // Un nom peut contenir « / » : tout ce qui suit la catégorie en fait partie.
     const nom = decoder(reste.join("/"));
     if (nom !== null && nom !== "") return { ecran: "fiche", categorie: PAR_FICHE[tete], nom };

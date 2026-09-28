@@ -44,7 +44,8 @@ const etat = {
   chargement: null, // { enveloppe }, { absente: true } ou { erreur }
   banque: null,
   index: null,
-  secret: null, // le secret qui a ouvert la banque
+  secret: null, // le secret de table en mémoire : sa seule copie hors du coffre
+  garder: null, // le choix « Se souvenir sur cet appareil » de la dernière saisie
   motDePasse: null, // « requis » ou « change » quand la banque attend le mot de passe
   derivation: null, // { duree, le } : la dernière dérivation de cette visite
   stockage: null, // { resultat, le } : la demande de stockage durable
@@ -77,15 +78,23 @@ const contexte = {
     const duree = resultat.secret?.duree ?? resultat.duree;
     if (duree !== undefined) etat.derivation = { duree, le: new Date().toISOString() };
     if (resultat.erreur) return resultat;
+    etat.garder = garder;
     installer(resultat.banque, resultat.secret);
     // Après chaque saisie réussie : que le navigateur n'efface pas la clé.
-    etat.stockage = { resultat: await demanderStockageDurable(), le: new Date().toISOString() };
-    ecrireMemoire("stockage", etat.stockage);
+    // Firefox demande l'accord de la personne, et la réponse peut ne jamais
+    // venir : l'Atelier s'ouvre sans l'attendre, le diagnostic la note après.
+    etat.stockage = { resultat: "réponse en attente", le: new Date().toISOString() };
+    demanderStockageDurable().then((resultat) => {
+      etat.stockage = { resultat, le: new Date().toISOString() };
+      ecrireMemoire("stockage", etat.stockage);
+    });
     return resultat;
   },
 
   async oublier() {
     await etat.coffre.oublierCle(etat.mode);
+    // L'espace auteur ne garde aucune copie : son circuit en cours s'annule.
+    espaceAuteur.oublier();
     Object.assign(etat, { banque: null, index: null, secret: null, nouvelles: null, motDePasse: etat.chargement?.enveloppe ? "requis" : null });
     afficher();
   },
@@ -133,7 +142,7 @@ function marquerNavigation(route) {
 
 function ecran(route) {
   if (route.ecran === "auteur") return espaceAuteur.afficher(contexte);
-  if (!etat.chargement) return el("p", { classe: "attente", role: "status" }, "Chargement de la banque…");
+  if (!etat.chargement) return el("p", { classe: "attente", role: "status", "data-chargement": true }, "Chargement de la banque…");
   if (etat.chargement.absente) return accueil.afficherSansBanque(contexte);
   if (etat.chargement.erreur) return accueil.afficherErreur(contexte, etat.chargement.erreur);
   if (!etat.banque) return motDePasse.afficher(contexte);

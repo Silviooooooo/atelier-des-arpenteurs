@@ -490,6 +490,27 @@ dl {
   font-size: var(--taille-petite);
 }
 
+/* La barre de publication reste au bas de l'écran : le rapport d'un
+   classeur réel est long, et « Publier » ne doit jamais se perdre dessous. */
+.barre-publication {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding: var(--espace-2) 0;
+  border-top: var(--trait) solid var(--separateur);
+  background: var(--fond);
+}
+
+.barre-publication .boutons {
+  margin: 0;
+}
+
+.raison-publier {
+  margin: var(--espace-1) 0 0;
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
 @media (min-width: 56rem) {
   .consultation {
     display: grid;

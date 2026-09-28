@@ -1,7 +1,8 @@
 // L'écran du mot de passe (SPECIFICATION.md, § 7.2 et § 9).
 //
-// Un champ, « se souvenir sur cet appareil » coché par défaut, et une
-// attente pendant la dérivation de la clé, qui peut durer sur un téléphone.
+// Un champ, « se souvenir sur cet appareil » coché par défaut (sans
+// IndexedDB, une phrase dit que rien n'est gardé), et une attente pendant la
+// dérivation de la clé, qui peut durer sur un téléphone.
 // En démonstration, le mot de passe, public, est affiché avec un bouton qui
 // le recopie dans le champ.
 
@@ -30,7 +31,10 @@ export function afficher(contexte) {
     spellcheck: "false",
     required: true,
   });
-  const garder = el("input", { type: "checkbox", id: "garder", checked: true });
+  // Sans IndexedDB (navigation privée), rien ne peut être gardé : la page le
+  // dit, au lieu d'une case sans effet (§ 7.2).
+  const durable = etat.coffre?.durable !== false;
+  const garder = durable ? el("input", { type: "checkbox", id: "garder", checked: true }) : null;
   const message = el("p", { classe: "message", role: "alert", hidden: true });
   const attente = el(
     "p",
@@ -51,7 +55,12 @@ export function afficher(contexte) {
         attente.hidden = false;
         formulaire.setAttribute("aria-busy", "true");
         await laisserPeindre();
-        const resultat = await contexte.deverrouiller(champ.value, garder.checked);
+        let resultat;
+        try {
+          resultat = await contexte.deverrouiller(champ.value, garder?.checked ?? false);
+        } catch (erreur) {
+          resultat = { erreur: `Erreur inattendue : ${erreur.message}` };
+        }
         formulaire.removeAttribute("aria-busy");
         attente.hidden = true;
         bouton.disabled = false;
@@ -66,7 +75,9 @@ export function afficher(contexte) {
     },
     el("label", { for: "mot-de-passe" }, "Mot de passe de table"),
     champ,
-    el("label", { classe: "case", for: "garder" }, garder, "Se souvenir sur cet appareil"),
+    garder
+      ? el("label", { classe: "case", for: "garder" }, garder, "Se souvenir sur cet appareil")
+      : el("p", { classe: "secondaire-texte" }, "Cet appareil ne garde rien : le mot de passe sera redemandé à la prochaine visite."),
     el("div", { classe: "boutons" }, bouton),
     attente,
     message,

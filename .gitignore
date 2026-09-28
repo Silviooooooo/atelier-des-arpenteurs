@@ -1,14 +1,28 @@
 # Ce qui n'entre jamais dans le dépôt, qui est public (SPECIFICATION.md, § 10.3).
 
-# Classeurs : seuls les classeurs fictifs d'essais/ entrent (interdit 1).
+# Classeurs : seul le classeur fictif d'essais/, fabriqué par l'outil des
+# essais, entre (interdit 1). Un classeur réel posé dans essais/ reste dehors.
 *.xlsx
-!essais/*.xlsx
+!essais/classeur_essai.xlsx
+# Les autres formats d'un classeur : un « Enregistrer sous » ne passe pas.
+*.xls
+*.xlsm
+*.xlsb
+*.ods
+*.csv
 
-# Le Word des règles, comme tout document Word.
+# Le Word des règles, comme tout document Word ou son export.
 *.docx
+*.doc
+*.docm
+*.odt
+*.pdf
 
-# Données : seule la banque chiffrée entre (interdit 2).
-donnees/**/*.json
+# Données : aucun JSON, sauf ces trois-là (interdit 2). Une banque en clair
+# gardée pour déboguer, où qu'elle soit, reste dehors.
+*.json
+!package.json
+!essais/banque_demo.chiffree.json
 !donnees/banque.chiffree.json
 
 # Documents de travail, et le dossier du classeur réel s'il venait ici.
@@ -18,7 +32,7 @@ système/
 Système/
 
 # Fichiers que déposent Windows, OneDrive et Office. Les verrous « ~$… »
-# viennent après l'exception d'essais/, qui sinon les réintégrerait.
+# viennent après les exceptions, qui sinon les réintégreraient.
 desktop.ini
 Thumbs.db
 ~$*

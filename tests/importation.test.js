@@ -7,6 +7,8 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { importerFichier } from "../js/banque/importation.js";
+import { CLASSEUR_ESSAI } from "./outils/classeur_essai.js";
+import { fabriquerClasseur } from "./outils/fabrique_classeur.js";
 
 const ESSAI = readFileSync(new URL("../essais/classeur_essai.xlsx", import.meta.url));
 
@@ -106,6 +108,20 @@ test("import — une ligne sans nom n'entre pas ; une feuille en plus est ignor�
   const b = await banque();
   assert.ok([...b.blocs, ...b.elements, ...b.capacites].every((objet) => objet.nom));
   assert.ok(!JSON.stringify(b).includes("Formes de cellules"));
+});
+
+test("import — une colonne nommée « __proto__ » ou « constructor » reste dans le brut", async () => {
+  const description = structuredClone(CLASSEUR_ESSAI);
+  const blocs = description.feuilles.find((feuille) => feuille.nom === "Blocs");
+  blocs.lignes[0].push("__proto__", "constructor");
+  blocs.lignes[1].push("PROTO", "CONSTRUCTEUR");
+  const { banque } = await importerFichier(fabriquerClasseur(description), "variante.xlsx");
+  const cellules = banque.blocs.find((bloc) => bloc.nom === "Louche d'acier").brut.cellules;
+  assert.equal(Object.hasOwn(cellules, "__proto__"), true, "la colonne __proto__ n'est pas avalée");
+  assert.equal(cellules.__proto__, "PROTO");
+  assert.equal(cellules.constructor, "CONSTRUCTEUR");
+  assert.equal(Object.getPrototypeOf(cellules), Object.prototype, "aucune pollution");
+  assert.match(JSON.stringify(banque), /"__proto__":"PROTO"/);
 });
 
 test("import — un fichier illisible donne un message, pas une exception", async () => {

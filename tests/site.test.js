@@ -6,7 +6,10 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { request } from "node:http";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { inflateSync, crc32 } from "node:zlib";
 import { CHEMINS, MOT_DE_PASSE_DEMO, demanderStockageDurable, empreinteCourte, modeDe, ouvrirAvecCoffre, ouvrirParMotDePasse, telecharger } from "../js/banque/chargement.js";
 import { importerFichier } from "../js/banque/importation.js";
@@ -72,13 +75,21 @@ test("site — la politique de sécurité du <meta>, avant tout script et tout s
   const meta = balises(INDEX, "meta").find((m) => m["http-equiv"] === "Content-Security-Policy");
   assert.ok(meta, "politique de sécurité absente");
   const directives = Object.fromEntries(meta.content.split(";").map((d) => d.trim().split(/\s+/)).map(([nom, ...valeurs]) => [nom, valeurs]));
-  assert.deepEqual(directives["default-src"], ["'self'"]);
-  assert.deepEqual(directives["script-src"], ["'self'"]);
-  assert.deepEqual(directives["style-src"], ["'self'"]);
-  assert.deepEqual(directives["connect-src"], ["'self'", "https://api.github.com"]);
-  assert.deepEqual(directives["font-src"], ["'none'"]);
-  assert.deepEqual(directives["object-src"], ["'none'"]);
-  assert.deepEqual(directives["base-uri"], ["'none'"]);
+  // Toute la table, et rien d'autre : une directive affaiblie, retirée ou
+  // ajoutée se voit (§ 10.1).
+  assert.deepEqual(directives, {
+    "default-src": ["'self'"],
+    "script-src": ["'self'"],
+    "style-src": ["'self'"],
+    "img-src": ["'self'"],
+    "font-src": ["'none'"],
+    "connect-src": ["'self'", "https://api.github.com"],
+    "manifest-src": ["'self'"],
+    "worker-src": ["'none'"],
+    "object-src": ["'none'"],
+    "base-uri": ["'none'"],
+    "form-action": ["'none'"],
+  });
   assert.doesNotMatch(meta.content, /unsafe-|\*|data:|blob:/);
   const position = INDEX.indexOf("Content-Security-Policy");
   assert.ok(position < INDEX.search(/<script|<link rel="stylesheet"/), "la politique doit précéder scripts et styles");
@@ -281,4 +292,47 @@ test("mot de passe — l'attente ne dépend pas de la peinture de la fenêtre", 
   const issue = await Promise.race([laisserPeindre().then(() => "repris"), new Promise((resoudre) => setTimeout(() => resoudre("bloqué"), 1000))]);
   assert.equal(issue, "repris");
   delete globalThis.requestAnimationFrame;
+});
+
+test("serveur local — la seule machine, les seuls fichiers du site (§ 3.2)", async () => {
+  const { creerServeur } = await import("../outils/serveur_local.js");
+  // Un dossier d'essai : ce que le site sert, et ce qu'il ne doit pas servir.
+  const racine = mkdtempSync(join(tmpdir(), "atelier-serveur-"));
+  const fichiers = {
+    "index.html": 200, "js/a.js": 200, "donnees/banque.chiffree.json": 200, "icones/i.svg": 200,
+    ".git/config": 403, ".git/x.js": 403, ".cache/x.js": 403, "plans/p.js": 403, "ressources/r.png": 403, "Système/s.js": 403,
+    "essais/c.xlsx": 403, "donnees/banque.json": 403, "SPECIFICATION.md": 403, "package.json": 403,
+  };
+  for (const chemin of Object.keys(fichiers)) {
+    mkdirSync(join(racine, dirname(chemin)), { recursive: true });
+    writeFileSync(join(racine, chemin), "x");
+  }
+  const serveur = creerServeur(racine);
+  await new Promise((resoudre) => serveur.listen(0, "127.0.0.1", resoudre));
+  const { port } = serveur.address();
+  // Host se choisit ici : une page hostile dont le nom se résout vers
+  // 127.0.0.1 (rebinding DNS) envoie le sien.
+  const demander = (chemin, hote = `localhost:${port}`) =>
+    new Promise((resoudre, rejeter) => {
+      request({ host: "127.0.0.1", port, path: encodeURI(chemin), headers: { Host: hote } }, (reponse) => {
+        reponse.resume();
+        resoudre({ statut: reponse.statusCode, entetes: reponse.headers });
+      })
+        .on("error", rejeter)
+        .end();
+    });
+  try {
+    for (const [chemin, statut] of Object.entries(fichiers)) assert.equal((await demander(`/${chemin}`)).statut, statut, chemin);
+    const page = await demander("/");
+    assert.equal(page.statut, 200);
+    assert.equal(page.entetes["x-content-type-options"], "nosniff");
+    assert.equal((await demander("/js/a.js", `127.0.0.1:${port}`)).statut, 200);
+    assert.equal((await demander("/js/a.js", `[::1]:${port}`)).statut, 200);
+    assert.equal((await demander("/index.html", `exemple.com:${port}`)).statut, 403);
+    assert.equal((await demander("/index.html", "localhost:1")).statut, 403);
+    assert.equal((await demander("/..%2f..%2fwindows/win.ini")).statut, 403);
+  } finally {
+    serveur.close();
+    rmSync(racine, { recursive: true, force: true });
+  }
 });

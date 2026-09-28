@@ -197,6 +197,26 @@ test("publication — droits insuffisants, réseau absent, JSON illisible : un m
   assert.equal((await lirePublication({ jeton: JETON, fetch: abime.fetch })).code, "format");
 });
 
+test("publication — une réponse de GitHub qui n'est pas du JSON : un message ; une écriture faite reste faite", async () => {
+  // Un portail captif, ou une réponse coupée : 200, mais du HTML.
+  const portail = async () => new Response("<html>Connectez-vous au réseau</html>", { status: 200 });
+  const lu = await lirePublication({ jeton: JETON, fetch: portail });
+  assert.equal(lu.code, "format");
+  assert.match(lu.erreur, /GitHub/);
+  // Le fichier est écrit (201), mais le corps de la réponse est perdu.
+  const coupee = async (adresse, init = {}) => (init.method === "PUT" ? new Response("", { status: 201 }) : reponse(404, { message: "Not Found" }));
+  const ecrit = await ecrirePublication({ jeton: JETON, enveloppe: NOUVELLE, sha: null, message: MESSAGE, fetch: coupee });
+  assert.equal(ecrit.erreur, undefined, "l'écriture a eu lieu : ce n'est pas une erreur");
+  assert.deepEqual(ecrit, { sha: null, commit: null });
+});
+
+test("publication — trois refus 422 : le message final garde le motif de GitHub", async () => {
+  const refus = async (adresse, init = {}) => (init.method === "PUT" ? reponse(422, { message: "author.email is invalid" }) : reponse(404, { message: "Not Found" }));
+  const resultat = await publier({ jeton: JETON, fetch: refus, preparer: async () => ({ enveloppe: NOUVELLE, message: MESSAGE }), confirmer: async () => true });
+  assert.equal(resultat.code, "sha_perime");
+  assert.match(resultat.erreur, /GitHub : 422, author.email is invalid/);
+});
+
 test("publication — au-delà d'un mégaoctet, le contenu se relit en brut", async () => {
   const github = simulerGithub({ fichier: { ...fichierPublie(ANCIENNE), gros: true } });
   assert.deepEqual(await lirePublication({ jeton: JETON, fetch: github.fetch }), { sha: "sha-publie", enveloppe: ANCIENNE });

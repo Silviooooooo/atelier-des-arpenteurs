@@ -29,15 +29,24 @@ async function appeler(fetch, adresse, init) {
   }
 }
 
-// Le motif que donne GitHub, recopié pour le diagnostic.
-async function refus(reponse) {
-  let motif = "";
+// Le JSON d'une réponse, ou null : un portail captif répond en HTML, et une
+// connexion coupée laisse un corps vide.
+async function lireJson(reponse) {
   try {
-    motif = (await reponse.json()).message ?? "";
+    return await reponse.json();
   } catch {
-    // une réponse sans JSON : le code suffit
+    return null;
   }
-  const detail = ` (GitHub : ${reponse.status}${motif ? `, ${motif}` : ""})`;
+}
+
+// Le motif que donne GitHub, recopié pour le diagnostic.
+async function motifDe(reponse) {
+  const motif = (await lireJson(reponse))?.message ?? "";
+  return `GitHub : ${reponse.status}${motif ? `, ${motif}` : ""}`;
+}
+
+async function refus(reponse) {
+  const detail = ` (${await motifDe(reponse)})`;
   if (reponse.status === 401) {
     return { code: "jeton", erreur: `GitHub refuse la clé : elle est fausse, expirée ou révoquée. Saisissez-en une nouvelle.${detail}` };
   }
@@ -61,7 +70,8 @@ export async function lirePublication({ jeton, fetch = globalThis.fetch }) {
   if (!lu.reponse) return lu;
   if (lu.reponse.status === 404) return { sha: null, enveloppe: null };
   if (!lu.reponse.ok) return refus(lu.reponse);
-  const fichier = await lu.reponse.json();
+  const fichier = await lireJson(lu.reponse);
+  if (!fichier) return { code: "format", erreur: `La réponse de GitHub est illisible : vérifiez la connexion (un réseau public demande parfois de s'identifier), puis réessayez. (GitHub : ${lu.reponse.status})` };
   let texte;
   if (fichier.encoding === "base64" && fichier.content) {
     texte = new TextDecoder().decode(depuisBase64(fichier.content.replace(/\s/g, "")));
@@ -102,11 +112,12 @@ export async function ecrirePublication({ jeton, enveloppe, sha, message, fetch 
   // 409 : le sha ne correspond plus. 422 sans sha : le fichier est apparu
   // depuis la lecture, par une première publication faite ailleurs.
   if (ecrit.reponse.status === 409 || (ecrit.reponse.status === 422 && !sha)) {
-    return { code: "sha_perime", erreur: "La banque a été publiée entre-temps depuis un autre appareil." };
+    return { code: "sha_perime", erreur: "La banque a été publiée entre-temps depuis un autre appareil.", motif: await motifDe(ecrit.reponse) };
   }
   if (!ecrit.reponse.ok) return refus(ecrit.reponse);
-  const resultat = await ecrit.reponse.json();
-  return { sha: resultat.content?.sha ?? null, commit: resultat.commit?.sha ?? null };
+  // Le statut dit que l'écriture a eu lieu, même si le corps est perdu.
+  const resultat = await lireJson(ecrit.reponse);
+  return { sha: resultat?.content?.sha ?? null, commit: resultat?.commit?.sha ?? null };
 }
 
 /**
@@ -122,6 +133,7 @@ export async function ecrirePublication({ jeton, enveloppe, sha, message, fetch 
  * Rend { sha, commit, preparation }, { annulee: true } ou { erreur, code }.
  */
 export async function publier({ jeton, preparer, confirmer, fetch = globalThis.fetch, essais = 3 }) {
+  let dernier = null;
   for (let essai = 1; essai <= essais; essai += 1) {
     const publiee = await lirePublication({ jeton, fetch });
     if (publiee.erreur) return publiee;
@@ -130,6 +142,8 @@ export async function publier({ jeton, preparer, confirmer, fetch = globalThis.f
     if (!(await confirmer(preparation, { essai }))) return { annulee: true };
     const ecrit = await ecrirePublication({ jeton, fetch, sha: publiee.sha, enveloppe: preparation.enveloppe, message: preparation.message });
     if (ecrit.code !== "sha_perime") return ecrit.erreur ? ecrit : { ...ecrit, preparation };
+    dernier = ecrit.motif;
   }
-  return { code: "sha_perime", erreur: `La banque a changé sur GitHub à chacun des ${essais} essais : réessayez dans un moment.` };
+  // Le motif du dernier refus : un 422 peut aussi venir d'une autre cause.
+  return { code: "sha_perime", erreur: `La banque a changé sur GitHub à chacun des ${essais} essais : réessayez dans un moment. (Dernier refus : ${dernier})` };
 }
