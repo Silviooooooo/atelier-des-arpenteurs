@@ -1,6 +1,6 @@
 # L'Atelier des Arpenteurs — spécification
 
-**Version 0.4 — 28/09/2026.** Ce document fait foi pour le code. Toute décision
+**Version 0.5 — 28/09/2026.** Ce document fait foi pour le code. Toute décision
 qui le contredit y est reportée, avec une entrée de révision et un numéro de
 version (§ 14). Le nom « L'Atelier des Arpenteurs » est validé par l'auteur ;
 le dépôt s'appelle `atelier-des-arpenteurs`.
@@ -333,14 +333,29 @@ signale** (E6), il ne l'avale pas.
 | | valeur contenant des accolades | `{degats:{force}*0,5/{force}/{force}*2}` | **accolades imbriquées** : compter la profondeur |
 | | cible entre parenthèses après l'accolade | `{…}(Attaque à mains nues)` | `cible` |
 | Capacites · éléments propres | nom, valeur éventuelle entre crochets | `Portee[1]` | élément Portée, `valeur: "1"` |
-| Descriptions | `[N]`, `[N*{degats}]`, `{portee}` | — | gardées telles quelles au lot 1 |
+| Eléments · paramètres reçus | liste de noms entre accolades | `{portee}` | paramètre reçu `portee` |
+| Descriptions | `[N]`, `[N*{degats}]`, `{portee}` | — | gardées telles quelles au lot 1 ; les `{nom}` sont les paramètres invoqués (A5) |
 
 **Une ligne de la feuille ne se découpe jamais sur une virgule située entre
 accolades, crochets ou parenthèses** : `{force}*0,5` contient une virgule
 décimale.
 
+Les noms et les options perdent leurs espaces de bord : `( a | b)` est un
+choix entre `a` et `b`. Un choix peut n'avoir qu'une option : `(a)`. Un
+morceau vide, celui d'une virgule finale par exemple, ne porte rien.
+
 Un choix peut apparaître dans la colonne des paramètres (Constellation de
-Neru). Il est lu, conservé en brut, et produit l'avertissement A7.
+Neru), ou dans celle des éléments. Il est lu, conservé en brut, et produit
+l'avertissement A7.
+
+**Ce qui donne E6**, le morceau étant gardé tel quel :
+
+- un délimiteur jamais fermé, ou fermant sans ouvrant ;
+- un paramètre sans `:`, ou avec un nom ou une valeur vide ;
+- une option vide ;
+- des délimiteurs ailleurs qu'aux places du tableau, par exemple une barre
+  hors d'un choix ou deux paramètres collés ;
+- un paramètre reçu écrit sans accolades.
 
 ### 6.3 Le contrôle de cohérence
 
@@ -355,7 +370,7 @@ résolu, mais signalé (A1).
 | E3 | erreur | doublon : bloc, élément, ou capacité de même nom et même puissance |
 | E4 | erreur | capacité citée par un bloc, introuvable |
 | E5 | erreur | élément cité (Blocs ou Capacites), introuvable |
-| E6 | erreur | notation illisible : délimiteur non fermé, paramètre sans `:` |
+| E6 | erreur | notation illisible : délimiteur non fermé, paramètre sans `:`… (liste au § 6.2) |
 | E7 | erreur | même paramètre transmis deux fois par un bloc, sans cible qui les distingue |
 | A1 | avertissement | renvoi qui ne diffère que par la casse, les accents ou les espaces |
 | A2 | avertissement | paramètre transmis qu'aucun élément ne reçoit (`lisez_moi` : un paramètre implique son élément) |
@@ -717,6 +732,12 @@ jamais entre deux étapes d'un même groupe.
 ---
 
 ## 14. Révisions
+
+**0.5 — 28/09/2026.** Étape C, notation (§ 6.2). La colonne « Paramètres
+reçus » s'écrit `{nom}`, comme dans le classeur réel. Espaces de bord
+retirés ; choix d'une seule option ; morceau vide sans donnée. A7 vaut aussi
+pour un choix écrit dans la colonne des éléments. Liste de ce qui donne E6
+(§ 6.2, § 6.3).
 
 **0.4 — 28/09/2026.** Étape B, lecture du classeur. `lisez_moi` compte 19
 lignes non vides, de la ligne 2 à la ligne 20 ; le « 20 » de la 0.3 était le
