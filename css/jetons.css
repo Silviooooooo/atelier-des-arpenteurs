@@ -1,0 +1,71 @@
+/* Les jetons de l'interface (SPECIFICATION.md, § 9 et § 10.1).
+
+   Toutes les valeurs de la mise en page vivent ici : une identité visuelle
+   s'y posera plus tard, sans toucher à ecran.css. L'aspect est sobre :
+   polices du système, aucune police téléchargée ; gris neutres et une seule
+   couleur d'accent ; un thème clair et un thème sombre, selon le réglage de
+   l'appareil. Le texte contraste d'au moins 4,5:1 avec chacun de ses fonds,
+   et les bordures des champs d'au moins 3:1 ; tests/site.test.js le mesure.
+
+   Seule exception, que CSS impose : une condition @media ne lit pas les
+   variables. La largeur où la liste et la fiche se placent côte à côte
+   (56rem) est donc écrite dans ecran.css. */
+
+:root {
+  color-scheme: light dark;
+
+  --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --police-chasse-fixe: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --taille-texte: 1rem;
+  --taille-petite: 0.875rem;
+  --taille-sous-titre: 1.125rem;
+  --taille-titre: 1.5rem;
+  --interligne: 1.5;
+  --interligne-titre: 1.25;
+  --graisse-forte: 600;
+
+  --espace-1: 0.25rem;
+  --espace-2: 0.5rem;
+  --espace-3: 0.75rem;
+  --espace-4: 1rem;
+  --espace-5: 1.5rem;
+  --espace-6: 2rem;
+
+  --cible-tactile: 44px;
+  --rayon: 6px;
+  --trait: 1px;
+  --trait-epais: 4px;
+  --contour: 3px;
+  --taille-case: 1.25rem;
+  --opacite-inactif: 0.55;
+  --largeur-page: 72rem;
+  --largeur-lecture: 42rem;
+  --largeur-liste: 22rem;
+  --largeur-champ: 28rem;
+  --largeur-carte: 9rem;
+  --largeur-etiquette: 3.5rem;
+
+  --fond: #ffffff;
+  --fond-2: #f3f4f6;
+  --texte: #1a1c20;
+  --texte-2: #555b66;
+  --bordure: #7d838d;
+  --separateur: #dfe2e6;
+  --accent: #1d5c8f;
+  --texte-sur-accent: #ffffff;
+  --accent-doux: #e3edf6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fond: #15171a;
+    --fond-2: #1f2226;
+    --texte: #e6e8eb;
+    --texte-2: #a7adb7;
+    --bordure: #6b717b;
+    --separateur: #2c3036;
+    --accent: #7db4e3;
+    --texte-sur-accent: #0b1722;
+    --accent-doux: #1c2f40;
+  }
+}

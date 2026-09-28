@@ -1,0 +1,46 @@
+<!doctype html>
+<!-- La page unique de l'Atelier (SPECIFICATION.md, § 3.2, § 9 et § 10.1).
+     Les écrans sont des routes après le « # ». La politique de sécurité ne
+     laisse venir que ce qui vient du site, et ne permet de connexion que vers
+     le site et api.github.com. Le zoom n'est jamais interdit. -->
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'none'; connect-src 'self' https://api.github.com; manifest-src 'self'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+    <meta name="referrer" content="no-referrer">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>L'Atelier des Arpenteurs</title>
+    <meta name="description" content="La banque des Arpenteurs d'Abrasia : blocs, capacités, éléments.">
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#15171a" media="(prefers-color-scheme: dark)">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Atelier">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icones/icone.svg" type="image/svg+xml">
+    <link rel="icon" href="icones/icone-192.png" type="image/png" sizes="192x192">
+    <link rel="apple-touch-icon" href="icones/icone-180.png">
+    <link rel="stylesheet" href="css/jetons.css">
+    <link rel="stylesheet" href="css/ecran.css">
+    <script type="module" src="js/application.js"></script>
+  </head>
+  <body>
+    <p class="bandeau-demo" id="bandeau-demo" hidden>Démonstration — données fictives</p>
+    <header class="entete">
+      <a class="marque" href="#/">L'Atelier des Arpenteurs</a>
+      <nav aria-label="Navigation principale">
+        <ul class="navigation">
+          <li><a href="#/blocs" data-route="blocs">Blocs</a></li>
+          <li><a href="#/capacites" data-route="capacites">Capacités</a></li>
+          <li><a href="#/elements" data-route="elements">Éléments</a></li>
+          <li><a href="#/anomalies" data-route="anomalies">Anomalies</a></li>
+          <li><a href="#/auteur" data-route="auteur">Auteur</a></li>
+        </ul>
+      </nav>
+    </header>
+    <main id="ecran" tabindex="-1">
+      <p class="attente">Chargement de l'Atelier…</p>
+      <noscript><p>L'Atelier a besoin de JavaScript : activez-le, puis rechargez la page.</p></noscript>
+    </main>
+  </body>
+</html>

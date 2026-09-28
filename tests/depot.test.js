@@ -130,8 +130,10 @@ function commitsDuDepot() {
     });
 }
 
-// § 10.1 : aucune donnée insérée comme HTML. Le mot est proscrit de js/,
+// § 10.1 : aucune donnée insérée comme HTML. Le mot est proscrit des fichiers
+// du site (la page, ses styles, ses modules, son manifeste) et des outils,
 // commentaires compris : le contrôle ne distingue pas un commentaire.
+const FICHIER_DU_SITE = /^(?:index\.html|manifest\.webmanifest|(?:css|js|outils)\/.+)$/;
 const INSERTION_HTML = /\b(?:innerHTML|outerHTML|insertAdjacentHTML)\b|\bdocument\s*\.\s*write(?:ln)?\b/;
 
 function insertionsHtml(fichiers) {
@@ -223,11 +225,13 @@ test("HTML — repère une insertion de HTML", () => {
     { chemin: "js/d.js", contenu: "const html = 'innerHTMLx';" },
   ];
   assert.deepEqual(insertionsHtml(fichiers), ["js/a.js, ligne 2", "js/b.js, ligne 1", "js/c.js, ligne 1"]);
+  const chemins = ["index.html", "manifest.webmanifest", "css/ecran.css", "js/ecrans/liste.js", "outils/icones.js", "tests/depot.test.js", "SPECIFICATION.md"];
+  assert.deepEqual(chemins.filter((chemin) => FICHIER_DU_SITE.test(chemin)), chemins.slice(0, 5));
 });
 
-test("HTML — aucune insertion de HTML dans js/", () => {
+test("HTML — aucune insertion de HTML dans les fichiers du site", () => {
   const fichiers = cheminsDuDepot()
-    .filter((chemin) => chemin.startsWith("js/"))
+    .filter((chemin) => FICHIER_DU_SITE.test(chemin))
     .map((chemin) => ({ chemin, contenu: lire(chemin, "utf8") }));
   assert.deepEqual(insertionsHtml(fichiers), []);
 });

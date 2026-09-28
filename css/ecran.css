@@ -1,0 +1,509 @@
+/* L'interface (SPECIFICATION.md, § 9).
+
+   Pensée pour le téléphone d'abord : une colonne, des cibles tactiles de
+   44 px au moins, un zoom jamais interdit. Sur un grand écran, la liste et
+   la fiche se placent côte à côte. Toutes les valeurs viennent de
+   jetons.css ; seule la largeur de la condition @media est écrite ici, car
+   CSS ne lit pas de variable à cet endroit. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--fond);
+  color: var(--texte);
+  font-family: var(--police);
+  font-size: var(--taille-texte);
+  line-height: var(--interligne);
+  overflow-wrap: break-word;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+a {
+  color: var(--accent);
+}
+
+:focus-visible {
+  outline: var(--contour) solid var(--accent);
+  outline-offset: var(--trait);
+}
+
+h1,
+h2,
+h3 {
+  line-height: var(--interligne-titre);
+  margin: var(--espace-5) 0 var(--espace-3);
+}
+
+h1 {
+  font-size: var(--taille-titre);
+  margin-top: var(--espace-2);
+}
+
+h1:focus {
+  outline: none;
+}
+
+h2 {
+  font-size: var(--taille-sous-titre);
+}
+
+h3 {
+  font-size: var(--taille-texte);
+}
+
+p,
+ul,
+ol,
+dl {
+  margin: 0 0 var(--espace-3);
+}
+
+/* Le bandeau de la démonstration reste visible en haut de l'écran. */
+.bandeau-demo {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0;
+  padding: var(--espace-2) var(--espace-4);
+  background: var(--accent);
+  color: var(--texte-sur-accent);
+  font-weight: var(--graisse-forte);
+  text-align: center;
+}
+
+.entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espace-1) var(--espace-4);
+  padding: var(--espace-1) var(--espace-4);
+  border-bottom: var(--trait) solid var(--separateur);
+  background: var(--fond-2);
+}
+
+.marque {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--cible-tactile);
+  color: var(--texte);
+  font-weight: var(--graisse-forte);
+  text-decoration: none;
+}
+
+.navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--espace-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navigation a,
+.onglets a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--cible-tactile);
+  padding: 0 var(--espace-3);
+  border-radius: var(--rayon);
+  text-decoration: none;
+}
+
+.navigation a[aria-current="page"],
+.onglets a[aria-current="page"] {
+  background: var(--accent-doux);
+  font-weight: var(--graisse-forte);
+}
+
+#ecran {
+  max-width: var(--largeur-page);
+  margin: 0 auto;
+  padding: var(--espace-4);
+}
+
+#ecran:focus {
+  outline: none;
+}
+
+.secondaire-texte {
+  color: var(--texte-2);
+}
+
+.petit {
+  font-size: var(--taille-petite);
+}
+
+/* Boutons et champs */
+
+.bouton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--cible-tactile);
+  padding: 0 var(--espace-4);
+  border: var(--trait) solid var(--accent);
+  border-radius: var(--rayon);
+  background: var(--accent);
+  color: var(--texte-sur-accent);
+  font: inherit;
+  font-weight: var(--graisse-forte);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.bouton.secondaire {
+  background: transparent;
+  color: var(--accent);
+}
+
+.bouton:disabled {
+  opacity: var(--opacite-inactif);
+  cursor: not-allowed;
+}
+
+.boutons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espace-2);
+  margin: var(--espace-3) 0;
+}
+
+.formulaire {
+  margin: var(--espace-4) 0;
+}
+
+.formulaire label {
+  display: block;
+  margin-bottom: var(--espace-1);
+  font-weight: var(--graisse-forte);
+}
+
+.champ {
+  display: block;
+  width: 100%;
+  max-width: var(--largeur-champ);
+  min-height: var(--cible-tactile);
+  margin-bottom: var(--espace-3);
+  padding: 0 var(--espace-3);
+  border: var(--trait) solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--fond);
+  color: var(--texte);
+  font: inherit;
+}
+
+.formulaire .case {
+  display: flex;
+  align-items: center;
+  gap: var(--espace-2);
+  min-height: var(--cible-tactile);
+  font-weight: normal;
+}
+
+.case input {
+  width: var(--taille-case);
+  height: var(--taille-case);
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.message {
+  margin: var(--espace-3) 0;
+  padding: var(--espace-3);
+  border-left: var(--trait-epais) solid var(--accent);
+  background: var(--fond-2);
+}
+
+.attente {
+  color: var(--texte-2);
+}
+
+.mot-de-passe-demo {
+  padding: var(--espace-3);
+  border: var(--trait) dashed var(--bordure);
+  border-radius: var(--rayon);
+}
+
+.valeur {
+  font-family: var(--police-chasse-fixe);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+/* Accueil */
+
+.comptes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--largeur-carte), 1fr));
+  gap: var(--espace-3);
+  margin: var(--espace-4) 0;
+  padding: 0;
+  list-style: none;
+}
+
+.carte {
+  display: block;
+  min-height: var(--cible-tactile);
+  padding: var(--espace-3);
+  border: var(--trait) solid var(--separateur);
+  border-radius: var(--rayon);
+  color: var(--texte);
+  text-decoration: none;
+}
+
+.carte .nombre {
+  display: block;
+  color: var(--accent);
+  font-size: var(--taille-titre);
+  font-weight: var(--graisse-forte);
+}
+
+.repliable {
+  margin: var(--espace-5) 0;
+  padding: 0 var(--espace-3);
+  border: var(--trait) solid var(--separateur);
+  border-radius: var(--rayon);
+}
+
+.repliable summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--cible-tactile);
+  font-weight: var(--graisse-forte);
+  cursor: pointer;
+}
+
+.repliable dt {
+  font-weight: var(--graisse-forte);
+}
+
+.repliable dd {
+  margin: 0 0 var(--espace-2);
+}
+
+/* L'aide est inutile une fois l'Atelier ouvert depuis l'écran d'accueil. */
+@media (display-mode: standalone) {
+  .aide-ecran-accueil {
+    display: none;
+  }
+}
+
+/* Listes et fiches : l'une ou l'autre sur un téléphone, côte à côte sur un
+   grand écran. */
+
+.consultation.avec-fiche .panneau-liste,
+.consultation:not(.avec-fiche) .panneau-fiche {
+  display: none;
+}
+
+/* Le retour à la liste, utile sur un téléphone seulement. */
+.retour a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--cible-tactile);
+}
+
+.onglets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espace-1);
+  margin: 0 0 var(--espace-3);
+  padding: 0;
+  list-style: none;
+}
+
+.liste-entrees {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: var(--trait) solid var(--separateur);
+}
+
+.liste-entrees a {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: var(--cible-tactile);
+  padding: var(--espace-2) var(--espace-3);
+  border-bottom: var(--trait) solid var(--separateur);
+  color: var(--texte);
+  text-decoration: none;
+}
+
+.liste-entrees a[aria-current="page"] {
+  background: var(--accent-doux);
+}
+
+.liste-entrees .detail {
+  overflow: hidden;
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fiche section {
+  margin-top: var(--espace-5);
+}
+
+.fiche ul {
+  padding-left: var(--espace-5);
+}
+
+.fiche li {
+  margin-bottom: var(--espace-1);
+}
+
+.fiche .variante {
+  margin-top: var(--espace-4);
+  padding-top: var(--espace-3);
+  border-top: var(--trait) solid var(--separateur);
+}
+
+.description {
+  max-width: var(--largeur-lecture);
+  white-space: pre-line;
+}
+
+.notes {
+  margin: var(--espace-3) 0 var(--espace-3) var(--espace-4);
+  padding-left: var(--espace-3);
+  border-left: var(--trait-epais) solid var(--separateur);
+  color: var(--texte-2);
+  white-space: pre-line;
+}
+
+.renvoi-casse {
+  color: var(--texte-2);
+  text-decoration: line-through;
+}
+
+.couts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espace-1) var(--espace-4);
+  margin: 0 0 var(--espace-2);
+}
+
+.couts dt {
+  display: inline;
+  font-weight: var(--graisse-forte);
+}
+
+.couts dd {
+  display: inline;
+  margin: 0 0 0 var(--espace-1);
+}
+
+/* Anomalies : la gravité se lit dans le texte et dans le trait, jamais dans
+   la seule couleur. */
+
+.anomalies {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.anomalie {
+  margin-bottom: var(--espace-2);
+  padding: var(--espace-2) var(--espace-3);
+  border-left: var(--trait-epais) solid var(--bordure);
+  background: var(--fond-2);
+}
+
+.anomalie.bloquante,
+.anomalie.erreur {
+  border-left-color: var(--accent);
+}
+
+.anomalie.avertissement {
+  border-left-style: dashed;
+}
+
+.anomalie.information {
+  border-left-color: var(--separateur);
+}
+
+.anomalie.surlignee {
+  background: var(--accent-doux);
+}
+
+.code {
+  font-family: var(--police-chasse-fixe);
+  font-weight: var(--graisse-forte);
+}
+
+/* Espace auteur */
+
+.resume {
+  padding: var(--espace-3);
+  border: var(--trait) solid var(--accent);
+  border-radius: var(--rayon);
+  font-weight: var(--graisse-forte);
+}
+
+.champ-modifie {
+  margin: var(--espace-1) 0 var(--espace-3);
+}
+
+.champ-modifie dt {
+  color: var(--texte-2);
+}
+
+.champ-modifie dd {
+  margin: 0;
+}
+
+.champ-modifie del,
+.champ-modifie ins {
+  font-family: var(--police-chasse-fixe);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.champ-modifie del {
+  color: var(--texte-2);
+}
+
+.champ-modifie ins {
+  text-decoration: none;
+}
+
+.etiquette {
+  display: inline-block;
+  min-width: var(--largeur-etiquette);
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+@media (min-width: 56rem) {
+  .consultation {
+    display: grid;
+    grid-template-columns: var(--largeur-liste) minmax(0, 1fr);
+    gap: var(--espace-6);
+    align-items: start;
+  }
+
+  .consultation.avec-fiche .panneau-liste,
+  .consultation:not(.avec-fiche) .panneau-fiche {
+    display: block;
+  }
+
+  .retour {
+    display: none;
+  }
+}

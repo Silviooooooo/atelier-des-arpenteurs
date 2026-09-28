@@ -6,7 +6,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ADRESSE_BANQUE, IDENTITE, ecrirePublication, lirePublication, publier } from "../js/publication/github.js";
-import { depuisBase64, versBase64 } from "../js/securite/chiffrement.js";
+import { readFileSync } from "node:fs";
+import { importerFichier } from "../js/banque/importation.js";
+import { preparerChangement, preparerPublication } from "../js/publication/preparation.js";
+import { depuisBase64, nouveauSecret, ouvrir, ouvrirAvecMotDePasse, versBase64 } from "../js/securite/chiffrement.js";
 
 globalThis.fetch = () => {
   throw new Error("Appel réel à GitHub interdit dans les contrôles.");
@@ -198,4 +201,79 @@ test("publication — au-delà d'un mégaoctet, le contenu se relit en brut", as
   const github = simulerGithub({ fichier: { ...fichierPublie(ANCIENNE), gros: true } });
   assert.deepEqual(await lirePublication({ jeton: JETON, fetch: github.fetch }), { sha: "sha-publie", enveloppe: ANCIENNE });
   assert.deepEqual(github.requetes.map((r) => r.entetes.Accept), ["application/vnd.github+json", "application/vnd.github.raw+json"]);
+});
+
+// La préparation : ce que l'espace auteur montre, puis écrit (§ 6.4, § 8.2).
+
+const ESSAI = readFileSync(new URL("../essais/classeur_essai.xlsx", import.meta.url));
+const MOT_DE_PASSE = "passoire louche marmite écumoire";
+const DATE = new Date(2026, 8, 28, 14, 32);
+
+test("préparation — première publication, puis mise à jour sous le même secret", async () => {
+  const { banque } = await importerFichier(ESSAI, "classeur_essai.xlsx");
+  const secret = await nouveauSecret(MOT_DE_PASSE);
+  const premiere = await preparerPublication({ publiee: { sha: null, enveloppe: null }, banque, secret, date: DATE });
+  assert.equal(premiere.ancienne, null);
+  assert.equal(premiere.erreurs, 15);
+  assert.equal(premiere.message, "Publication du classeur des règles — 28/09/2026 14:32 — première publication : 15 blocs, 15 capacités, 9 éléments — publiée malgré 15 erreurs");
+  assert.deepEqual(Object.keys(premiere.banque).slice(0, 3), ["format", "publiee_le", "sources"]);
+  assert.equal(premiere.enveloppe.publiee_le, premiere.banque.publiee_le);
+  assert.deepEqual((await ouvrirAvecMotDePasse(premiere.enveloppe, MOT_DE_PASSE)).banque, premiere.banque);
+
+  const plusTard = new Date(2026, 9, 2, 9, 5);
+  const seconde = await preparerPublication({ publiee: { sha: "sha-1", enveloppe: premiere.enveloppe }, banque, secret, date: plusTard });
+  assert.deepEqual(seconde.ancienne, premiere.banque);
+  assert.match(seconde.message, /— 02\/10\/2026 09:05 — aucune différence — publiée malgré 15 erreurs$/);
+  assert.equal(seconde.enveloppe.kdf.sel, premiere.enveloppe.kdf.sel);
+  assert.notEqual(seconde.banque.publiee_le, premiere.banque.publiee_le);
+});
+
+test("préparation — le mot de passe à choisir, à saisir, ou changé ; E1 refusé", async () => {
+  const { banque } = await importerFichier(ESSAI, "classeur_essai.xlsx");
+  const vide = { sha: null, enveloppe: null };
+  assert.equal((await preparerPublication({ publiee: vide, banque, secret: null })).code, "nouveau_mot_de_passe");
+  const premiere = await preparerPublication({ publiee: vide, banque, secret: await nouveauSecret(MOT_DE_PASSE) });
+  const publiee = { sha: "sha-1", enveloppe: premiere.enveloppe };
+  assert.equal((await preparerPublication({ publiee, banque, secret: null })).code, "mot_de_passe_requis");
+  assert.equal((await preparerPublication({ publiee, banque, secret: await nouveauSecret(MOT_DE_PASSE) })).code, "sel_change");
+  const bloquee = { ...banque, anomalies: [{ gravite: "bloquante", code: "E1", feuille: "Blocs", ligne: null, message: "…" }] };
+  assert.equal((await preparerPublication({ publiee, banque: bloquee, secret: null })).code, "bloquante");
+  assert.equal((await preparerPublication({ publiee, banque: null, secret: null })).code, "bloquante");
+});
+
+test("préparation — le changement de mot de passe republie la banque publiée", async () => {
+  const { banque } = await importerFichier(ESSAI, "classeur_essai.xlsx");
+  const ancien = await nouveauSecret(MOT_DE_PASSE);
+  const nouveau = await nouveauSecret("un nouveau mot de passe de table");
+  const premiere = await preparerPublication({ publiee: { enveloppe: null }, banque, secret: ancien, date: DATE });
+  const publiee = { sha: "sha-1", enveloppe: premiere.enveloppe };
+  const changement = await preparerChangement({ publiee, ancien, nouveau, date: new Date(2026, 9, 2, 9, 5) });
+  assert.equal(changement.message, "Publication du classeur des règles — 02/10/2026 09:05 — aucune différence — nouveau mot de passe de table");
+  assert.equal(changement.enveloppe.kdf.sel, nouveau.sel);
+  // La banque republiée prend la date du changement, pas celle de sa publication.
+  assert.notEqual(changement.enveloppe.publiee_le, premiere.enveloppe.publiee_le);
+  assert.match(changement.banque.publiee_le, /^2026-10-02T09:05:00/);
+  assert.equal((await ouvrir(changement.enveloppe, ancien)).code, "sel_change");
+  const relue = await ouvrirAvecMotDePasse(changement.enveloppe, "un nouveau mot de passe de table");
+  assert.deepEqual({ ...relue.banque, publiee_le: null }, { ...premiere.banque, publiee_le: null });
+  assert.equal(relue.banque.publiee_le, changement.banque.publiee_le);
+  assert.equal((await preparerChangement({ publiee: { enveloppe: null }, ancien, nouveau })).code, "absente");
+  assert.equal((await preparerChangement({ publiee, ancien: null, nouveau })).code, "mot_de_passe_requis");
+});
+
+test("circuit complet — import, préparation, publication simulée, lecture par un joueur", async () => {
+  const { banque } = await importerFichier(ESSAI, "classeur_essai.xlsx");
+  const secret = await nouveauSecret(MOT_DE_PASSE);
+  const github = simulerGithub();
+  const publication = await publier({
+    jeton: JETON,
+    fetch: github.fetch,
+    preparer: (publiee) => preparerPublication({ publiee, banque, secret, date: DATE }),
+    confirmer: async () => true,
+  });
+  assert.equal(publication.commit, "commit-1");
+  // Un joueur lit le fichier écrit, avec le mot de passe transmis.
+  const lu = await ouvrirAvecMotDePasse(JSON.parse(github.fichier.texte), MOT_DE_PASSE);
+  assert.deepEqual(lu.banque, publication.preparation.banque);
+  assert.equal(github.requetes[1].corps.message, publication.preparation.message);
 });
