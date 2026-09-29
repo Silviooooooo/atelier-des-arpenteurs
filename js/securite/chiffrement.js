@@ -9,8 +9,16 @@
 //
 // Un mot de passe faux ou un fichier abîmé ne lèvent jamais d'exception :
 // les fonctions rendent { erreur, code }, avec un message à afficher.
+//
+// Le format 2 (groupe 4) : l'empreinte de l'en-tête est celle des octets
+// chiffrés, étiquette comprise ; elle ne dit plus rien du contenu, même à
+// qui en a lu une version. La page écrit le format 2 et lit encore le
+// format 1, où l'empreinte était celle de la banque en clair, jusqu'au
+// groupe qui suivra une publication réelle au format 2 (§ 7.1).
 
 export const ITERATIONS = 600_000;
+export const FORMAT = 2;
+const FORMATS_LUS = [1, 2];
 // À la lecture, un en-tête peut annoncer plus (une hausse future), jamais
 // moins, ni un nombre qui ferait patienter des heures (§ 7.1).
 export const ITERATIONS_MAX = 10 * ITERATIONS;
@@ -97,9 +105,9 @@ export async function chiffrer(banque, { cle, sel, iterations }) {
   const iv = crypto.getRandomValues(new Uint8Array(OCTETS_IV));
   const donnees = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, cle, clair));
   return {
-    format: 1,
+    format: FORMAT,
     publiee_le: banque.publiee_le,
-    empreinte: await empreinte(clair),
+    empreinte: await empreinte(donnees),
     kdf: { nom: "PBKDF2-SHA256", iterations, sel },
     chiffre: { nom: "AES-GCM", iv: versBase64(iv), donnees: versBase64(donnees) },
   };
@@ -129,7 +137,12 @@ function octetsBase64(texte) {
 export function lireEnTete(enveloppe) {
   const { format, kdf, chiffre } = enveloppe ?? {};
   const abime = { erreur: "Le fichier de la banque est abîmé ou d'un format inconnu.", code: "format" };
-  if (format !== 1 || kdf?.nom !== "PBKDF2-SHA256" || chiffre?.nom !== "AES-GCM") return abime;
+  // Un format plus récent que celui de la page : l'onglet est en retard sur
+  // le site, recharger suffit (revue du groupe 4).
+  if (Number.isInteger(format) && format > FORMAT) {
+    return { erreur: "Cette banque vient d'une version plus récente de l'Atelier : rechargez la page.", code: "format_recent" };
+  }
+  if (!FORMATS_LUS.includes(format) || kdf?.nom !== "PBKDF2-SHA256" || chiffre?.nom !== "AES-GCM") return abime;
   if (!Number.isInteger(kdf.iterations) || kdf.iterations < ITERATIONS || kdf.iterations > ITERATIONS_MAX) return abime;
   if (octetsBase64(kdf.sel) !== OCTETS_SEL || octetsBase64(chiffre.iv) !== OCTETS_IV) return abime;
   const donnees = chiffre.donnees;
@@ -137,19 +150,33 @@ export function lireEnTete(enveloppe) {
   return { sel: kdf.sel, iterations: kdf.iterations };
 }
 
+/**
+ * Format 2 : l'empreinte des octets chiffrés, vérifiable sans clé, dès le
+ * téléchargement. Rend null si elle est juste (ou au format 1), sinon
+ * { erreur, code }. L'en-tête doit avoir passé lireEnTete.
+ */
+export async function verifierEmpreinte(enveloppe) {
+  if (enveloppe.format !== 2) return null;
+  if ((await empreinte(depuisBase64(enveloppe.chiffre.donnees))) === enveloppe.empreinte) return null;
+  return { erreur: "Le fichier de la banque est abîmé : il ne correspond pas à son empreinte.", code: "empreinte" };
+}
+
 /** Déchiffre avec une clé : { banque } ou { erreur, code }. */
 export async function dechiffrer(enveloppe, cle) {
   const enTete = lireEnTete(enveloppe);
   if (enTete.erreur) return enTete;
+  // Format 2 : l'empreinte se vérifie sur le fichier, avant de déchiffrer.
+  const faussee = await verifierEmpreinte(enveloppe);
+  if (faussee) return faussee;
+  const donnees = depuisBase64(enveloppe.chiffre.donnees);
   let clair;
   try {
-    clair = new Uint8Array(
-      await crypto.subtle.decrypt({ name: "AES-GCM", iv: depuisBase64(enveloppe.chiffre.iv) }, cle, depuisBase64(enveloppe.chiffre.donnees)),
-    );
+    clair = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: depuisBase64(enveloppe.chiffre.iv) }, cle, donnees));
   } catch {
     return { erreur: "Ce mot de passe n'ouvre pas la banque.", code: "mot_de_passe" };
   }
-  if ((await empreinte(clair)) !== enveloppe.empreinte) {
+  // Format 1 : l'empreinte était celle de la banque en clair.
+  if (enveloppe.format === 1 && (await empreinte(clair)) !== enveloppe.empreinte) {
     return { erreur: "La banque déchiffrée ne correspond pas à son empreinte.", code: "empreinte" };
   }
   try {

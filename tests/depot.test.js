@@ -12,9 +12,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CLASSEUR_ESSAI } from "./outils/classeur_essai.js";
 import { fabriquerClasseur } from "./outils/fabrique_classeur.js";
@@ -25,9 +26,15 @@ function git(...parametres) {
   return gitDans(RACINE, ...parametres);
 }
 
+// Un environnement sans les variables GIT_… qu'exporte Git quand il lance un
+// crochet (GIT_DIR…) : sinon, depuis le crochet pre-push, un git lancé dans
+// un dépôt d'essai écrirait dans le vrai. NODE_TEST_CONTEXT, que ce contrôle
+// hérite de node --test, reste : le crochet doit s'en défaire lui-même.
+const ENVIRONNEMENT = Object.fromEntries(Object.entries(process.env).filter(([nom]) => !nom.startsWith("GIT_")));
+
 // core.quotePath=false : un chemin accentué (« Système/ ») reste lisible.
 function gitDans(dossier, ...parametres) {
-  return execFileSync("git", ["-c", "core.quotePath=false", ...parametres], { cwd: dossier, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  return execFileSync("git", ["-c", "core.quotePath=false", ...parametres], { cwd: dossier, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, env: ENVIRONNEMENT });
 }
 
 function cheminsDuDepot() {
@@ -70,7 +77,7 @@ function classeursInconnus(chemins, lireOctets) {
 // sous », un export PDF), et tout JSON hors de cette liste, restent hors du
 // dépôt : une banque en clair gardée pour déboguer ne passe pas.
 const FORMATS_INTERDITS = /\.(?:xls|xlsm|xlsb|ods|csv|doc|docm|odt|pdf)$/i;
-const JSON_PERMIS = ["package.json", "essais/banque_demo.chiffree.json", "donnees/banque.chiffree.json"];
+const JSON_PERMIS = ["package.json", "essais/banque_demo.chiffree.json", "essais/banque_format1.chiffree.json", "donnees/banque.chiffree.json"];
 
 function fichiersHorsListe(chemins) {
   return chemins.filter((chemin) => FORMATS_INTERDITS.test(chemin) || (/\.json$/i.test(chemin) && !JSON_PERMIS.includes(chemin)));
@@ -138,13 +145,31 @@ function defautDeFormeChiffree(texte) {
     return "données chiffrées incomplètes";
   }
   if (seLitCommeDuTexte(donnees)) return "données en clair, seulement encodées en base64";
+  if (banque.format !== 1 && banque.format !== 2) return `format ${banque.format} inconnu`;
+  // Format 2 : l'empreinte est celle des octets chiffrés, et se vérifie ici.
+  if (banque.format === 2 && banque.empreinte !== `sha256:${createHash("sha256").update(donnees).digest("hex")}`) {
+    return "format 2 : l'empreinte n'est pas celle des octets chiffrés";
+  }
+  return null;
+}
+
+// La première publication réelle (29/09/2026) est au format 1 ; toute
+// publication suivante doit être au format 2. Un onglet de l'espace auteur
+// ouvert sur l'ancien code écrirait encore le format 1 : cela se verrait ici.
+const FORMAT_1_PUBLIE = "sha256:de78dcbfbcf5f39a1187b6821359aef6fcda740faa8c1f4c79094479428ad854";
+
+function defautDeLaBanquePubliee(texte) {
+  const defaut = defautDeFormeChiffree(texte);
+  if (defaut) return defaut;
+  const { format, empreinte } = JSON.parse(texte);
+  if (format === 1 && empreinte !== FORMAT_1_PUBLIE) return "format 1 : seul le fichier du 29/09/2026 l'a ; une publication nouvelle doit être au format 2 (recharger la page avant de publier)";
   return null;
 }
 
 function donneesEnClair(chemins, lireTexte) {
   const fautes = [];
   for (const chemin of chemins.filter((c) => c.toLowerCase().startsWith("donnees/"))) {
-    const defaut = chemin === BANQUE ? defautDeFormeChiffree(lireTexte(chemin)) : `seule ${BANQUE} a sa place ici`;
+    const defaut = chemin === BANQUE ? defautDeLaBanquePubliee(lireTexte(chemin)) : `seule ${BANQUE} a sa place ici`;
     if (defaut) fautes.push(`${chemin} : ${defaut}`);
   }
   return fautes;
@@ -281,7 +306,7 @@ test(".gitignore — ignore les classeurs, documents et données en clair, pas l
     "donnees/banque.json", "donnees/sous/clair.json", "banque.json", "essais/banque_claire.json", "tests/banque.json",
     "plans/instruction.md", "ressources/notes.md", "desktop.ini", "Thumbs.db", "~$regles_jdr.xlsx", "essais/~$classeur_essai.xlsx",
   ];
-  const suivis = ["essais/classeur_essai.xlsx", "essais/banque_demo.chiffree.json", "donnees/banque.chiffree.json", "package.json", "index.html", "js/application.js", "icones/icone.svg"];
+  const suivis = ["essais/classeur_essai.xlsx", "essais/banque_demo.chiffree.json", "essais/banque_format1.chiffree.json", "donnees/banque.chiffree.json", "package.json", "index.html", "js/application.js", "icones/icone.svg"];
   let sortie = "";
   try {
     sortie = git("check-ignore", "--no-index", "--", ...ignores, ...suivis);
@@ -358,11 +383,92 @@ test("workflow — les workflows du dépôt sont sûrs (§ 10.2)", () => {
   for (const chemin of workflows) assert.deepEqual(defautsDuWorkflow(lire(chemin, "utf8")), [], chemin);
 });
 
+// Le crochet pre-push (§ 10.3) : les contrôles passent avant chaque envoi.
+const CROCHET = ".githooks/pre-push";
+
+test("crochet — le crochet pre-push existe, en sh, exécutable, et lance node --test", () => {
+  const texte = lire(CROCHET, "utf8");
+  assert.match(texte.split("\n")[0], /^#!\/bin\/sh\s*$/);
+  assert.doesNotMatch(texte, /\r/, "des fins de ligne Windows casseraient sh");
+  assert.match(texte, /^if node --test /m);
+  assert.match(texte, /Envoi refusé/);
+  assert.match(texte, /^exit 1\s*$/m);
+  assert.match(git("ls-files", "-s", CROCHET), /^100755 /, "mode 100755 dans l'index : chmod +x pour Git");
+  assert.match(git("check-attr", "eol", "--", CROCHET), /: eol: lf$/m, "extrait toujours en LF, même avec core.autocrlf");
+});
+
+test("crochet — core.hooksPath désigne .githooks sur ce poste", { skip: process.env.GITHUB_ACTIONS ? "GitHub Actions n'envoie rien : le crochet protège les envois du poste" : false }, () => {
+  assert.equal(git("config", "--local", "--get", "core.hooksPath").trim(), ".githooks");
+});
+
+test("crochet — un envoi est refusé quand un contrôle échoue, quand tout n'est pas commité, ou sans node ; accepté sinon", (t) => {
+  const essai = mkdtempSync(join(tmpdir(), "atelier-crochet-"));
+  try {
+    const travail = join(essai, "travail");
+    const distant = join(essai, "distant.git");
+    gitDans(essai, "init", "-q", "--bare", distant);
+    gitDans(essai, "init", "-q", travail);
+    const options = ["-c", "user.name=Essai", "-c", "user.email=essai@users.noreply.github.com", "-c", "commit.gpgsign=false"];
+    const crochets = ["-c", `core.hooksPath=${join(RACINE, ".githooks").replaceAll("\\", "/")}`];
+    const g = (...parametres) => gitDans(travail, ...options, ...crochets, ...parametres);
+    // Un envoi : null s'il passe, sinon ce qu'a dit le crochet.
+    const envoyer = (environnement = ENVIRONNEMENT) => {
+      try {
+        execFileSync("git", [...crochets, "push", "-q", distant, "HEAD:main"], { cwd: travail, encoding: "utf8", env: environnement, stdio: "pipe" });
+        return null;
+      } catch (erreur) {
+        return `${erreur.stdout}${erreur.stderr}`;
+      }
+    };
+    const rienNestParti = () => assert.equal(gitDans(distant, "branch", "--list").trim(), "", "rien n'est parti");
+    const controle = (reussit) => `import { test } from "node:test";\nimport assert from "node:assert/strict";\ntest("essai", () => assert.equal(${reussit}, true));\n`;
+    mkdirSync(join(travail, "tests"));
+    writeFileSync(join(travail, "tests/essai.test.mjs"), controle(false));
+    g("add", "-A");
+    g("commit", "-q", "-m", "un contrôle cassé");
+
+    // Un contrôle échoue : refusé, même si NODE_TEST_CONTEXT est hérité.
+    assert.match(envoyer() ?? "", /Envoi refusé : des contrôles échouent/);
+    assert.match(envoyer({ ...ENVIRONNEMENT, NODE_TEST_CONTEXT: "child-v8" }) ?? "", /Envoi refusé : des contrôles échouent/);
+    rienNestParti();
+
+    // Réparé sur le disque, mais pas commité : ce qui partirait est cassé.
+    writeFileSync(join(travail, "tests/essai.test.mjs"), controle(true));
+    assert.match(envoyer() ?? "", /Envoi refusé : des modifications ne sont pas commitées/);
+    g("commit", "-q", "-am", "le contrôle réparé");
+    // Un fichier nouveau, non suivi : refusé aussi.
+    writeFileSync(join(travail, "oublie.txt"), "un fichier oublié au commit");
+    assert.match(envoyer() ?? "", /Envoi refusé : des modifications ne sont pas commitées/);
+    rmSync(join(travail, "oublie.txt"));
+    rienNestParti();
+
+    // Sans node : refusé, et le message le dit.
+    const cle = Object.keys(ENVIRONNEMENT).find((nom) => nom.toUpperCase() === "PATH");
+    const executable = process.platform === "win32" ? ".exe" : "";
+    const dossiers = ENVIRONNEMENT[cle].split(delimiter);
+    const avecNode = dossiers.filter((dossier) => existsSync(join(dossier, `node${executable}`)));
+    if (avecNode.some((dossier) => existsSync(join(dossier, `git${executable}`)) || existsSync(join(dossier, "sh")))) {
+      t.diagnostic("node partage son dossier avec git ou sh : le cas « sans node » n'est pas essayé ici");
+    } else {
+      const sansNode = { ...ENVIRONNEMENT, [cle]: dossiers.filter((dossier) => !avecNode.includes(dossier)).join(delimiter) };
+      assert.match(envoyer(sansNode) ?? "", /Envoi refusé : node introuvable/);
+      rienNestParti();
+    }
+
+    // Tout est commité et les contrôles passent : l'envoi part.
+    assert.equal(envoyer(), null);
+    assert.equal(gitDans(distant, "rev-parse", "main").trim(), g("rev-parse", "HEAD").trim(), "l'envoi est passé");
+  } finally {
+    rmSync(essai, { recursive: true, force: true });
+  }
+});
+
 test("interdit 2 — repère des données en clair dans donnees/", () => {
-  const enTete = { format: 1, publiee_le: "2026-09-28T14:32:00+02:00", empreinte: "sha256:00" };
   const kdf = { nom: "PBKDF2-SHA256", iterations: 600000, sel: Buffer.alloc(16, 7).toString("base64") };
   // Des octets qui ne se lisent pas comme du texte, comme un vrai chiffré.
-  const chiffre = { nom: "AES-GCM", iv: Buffer.alloc(12, 9).toString("base64"), donnees: Buffer.alloc(32, 0x9c).toString("base64") };
+  const octets = Buffer.alloc(32, 0x9c);
+  const chiffre = { nom: "AES-GCM", iv: Buffer.alloc(12, 9).toString("base64"), donnees: octets.toString("base64") };
+  const enTete = { format: 2, publiee_le: "2026-09-28T14:32:00+02:00", empreinte: `sha256:${createHash("sha256").update(octets).digest("hex")}` };
   const clair = Buffer.from(JSON.stringify({ format: 1, blocs: [{ nom: "Secret du MJ" }] })).toString("base64");
   const essais = [
     [{ ...enTete, kdf, chiffre }, 0],
@@ -374,6 +480,9 @@ test("interdit 2 — repère des données en clair dans donnees/", () => {
     [{ ...enTete, kdf: { ...kdf, iterations: 1000 }, chiffre }, 1],
     [{ ...enTete, kdf: { ...kdf, sel: "c2Vs" }, chiffre }, 1],
     [{ ...enTete, kdf, chiffre: { ...chiffre, iv: "aXY=" } }, 1],
+    // Le format 1 n'est permis dans donnees/ que pour le fichier du 29/09/2026.
+    [{ ...enTete, format: 1, empreinte: `sha256:${"1".repeat(64)}`, kdf, chiffre }, 1],
+    [{ ...enTete, format: 1, empreinte: FORMAT_1_PUBLIE, kdf, chiffre }, 0],
   ];
   for (const [banque, nombre] of essais) {
     const fautes = donneesEnClair([BANQUE], () => JSON.stringify(banque));
@@ -383,8 +492,18 @@ test("interdit 2 — repère des données en clair dans donnees/", () => {
   assert.equal(donneesEnClair(["donnees/banque.json", "donnees/copie.csv", "Donnees/clair.json"], () => "{}").length, 3);
 });
 
-test("interdit 2 — la banque de démonstration a la forme chiffrée du § 7.1", () => {
-  assert.equal(defautDeFormeChiffree(lire("essais/banque_demo.chiffree.json", "utf8")), null);
+test("interdit 2 — repère un format inconnu, ou une empreinte de format 2 qui n'est pas celle des octets chiffrés", () => {
+  const vraie = JSON.parse(lire("essais/banque_demo.chiffree.json", "utf8"));
+  assert.equal(defautDeFormeChiffree(JSON.stringify({ ...vraie, format: 3 })), "format 3 inconnu");
+  assert.match(defautDeFormeChiffree(JSON.stringify({ ...vraie, empreinte: `sha256:${"0".repeat(64)}` })), /format 2/);
+});
+
+test("interdit 2 — les banques d'essais/ ont la forme chiffrée du § 7.1 : démonstration au format 2, ancien format au format 1", () => {
+  const banques = cheminsDuDepot().filter((chemin) => /^essais\/.+\.chiffree\.json$/.test(chemin));
+  assert.deepEqual(banques.sort(), ["essais/banque_demo.chiffree.json", "essais/banque_format1.chiffree.json"]);
+  for (const chemin of banques) assert.equal(defautDeFormeChiffree(lire(chemin, "utf8")), null, chemin);
+  assert.equal(JSON.parse(lire("essais/banque_demo.chiffree.json", "utf8")).format, 2);
+  assert.equal(JSON.parse(lire("essais/banque_format1.chiffree.json", "utf8")).format, 1);
 });
 
 test("interdit 2 — donnees/ ne contient que la banque chiffrée", () => {

@@ -1,0 +1,4 @@
+# Les crochets sont des scripts sh : des fins de ligne Windows (CRLF), que
+# Git pour Windows écrit à l'extraction quand core.autocrlf est vrai, les
+# casseraient (SPECIFICATION.md, § 10.3).
+.githooks/* text eol=lf

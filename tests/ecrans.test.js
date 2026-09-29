@@ -521,3 +521,26 @@ test("fiches — un nom introuvable n'est jamais le titre de la page (§ 9)", as
     retirer();
   }
 });
+
+test("accueil — le diagnostic dit le format de la banque (§ 7.1, § 9)", async () => {
+  const retirer = installerDom();
+  try {
+    const { MOT_DE_PASSE_DEMO } = await import("../js/banque/chargement.js");
+    const { ouvrirAvecMotDePasse } = await import("../js/securite/chiffrement.js");
+    const accueil = await import("../js/ecrans/accueil.js");
+    const { banque } = await ouvrirAvecMotDePasse(DEMO, MOT_DE_PASSE_DEMO);
+    const contexte = {
+      etat: { mode: "demo", banque, chargement: { enveloppe: DEMO }, coffre: creerCoffre(magasinMemoire()), derivation: null, stockage: null, nouvelles: null },
+      dernierePublication: () => null,
+      stockageMemorise: () => null,
+      recharger() {},
+      oublier() {},
+    };
+    const ecran = accueil.afficher(contexte);
+    document.body.replaceChildren(ecran);
+    await attendre(() => ecran.querySelector(".diagnostic"), "le diagnostic ne s'affiche pas");
+    assert.match(texteDe(ecran.querySelector(".diagnostic")), /format 2, empreinte [0-9a-f]{12}/);
+  } finally {
+    retirer();
+  }
+});

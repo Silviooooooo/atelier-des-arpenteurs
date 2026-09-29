@@ -8,7 +8,7 @@
 // chiffrée avec un mot de passe public, affiché à l'écran ; sa clé se garde
 // à part de la clé réelle (coffre.js).
 
-import { lireEnTete, ouvrir, ouvrirAvecMotDePasse } from "../securite/chiffrement.js";
+import { lireEnTete, ouvrir, ouvrirAvecMotDePasse, verifierEmpreinte } from "../securite/chiffrement.js";
 
 export const CHEMINS = { reel: "donnees/banque.chiffree.json", demo: "essais/banque_demo.chiffree.json" };
 
@@ -40,7 +40,10 @@ export async function telecharger(mode, { fetch = globalThis.fetch, maintenant =
     return { erreur: "Le fichier de la banque est abîmé : ce n'est pas du JSON." };
   }
   const enTete = lireEnTete(enveloppe);
-  return enTete.erreur ? { erreur: enTete.erreur } : { enveloppe };
+  if (enTete.erreur) return { erreur: enTete.erreur };
+  // Un fichier abîmé se voit tout de suite, avant de demander le mot de passe.
+  const faussee = await verifierEmpreinte(enveloppe);
+  return faussee ? { erreur: faussee.erreur } : { enveloppe };
 }
 
 /**

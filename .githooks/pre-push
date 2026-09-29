@@ -1,0 +1,40 @@
+#!/bin/sh
+# Contrôle avant chaque envoi (SPECIFICATION.md, § 10.3 et § 11).
+#
+# Lance tous les contrôles ; au moindre échec, l'envoi est refusé et rien ne
+# part sur GitHub. Il s'installe une fois par poste, sans --global :
+#   git config core.hooksPath .githooks
+# Ne jamais le contourner (--no-verify) : un envoi refusé se corrige.
+#
+# Les contrôles portent sur l'arbre de travail : il doit donc être celui du
+# commit envoyé, sans modification ni fichier nouveau hors des commits.
+
+# Hérité d'un node --test, NODE_TEST_CONTEXT ferait passer un échec pour un
+# succès (revue du groupe 4).
+unset NODE_TEST_CONTEXT
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "Envoi refusé : node introuvable. Lancez l'envoi depuis un terminal où la commande node répond (Node 22 ou plus récent)."
+  exit 1
+fi
+
+if [ -n "$(git status --porcelain)" ]; then
+  echo "Envoi refusé : des modifications ne sont pas commitées, ou des fichiers ne sont pas suivis."
+  echo "Les contrôles doivent porter sur ce qui part : commitez-les, ou retirez-les, puis renvoyez."
+  git status --short | head -20
+  exit 1
+fi
+
+echo "Contrôles avant l'envoi (node --test)…"
+journal=$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/atelier-pre-push.$$")
+if node --test >"$journal" 2>&1; then
+  grep -E '^(ℹ|#) (tests|pass|fail) ' "$journal"
+  rm -f "$journal"
+  exit 0
+fi
+grep -E '^✖|^not ok|^(ℹ|#) (tests|pass|fail) ' "$journal" | head -40
+rm -f "$journal"
+echo ""
+echo "Envoi refusé : des contrôles échouent. Corrigez-les, puis renvoyez."
+echo "Ne contournez jamais ce contrôle (--no-verify)."
+exit 1

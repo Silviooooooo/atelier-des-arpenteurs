@@ -55,7 +55,7 @@ async function diagnostic(contexte) {
     [
       "Banque",
       enveloppe
-        ? `publiée le ${dateLisible(enveloppe.publiee_le)}, empreinte ${empreinteCourte(enveloppe.empreinte)}`
+        ? `publiée le ${dateLisible(enveloppe.publiee_le)}, format ${enveloppe.format}, empreinte ${empreinteCourte(enveloppe.empreinte)}`
         : etat.chargement?.absente
           ? "aucune banque publiée"
           : "non chargée",

@@ -19,12 +19,14 @@ import {
   versBase64,
 } from "../js/securite/chiffrement.js";
 import { creerCoffre, magasinMemoire } from "../js/securite/coffre.js";
+import { MOT_DE_PASSE_DEMO } from "../js/banque/chargement.js";
+import { readFileSync } from "node:fs";
 
 const MOT_DE_PASSE = "passoire louche marmite écumoire";
 const BANQUE = { format: 1, publiee_le: "2026-09-28T14:32:00+02:00", blocs: [{ nom: "Poêle" }], anomalies: [] };
 const BANQUE_SUIVANTE = { ...BANQUE, publiee_le: "2026-10-02T09:05:00+02:00", blocs: [{ nom: "Poêle" }, { nom: "Wok" }] };
 
-test("chiffrement — aller-retour, au format du § 7.1", async () => {
+test("chiffrement — aller-retour, au format 2 du § 7.1", async () => {
   const secret = await nouveauSecret(MOT_DE_PASSE);
   const fichier = await chiffrer(BANQUE, secret);
   assert.deepEqual(Object.keys(fichier), ["format", "publiee_le", "empreinte", "kdf", "chiffre"]);
@@ -34,7 +36,11 @@ test("chiffrement — aller-retour, au format du § 7.1", async () => {
   assert.equal(depuisBase64(fichier.kdf.sel).length, 16);
   assert.equal(fichier.chiffre.nom, "AES-GCM");
   assert.equal(depuisBase64(fichier.chiffre.iv).length, 12);
-  assert.equal(fichier.empreinte, await empreinte(JSON.stringify(BANQUE)));
+  // Format 2 : l'empreinte est celle des octets chiffrés, étiquette comprise ;
+  // celle de la banque en clair n'est plus dans l'en-tête.
+  assert.equal(fichier.format, 2);
+  assert.equal(fichier.empreinte, await empreinte(depuisBase64(fichier.chiffre.donnees)));
+  assert.notEqual(fichier.empreinte, await empreinte(JSON.stringify(BANQUE)));
   assert.doesNotMatch(JSON.stringify(fichier), /Poêle|blocs/);
 
   // Un joueur : le mot de passe saisi, le sel lu dans l'en-tête.
@@ -60,9 +66,17 @@ test("chiffrement — un fichier abîmé ou inconnu donne un message, pas une ex
   const octets = depuisBase64(fichier.chiffre.donnees);
   octets[0] ^= 1;
   const abime = { ...fichier, chiffre: { ...fichier.chiffre, donnees: Buffer.from(octets).toString("base64") } };
-  assert.equal((await dechiffrer(abime, secret.cle)).code, "mot_de_passe");
+  // Format 2 : un octet changé ne correspond plus à l'empreinte du fichier.
+  assert.equal((await dechiffrer(abime, secret.cle)).code, "empreinte");
   assert.equal((await dechiffrer({ ...fichier, empreinte: "sha256:00" }, secret.cle)).code, "empreinte");
-  for (const inconnu of [null, {}, { ...fichier, format: 2 }, { ...fichier, kdf: { ...fichier.kdf, sel: "pas du base64 !" } }]) {
+  // Un format plus récent que celui de la page : la page est en retard.
+  for (const recent of [{ ...fichier, format: 3 }, { ...fichier, format: 7 }]) {
+    const resultat = lireEnTete(recent);
+    assert.equal(resultat.code, "format_recent");
+    assert.match(resultat.erreur, /rechargez la page/);
+    assert.equal((await ouvrirAvecMotDePasse(recent, MOT_DE_PASSE)).code, "format_recent");
+  }
+  for (const inconnu of [null, {}, { ...fichier, format: 0 }, { ...fichier, format: "2" }, { ...fichier, format: 2.5 }, { ...fichier, kdf: { ...fichier.kdf, sel: "pas du base64 !" } }]) {
     assert.equal(lireEnTete(inconnu).code, "format");
     assert.equal((await ouvrirAvecMotDePasse(inconnu, MOT_DE_PASSE)).code, "format");
   }
@@ -111,13 +125,42 @@ test("chiffrement — un navigateur qui refuse la dérivation donne un message, 
   }
 });
 
+test("format 2 — l'empreinte des octets chiffrés se vérifie avant de déchiffrer, et change à chaque publication", async () => {
+  const secret = await nouveauSecret(MOT_DE_PASSE);
+  const fichier = await chiffrer(BANQUE, secret);
+  // Une empreinte fausse : refusée, sans même déchiffrer.
+  const fausse = { ...fichier, empreinte: `sha256:${"0".repeat(64)}` };
+  assert.equal((await dechiffrer(fausse, secret.cle)).code, "empreinte");
+  assert.equal((await ouvrirAvecMotDePasse(fausse, MOT_DE_PASSE)).code, "empreinte");
+  // Des octets changés, l'empreinte recalculée : l'étiquette d'AES-GCM les refuse.
+  const octets = depuisBase64(fichier.chiffre.donnees);
+  octets[0] ^= 1;
+  const change = { ...fichier, chiffre: { ...fichier.chiffre, donnees: versBase64(octets) }, empreinte: await empreinte(octets) };
+  assert.equal((await dechiffrer(change, secret.cle)).code, "mot_de_passe");
+  // La même banque, chiffrée deux fois : deux empreintes. Savoir si le
+  // contenu a changé se fait sur le contenu déchiffré, jamais sur elle.
+  const second = await chiffrer(BANQUE, secret);
+  assert.notEqual(second.empreinte, fichier.empreinte);
+  assert.deepEqual((await ouvrir(second, secret)).banque, (await ouvrir(fichier, secret)).banque);
+});
+
+test("format 1 — un fichier au format 1 se lit encore, et son empreinte en clair se vérifie", async () => {
+  const ancien = JSON.parse(readFileSync(new URL("../essais/banque_format1.chiffree.json", import.meta.url), "utf8"));
+  assert.equal(ancien.format, 1);
+  const ouvert = await ouvrirAvecMotDePasse(ancien, MOT_DE_PASSE_DEMO);
+  assert.equal(ouvert.erreur, undefined, ouvert.erreur);
+  assert.equal(ancien.empreinte, await empreinte(JSON.stringify(ouvert.banque)), "format 1 : empreinte de la banque en clair");
+  assert.equal((await ouvrirAvecMotDePasse({ ...ancien, empreinte: `sha256:${"0".repeat(64)}` }, MOT_DE_PASSE_DEMO)).code, "empreinte");
+});
+
 test("chiffrement — un IV neuf à chaque chiffrement, le sel inchangé", async () => {
   const secret = await nouveauSecret(MOT_DE_PASSE);
   const [premier, second] = [await chiffrer(BANQUE, secret), await chiffrer(BANQUE, secret)];
   assert.notEqual(premier.chiffre.iv, second.chiffre.iv);
   assert.notEqual(premier.chiffre.donnees, second.chiffre.donnees);
   assert.equal(premier.kdf.sel, second.kdf.sel);
-  assert.equal(premier.empreinte, second.empreinte);
+  // Format 2 : l'empreinte suit les octets chiffrés, donc l'IV.
+  assert.notEqual(premier.empreinte, second.empreinte);
 });
 
 test("chiffrement — la clé gardée déchiffre la publication suivante (§ 7.1)", async () => {

@@ -228,6 +228,7 @@ test("démonstration — la banque se déchiffre avec le mot de passe public et 
   assert.ok([...MOT_DE_PASSE_DEMO].length >= 20);
   const enveloppe = JSON.parse(lire(CHEMINS.demo));
   assert.deepEqual(Object.keys(enveloppe), ["format", "publiee_le", "empreinte", "kdf", "chiffre"]);
+  assert.equal(enveloppe.format, 2, "banque au format 1 : relancer node outils/banque_demo.js");
   const { banque, erreur } = await ouvrirAvecMotDePasse(enveloppe, MOT_DE_PASSE_DEMO);
   assert.equal(erreur, undefined, erreur);
   const { banque: attendue } = await importerFichier(ESSAI, "classeur_essai.xlsx");
@@ -235,6 +236,24 @@ test("démonstration — la banque se déchiffre avec le mot de passe public et 
   assert.equal(date, enveloppe.publiee_le);
   assert.deepEqual(reste, attendue, "banque périmée : relancer node outils/banque_demo.js");
   assert.equal((await ouvrirAvecMotDePasse(enveloppe, "un autre mot de passe de table")).code, "mot_de_passe");
+});
+
+test("ancien format — le fichier d'essai au format 1 vient du classeur d'essai, et la page l'ouvre", async () => {
+  const ancien = JSON.parse(lire("essais/banque_format1.chiffree.json"));
+  assert.equal(ancien.format, 1);
+  const coffre = creerCoffre(magasinMemoire());
+  const { banque, erreur } = await ouvrirParMotDePasse(ancien, MOT_DE_PASSE_DEMO, { coffre, mode: "demo", garder: true });
+  assert.equal(erreur, undefined, erreur);
+  // Le fichier est figé : il vient du classeur d'essai tel qu'il était le
+  // 29/09/2026. Tant que ce classeur n'a pas changé, il en a tout le contenu.
+  assert.equal(banque.sources[0].fichier, "classeur_essai.xlsx");
+  const { banque: attendue } = await importerFichier(ESSAI, "classeur_essai.xlsx");
+  if (attendue.sources[0].empreinte === banque.sources[0].empreinte) {
+    const { publiee_le: _date, ...reste } = banque;
+    assert.deepEqual(reste, attendue);
+  }
+  // La clé gardée l'ouvre à la visite suivante.
+  assert.ok((await ouvrirAvecCoffre(ancien, coffre, "demo")).banque);
 });
 
 test("chargement — banque absente, présente, abîmée ; un paramètre unique, sans cache (§ 8.3)", async () => {
@@ -250,7 +269,11 @@ test("chargement — banque absente, présente, abîmée ; un paramètre unique,
   assert.deepEqual(await telecharger("demo", { fetch: simuler(new Response(JSON.stringify(enveloppe))), maintenant: 456 }), { enveloppe });
   assert.equal(appels[1].adresse, "essais/banque_demo.chiffree.json?v=456");
   assert.match((await telecharger("reel", { fetch: simuler(new Response("<html>")) })).erreur, /abîmé/);
-  assert.match((await telecharger("reel", { fetch: simuler(new Response(JSON.stringify({ format: 9 }))) })).erreur, /format inconnu/);
+  assert.match((await telecharger("reel", { fetch: simuler(new Response(JSON.stringify({ format: "x" }))) })).erreur, /format inconnu/);
+  assert.match((await telecharger("reel", { fetch: simuler(new Response(JSON.stringify({ ...enveloppe, format: 9 }))) })).erreur, /rechargez la page/);
+  // Format 2 : l'empreinte se vérifie dès le téléchargement, sans clé.
+  const abimee = { ...enveloppe, empreinte: `sha256:${"0".repeat(64)}` };
+  assert.match((await telecharger("demo", { fetch: simuler(new Response(JSON.stringify(abimee))) })).erreur, /abîmé.*empreinte/);
   assert.match((await telecharger("reel", { fetch: simuler(new Response("", { status: 503 })) })).erreur, /503/);
   assert.match((await telecharger("reel", { fetch: simuler(new TypeError("Failed to fetch")) })).erreur, /connexion/);
 });
