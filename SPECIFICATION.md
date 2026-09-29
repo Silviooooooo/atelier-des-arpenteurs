@@ -1,6 +1,6 @@
 # L'Atelier des Arpenteurs — spécification
 
-**Version 0.8 — 28/09/2026.** Ce document fait foi pour le code. Toute décision
+**Version 1.0 — 29/09/2026.** Le lot 1 est en service. Ce document fait foi pour le code. Toute décision
 qui le contredit y est reportée, avec une entrée de révision et un numéro de
 version (§ 14). Le nom « L'Atelier des Arpenteurs » est validé par l'auteur ;
 le dépôt s'appelle `atelier-des-arpenteurs`.
@@ -157,7 +157,8 @@ donnees/
   banque.chiffree.json      la seule donnée réelle du dépôt, chiffrée
 essais/
   classeur_essai.xlsx       classeur FICTIF, contenu inventé, fabriqué par tests/outils/
-  banque_demo.chiffree.json la banque de démonstration, tirée du classeur d'essai (§ 9)
+  banque_demo.chiffree.json la banque de démonstration, tirée du classeur d'essai, au format 2 (§ 9)
+  banque_format1.chiffree.json  la même, au format 1, figée : l'ancien format reste lisible (§ 7.1)
 outils/
   icones.js                 fabrique les icônes, sans dépendance
   banque_demo.js            fabrique la banque de démonstration
@@ -170,6 +171,8 @@ tests/
   controles.yml             lance les contrôles à chaque envoi
 .gitignore                  classeurs et leurs formats voisins, documents, JSON hors liste, documents de travail (§ 10.3)
 .nojekyll                   fichier vide : GitHub Pages sert les fichiers tels quels, sans Jekyll
+.githooks/pre-push          lance node --test avant chaque envoi, et refuse l'envoi en cas d'échec (§ 10.3)
+.gitattributes              les crochets toujours extraits en fins de ligne LF
 CLAUDE.md                   consignes pour Claude Code
 SPECIFICATION.md            ce document
 ```
@@ -517,22 +520,38 @@ Le fichier `donnees/banque.chiffree.json` :
 
 ```json
 {
-  "format": 1,
+  "format": 2,
   "publiee_le": "2026-09-27T14:32:00+02:00",
-  "empreinte": "sha256 de la banque en clair",
+  "empreinte": "sha256 des octets chiffrés",
   "kdf": { "nom": "PBKDF2-SHA256", "iterations": 600000, "sel": "base64…" },
   "chiffre": { "nom": "AES-GCM", "iv": "base64…", "donnees": "base64…" }
 }
 ```
 
-L'en-tête est en clair (date, empreinte, paramètres). L'empreinte est celle
-du JSON en clair tel qu'il est chiffré ; elle permet à la page de savoir si
-sa copie est à jour, et se vérifie après le déchiffrement. Elle ne révèle
-aucun contenu à qui n'en a jamais lu, mais permet à qui détient une version
-en clair de vérifier une supposition sur une version suivante (revue de
-sécurité du groupe 3 ; la décision reste ouverte, voir le compte rendu du
-groupe 3). Un fichier abîmé, d'un format inconnu, ou un mot de passe faux
-donnent un message, jamais une exception.
+L'en-tête est en clair (date, empreinte, paramètres). **Au format 2**
+(décision de l'auteur, 29/09/2026), l'empreinte est le SHA-256 **des octets
+chiffrés** (`chiffre.donnees` décodé, étiquette d'AES-GCM comprise). Elle
+permet à la page de savoir si sa copie est à jour, et se vérifie sans clé,
+**dès le téléchargement** : un fichier abîmé se dit avant que le mot de passe
+soit demandé. Elle ne dit rien du contenu, même à qui en a lu une version :
+deux publications de la même banque ont deux empreintes, puisque l'IV
+change. Savoir si le contenu a changé se fait sur le contenu déchiffré,
+jamais sur l'empreinte. Elle ne couvre pas l'IV : un IV abîmé se lit comme
+un mot de passe faux (revue du groupe 4). Un fichier abîmé, d'un format
+inconnu, ou un mot de passe faux donnent un message, jamais une exception.
+Un format plus récent que celui de la page (un onglet resté ouvert sur
+l'ancien code) dit « rechargez la page ».
+
+**Le format 1**, celui de la première publication réelle (29/09/2026),
+portait le SHA-256 de la banque en clair, vérifié après le déchiffrement :
+qui détenait une version en clair pouvait y vérifier une supposition sur une
+version suivante (revue du groupe 3). **La page écrit le format 2 et lit
+encore le format 1** : la banque réelle reste lisible sans rien faire, et la
+prochaine publication de l'auteur passe d'elle-même au format 2, sous le même
+sel. Le fichier figé `essais/banque_format1.chiffree.json`, tiré du classeur
+d'essai par le code du format 1, garantit cette lecture. **La lecture du
+format 1 sera retirée au premier groupe qui suit une publication réelle au
+format 2, confirmée par l'auteur.**
 
 **Les bornes de l'en-tête, à la lecture** (groupe 3). La page refuse, comme
 un fichier abîmé : moins de 600 000 itérations, ou plus de dix fois ce
@@ -571,8 +590,9 @@ la dérivation donne lui aussi un message.
   ne revient pas en mémoire.
 - La dérivation prend 63 ms dans Chromium et 77 ms dans Node 24 sur le PC de
   l'auteur (relevé du 28/09/2026), et **123 ms sur Android 15, dans
-  Firefox 156** (relevé de l'auteur, 28/09/2026). Le stockage durable y est
-  accordé. La page affiche une attente.
+  Firefox 156** (relevé de l'auteur, 28/09/2026), puis **119 ms en mode réel**
+  sur le même téléphone, le 29/09/2026 à 7 h 29, clé gardée. Le stockage
+  durable y est accordé. La page affiche une attente.
 
 ### 7.3 Les limites, à dire à l'auteur et dans le guide
 
@@ -589,6 +609,11 @@ la dérivation donne lui aussi un message.
   transmet. L'espace auteur le propose en une action.
 - **Le code est public** : il révèle la structure des données (noms des
   champs), jamais leur contenu.
+- **La taille se voit.** Le fichier chiffré a la taille de la banque en
+  clair, plus 16 octets, et le message de commit compte les ajouts, les
+  modifications et les retraits (§ 8.2). Qui a lu une version peut donc
+  deviner l'ampleur d'un changement, jamais son contenu (revue du
+  groupe 4).
 - **L'origine est réservée à l'Atelier.** Tous les sites GitHub Pages d'un
   compte partagent l'origine `https://silviooooooo.github.io`, et IndexedDB
   est cloisonné par origine, pas par chemin : la clé de table et le jeton
@@ -751,7 +776,8 @@ quelques minutes », avec un bouton « Recharger » (décision de l'auteur,
 page sur « Chargement de l'Atelier… » ; à 16 secondes, le message est là.
 
 **Le diagnostic**, repliable en bas de l'accueil : le mode (réel ou
-démonstration) ; la date de la banque et son empreinte courte (12 chiffres) ;
+démonstration) ; la date de la banque, son format (§ 7.1) et son empreinte
+courte (12 chiffres) ;
 la durée de la dernière dérivation de clé, en millisecondes, et sa date ; la
 réponse à la demande de stockage durable, et s'il est accordé aujourd'hui ;
 la clé gardée ou non ; le coffre (IndexedDB, ou la mémoire seule) ; le
@@ -843,8 +869,8 @@ Toute dépendance future est justifiée ici, avant son arrivée.
   `!essais/classeur_essai.xlsx`, et les formats voisins d'un classeur
   (`.xls`, `.xlsm`, `.xlsb`, `.ods`, `.csv`) ; `*.docx` (le Word des
   règles), `.doc`, `.docm`, `.odt` et `.pdf` ; tout JSON, sauf
-  `package.json`, `essais/banque_demo.chiffree.json` et
-  `donnees/banque.chiffree.json` (groupe 3) ; les documents de travail `ressources/` et `plans/` ; `système/`, le dossier
+  `package.json`, `essais/banque_demo.chiffree.json`,
+  `essais/banque_format1.chiffree.json` et `donnees/banque.chiffree.json` ; les documents de travail `ressources/` et `plans/` ; `système/`, le dossier
   du classeur réel, s'il venait dans le dépôt ; les fichiers que déposent
   Windows, OneDrive et Office (`desktop.ini`, `Thumbs.db`, les verrous `~$…`).
 - **Le dépôt vit dans OneDrive** (décision de l'auteur). Le classeur réel et
@@ -871,6 +897,18 @@ Toute dépendance future est justifiée ici, avant son arrivée.
   Un contrôle vérifie que l'historique n'en contient pas d'autre.
 - Sans `.nojekyll`, GitHub Pages passe le dépôt dans Jekyll, qui ignore les
   fichiers commençant par `_` et retarde chaque publication.
+- **Un contrôle avant chaque envoi** (décision de l'auteur, 29/09/2026) : le
+  crochet `.githooks/pre-push`, un script `sh` qui fonctionne sous Git pour
+  Windows, lance `node --test` et refuse l'envoi au moindre échec, avec un
+  message en français. Il s'installe une fois par poste, sans `--global` :
+  `git config core.hooksPath .githooks`. Il ne se contourne jamais
+  (`--no-verify`) : un envoi refusé se corrige. `.gitattributes` l'extrait
+  toujours en fins de ligne LF, que `sh` exige. Les contrôles portant sur
+  l'arbre de travail, le crochet refuse aussi l'envoi quand cet arbre n'est
+  pas celui du dernier commit (modification non commitée, fichier non suivi) :
+  ce qui est contrôlé est ce qui part. Il refuse enfin, en le disant, quand
+  `node` est introuvable, et se défait de `NODE_TEST_CONTEXT`, qui ferait
+  passer un échec pour un succès (revue du groupe 4).
 
 ---
 
@@ -885,13 +923,13 @@ Chaque contrôle nouveau se vérifie **armé puis désarmé**.
 | Notation | chaque ligne du tableau du § 6.2, dont les accolades imbriquées et la virgule décimale ; une notation cassée donne E6 et garde le brut |
 | Import | la banque du classeur d'essai a le format du § 5.1 ; colonnes retrouvées malgré la casse, les accents et l'ordre des en-têtes ; valeurs en chaînes, telles qu'écrites ; brut et `lisez_moi`, où une colonne nommée `__proto__` ou `constructor` reste ; ligne sans nom exclue ; fichier illisible : un message |
 | Contrôle | le classeur d'essai déclenche **chaque** code du § 6.3 (E1 sur ses variantes, § 10.3), et exactement les anomalies qu'il annonce, ligne par ligne ; un classeur propre n'en déclenche aucun ; gravités du § 6.3 et tri du § 6.4 |
-| Chiffrement | aller-retour, au format du § 7.1 ; mauvais mot de passe refusé proprement ; fichier abîmé ou inconnu, ou en-tête hors des bornes du § 7.1 (itérations, sel, IV, données), ou dérivation refusée : un message ; une clé sous le plancher ne chiffre pas ; IV différent à chaque chiffrement ; sel inchangé tant que le mot de passe ne change pas ; la clé gardée déchiffre la publication suivante (§ 7.1), et un sel renouvelé la rend inutilisable ; normalisation du mot de passe ; 20 signes au moins ; coffre : seule une clé AES-GCM non extractible, clés réelle et de démonstration séparées, jeton à part (§ 7.2) |
+| Chiffrement | aller-retour, au format 2 du § 7.1 : l'empreinte est celle des octets chiffrés, vérifiée avant le déchiffrement, et change à chaque publication ; le format 1 se lit encore, son empreinte en clair vérifiée ; mauvais mot de passe refusé proprement ; fichier abîmé ou inconnu, ou en-tête hors des bornes du § 7.1 (itérations, sel, IV, données), ou dérivation refusée : un message ; une clé sous le plancher ne chiffre pas ; IV différent à chaque chiffrement ; sel inchangé tant que le mot de passe ne change pas ; la clé gardée déchiffre la publication suivante (§ 7.1), et un sel renouvelé la rend inutilisable ; normalisation du mot de passe ; 20 signes au moins ; coffre : seule une clé AES-GCM non extractible, clés réelle et de démonstration séparées, jeton à part (§ 7.2) |
 | Publication | `fetch` simulé, **aucun appel réel à GitHub** : adresses, en-têtes et corps de la requête ; auteur et committer explicites, en adresse privée (§ 8.2) ; **première publication** : fichier absent, réponse 404, écriture sans `sha` ; mise à jour avec le `sha` lu ; refus pour `sha` périmé (409, ou 422 sans `sha`) : rechargement, nouvelles différences, nouvelle confirmation ; clé refusée (401), droits, réseau, JSON illisible, réponse qui n'est pas du JSON : un message ; écriture acceptée au corps perdu : un succès ; trois refus 422 : le motif du dernier ; contenu de plus d'un mégaoctet relu en brut |
-| Dépôt | aucun `.xlsx` hors `essais/`, et chaque `.xlsx` d'`essais/` fabriqué, octet pour octet, par l'outil des essais ; le `.gitignore` ignore les classeurs, leurs formats voisins, les documents et tout JSON hors liste ; aucun autre format de classeur ou de document, aucun JSON hors liste ; une seule page (`index.html`), une seule image SVG (l'icône) ; dans tout l'historique, aucun fichier interdit et aucun jeton ; un jeton écrit en UTF-16 se voit ; workflow : actions fixées sur un commit avec leur version, `contents: read`, aucune écriture, `persist-credentials: false`, ni `pull_request_target` ni texte d'un événement ; **aucun `.docx`** ; `donnees/` (quelle que soit la casse) ne contient que `banque.chiffree.json`, sans autre champ que ceux du § 7.1, aux valeurs du § 7.1 (600 000 itérations, sel de 16 octets, IV de 12), et des données qui ne se lisent pas comme du texte ; la banque de démonstration a la même forme ; aucun **jeton GitHub entier** : un préfixe (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`) suivi d'au moins 36 caractères alphanumériques ou soulignés, le contrôle fabriquant son faux jeton au moment de l'essai ; dans l'historique, des **auteurs** en `…@users.noreply.github.com`, des **committers** aussi ou en `noreply@github.com` (commits faits sur le site de GitHub), la ligne `Co-Authored-By` d'un message n'étant pas une adresse d'auteur ; ni `innerHTML`, ni `outerHTML`, ni `insertAdjacentHTML`, ni `document.write` dans les fichiers du site et dans `outils/` (§ 10.1) |
+| Dépôt | aucun `.xlsx` hors `essais/`, et chaque `.xlsx` d'`essais/` fabriqué, octet pour octet, par l'outil des essais ; le `.gitignore` ignore les classeurs, leurs formats voisins, les documents et tout JSON hors liste ; aucun autre format de classeur ou de document, aucun JSON hors liste ; une seule page (`index.html`), une seule image SVG (l'icône) ; dans tout l'historique, aucun fichier interdit et aucun jeton ; un jeton écrit en UTF-16 se voit ; workflow : actions fixées sur un commit avec leur version, `contents: read`, aucune écriture, `persist-credentials: false`, ni `pull_request_target` ni texte d'un événement ; **aucun `.docx`** ; `donnees/` (quelle que soit la casse) ne contient que `banque.chiffree.json`, sans autre champ que ceux du § 7.1, aux valeurs du § 7.1 (600 000 itérations, sel de 16 octets, IV de 12), au format 1 ou 2 (au format 2, l'empreinte est vérifiée sur les octets chiffrés ; dans `donnees/`, le format 1 n'est permis qu'au fichier publié le 29/09/2026), et des données qui ne se lisent pas comme du texte ; les banques d'`essais/` ont la même forme, la démonstration au format 2 et l'ancien format au format 1 ; le crochet `pre-push` existe, en `sh`, exécutable, extrait en LF, et `core.hooksPath` le désigne sur le poste (pas sur GitHub Actions, qui n'envoie rien) ; un envoi vers un dépôt d'essai est refusé quand un contrôle échoue (même avec `NODE_TEST_CONTEXT` hérité), quand tout n'est pas commité, ou sans `node`, et accepté sinon ; aucun **jeton GitHub entier** : un préfixe (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`) suivi d'au moins 36 caractères alphanumériques ou soulignés, le contrôle fabriquant son faux jeton au moment de l'essai ; dans l'historique, des **auteurs** en `…@users.noreply.github.com`, des **committers** aussi ou en `noreply@github.com` (commits faits sur le site de GitHub), la ligne `Co-Authored-By` d'un message n'étant pas une adresse d'auteur ; ni `innerHTML`, ni `outerHTML`, ni `insertAdjacentHTML`, ni `document.write` dans les fichiers du site et dans `outils/` (§ 10.1) |
 | Différences | ajout, modification champ par champ, retrait ; variantes de puissance ; ordre des lignes et écriture d'une même notation sans effet ; doublons ; résumé d'une ligne et ses accords ; dates |
 | Préparation | première publication, mise à jour sous le même secret ; mot de passe à choisir, à saisir ou changé ; E1 refusé ; changement de mot de passe ; circuit complet, de l'import à la lecture par un joueur |
 | Routes et fiches | décodage des adresses de fiche (`#/capacite/Attaque%20de%20base`) et aller-retour des noms difficiles ; adresses abîmées, dont les noms d'`Object.prototype` ; un nom introuvable n'est jamais le titre ; recherche sans casse ni accents, sur les noms et les descriptions ; renvois résolus comme au contrôle ; « octroyée par », « porté par », nom affiché ; anomalies d'une ligne |
-| Site | politique de sécurité du `<meta>`, avant scripts et styles, toute la table des directives et rien d'autre ; zoom permis ; ni script, ni style, ni gestionnaire en ligne ; chaque fichier appelé existe ; le graphe des modules se résout et atteint les huit écrans ; manifeste, couleurs des jetons, icônes aux tailles dites, telles que les dessine leur outil ; contrastes ; valeurs de `ecran.css` tirées des jetons, aucune police téléchargée ; la banque de démonstration se déchiffre et vient du classeur d'essai ; chargement : absente, présente, abîmée, `?v=`, clé gardée, mot de passe requis ou changé, stockage durable ; l'attente du mot de passe ne dépend pas de la peinture de la fenêtre ; le déverrouillage n'attend pas la réponse sur le stockage durable ; sans IndexedDB, la phrase au lieu de la case ; une erreur inattendue : un message. Dans un document simulé : le bouton « Publier » existe dans chaque état de l'espace auteur, et sa raison s'affiche ; la barre de publication reste collée au bas de l'écran ; « Oublier le mot de passe » ne laisse ni clé ni différences, même pendant une comparaison ; « Oublier la clé GitHub » annule la publication en attente ; « Se souvenir » décide de garder la clé ; la veille de 15 secondes, et rien sur une page chargée ; l'aide dit d'ajouter l'Atelier depuis son accueil ; `dom.js` refuse gestionnaires en texte, `style`, `srcdoc` et adresses étrangères. Le serveur local : la seule machine, les seuls fichiers du site |
+| Site | politique de sécurité du `<meta>`, avant scripts et styles, toute la table des directives et rien d'autre ; zoom permis ; ni script, ni style, ni gestionnaire en ligne ; chaque fichier appelé existe ; le graphe des modules se résout et atteint les huit écrans ; manifeste, couleurs des jetons, icônes aux tailles dites, telles que les dessine leur outil ; contrastes ; valeurs de `ecran.css` tirées des jetons, aucune police téléchargée ; la banque de démonstration, au format 2, se déchiffre et vient du classeur d'essai ; le fichier d'essai au format 1 vient du classeur d'essai, et la page l'ouvre ; au téléchargement, une empreinte de format 2 fausse et un format plus récent donnent leur message ; le diagnostic dit le format ; chargement : absente, présente, abîmée, `?v=`, clé gardée, mot de passe requis ou changé, stockage durable ; l'attente du mot de passe ne dépend pas de la peinture de la fenêtre ; le déverrouillage n'attend pas la réponse sur le stockage durable ; sans IndexedDB, la phrase au lieu de la case ; une erreur inattendue : un message. Dans un document simulé : le bouton « Publier » existe dans chaque état de l'espace auteur, et sa raison s'affiche ; la barre de publication reste collée au bas de l'écran ; « Oublier le mot de passe » ne laisse ni clé ni différences, même pendant une comparaison ; « Oublier la clé GitHub » annule la publication en attente ; « Se souvenir » décide de garder la clé ; la veille de 15 secondes, et rien sur une page chargée ; l'aide dit d'ajouter l'Atelier depuis son accueil ; `dom.js` refuse gestionnaires en texte, `style`, `srcdoc` et adresses étrangères. Le serveur local : la seule machine, les seuls fichiers du site |
 
 Les contrôles du dépôt portent sur les fichiers suivis et sur ceux que Git
 suivrait, c'est-à-dire non ignorés : une faute se voit avant d'être commitée.
@@ -955,15 +993,26 @@ l'articulation entre montée de niveau et points d'expérience.
 | 4 — Personnage | créateur, vue téléphone, vue fiche zoomable, code QR vers le téléphone, PDF | § 12, lot 4 |
 | 5 — Finitions | fiche de jeu à compteurs, PDF sur téléphone, annulation d'une publication | — |
 
-**Le lot 1 est terminé quand** : l'auteur a publié le classeur réel depuis
-son ordinateur ; un joueur l'a ouvert sur son téléphone avec le mot de passe ;
-le banc du § 6.3 trouve au moins les comptes de référence ; tous les
-contrôles passent, et chacun a été vu échouer une fois.
+**Le lot 1 est terminé** (29/09/2026, spécification 1.0). Ses critères :
+
+- l'auteur a publié le classeur réel depuis son ordinateur : le 29/09/2026 à
+  7 h 19 (commit `d25aa2a`, 67 blocs, 69 capacités, 19 éléments, publiée
+  malgré 15 erreurs) ;
+- « un joueur l'a ouvert sur son téléphone » : **critère levé par
+  l'auteur**, son propre essai en tient lieu (mode réel, Android 15,
+  Firefox 156, dérivation en 119 ms, le 29/09/2026 à 7 h 29, clé gardée,
+  stockage durable accordé) ;
+- le banc du § 6.3 a retrouvé exactement les comptes de référence le
+  28/09/2026 (groupes 1 et 2). Le 29/09, sur le classeur que l'auteur a
+  corrigé depuis, il trouve 129 anomalies, et moins que la référence en E4
+  (8 noms sur 9) et en A3 (1 sur 2) : une même citation corrigée,
+  « Maîtrise du combat précise », retire les deux ;
+- tous les contrôles passent, et chacun a été vu échouer une fois.
 
 **Ce qui ne dépend que de l'auteur, au lot 1** : créer le compte GitHub et le
 dépôt public (fait) ; activer GitHub Pages, branche `main`, racine (fait le
-28/09/2026) ; créer le jeton à portée fine ; choisir le mot de passe de table
-et le transmettre aux joueurs.
+28/09/2026) ; créer le jeton à portée fine (fait, valable un an) ; choisir le
+mot de passe de table (fait) et le transmettre aux joueurs.
 
 **Le déroulement du lot 1** (plan validé par l'auteur le 28/09/2026). Huit
 étapes, réunies en trois groupes. L'auteur valide à la fin de chaque groupe,
@@ -980,11 +1029,38 @@ relecteurs au plus, une seule liste, l'agent principal corrige).
 | 1 | A — socle du dépôt et spécification 0.3 ; B — lecture du classeur ; C — notation ; D — import, contrôle et banc |
 | 2 | 0 — virgule décimale, A6 devenu I3 ; E — chiffrement et coffre ; F — différences et publication ; G — écrans, écran d'accueil, démonstration, diagnostic, mise en ligne sur GitHub Pages |
 | 3 | revue de sécurité à trois relecteurs, et correction de ses constats ; corrections de l'essai 8 (le bouton « Publier » toujours visible), de l'attente sur « Chargement » et de l'aide pour l'écran d'accueil ; préparation de H |
-| H | mise en service, faite par l'auteur et guidée par Claude : jeton valable un an, mot de passe de table, première publication, essai sur téléphone |
+| H | mise en service, faite par l'auteur et guidée par Claude : jeton valable un an, mot de passe de table, première publication (29/09/2026, 7 h 19), essai sur téléphone |
+| 4 | clôture : vérification de la première publication (en-tête, commit, historique sans donnée réelle, fichier servi) ; empreinte sur le fichier chiffré (format 2) ; crochet `pre-push` ; un relecteur ; spécification 1.0 |
+
+La suite : **un numéro de version par groupe**, 1.1, 1.2…
 
 ---
 
 ## 14. Révisions
+
+**1.0 — 29/09/2026.** Groupe 4, clôture du lot 1 : le lot 1 est en service.
+
+- Première publication réelle vérifiée : `donnees/` ne contient que la
+  banque chiffrée, à l'en-tête conforme au § 7.1 ; commit en adresse privée,
+  message du § 8.2 ; aucun fichier interdit ni aucun nom réel hors des
+  exemples de la spécification dans l'historique ; fichier servi par GitHub
+  Pages identique octet pour octet.
+- Format 2 : l'empreinte porte sur les octets chiffrés ; le format 1 se lit
+  encore, jusqu'à une publication réelle au format 2 confirmée (§ 7.1) ;
+  banque de démonstration au format 2, fichier d'essai figé au format 1
+  (§ 3.2).
+- Crochet `pre-push` et `.gitattributes` (§ 3.2, § 10.3). Mesure de l'auteur
+  en mode réel (§ 7.2). Lot 1 terminé, critère du téléphone levé par
+  l'auteur, banc relevé sur le classeur corrigé (§ 13). Contrôles (§ 11).
+  Désormais, un numéro par groupe : 1.1, 1.2…
+- Relecture (un relecteur, cryptographie et compatibilité des formats),
+  aucun constat critique ni important. Corrigés : le crochet se défait de
+  `NODE_TEST_CONTEXT`, refuse un arbre non commité, et dit « node
+  introuvable » (§ 10.3) ; l'empreinte se vérifie dès le téléchargement ;
+  un format plus récent dit « rechargez la page » (§ 7.1) ; le diagnostic
+  dit le format (§ 9) ; le format 1 de `donnees/` est épinglé au fichier du
+  29/09/2026 (§ 11). La taille qui se voit (§ 7.3), l'IV hors de l'empreinte
+  (§ 7.1).
 
 **0.8 — 28/09/2026.** Groupe 3 du lot 1 : revue de sécurité, corrections,
 préparation de H.

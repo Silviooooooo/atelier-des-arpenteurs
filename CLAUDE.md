@@ -47,6 +47,10 @@ répond pas aux questions de règles en conversation.
   l'adresse privée GitHub de l'auteur (`…@users.noreply.github.com`), jamais
   son adresse personnelle.
 - Contrôles : `node --test` (Node 22 ou plus récent, 24 conseillé).
+- Chaque envoi passe par le crochet `.githooks/pre-push`, qui lance
+  `node --test` (installé par `git config core.hooksPath .githooks`, sans
+  `--global`). **Ne jamais le contourner** (`--no-verify`) : un envoi
+  refusé se corrige.
 - Banc sur le classeur réel, **hors dépôt** :
   `node tests/banc_classeur_reel.js chemin/vers/regles_jdr.xlsx`.
 
