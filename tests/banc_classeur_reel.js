@@ -27,12 +27,12 @@ const REFERENCE = {
   I1: 15,
 };
 
-// État du classeur relevé le 28/09/2026 (§ 4.1).
+// État du classeur relevé le 28/09/2026, et sa colonne « Type » le 29/09/2026 (§ 4.1).
 const RELEVE = [
   { feuille: "lisez_moi", entetes: null, lignes: 19 },
   {
     feuille: "Blocs",
-    entetes: ["Nom", "Eléments transmis aux capacités", "capacites", "Paramètres transmis aux capacités", "Infos"],
+    entetes: ["Nom", "Type", "Eléments transmis aux capacités", "capacites", "Paramètres transmis aux capacités", "Infos"],
     lignes: 67,
   },
   { feuille: "Eléments", entetes: ["Nom", "Paramètres reçus", "description"], lignes: 19 },

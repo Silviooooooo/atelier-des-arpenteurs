@@ -13,7 +13,7 @@ import { COLONNES } from "./importation.js";
 import { cle } from "./noms.js";
 
 const CATEGORIES = {
-  blocs: { feuille: "Blocs", champs: ["elements", "capacites", "parametres", "notes"] },
+  blocs: { feuille: "Blocs", champs: ["type", "elements", "capacites", "parametres", "notes"] },
   capacites: { feuille: "Capacites", champs: ["puissance", "cout_souffle", "cout_lien", "elements", "description", "notes"] },
   elements: { feuille: "Eléments", champs: ["parametres_recus", "description"] },
 };
@@ -31,18 +31,24 @@ function canonique(valeur) {
   return JSON.stringify(valeur ?? null);
 }
 
-// Le texte de la cellule telle qu'écrite ; à défaut, la valeur lue.
+// Le texte de la cellule telle qu'écrite ; à défaut, la valeur lue. Une
+// banque publiée avant une colonne (le type, § 4.1) n'a rien à montrer.
 function texteEcrit(ligne, feuille, champ) {
   const cellules = ligne?.brut?.cellules ?? {};
   const entete = Object.keys(cellules).find((k) => cle(k) === cle(COLONNES[feuille][champ]));
   if (entete !== undefined) return cellules[entete];
   const valeur = ligne?.[champ];
+  if (valeur === undefined) return "";
   return typeof valeur === "string" ? valeur : canonique(valeur);
 }
 
+// Un bloc publié avant la colonne « Type » n'a pas de type : il vaut un
+// type vide, et un bloc resté sans type n'a pas changé.
+const lue = (ligne, champ) => (champ === "type" ? (ligne[champ] ?? "") : ligne[champ]);
+
 function champsModifies(ancien, nouveau, feuille, champs, variante = null) {
   return champs
-    .filter((champ) => canonique(ancien[champ]) !== canonique(nouveau[champ]))
+    .filter((champ) => canonique(lue(ancien, champ)) !== canonique(lue(nouveau, champ)))
     .map((champ) => ({
       champ,
       colonne: COLONNES[feuille][champ],

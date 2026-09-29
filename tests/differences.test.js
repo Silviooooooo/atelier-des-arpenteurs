@@ -31,10 +31,10 @@ function variante(modifier) {
 // Brûlant, Distance, Épais.
 const MODIFIEE = variante((feuille) => {
   const blocs = feuille("Blocs");
-  blocs[1][1] = "Tranchant,Brûlant(Coup)"; // même lecture, autre écriture
-  blocs[1][3] = "{chaleur:3}(Coup), {chaleur:2}(Jet), {distance:0}";
+  blocs[1][2] = "Tranchant,Brûlant(Coup)"; // même lecture, autre écriture
+  blocs[1][4] = "{chaleur:3}(Coup), {chaleur:2}(Jet), {distance:0}";
   blocs.splice(2, 1); // Tablier
-  blocs.push(["Passoire", _, "Coup", _, _]);
+  blocs.push(["Passoire", "Équipement", _, "Coup", _, _]);
   const capacites = feuille("Capacites");
   capacites[1][6] = "Frappe fort de {chaleur}.";
   capacites[2][2] = "1"; // Jet, de puissance N
@@ -97,7 +97,7 @@ test("différences — l'ordre des lignes et l'écriture d'une même notation ne
   const reordonnee = variante((feuille) => {
     const blocs = feuille("Blocs");
     [blocs[1], blocs[2]] = [blocs[2], blocs[1]];
-    blocs[2][2] = "Coup,Jet,( Recette|Tradition ),[Brûlure|Pincement]";
+    blocs[2][3] = "Coup,Jet,( Recette|Tradition ),[Brûlure|Pincement]";
     const capacites = feuille("Capacites");
     [capacites[5], capacites[6]] = [capacites[6], capacites[5]];
   });
@@ -107,6 +107,27 @@ test("différences — l'ordre des lignes et l'écriture d'une même notation ne
   }
   assert.equal(d.lisez_moi_modifie, false);
   assert.equal(resumer(d, { date: DATE }), "Publication du classeur des règles — 28/09/2026 14:32 — aucune différence");
+});
+
+test("différences — le type d'un bloc se compare ; publié avant la colonne « Type », il vaut un type vide", async () => {
+  const propre = await importer(CLASSEUR_PROPRE);
+  const retype = variante((feuille) => {
+    feuille("Blocs")[1][1] = "Équipement";
+  });
+  const d = comparer(propre, await importer(retype));
+  assert.deepEqual(d.blocs.modifies, [
+    { nom: "Louche", champs: [{ champ: "type", colonne: "Type", variante: null, avant: "Arme", apres: "Équipement" }] },
+  ]);
+  // Une banque publiée avant la colonne : ses blocs n'ont pas de type.
+  const ancienne = { ...propre, blocs: propre.blocs.map(({ type: _type, ...bloc }) => ({ ...bloc, brut: { ...bloc.brut, cellules: { Nom: bloc.nom } } })) };
+  const avantType = comparer(ancienne, propre);
+  assert.deepEqual(
+    avantType.blocs.modifies.map(({ nom, champs }) => [nom, champs.map((c) => [c.champ, c.avant, c.apres])]),
+    [["Louche", [["type", "", "Arme"]]], ["Tablier", [["type", "", "Armure"]]]],
+  );
+  const sansType = { ...propre, blocs: propre.blocs.map((bloc) => ({ ...bloc, type: "" })) };
+  const aucun = comparer({ ...ancienne }, { ...sansType, blocs: sansType.blocs.map((b, i) => ({ ...b, brut: ancienne.blocs[i].brut })) });
+  assert.deepEqual(aucun.blocs.modifies, []);
 });
 
 test("différences — deux entrées de même nom se distinguent par leur rang", () => {

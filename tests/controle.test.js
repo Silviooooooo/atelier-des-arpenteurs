@@ -1,6 +1,6 @@
 // Contrôles du contrôle de cohérence (SPECIFICATION.md, § 6.3 et § 11,
-// domaine « Contrôle ») : le classeur d'essai déclenche chaque code, E1 sur
-// ses variantes, et un classeur propre n'en déclenche aucun.
+// domaine « Contrôle ») : le classeur d'essai déclenche chaque code, E1, A8
+// et A9 sur ses variantes, et un classeur propre n'en déclenche aucun.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -23,7 +23,9 @@ const ANNONCEES = [
   ["A1", "Blocs", 6], ["A1", "Blocs", 6], ["A2", "Blocs", 12], ["A7", "Blocs", 14],
   ["A4", "Eléments", 9],
   ["A5", "Capacites", 16], ["A3", "Capacites", 19],
-  ["I3", "Blocs", 13], ["I3", "Blocs", 14], ["I1", "Blocs", 15], ["I1", "Eléments", 7], ["I2", "Eléments", 8], ["I1", "Capacites", 13], ["I2", "Capacites", 17],
+  ["I3", "Blocs", 13], ["I3", "Blocs", 14], ["I1", "Blocs", 15],
+  ["I3", "Blocs", 25], ["I3", "Blocs", 27], ["I3", "Blocs", 31], ["I3", "Blocs", 32], ["I3", "Blocs", 33], ["I3", "Blocs", 34], ["I3", "Blocs", 35],
+  ["I1", "Eléments", 7], ["I2", "Eléments", 8], ["I1", "Capacites", 13], ["I2", "Capacites", 17],
 ];
 
 // Le tableau du § 6.3, lu dans la spécification elle-même : la table du code
@@ -51,11 +53,48 @@ test("contrôle — le classeur d'essai déclenche exactement les anomalies qu'i
   assert.deepEqual(anomalies.map((a) => [a.code, a.feuille, a.ligne]), ANNONCEES);
 });
 
-test("contrôle — les seize codes du § 6.3 : quinze sur le classeur d'essai, E1 sur ses variantes", async () => {
+// Le classeur d'essai porte un type sur chaque bloc (§ 10.3) : A8 et A9 se
+// déclenchent sur une variante, un bloc sans type et un bloc d'un type
+// inconnu.
+const TYPES_FAUTIFS = variante((feuilles) => {
+  feuilles[1].lignes[1][5] = "  ";
+  feuilles[1].lignes[2][5] = "Ustensile";
+});
+
+test("contrôle — les dix-huit codes du § 6.3 : quinze sur le classeur d'essai, E1, A8 et A9 sur ses variantes", async () => {
   const essai = await importer();
   const sansFeuille = await importer(variante((feuilles) => feuilles.splice(2, 1)));
-  const codes = new Set([...essai.anomalies, ...sansFeuille.anomalies].map((a) => a.code));
+  const types = await importer(TYPES_FAUTIFS);
+  const codes = new Set([...essai.anomalies, ...sansFeuille.anomalies, ...types.anomalies].map((a) => a.code));
   assert.deepEqual([...codes].sort(), Object.keys(GRAVITES).sort());
+});
+
+test("A8, A9 — un bloc sans type, un bloc d'un type inconnu ; les types se comparent sans casse, accents ni espaces", async () => {
+  const { banque, anomalies } = await importer(TYPES_FAUTIFS);
+  const nouvelles = anomalies.filter((a) => a.code === "A8" || a.code === "A9");
+  assert.deepEqual(nouvelles, [
+    { gravite: "avertissement", code: "A8", feuille: "Blocs", ligne: 2, message: "Le bloc « Louche d'acier » n'a pas de type : le créateur de personnage ne le voit pas." },
+    {
+      gravite: "avertissement",
+      code: "A9",
+      feuille: "Blocs",
+      ligne: 3,
+      message:
+        "Le bloc « Carnet de recettes » a le type « Ustensile », inconnu (types reconnus : Base, Espèce, Archétype, Style de combat, Constellation, Primordial, Arme, Armure, Équipement, Consommable, Blessure, État) : le créateur de personnage ne le voit pas.",
+    },
+  ]);
+  // Le type se garde tel qu'écrit, espaces de bord retirés.
+  assert.equal(banque.blocs[0].type, "");
+  assert.equal(banque.blocs.find((b) => b.nom === "Fumoir").type, "Consommable");
+  // « Equipement », « équipement », « Archetype » : reconnus, sans anomalie.
+  const essai = await importer();
+  assert.equal(essai.anomalies.filter((a) => a.code === "A8" || a.code === "A9").length, 0);
+});
+
+test("E1 — la colonne « Type » est un en-tête attendu", async () => {
+  const { banque, anomalies } = await importer(variante((feuilles) => (feuilles[1].lignes[0][5] = "Genre")));
+  assert.equal(banque, null);
+  assert.deepEqual(anomalies.map((a) => a.message), ["L'en-tête « Type » est introuvable dans la feuille Blocs : l'import s'arrête."]);
 });
 
 test("E1 — une feuille absente arrête l'import", async () => {
@@ -88,7 +127,7 @@ test("contrôle — un classeur propre ne déclenche aucune anomalie", async () 
 
 test("contrôle — gravité de chaque code, tri par gravité puis feuille puis ligne", async () => {
   const gravites = gravitesDeLaSpecification();
-  assert.equal(Object.keys(gravites).length, 16);
+  assert.equal(Object.keys(gravites).length, 18);
   assert.deepEqual({ ...GRAVITES }, gravites);
   const { anomalies } = await importer();
   for (const a of anomalies) assert.equal(a.gravite, gravites[a.code], a.code);

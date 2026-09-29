@@ -9,7 +9,8 @@
 //
 // L'import relève E1, E2, E6, A7 et I1 en lisant les lignes ; controle.js
 // relève le reste sur la banque. Rien n'est corrigé : les anomalies voyagent
-// avec la banque (§ 5.1).
+// avec la banque (§ 5.1). Le type d'un bloc (colonne « Type ») se garde tel
+// qu'écrit, espaces de bord retirés ; types.js le compare.
 
 import { lireClasseur } from "../lecture/xlsx.js";
 import { empreinte } from "../securite/chiffrement.js";
@@ -21,6 +22,7 @@ import { lireCapacites, lireElements, lireElementsPropres, lireParametres, lireP
 export const COLONNES = {
   Blocs: {
     nom: "Nom",
+    type: "Type",
     elements: "Eléments transmis aux capacités",
     capacites: "capacites",
     parametres: "Paramètres transmis aux capacités",
@@ -129,6 +131,7 @@ export function importerClasseur(classeur, source = null) {
     const sujet = `Le bloc « ${nom} »`;
     return {
       nom,
+      type: valeur("type").trim(),
       elements: noter(lireElements(valeur("elements")), "Blocs", ligne, sujet, "elements"),
       capacites: noter(lireCapacites(valeur("capacites")), "Blocs", ligne, sujet, "capacites"),
       parametres: noter(lireParametres(valeur("parametres")), "Blocs", ligne, sujet, "parametres"),

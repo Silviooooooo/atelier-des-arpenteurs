@@ -21,7 +21,7 @@ const panneaux = new Map();
 let banqueDesPanneaux = null;
 
 function detail(categorie, entree) {
-  if (categorie === "blocs") return compte(entree.capacites.length, "capacité", "capacités");
+  if (categorie === "blocs") return [entree.type, compte(entree.capacites.length, "capacité", "capacités")].filter(Boolean).join(" · ");
   if (categorie === "capacites") {
     const puissances = entree.variantes.map((v) => v.puissance).filter(Boolean);
     return puissances.length > 1 ? `puissances ${puissances.join(", ")}` : puissances.length ? `puissance ${puissances[0]}` : "";

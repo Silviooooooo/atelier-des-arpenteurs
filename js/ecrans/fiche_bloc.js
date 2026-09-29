@@ -1,6 +1,6 @@
 // La fiche d'un bloc (SPECIFICATION.md, § 9).
 //
-// Ses éléments et ses capacités en liens (« au choix : … », « facultatif :
+// Son type (colonne « Type », § 4.1), ses éléments et ses capacités en liens (« au choix : … », « facultatif :
 // … »), ses paramètres sous leur nom affiché (§ 5.2), et ses notes de
 // conception en retrait. Un renvoi cassé se barre et mène à son anomalie ;
 // un morceau que la notation n'a pas compris s'affiche tel qu'écrit.
@@ -30,7 +30,10 @@ function corps(index, bloc) {
         ],
   );
   const anomalies = index.anomaliesDe(lieu.feuille, lieu.ligne);
+  // Une banque publiée avant la colonne « Type » n'en dit rien.
+  const type = typeof bloc.type !== "string" ? null : bloc.type === "" ? "Sans type" : `Type : ${bloc.type}`;
   return [
+    type ? el("p", { classe: "secondaire-texte" }, type) : null,
     section("Éléments", liste(elements), "Aucun élément."),
     section("Capacités", liste(capacites), "Aucune capacité."),
     section("Paramètres", liste(parametres), "Aucun paramètre."),

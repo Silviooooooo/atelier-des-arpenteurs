@@ -235,7 +235,7 @@ test("préparation — première publication, puis mise à jour sous le même se
   const premiere = await preparerPublication({ publiee: { sha: null, enveloppe: null }, banque, secret, date: DATE });
   assert.equal(premiere.ancienne, null);
   assert.equal(premiere.erreurs, 15);
-  assert.equal(premiere.message, "Publication du classeur des règles — 28/09/2026 14:32 — première publication : 15 blocs, 15 capacités, 9 éléments — publiée malgré 15 erreurs");
+  assert.equal(premiere.message, "Publication du classeur des règles — 28/09/2026 14:32 — première publication : 35 blocs, 44 capacités, 20 éléments — publiée malgré 15 erreurs");
   assert.deepEqual(Object.keys(premiere.banque).slice(0, 3), ["format", "publiee_le", "sources"]);
   assert.equal(premiere.enveloppe.publiee_le, premiere.banque.publiee_le);
   assert.deepEqual((await ouvrirAvecMotDePasse(premiere.enveloppe, MOT_DE_PASSE)).banque, premiere.banque);

@@ -189,7 +189,7 @@ leur position** : l'auteur réordonne ses feuilles.
 | Feuille | En-têtes (ligne 1) | Lignes |
 |---|---|---|
 | `lisez_moi` | aucune ; colonne A = rubrique (Syntaxe, nb, directions), écrite sur la première ligne de chacune, B = texte | 19 lignes non vides, de la ligne 2 à la ligne 20 ; la ligne 1 est vide |
-| `Blocs` | Nom · Eléments transmis aux capacités · capacites · Paramètres transmis aux capacités · Infos | 67 blocs |
+| `Blocs` | Nom · Type · Eléments transmis aux capacités · capacites · Paramètres transmis aux capacités · Infos | 67 blocs |
 | `Eléments` | Nom · Paramètres reçus · description | 19 éléments |
 | `Capacites` | origine · Nom · puissance · Coût en souffle · Coût en lien · Eléments propres · description | 71 lignes, 69 noms |
 
@@ -206,6 +206,19 @@ d'import (§ 6.3, E1).
 Les colonnes `origine` (Capacites) et `Infos` (Blocs) n'ont, selon
 `lisez_moi`, « aucune valeur légale ». Elles sont conservées et affichées
 comme **notes de conception**, jamais interprétées.
+
+**Le type d'un bloc** (lot 2). L'auteur a ajouté la colonne « Type » à
+`Blocs` le 29/09/2026 ; c'est un en-tête attendu (E1 s'il manque). Le type
+se garde tel qu'écrit, espaces de bord retirés, et se compare sans casse,
+accents ni espaces (`js/banque/types.js`). Les types reconnus sont ceux que
+le livret énumère (« Système », « Blocs ») : Base, Espèce, Archétype,
+Style de combat, Constellation, Primordial, Arme, Armure, Équipement,
+Consommable, Blessure, État. Le livret écrit « Constellation de
+naissance » : les deux écritures sont admises (§ 12). Un bloc sans type
+(A8) ou d'un type inconnu (A9) reste dans la banque et dans la
+consultation, mais le créateur de personnage ne le voit pas. La fiche
+d'un bloc et la liste des blocs montrent le type. Banc du 29/09/2026 sur
+le classeur réel : chaque bloc a un type reconnu, aucun A8 ni A9.
 
 ### 4.2 Le second classeur
 
@@ -233,6 +246,7 @@ Il n'est pas lu par le programme. La spécification le cite par section.
   "blocs": [
     {
       "nom": "Epée longue",
+      "type": "Arme",
       "elements": [ { "nom": "Arme" }, { "nom": "Agile" } ],
       "capacites": [
         { "forme": "simple", "nom": "Attaque de base" },
@@ -291,6 +305,13 @@ Il n'est pas lu par le programme. La spécification le cite par section.
   rubrique vide.
 - `sources` porte le nom du fichier importé et l'empreinte SHA-256 de ses
   octets.
+- `type` (lot 2) : le type du bloc tel qu'écrit, ou `""` (A8). Une banque
+  publiée avant la colonne « Type » n'a pas ce champ : la consultation la
+  lit comme avant, et le créateur de personnage dit « Le créateur a besoin
+  d'une banque republiée depuis le classeur à jour. » Les différences
+  comparent le type comme un champ ; un bloc sans type vaut un type vide,
+  si bien que la première republication de l'auteur montre chaque bloc
+  modifié par son type, et rien d'autre.
 
 ### 5.2 Le nom affiché d'un paramètre
 
@@ -408,6 +429,8 @@ résolu, mais signalé (A1).
 | A4 | avertissement | élément défini, porté par rien : cité par aucun bloc ni aucune capacité, et reçu d'aucun paramètre transmis (`lisez_moi` : un bloc qui transmet un paramètre porte l'élément lié) |
 | A5 | avertissement | paramètre invoqué dans une description (`{portee}`) que ni la capacité ni ses blocs ne portent : ni un élément propre qui le reçoit, ni un bloc qui la cite et le transmet ou porte un élément qui le reçoit, sans cible ou avec elle pour cible |
 | A7 | avertissement | choix de capacités écrit hors de la colonne des capacités |
+| A8 | avertissement | bloc sans type (colonne « Type » vide) : le créateur de personnage ne le voit pas |
+| A9 | avertissement | bloc d'un type inconnu, qui n'est aucun des types reconnus (§ 4.1) : le créateur de personnage ne le voit pas |
 | I1 | information | espaces de bord retirés d'un nom |
 | I2 | information | description vide |
 | I3 | information | bloc sans capacité (décision de l'auteur, 28/09/2026 : ce fut A6, avertissement, jusqu'à la 0.6 ; le code A6 ne sera pas réutilisé) |
@@ -887,7 +910,18 @@ Toute dépendance future est justifiée ici, avant son arrivée.
   automatiques. Deux autres traits y figurent : une feuille écrite en XML
   préfixé (`x:row`), et une cinquième feuille, que l'import ignore, avec les
   formes de cellule qu'Excel n'écrit pas toujours (texte en ligne, texte
-  enrichi, formule, booléen, erreur).
+  enrichi, formule, booléen, erreur). Depuis le lot 2, chaque bloc y porte
+  un type, écrit de plusieurs façons (« Equipement », « équipement »,
+  « Archetype », espaces de bord), et le classeur a de quoi créer un
+  personnage : un bloc de base dont les dégâts de mains nues sont une
+  expression, deux espèces, deux archétypes avec un groupe de style et un
+  groupe de maîtrise (éléments « Style de combat » et « Maîtrise »), trois
+  constellations dont une sans capacité, deux primordiaux dont un sans
+  capacité (l'autre a une capacité à trois puissances et un choix), des
+  armes lourde, agile et précise, des armures sur les six zones dont deux
+  sur le torse, un bouclier (paramètre `defense`), un consommable, et les
+  éléments Arme, Lourde, Agile, Précise, Armure, Dégâts, Qualité, Portée,
+  Défense. A8 et A9 se déclenchent sur des variantes, comme E1.
 - Messages de commit en prose française : un titre, puis ce qui a changé, ce
   qui a été mesuré, ce qui a été laissé.
 - **Le dépôt est public, l'historique aussi** : chaque commit porte le nom et
@@ -922,11 +956,11 @@ Chaque contrôle nouveau se vérifie **armé puis désarmé**.
 | Lecture | le lecteur XML : entités, CDATA, noms locaux, fins de ligne, XML mal formé et DOCTYPE refusés ; le classeur d'essai donne les feuilles, en-têtes et cellules attendus, dont le texte enrichi, les retours à la ligne et les nombres ; un fichier qui n'est pas un ZIP, une archive tronquée, chiffrée, ZIP64 ou d'une méthode inconnue, un CRC faux, un classeur protégé par mot de passe, un XML abîmé donnent un message, pas une exception ; le classeur suivi correspond à sa description (`tests/outils/`) |
 | Notation | chaque ligne du tableau du § 6.2, dont les accolades imbriquées et la virgule décimale ; une notation cassée donne E6 et garde le brut |
 | Import | la banque du classeur d'essai a le format du § 5.1 ; colonnes retrouvées malgré la casse, les accents et l'ordre des en-têtes ; valeurs en chaînes, telles qu'écrites ; brut et `lisez_moi`, où une colonne nommée `__proto__` ou `constructor` reste ; ligne sans nom exclue ; fichier illisible : un message |
-| Contrôle | le classeur d'essai déclenche **chaque** code du § 6.3 (E1 sur ses variantes, § 10.3), et exactement les anomalies qu'il annonce, ligne par ligne ; un classeur propre n'en déclenche aucun ; gravités du § 6.3 et tri du § 6.4 |
+| Contrôle | le classeur d'essai déclenche **chaque** code du § 6.3 (E1, A8 et A9 sur ses variantes, § 10.3), et exactement les anomalies qu'il annonce, ligne par ligne ; un classeur propre n'en déclenche aucun ; gravités du § 6.3 et tri du § 6.4 ; la colonne « Type » attendue, les types comparés sans casse, accents ni espaces |
 | Chiffrement | aller-retour, au format 2 du § 7.1 : l'empreinte est celle des octets chiffrés, vérifiée avant le déchiffrement, et change à chaque publication ; le format 1 se lit encore, son empreinte en clair vérifiée ; mauvais mot de passe refusé proprement ; fichier abîmé ou inconnu, ou en-tête hors des bornes du § 7.1 (itérations, sel, IV, données), ou dérivation refusée : un message ; une clé sous le plancher ne chiffre pas ; IV différent à chaque chiffrement ; sel inchangé tant que le mot de passe ne change pas ; la clé gardée déchiffre la publication suivante (§ 7.1), et un sel renouvelé la rend inutilisable ; normalisation du mot de passe ; 20 signes au moins ; coffre : seule une clé AES-GCM non extractible, clés réelle et de démonstration séparées, jeton à part (§ 7.2) |
 | Publication | `fetch` simulé, **aucun appel réel à GitHub** : adresses, en-têtes et corps de la requête ; auteur et committer explicites, en adresse privée (§ 8.2) ; **première publication** : fichier absent, réponse 404, écriture sans `sha` ; mise à jour avec le `sha` lu ; refus pour `sha` périmé (409, ou 422 sans `sha`) : rechargement, nouvelles différences, nouvelle confirmation ; clé refusée (401), droits, réseau, JSON illisible, réponse qui n'est pas du JSON : un message ; écriture acceptée au corps perdu : un succès ; trois refus 422 : le motif du dernier ; contenu de plus d'un mégaoctet relu en brut |
 | Dépôt | aucun `.xlsx` hors `essais/`, et chaque `.xlsx` d'`essais/` fabriqué, octet pour octet, par l'outil des essais ; le `.gitignore` ignore les classeurs, leurs formats voisins, les documents et tout JSON hors liste ; aucun autre format de classeur ou de document, aucun JSON hors liste ; une seule page (`index.html`), une seule image SVG (l'icône) ; dans tout l'historique, aucun fichier interdit et aucun jeton ; un jeton écrit en UTF-16 se voit ; workflow : actions fixées sur un commit avec leur version, `contents: read`, aucune écriture, `persist-credentials: false`, ni `pull_request_target` ni texte d'un événement ; **aucun `.docx`** ; `donnees/` (quelle que soit la casse) ne contient que `banque.chiffree.json`, sans autre champ que ceux du § 7.1, aux valeurs du § 7.1 (600 000 itérations, sel de 16 octets, IV de 12), au format 1 ou 2 (au format 2, l'empreinte est vérifiée sur les octets chiffrés ; dans `donnees/`, le format 1 n'est permis qu'au fichier publié le 29/09/2026), et des données qui ne se lisent pas comme du texte ; les banques d'`essais/` ont la même forme, la démonstration au format 2 et l'ancien format au format 1 ; le crochet `pre-push` existe, en `sh`, exécutable, extrait en LF, et `core.hooksPath` le désigne sur le poste (pas sur GitHub Actions, qui n'envoie rien) ; un envoi vers un dépôt d'essai est refusé quand un contrôle échoue (même avec `NODE_TEST_CONTEXT` hérité), quand tout n'est pas commité, ou sans `node`, et accepté sinon ; aucun **jeton GitHub entier** : un préfixe (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`) suivi d'au moins 36 caractères alphanumériques ou soulignés, le contrôle fabriquant son faux jeton au moment de l'essai ; dans l'historique, des **auteurs** en `…@users.noreply.github.com`, des **committers** aussi ou en `noreply@github.com` (commits faits sur le site de GitHub), la ligne `Co-Authored-By` d'un message n'étant pas une adresse d'auteur ; ni `innerHTML`, ni `outerHTML`, ni `insertAdjacentHTML`, ni `document.write` dans les fichiers du site et dans `outils/` (§ 10.1) |
-| Différences | ajout, modification champ par champ, retrait ; variantes de puissance ; ordre des lignes et écriture d'une même notation sans effet ; doublons ; résumé d'une ligne et ses accords ; dates |
+| Différences | ajout, modification champ par champ, retrait ; variantes de puissance ; ordre des lignes et écriture d'une même notation sans effet ; doublons ; résumé d'une ligne et ses accords ; dates ; le type d'un bloc, et une banque publiée avant la colonne « Type » |
 | Préparation | première publication, mise à jour sous le même secret ; mot de passe à choisir, à saisir ou changé ; E1 refusé ; changement de mot de passe ; circuit complet, de l'import à la lecture par un joueur |
 | Routes et fiches | décodage des adresses de fiche (`#/capacite/Attaque%20de%20base`) et aller-retour des noms difficiles ; adresses abîmées, dont les noms d'`Object.prototype` ; un nom introuvable n'est jamais le titre ; recherche sans casse ni accents, sur les noms et les descriptions ; renvois résolus comme au contrôle ; « octroyée par », « porté par », nom affiché ; anomalies d'une ligne |
 | Site | politique de sécurité du `<meta>`, avant scripts et styles, toute la table des directives et rien d'autre ; zoom permis ; ni script, ni style, ni gestionnaire en ligne ; chaque fichier appelé existe ; le graphe des modules se résout et atteint les huit écrans ; manifeste, couleurs des jetons, icônes aux tailles dites, telles que les dessine leur outil ; contrastes ; valeurs de `ecran.css` tirées des jetons, aucune police téléchargée ; la banque de démonstration, au format 2, se déchiffre et vient du classeur d'essai ; le fichier d'essai au format 1 vient du classeur d'essai, et la page l'ouvre ; au téléchargement, une empreinte de format 2 fausse et un format plus récent donnent leur message ; le diagnostic dit le format ; chargement : absente, présente, abîmée, `?v=`, clé gardée, mot de passe requis ou changé, stockage durable ; l'attente du mot de passe ne dépend pas de la peinture de la fenêtre ; le déverrouillage n'attend pas la réponse sur le stockage durable ; sans IndexedDB, la phrase au lieu de la case ; une erreur inattendue : un message. Dans un document simulé : le bouton « Publier » existe dans chaque état de l'espace auteur, et sa raison s'affiche ; la barre de publication reste collée au bas de l'écran ; « Oublier le mot de passe » ne laisse ni clé ni différences, même pendant une comparaison ; « Oublier la clé GitHub » annule la publication en attente ; « Se souvenir » décide de garder la clé ; la veille de 15 secondes, et rien sur une page chargée ; l'aide dit d'ajouter l'Atelier depuis son accueil ; `dom.js` refuse gestionnaires en texte, `style`, `srcdoc` et adresses étrangères. Le serveur local : la seule machine, les seuls fichiers du site |

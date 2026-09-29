@@ -75,7 +75,7 @@ test("classeur — feuilles dans leur ordre, en-têtes tels qu'écrits, y compri
   const classeur = await lireEssai();
   assert.deepEqual(classeur.feuilles.map((f) => f.nom), ["lisez_moi", "Blocs", "Eléments", "Capacites", "Formes de cellules"]);
   const entetes = (nom) => classeur.feuilles.find((f) => f.nom === nom).lignes.find((l) => l.numero === 1).cellules;
-  assert.deepEqual(entetes("Blocs"), ["Nom", "Eléments transmis aux capacités", "Capacités", "Paramètres transmis aux capacités", "Infos"]);
+  assert.deepEqual(entetes("Blocs"), ["Nom", "Eléments transmis aux capacités", "Capacités", "Paramètres transmis aux capacités", "Infos", "TYPE"]);
   assert.deepEqual(entetes("Eléments"), ["Nom", "Paramètres reçus", "Description"]);
   assert.deepEqual(entetes("Capacites"), ["Nom", "puissance", "Coût en souffle", "Coût en lien", "Éléments propres", "description", "origine"]);
 });

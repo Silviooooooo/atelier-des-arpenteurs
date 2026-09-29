@@ -1,6 +1,6 @@
 // Contrôle de cohérence de la banque (SPECIFICATION.md, § 6.3).
 //
-// Les seize codes du § 6.3 sont définis ici, avec leur gravité (A6, retiré,
+// Les dix-huit codes du § 6.3 sont définis ici, avec leur gravité (A6, retiré,
 // ne revient pas : le bloc sans capacité est devenu I3). L'import en
 // relève cinq en lisant les lignes (E1, E2, E6, A7, I1) ; ce module relève
 // les autres sur la banque : doublons, renvois, paramètres, rattachements,
@@ -9,6 +9,7 @@
 
 import { cle, repertoire } from "./noms.js";
 import { parametresInvoques } from "./notation.js";
+import { TYPES, typeInconnu } from "./types.js";
 
 export const GRAVITES = {
   E1: "bloquante",
@@ -24,6 +25,8 @@ export const GRAVITES = {
   A4: "avertissement",
   A5: "avertissement",
   A7: "avertissement",
+  A8: "avertissement",
+  A9: "avertissement",
   I1: "information",
   I2: "information",
   I3: "information",
@@ -123,6 +126,12 @@ export function controler(banque) {
       } else signaler("E4", lieu, `${lieu.sujet} cite la capacité « ${nom} », introuvable dans Capacites${ambigu(trouve)}.`);
     }
     if (bloc.capacites.length === 0) signaler("I3", lieu, `${lieu.sujet} n'a aucune capacité.`);
+
+    // Le créateur de personnage ne voit que les blocs d'un type reconnu.
+    if ((bloc.type ?? "") === "") signaler("A8", lieu, `${lieu.sujet} n'a pas de type : le créateur de personnage ne le voit pas.`);
+    else if (typeInconnu(bloc)) {
+      signaler("A9", lieu, `${lieu.sujet} a le type « ${bloc.type} », inconnu (types reconnus : ${Object.values(TYPES).map((t) => t.nom).join(", ")}) : le créateur de personnage ne le voit pas.`);
+    }
 
     for (const element of bloc.elements.filter((item) => item.nom)) {
       const trouve = resoudre(elements, element.nom, lieu, "l'élément");

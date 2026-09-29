@@ -24,13 +24,14 @@ test("import — la banque a le format du § 5.1, avec la source et son empreint
   assert.equal(b.format, 1);
   const empreinte = `sha256:${createHash("sha256").update(ESSAI).digest("hex")}`;
   assert.deepEqual(b.sources, [{ classeur: "regles", fichier: "classeur_essai.xlsx", empreinte }]);
-  assert.deepEqual([b.blocs.length, b.capacites.length, b.elements.length, b.lisez_moi.length], [15, 15, 9, 5]);
+  assert.deepEqual([b.blocs.length, b.capacites.length, b.elements.length, b.lisez_moi.length], [35, 44, 20, 5]);
 });
 
 test("import — un bloc : éléments, capacités, paramètres, notes et brut", async () => {
   const bloc = (await banque()).blocs.find((b) => b.nom === "Rouleau à pâtisserie");
   assert.deepEqual(bloc, {
     nom: "Rouleau à pâtisserie",
+    type: "Arme",
     elements: [{ nom: "Brûlant", cible: "Coup de louche" }],
     capacites: [
       { forme: "simple", nom: "Coup de louche" },
@@ -47,6 +48,7 @@ test("import — un bloc : éléments, capacités, paramètres, notes et brut", 
         Capacités: "Coup de louche, ( Sauce piquante )",
         "Paramètres transmis aux capacités": "{chaleur:{force}*0,5/{force}/{force}*2}(Coup de louche)",
         Infos: "Cibles ; accolades imbriquées ; virgule décimale ; choix d'une seule option",
+        TYPE: "Arme",
       },
     },
   });
