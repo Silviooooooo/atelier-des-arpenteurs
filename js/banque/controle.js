@@ -152,12 +152,15 @@ export function controler(banque) {
     }
 
     // E7 : sans cible, un paramètre vaut pour toutes les capacités du bloc ;
-    // deux transmissions ne se distinguent que par deux cibles différentes.
-    // Laquelle l'emporte n'est écrit nulle part : l'ambiguïté est signalée.
+    // avec une cible, il vaut pour elle seule et l'emporte sur le même
+    // paramètre sans cible (lisez_moi, « Syntaxe » : la Hache légère). Restent
+    // ambiguës deux transmissions sans cible, ou deux vers la même cible.
     for (const liste of parNom.values()) {
-      const conflit = liste.some((p, i) => liste.slice(i + 1).some((q) => !p.cible || !q.cible || cle(p.cible) === cle(q.cible)));
+      const conflit = liste.some((p, i) =>
+        liste.slice(i + 1).some((q) => (!p.cible && !q.cible) || (p.cible && q.cible && cle(p.cible) === cle(q.cible))),
+      );
       if (conflit) {
-        signaler("E7", lieu, `${lieu.sujet} transmet ${liste.length} fois le paramètre ${liste[0].nom} (${liste.map(ecrire).join(", ")}) sans cible qui les distingue : une même capacité en recevrait plusieurs valeurs.`);
+        signaler("E7", lieu, `${lieu.sujet} transmet ${liste.length} fois le paramètre ${liste[0].nom} (${liste.map(ecrire).join(", ")}) : deux fois sans cible, ou deux fois vers la même capacité, qui en recevrait plusieurs valeurs.`);
       }
     }
   }

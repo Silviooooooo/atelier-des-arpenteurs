@@ -13,14 +13,14 @@ import {
   deriverCle,
   empreinte,
   lireEnTete,
+  normaliserMotDePasse,
   nouveauSecret,
   ouvrir,
+  tirerSel,
   ouvrirAvecMotDePasse,
   versBase64,
 } from "../js/securite/chiffrement.js";
 import { creerCoffre, magasinMemoire } from "../js/securite/coffre.js";
-import { MOT_DE_PASSE_DEMO } from "../js/banque/chargement.js";
-import { readFileSync } from "node:fs";
 
 const MOT_DE_PASSE = "passoire louche marmite écumoire";
 const BANQUE = { format: 1, publiee_le: "2026-09-28T14:32:00+02:00", blocs: [{ nom: "Poêle" }], anomalies: [] };
@@ -144,13 +144,14 @@ test("format 2 — l'empreinte des octets chiffrés se vérifie avant de déchif
   assert.deepEqual((await ouvrir(second, secret)).banque, (await ouvrir(fichier, secret)).banque);
 });
 
-test("format 1 — un fichier au format 1 se lit encore, et son empreinte en clair se vérifie", async () => {
-  const ancien = JSON.parse(readFileSync(new URL("../essais/banque_format1.chiffree.json", import.meta.url), "utf8"));
-  assert.equal(ancien.format, 1);
-  const ouvert = await ouvrirAvecMotDePasse(ancien, MOT_DE_PASSE_DEMO);
-  assert.equal(ouvert.erreur, undefined, ouvert.erreur);
-  assert.equal(ancien.empreinte, await empreinte(JSON.stringify(ouvert.banque)), "format 1 : empreinte de la banque en clair");
-  assert.equal((await ouvrirAvecMotDePasse({ ...ancien, empreinte: `sha256:${"0".repeat(64)}` }, MOT_DE_PASSE_DEMO)).code, "empreinte");
+// Lot 2 bis : le format 1 ne se lit plus ; un fichier qui l'annonce se dit
+// abîmé, avant toute dérivation.
+test("format 1 — ne se lit plus : le fichier se dit abîmé ou d'un format inconnu", async () => {
+  const fichier = await chiffrer(BANQUE, await nouveauSecret(MOT_DE_PASSE));
+  const ancien = { ...fichier, format: 1 };
+  assert.deepEqual(lireEnTete(ancien), { erreur: "Le fichier de la banque est abîmé ou d'un format inconnu.", code: "format" });
+  assert.equal((await ouvrirAvecMotDePasse(ancien, MOT_DE_PASSE)).code, "format");
+  assert.equal((await dechiffrer(ancien, (await ouvrirAvecMotDePasse(fichier, MOT_DE_PASSE)).secret.cle)).code, "format");
 });
 
 test("chiffrement — un IV neuf à chaque chiffrement, le sel inchangé", async () => {
@@ -195,11 +196,48 @@ test("chiffrement — le même mot de passe, quelle que soit sa saisie, donne la
   assert.deepEqual((await ouvrirAvecMotDePasse(fichier, ` passoire louche marmite e${aigu}cumoire `)).banque, BANQUE);
 });
 
-test("chiffrement — un mot de passe de table a 20 signes au moins (§ 7.3)", () => {
+test("chiffrement — un mot de passe de table a 8 signes au moins, sans autre exigence (§ 7.3)", () => {
   assert.equal(defautDuMotDePasse(MOT_DE_PASSE), null);
-  assert.equal(defautDuMotDePasse("é".repeat(20)), null);
-  assert.match(defautDuMotDePasse("abrasia"), /7 signe/);
-  assert.match(defautDuMotDePasse(`  ${"x".repeat(19)}  `), /19 signe/);
+  assert.equal(defautDuMotDePasse("é".repeat(8)), null);
+  // Ni chiffre, ni majuscule, ni signe exigés.
+  assert.equal(defautDuMotDePasse("marmites"), null);
+  assert.match(defautDuMotDePasse("abrasia"), /7 signe\(s\) : il en faut 8 au moins/);
+  assert.match(defautDuMotDePasse(`  ${"x".repeat(7)}  `), /7 signe/);
+  assert.match(defautDuMotDePasse("abrasia"), /Deux ou trois mots sans rapport, collés/);
+});
+
+// Lot 2 bis : insensible aux majuscules, à la publication comme à la saisie.
+test("mot de passe — normalisé en minuscules après NFC et espaces de bord : même clé, quelle que soit la casse", async () => {
+  const [compose, aigu] = [String.fromCharCode(0xe9), String.fromCharCode(0x301)];
+  assert.equal(normaliserMotDePasse(`  Passoire LOUCHE ${compose}cumoire `), `passoire louche ${compose}cumoire`);
+  assert.equal(normaliserMotDePasse(`E${aigu}CUMOIRE`), `${compose}cumoire`);
+  // « İ » (I pointé) devient « i » suivi du point combinant, puis NFC.
+  assert.equal(normaliserMotDePasse("İ"), "i̇".normalize("NFC"));
+  const fichier = await chiffrer(BANQUE, await nouveauSecret("Passoire Louche Marmite"));
+  for (const saisie of ["passoire louche marmite", "PASSOIRE LOUCHE MARMITE", " pAssoire louche Marmite "]) {
+    assert.deepEqual((await ouvrirAvecMotDePasse(fichier, saisie)).banque, BANQUE, saisie);
+  }
+  // Deux dérivations de casses différentes donnent la même clé.
+  const sel = tirerSel();
+  const [a, b] = [await deriverCle("Marmite Fouet", sel), await deriverCle("marmite fouet", sel)];
+  assert.deepEqual((await dechiffrer(await chiffrer(BANQUE, a), b.cle)).banque, BANQUE);
+});
+
+// La banque chiffrée avant le lot 2 bis l'a été sous la forme exacte : elle
+// reste lisible avec le mot de passe tel qu'il se saisissait, jusqu'au
+// prochain changement de mot de passe (§ 7.1).
+test("mot de passe — une banque chiffrée sous la forme exacte (avant le lot 2 bis) reste lisible", async () => {
+  const sel = tirerSel();
+  const ancienne = await deriverCle("Passoire Louche", sel, ITERATIONS, { minuscules: false });
+  const fichier = await chiffrer(BANQUE, ancienne);
+  const ouvert = await ouvrirAvecMotDePasse(fichier, "Passoire Louche");
+  assert.deepEqual(ouvert.banque, BANQUE);
+  // La clé rendue est celle de la banque : elle republie sous la même forme.
+  assert.deepEqual((await dechiffrer(await chiffrer(BANQUE_SUIVANTE, ouvert.secret), ancienne.cle)).banque, BANQUE_SUIVANTE);
+  // Tant que cette banque est en place, la casse compte encore.
+  assert.equal((await ouvrirAvecMotDePasse(fichier, "passoire louche")).code, "mot_de_passe");
+  // Un mot de passe faux se dit faux après les deux essais.
+  assert.equal((await ouvrirAvecMotDePasse(fichier, "Passoire Faux")).code, "mot_de_passe");
 });
 
 test("coffre — la clé réelle et la clé de démonstration se gardent séparément", async () => {

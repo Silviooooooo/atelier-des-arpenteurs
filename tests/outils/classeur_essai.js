@@ -56,7 +56,7 @@ export const CLASSEUR_ESSAI = {
         ["Presse-ail", "Mystère", "Coup de louche", _, "E5 : élément introuvable", "Équipement"],
         ["Fouet", _, "Coup de louche, (Recette secrète | Recette de grand-mère", "{chaleur:2", "E6 : parenthèse et accolade jamais fermées", "Équipement"],
         ["Écumoire", _, "Coup de louche", "{distance 3}", "E6 : paramètre sans deux-points", "Équipement"],
-        ["Hachoir", "Tranchant", "Coup de louche, Jet de sel", "{distance:0}, {distance:1}(Jet de sel)", "E7 : Jet de sel reçoit deux distances", "Arme"],
+        ["Hachoir", "Tranchant", "Coup de louche, Jet de sel", "{distance:0}, {distance:1}(Jet de sel), {distance:2}(Jet de sel)", "E7 : Jet de sel visé deux fois (la distance sans cible est admise)", "Arme"],
         ["Sablier de cuisine", _, "Coup de louche", "{piment:3}", "A2 : aucun élément ne reçoit piment", "Équipement"],
         ["Vaisselier vide", "Tranchant", _, _, "I3 : aucune capacité", "Équipement"],
         ["Livre de cuisine", _, _, "(Recette secrète|Recette de grand-mère)", "A7 : choix hors de la colonne des capacités ; I3", "Équipement"],

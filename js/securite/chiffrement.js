@@ -12,17 +12,15 @@
 //
 // Le format 2 (groupe 4) : l'empreinte de l'en-tête est celle des octets
 // chiffrés, étiquette comprise ; elle ne dit plus rien du contenu, même à
-// qui en a lu une version. La page écrit le format 2 et lit encore le
-// format 1, où l'empreinte était celle de la banque en clair, jusqu'au
-// groupe qui suivra une publication réelle au format 2 (§ 7.1).
+// qui en a lu une version. Le format 1 ne se lit plus (lot 2 bis) : la
+// banque réelle est au format 2 depuis le 29/09/2026 (§ 7.1).
 
 export const ITERATIONS = 600_000;
 export const FORMAT = 2;
-const FORMATS_LUS = [1, 2];
 // À la lecture, un en-tête peut annoncer plus (une hausse future), jamais
 // moins, ni un nombre qui ferait patienter des heures (§ 7.1).
 export const ITERATIONS_MAX = 10 * ITERATIONS;
-export const LONGUEUR_MINIMALE = 20;
+export const LONGUEUR_MINIMALE = 8;
 const OCTETS_SEL = 16;
 const OCTETS_IV = 12;
 
@@ -51,17 +49,27 @@ export async function empreinte(donnees) {
 }
 
 // Le même mot de passe doit donner la même clé sur tous les appareils : un
-// « é » peut s'y écrire en un ou deux caractères, et un clavier de téléphone
-// ajoute volontiers une espace en fin de mot.
-function normaliser(motDePasse) {
-  return motDePasse.normalize("NFC").trim();
+// « é » peut s'y écrire en un ou deux caractères, un clavier de téléphone
+// ajoute volontiers une espace en fin de mot, ou une majuscule en tête. Le
+// mot de passe est donc insensible aux majuscules (lot 2 bis) : NFC, espaces
+// de bord retirés, puis minuscules (et NFC de nouveau : « İ » en minuscule
+// n'est plus en NFC). La forme exacte, sans minuscules, est celle des
+// banques chiffrées avant le lot 2 bis (§ 7.1).
+function normaliser(motDePasse, { minuscules = true } = {}) {
+  const base = motDePasse.normalize("NFC").trim();
+  return minuscules ? base.toLowerCase().normalize("NFC") : base;
+}
+
+/** Le mot de passe tel qu'il entre dans la dérivation : deux saisies se comparent ainsi. */
+export function normaliserMotDePasse(motDePasse) {
+  return normaliser(motDePasse);
 }
 
 /** Rend null si le mot de passe de table est acceptable, sinon un message (§ 7.3). */
 export function defautDuMotDePasse(motDePasse) {
   const longueur = [...normaliser(motDePasse)].length;
   if (longueur < LONGUEUR_MINIMALE) {
-    return `Le mot de passe compte ${longueur} signe(s) : il en faut ${LONGUEUR_MINIMALE} au moins. Une phrase de quatre ou cinq mots tirés au hasard résiste ; un mot seul se trouve en quelques secondes.`;
+    return `Le mot de passe compte ${longueur} signe(s) : il en faut ${LONGUEUR_MINIMALE} au moins. Deux ou trois mots sans rapport, collés, résistent ; un mot du dictionnaire se devine en quelques secondes.`;
   }
   return null;
 }
@@ -74,11 +82,12 @@ export function tirerSel() {
 /**
  * Dérive la clé de table. Rend le secret { cle, sel, iterations, duree } :
  * la clé non extractible, le sel qui l'a produite, et la durée de la
- * dérivation en millisecondes, que le diagnostic affiche.
+ * dérivation en millisecondes, que le diagnostic affiche. { minuscules:
+ * false } dérive sous la forme exacte, celle des banques d'avant le lot 2 bis.
  */
-export async function deriverCle(motDePasse, sel, iterations = ITERATIONS) {
+export async function deriverCle(motDePasse, sel, iterations = ITERATIONS, { minuscules = true } = {}) {
   const debut = performance.now();
-  const materiau = await crypto.subtle.importKey("raw", new TextEncoder().encode(normaliser(motDePasse)), "PBKDF2", false, ["deriveKey"]);
+  const materiau = await crypto.subtle.importKey("raw", new TextEncoder().encode(normaliser(motDePasse, { minuscules })), "PBKDF2", false, ["deriveKey"]);
   const cle = await crypto.subtle.deriveKey(
     { name: "PBKDF2", hash: "SHA-256", salt: depuisBase64(sel), iterations },
     materiau,
@@ -142,7 +151,7 @@ export function lireEnTete(enveloppe) {
   if (Number.isInteger(format) && format > FORMAT) {
     return { erreur: "Cette banque vient d'une version plus récente de l'Atelier : rechargez la page.", code: "format_recent" };
   }
-  if (!FORMATS_LUS.includes(format) || kdf?.nom !== "PBKDF2-SHA256" || chiffre?.nom !== "AES-GCM") return abime;
+  if (format !== FORMAT || kdf?.nom !== "PBKDF2-SHA256" || chiffre?.nom !== "AES-GCM") return abime;
   if (!Number.isInteger(kdf.iterations) || kdf.iterations < ITERATIONS || kdf.iterations > ITERATIONS_MAX) return abime;
   if (octetsBase64(kdf.sel) !== OCTETS_SEL || octetsBase64(chiffre.iv) !== OCTETS_IV) return abime;
   const donnees = chiffre.donnees;
@@ -151,12 +160,11 @@ export function lireEnTete(enveloppe) {
 }
 
 /**
- * Format 2 : l'empreinte des octets chiffrés, vérifiable sans clé, dès le
- * téléchargement. Rend null si elle est juste (ou au format 1), sinon
- * { erreur, code }. L'en-tête doit avoir passé lireEnTete.
+ * L'empreinte des octets chiffrés, vérifiable sans clé, dès le
+ * téléchargement. Rend null si elle est juste, sinon { erreur, code }.
+ * L'en-tête doit avoir passé lireEnTete.
  */
 export async function verifierEmpreinte(enveloppe) {
-  if (enveloppe.format !== 2) return null;
   if ((await empreinte(depuisBase64(enveloppe.chiffre.donnees))) === enveloppe.empreinte) return null;
   return { erreur: "Le fichier de la banque est abîmé : il ne correspond pas à son empreinte.", code: "empreinte" };
 }
@@ -165,7 +173,7 @@ export async function verifierEmpreinte(enveloppe) {
 export async function dechiffrer(enveloppe, cle) {
   const enTete = lireEnTete(enveloppe);
   if (enTete.erreur) return enTete;
-  // Format 2 : l'empreinte se vérifie sur le fichier, avant de déchiffrer.
+  // L'empreinte se vérifie sur le fichier, avant de déchiffrer.
   const faussee = await verifierEmpreinte(enveloppe);
   if (faussee) return faussee;
   const donnees = depuisBase64(enveloppe.chiffre.donnees);
@@ -174,10 +182,6 @@ export async function dechiffrer(enveloppe, cle) {
     clair = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: depuisBase64(enveloppe.chiffre.iv) }, cle, donnees));
   } catch {
     return { erreur: "Ce mot de passe n'ouvre pas la banque.", code: "mot_de_passe" };
-  }
-  // Format 1 : l'empreinte était celle de la banque en clair.
-  if (enveloppe.format === 1 && (await empreinte(clair)) !== enveloppe.empreinte) {
-    return { erreur: "La banque déchiffrée ne correspond pas à son empreinte.", code: "empreinte" };
   }
   try {
     return { banque: JSON.parse(new TextDecoder().decode(clair)) };
@@ -200,17 +204,30 @@ export async function ouvrir(enveloppe, { cle, sel, iterations }) {
   return dechiffrer(enveloppe, cle);
 }
 
-/** Dérive la clé du mot de passe saisi avec le sel de la banque publiée, puis l'ouvre. */
+/**
+ * Dérive la clé du mot de passe saisi avec le sel de la banque publiée, puis
+ * l'ouvre. Le mot de passe se dérive en minuscules ; s'il n'ouvre pas la
+ * banque et que sa forme exacte diffère, une seconde dérivation l'essaie sous
+ * cette forme : une banque chiffrée avant le lot 2 bis reste lisible avec le
+ * mot de passe tel qu'il se saisissait, jusqu'au prochain changement de mot
+ * de passe (§ 7.1).
+ */
 export async function ouvrirAvecMotDePasse(enveloppe, motDePasse) {
   const enTete = lireEnTete(enveloppe);
   if (enTete.erreur) return enTete;
-  let secret;
-  try {
-    secret = await deriverCle(motDePasse, enTete.sel, enTete.iterations);
-  } catch (erreur) {
-    // Les bornes de l'en-tête sont vérifiées : reste un navigateur qui refuse.
-    return { erreur: `La clé n'a pas pu être calculée sur cet appareil (${erreur.message}).`, code: "derivation" };
-  }
-  const resultat = await dechiffrer(enveloppe, secret.cle);
-  return resultat.erreur ? { ...resultat, duree: secret.duree } : { ...resultat, secret };
+  const essayer = async (minuscules) => {
+    let secret;
+    try {
+      secret = await deriverCle(motDePasse, enTete.sel, enTete.iterations, { minuscules });
+    } catch (erreur) {
+      // Les bornes de l'en-tête sont vérifiées : reste un navigateur qui refuse.
+      return { erreur: `La clé n'a pas pu être calculée sur cet appareil (${erreur.message}).`, code: "derivation" };
+    }
+    const resultat = await dechiffrer(enveloppe, secret.cle);
+    return resultat.erreur ? { ...resultat, duree: secret.duree } : { ...resultat, secret };
+  };
+  const resultat = await essayer(true);
+  if (resultat.code !== "mot_de_passe" || normaliser(motDePasse, { minuscules: false }) === normaliser(motDePasse)) return resultat;
+  const exacte = await essayer(false);
+  return exacte.erreur ? { ...resultat, duree: resultat.duree + (exacte.duree ?? 0) } : exacte;
 }

@@ -263,7 +263,8 @@ export function depuisBase64Url(texteSource) {
   }
 }
 
-async function transformer(octets, flux) {
+/** Passe des octets dans un flux de (dé)compression ; rend les octets. */
+export async function transformer(octets, flux) {
   const lecteur = new Blob([octets]).stream().pipeThrough(flux).getReader();
   const morceaux = [];
   for (;;) {
@@ -283,7 +284,7 @@ export async function codeDuLien(personnage) {
 // par tranches d'un kilo-octet, une à la demande : sinon Chromium
 // décompresse tout le code avant la première lecture, soit une soixantaine
 // de mégaoctets pour un lien forgé (relecture du lot 2).
-async function decompresserBorne(octets, borne) {
+export async function decompresserBorne(octets, borne) {
   let position = 0;
   const entree = new ReadableStream(
     {

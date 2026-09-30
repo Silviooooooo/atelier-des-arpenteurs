@@ -20,7 +20,10 @@ const REFERENCE = {
     citations: 12,
     noms: ["Boire", "Enduire arme", "Maîtrise du combat précise", "Représailles", "Savoir acquis", "fureur", "lancer grenade", "redécouverte", "trouvé !"],
   },
-  E7: ["Hache légère"],
+  // Depuis le lot 2 bis, un paramètre ciblé à côté du même sans cible est
+  // admis : la Hache légère ne doit plus paraître en E7.
+  E7: [],
+  E7_admis: ["Hache légère"],
   A1: 21,
   A2: ["archetype", "consommable", "defense"],
   A3: ["Maîtrise du combat précis", "Constellation d'Enaël"],
@@ -159,7 +162,10 @@ async function bancComplet(octets, fichier) {
   console.log("\nComparaison avec la mesure de référence :");
   comparer("E4, capacités citées introuvables", citees, REFERENCE.E4.noms);
   if (cibles.length) console.log(`    cibles introuvables (hors référence) : ${[...new Set(cibles)].join(" · ")}`);
-  comparer("E7, blocs", noms(anomalies, "E7", /Le bloc « (.+?) » transmet/), REFERENCE.E7);
+  const e7 = noms(anomalies, "E7", /Le bloc « (.+?) » transmet/);
+  comparer("E7, blocs", e7, REFERENCE.E7);
+  const admisSignales = REFERENCE.E7_admis.filter((nom) => e7.includes(nom));
+  console.log(`  E7, cas admis (paramètre ciblé à côté du même sans cible) : ${admisSignales.length ? `signalés à tort : ${admisSignales.join(" · ")}` : "aucun signalé"}.`);
   comparer("A2, paramètres sans élément", noms(anomalies, "A2", /transmet le paramètre (.+?), qu'aucun/), REFERENCE.A2);
   comparer("A3, capacités orphelines", noms(anomalies, "A3", /La capacité « (.+?) » n'est rattachée/), REFERENCE.A3);
   console.log(`  A1, renvois de capacités : ${a1("la capacité")} trouvés, ${REFERENCE.A1} attendus au moins.`);

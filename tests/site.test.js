@@ -15,7 +15,7 @@ import { CHEMINS, MOT_DE_PASSE_DEMO, demanderStockageDurable, empreinteCourte, m
 import { importerFichier } from "../js/banque/importation.js";
 import { preparerPublication } from "../js/publication/preparation.js";
 import { creerCoffre, magasinMemoire } from "../js/securite/coffre.js";
-import { nouveauSecret, ouvrirAvecMotDePasse } from "../js/securite/chiffrement.js";
+import { LONGUEUR_MINIMALE, normaliserMotDePasse, nouveauSecret, ouvrirAvecMotDePasse } from "../js/securite/chiffrement.js";
 import { COTE, QUADRILATERES, couleursDesJetons, pixels, svg } from "../outils/icones.js";
 
 const RACINE = new URL("../", import.meta.url);
@@ -230,10 +230,12 @@ test("jetons — ecran.css et personnage.css tirent toutes leurs valeurs de jeto
 
 test("démonstration — la banque se déchiffre avec le mot de passe public et vient du classeur d'essai", async () => {
   assert.ok(CHEMINS.demo.startsWith("essais/"));
-  assert.ok([...MOT_DE_PASSE_DEMO].length >= 20);
+  assert.ok([...MOT_DE_PASSE_DEMO].length >= LONGUEUR_MINIMALE);
+  // Déjà en minuscules : la normalisation du lot 2 bis ne change pas sa clé.
+  assert.equal(normaliserMotDePasse(MOT_DE_PASSE_DEMO), MOT_DE_PASSE_DEMO);
   const enveloppe = JSON.parse(lire(CHEMINS.demo));
   assert.deepEqual(Object.keys(enveloppe), ["format", "publiee_le", "empreinte", "kdf", "chiffre"]);
-  assert.equal(enveloppe.format, 2, "banque au format 1 : relancer node outils/banque_demo.js");
+  assert.equal(enveloppe.format, 2);
   const { banque, erreur } = await ouvrirAvecMotDePasse(enveloppe, MOT_DE_PASSE_DEMO);
   assert.equal(erreur, undefined, erreur);
   const { banque: attendue } = await importerFichier(ESSAI, "classeur_essai.xlsx");
@@ -243,22 +245,16 @@ test("démonstration — la banque se déchiffre avec le mot de passe public et 
   assert.equal((await ouvrirAvecMotDePasse(enveloppe, "un autre mot de passe de table")).code, "mot_de_passe");
 });
 
-test("ancien format — le fichier d'essai au format 1 vient du classeur d'essai, et la page l'ouvre", async () => {
-  const ancien = JSON.parse(lire("essais/banque_format1.chiffree.json"));
-  assert.equal(ancien.format, 1);
+test("démonstration — le mot de passe saisi, en majuscules comme en minuscules, ouvre la banque, et la clé gardée la rouvre", async () => {
+  const enveloppe = JSON.parse(lire(CHEMINS.demo));
   const coffre = creerCoffre(magasinMemoire());
-  const { banque, erreur } = await ouvrirParMotDePasse(ancien, MOT_DE_PASSE_DEMO, { coffre, mode: "demo", garder: true });
+  const { banque, erreur } = await ouvrirParMotDePasse(enveloppe, MOT_DE_PASSE_DEMO.toUpperCase(), { coffre, mode: "demo", garder: true });
   assert.equal(erreur, undefined, erreur);
-  // Le fichier est figé : il vient du classeur d'essai tel qu'il était le
-  // 29/09/2026. Tant que ce classeur n'a pas changé, il en a tout le contenu.
   assert.equal(banque.sources[0].fichier, "classeur_essai.xlsx");
-  const { banque: attendue } = await importerFichier(ESSAI, "classeur_essai.xlsx");
-  if (attendue.sources[0].empreinte === banque.sources[0].empreinte) {
-    const { publiee_le: _date, ...reste } = banque;
-    assert.deepEqual(reste, attendue);
-  }
   // La clé gardée l'ouvre à la visite suivante.
-  assert.ok((await ouvrirAvecCoffre(ancien, coffre, "demo")).banque);
+  assert.ok((await ouvrirAvecCoffre(enveloppe, coffre, "demo")).banque);
+  // Le format 1 ne se lit plus (lot 2 bis).
+  assert.deepEqual(await ouvrirAvecCoffre({ ...enveloppe, format: 1 }, coffre, "demo"), { erreur: "Le fichier de la banque est abîmé ou d'un format inconnu." });
 });
 
 test("chargement — banque absente, présente, abîmée ; un paramètre unique, sans cache (§ 8.3)", async () => {

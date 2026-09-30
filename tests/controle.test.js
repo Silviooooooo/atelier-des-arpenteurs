@@ -143,11 +143,26 @@ test("contrôle — messages : E4 au format du § 5.1, E7 et A1 disent ce qu'ils
   const { anomalies } = await importer();
   const message = (code, ligne) => anomalies.filter((a) => a.code === code && a.ligne === ligne).map((a) => a.message);
   assert.equal(message("E4", 7)[0], "Le bloc « Poêle en fonte » cite la capacité « Omelette fantôme », introuvable dans Capacites.");
-  assert.match(message("E7", 11)[0], /Le bloc « Hachoir » transmet 2 fois le paramètre distance \(\{distance:0\}, \{distance:1\}\(Jet de sel\)\)/);
+  assert.match(message("E7", 11)[0], /Le bloc « Hachoir » transmet 3 fois le paramètre distance \(\{distance:0\}, \{distance:1\}\(Jet de sel\), \{distance:2\}\(Jet de sel\)\)/);
   assert.deepEqual(message("A1", 6), [
     "Le bloc « Marmite hurlante » cite « coup de poele » pour la capacité « Coup de poêle » : seules la casse, les accents ou les espaces diffèrent.",
     "Le bloc « Marmite hurlante » cite « brulant » pour l'élément « Brûlant » : seules la casse, les accents ou les espaces diffèrent.",
   ]);
+});
+
+// E7 (lot 2 bis) : un paramètre ciblé à côté du même paramètre sans cible est
+// admis (lisez_moi, la Hache légère) ; deux sans cible, ou deux fois la même
+// cible, restent une erreur ; E4 vérifie toujours que la cible existe.
+test("E7 — ciblé à côté de sans cible : admis ; deux sans cible, ou la même cible deux fois : erreur", async () => {
+  const avecParametres = (parametres) => variante((feuilles) => (feuilles[1].lignes[10][3] = parametres));
+  const e7 = async (parametres) => (await importer(avecParametres(parametres))).anomalies.filter((a) => a.code === "E7" || a.code === "E4").map((a) => [a.code, a.ligne]);
+  assert.deepEqual(await e7("{distance:0}, {distance:1}(Jet de sel)"), [["E4", 7], ["E4", 7]]);
+  assert.deepEqual(await e7("{distance:1}(Jet de sel), {distance:0}"), [["E4", 7], ["E4", 7]]);
+  assert.deepEqual(await e7("{distance:0}, {distance:1}"), [["E4", 7], ["E4", 7], ["E7", 11]]);
+  assert.deepEqual(await e7("{distance:1}(Jet de sel), {distance:2}(jet de SEL)"), [["E4", 7], ["E4", 7], ["E7", 11]]);
+  assert.deepEqual(await e7("{distance:1}(Jet de sel), {distance:2}(Coup de louche)"), [["E4", 7], ["E4", 7]]);
+  // La cible d'un paramètre ciblé doit exister (E4), même à côté du paramètre sans cible.
+  assert.deepEqual(await e7("{distance:0}, {distance:1}(Jet de poivre)"), [["E4", 7], ["E4", 7], ["E4", 11]]);
 });
 
 test("noms — clé sans casse, accents ni espaces ; résolution exacte, approchée, ambiguë, absente", () => {

@@ -77,10 +77,14 @@ function classeursInconnus(chemins, lireOctets) {
 // sous », un export PDF), et tout JSON hors de cette liste, restent hors du
 // dépôt : une banque en clair gardée pour déboguer ne passe pas.
 const FORMATS_INTERDITS = /\.(?:xls|xlsm|xlsb|ods|csv|doc|docm|odt|pdf)$/i;
-const JSON_PERMIS = ["package.json", "essais/banque_demo.chiffree.json", "essais/banque_format1.chiffree.json", "donnees/banque.chiffree.json", "essais/personnage_demo.arpenteur.json"];
+const JSON_PERMIS = ["package.json", "essais/banque_demo.chiffree.json", "donnees/banque.chiffree.json", "essais/personnage_demo.arpenteur.json"];
+// Retirés depuis, mais permis dans l'historique : le fichier figé du format 1
+// (lot 2 bis, § 7.1).
+const JSON_DE_L_HISTORIQUE = ["essais/banque_format1.chiffree.json"];
 
-function fichiersHorsListe(chemins) {
-  return chemins.filter((chemin) => FORMATS_INTERDITS.test(chemin) || (/\.json$/i.test(chemin) && !JSON_PERMIS.includes(chemin)));
+function fichiersHorsListe(chemins, { historique = false } = {}) {
+  const permis = historique ? [...JSON_PERMIS, ...JSON_DE_L_HISTORIQUE] : JSON_PERMIS;
+  return chemins.filter((chemin) => FORMATS_INTERDITS.test(chemin) || (/\.json$/i.test(chemin) && !permis.includes(chemin)));
 }
 
 // § 10.1 : GitHub Pages sert chaque fichier du dépôt dans l'origine de
@@ -145,26 +149,18 @@ function defautDeFormeChiffree(texte) {
     return "données chiffrées incomplètes";
   }
   if (seLitCommeDuTexte(donnees)) return "données en clair, seulement encodées en base64";
-  if (banque.format !== 1 && banque.format !== 2) return `format ${banque.format} inconnu`;
+  if (banque.format !== 2) return `format ${banque.format} inconnu`;
   // Format 2 : l'empreinte est celle des octets chiffrés, et se vérifie ici.
-  if (banque.format === 2 && banque.empreinte !== `sha256:${createHash("sha256").update(donnees).digest("hex")}`) {
+  if (banque.empreinte !== `sha256:${createHash("sha256").update(donnees).digest("hex")}`) {
     return "format 2 : l'empreinte n'est pas celle des octets chiffrés";
   }
   return null;
 }
 
-// La première publication réelle (29/09/2026) est au format 1 ; toute
-// publication suivante doit être au format 2. Un onglet de l'espace auteur
-// ouvert sur l'ancien code écrirait encore le format 1 : cela se verrait ici.
-const FORMAT_1_PUBLIE = "sha256:de78dcbfbcf5f39a1187b6821359aef6fcda740faa8c1f4c79094479428ad854";
-
-function defautDeLaBanquePubliee(texte) {
-  const defaut = defautDeFormeChiffree(texte);
-  if (defaut) return defaut;
-  const { format, empreinte } = JSON.parse(texte);
-  if (format === 1 && empreinte !== FORMAT_1_PUBLIE) return "format 1 : seul le fichier du 29/09/2026 l'a ; une publication nouvelle doit être au format 2 (recharger la page avant de publier)";
-  return null;
-}
+// La banque publiée est au format 2 depuis le 29/09/2026, et le format 1 ne
+// se lit plus (lot 2 bis) : un onglet resté sur un ancien code qui
+// l'écrirait se verrait ici.
+const defautDeLaBanquePubliee = defautDeFormeChiffree;
 
 function donneesEnClair(chemins, lireTexte) {
   const fautes = [];
@@ -212,7 +208,7 @@ function cheminsInterdits(chemins) {
     ...classeursHorsEssais(chemins),
     ...chemins.filter((chemin) => /^essais\/[^/]+\.xlsx$/i.test(chemin) && !Object.hasOwn(CLASSEURS_D_ESSAI, chemin)),
     ...documentsWord(chemins),
-    ...fichiersHorsListe(chemins),
+    ...fichiersHorsListe(chemins, { historique: true }),
     ...pagesEnTrop(chemins),
     ...chemins.filter((chemin) => chemin.toLowerCase().startsWith("donnees/") && chemin !== BANQUE),
   ];
@@ -308,7 +304,7 @@ test(".gitignore — ignore les classeurs, documents et données en clair, pas l
     "Aubépine.arpenteur.json", "essais/Mon personnage.arpenteur.json", "essais/personnage_demo.json",
   ];
   const suivis = [
-    "essais/classeur_essai.xlsx", "essais/banque_demo.chiffree.json", "essais/banque_format1.chiffree.json", "donnees/banque.chiffree.json", "package.json", "index.html", "js/application.js", "icones/icone.svg",
+    "essais/classeur_essai.xlsx", "essais/banque_demo.chiffree.json", "donnees/banque.chiffree.json", "package.json", "index.html", "js/application.js", "icones/icone.svg",
     "essais/personnage_demo.arpenteur.json", "polices/Marcellus-Regular.woff2", "polices/OFL-Marcellus.txt", "css/fiche.css",
   ];
   let sortie = "";
@@ -484,9 +480,10 @@ test("interdit 2 — repère des données en clair dans donnees/", () => {
     [{ ...enTete, kdf: { ...kdf, iterations: 1000 }, chiffre }, 1],
     [{ ...enTete, kdf: { ...kdf, sel: "c2Vs" }, chiffre }, 1],
     [{ ...enTete, kdf, chiffre: { ...chiffre, iv: "aXY=" } }, 1],
-    // Le format 1 n'est permis dans donnees/ que pour le fichier du 29/09/2026.
+    // Le format 1 ne se lit plus (lot 2 bis) : aucun fichier de donnees/ ne
+    // l'a, pas même celui du 29/09/2026.
     [{ ...enTete, format: 1, empreinte: `sha256:${"1".repeat(64)}`, kdf, chiffre }, 1],
-    [{ ...enTete, format: 1, empreinte: FORMAT_1_PUBLIE, kdf, chiffre }, 0],
+    [{ ...enTete, format: 1, empreinte: "sha256:de78dcbfbcf5f39a1187b6821359aef6fcda740faa8c1f4c79094479428ad854", kdf, chiffre }, 1],
   ];
   for (const [banque, nombre] of essais) {
     const fautes = donneesEnClair([BANQUE], () => JSON.stringify(banque));
@@ -502,12 +499,14 @@ test("interdit 2 — repère un format inconnu, ou une empreinte de format 2 qui
   assert.match(defautDeFormeChiffree(JSON.stringify({ ...vraie, empreinte: `sha256:${"0".repeat(64)}` })), /format 2/);
 });
 
-test("interdit 2 — les banques d'essais/ ont la forme chiffrée du § 7.1 : démonstration au format 2, ancien format au format 1", () => {
+test("interdit 2 — la banque d'essais/ a la forme chiffrée du § 7.1, au format 2 ; le fichier du format 1 est retiré", () => {
   const banques = cheminsDuDepot().filter((chemin) => /^essais\/.+\.chiffree\.json$/.test(chemin));
-  assert.deepEqual(banques.sort(), ["essais/banque_demo.chiffree.json", "essais/banque_format1.chiffree.json"]);
+  assert.deepEqual(banques.sort(), ["essais/banque_demo.chiffree.json"]);
   for (const chemin of banques) assert.equal(defautDeFormeChiffree(lire(chemin, "utf8")), null, chemin);
   assert.equal(JSON.parse(lire("essais/banque_demo.chiffree.json", "utf8")).format, 2);
-  assert.equal(JSON.parse(lire("essais/banque_format1.chiffree.json", "utf8")).format, 1);
+  // Retiré du dépôt, il reste permis dans l'historique, et là seulement.
+  assert.deepEqual(fichiersHorsListe(JSON_DE_L_HISTORIQUE), JSON_DE_L_HISTORIQUE);
+  assert.deepEqual(fichiersHorsListe(JSON_DE_L_HISTORIQUE, { historique: true }), []);
 });
 
 test("interdit 2 — donnees/ ne contient que la banque chiffrée", () => {

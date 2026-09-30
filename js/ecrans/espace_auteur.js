@@ -16,7 +16,7 @@ import { MOT_DE_PASSE_DEMO } from "../banque/chargement.js";
 import { importerFichier } from "../banque/importation.js";
 import { DEPOT, publier } from "../publication/github.js";
 import { preparerChangement, preparerPublication } from "../publication/preparation.js";
-import { defautDuMotDePasse, nouveauSecret, ouvrirAvecMotDePasse } from "../securite/chiffrement.js";
+import { LONGUEUR_MINIMALE, defautDuMotDePasse, normaliserMotDePasse, nouveauSecret, ouvrirAvecMotDePasse } from "../securite/chiffrement.js";
 import { decompte, listeAnomalies } from "./anomalies.js";
 import { compte, el, titre } from "./dom.js";
 
@@ -421,7 +421,7 @@ function formulaireMotDePasse() {
   const erreur = erreurDeFormulaire();
   const intro = {
     nouveau_mot_de_passe:
-      "Première publication : choisissez le mot de passe de table, que les joueurs saisiront. Une phrase de quatre ou cinq mots tirés au hasard, 20 signes au moins. Il ne quitte pas cet appareil : seule la clé qui en dérive y est gardée.",
+      `Première publication : choisissez le mot de passe de table, que les joueurs saisiront : ${LONGUEUR_MINIMALE} signes au moins, majuscules indifférentes. Deux ou trois mots sans rapport, collés, résistent ; un mot du dictionnaire se devine en quelques secondes. Il ne quitte pas cet appareil : seule la clé qui en dérive y est gardée.`,
     mot_de_passe_requis: "Pour comparer avec la banque publiée, saisissez le mot de passe de table.",
     sel_change: "La clé gardée sur cet appareil n'ouvre plus la banque publiée : saisissez le mot de passe de table actuel.",
   }[auteur.besoin];
@@ -433,7 +433,7 @@ function formulaireMotDePasse() {
         evenement.preventDefault();
         erreur.hidden = true;
         if (nouveau) {
-          const defaut = defautDuMotDePasse(premier.value) ?? (premier.value !== second.value ? "Les deux saisies diffèrent." : null);
+          const defaut = defautDuMotDePasse(premier.value) ?? (normaliserMotDePasse(premier.value) !== normaliserMotDePasse(second.value) ? "Les deux saisies diffèrent." : null);
           if (defaut) {
             erreur.textContent = defaut;
             erreur.hidden = false;
@@ -564,7 +564,7 @@ function changement() {
         classe: "formulaire",
         onsubmit: async (evenement) => {
           evenement.preventDefault();
-          const defaut = defautDuMotDePasse(premier.value) ?? (premier.value !== second.value ? "Les deux saisies diffèrent." : null);
+          const defaut = defautDuMotDePasse(premier.value) ?? (normaliserMotDePasse(premier.value) !== normaliserMotDePasse(second.value) ? "Les deux saisies diffèrent." : null);
           if (defaut) {
             erreur.textContent = defaut;
             erreur.hidden = false;
