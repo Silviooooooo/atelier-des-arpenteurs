@@ -227,7 +227,8 @@ test("polices — Marcellus et Alegreya Sans hébergées dans le dépôt, avec l
 
 test("démonstration — le personnage fourni vient de l'outil, est complet, et sans changement contre la banque de démonstration", async () => {
   assert.ok(existsSync(new URL(CHEMIN_PERSONNAGE_DEMO, racine)));
-  const texte = lire(CHEMIN_PERSONNAGE_DEMO);
+  // Git pour Windows peut l'extraire en fins de ligne CRLF (core.autocrlf).
+  const texte = lire(CHEMIN_PERSONNAGE_DEMO).replace(/\r\n/g, "\n");
   const { personnage, erreur } = lirePersonnage(texte, { mode: "demo" });
   assert.equal(erreur, undefined, erreur);
   assert.equal(personnage.etat, "enregistre");

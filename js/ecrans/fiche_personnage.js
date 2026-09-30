@@ -90,8 +90,8 @@ function afficherPersonnage(contexte, personnage, zone) {
   const cadreImpression = el("div", { classe: "cadre-feuilles" }, impression);
   const telephone = el("div", { classe: "ne-pas-imprimer" });
   const boutonsVue = {
-    lecture: el("button", { type: "button", classe: "bouton", "aria-pressed": String(vue === "lecture") }, "Vue lecture"),
-    fiche: el("button", { type: "button", classe: "bouton", "aria-pressed": String(vue === "fiche") }, "Vue fiche"),
+    lecture: el("button", { type: "button", classe: "bouton secondaire", "aria-pressed": String(vue === "lecture") }, "Vue lecture"),
+    fiche: el("button", { type: "button", classe: "bouton secondaire", "aria-pressed": String(vue === "fiche") }, "Vue fiche"),
   };
   const changerVue = (nouvelle) => {
     vue = nouvelle;

@@ -92,6 +92,8 @@ class Element extends Noeud {
 
   append(...enfants) {
     for (const enfant of enfants) {
+      // Un navigateur écrirait « null » ou « undefined » dans la page.
+      if (enfant === null || enfant === undefined) throw new TypeError(`append(${enfant}) : le navigateur afficherait « ${enfant} »`);
       const noeud = enfant instanceof Noeud ? enfant : new Texte(String(enfant));
       noeud.remove();
       noeud.parentNode = this;

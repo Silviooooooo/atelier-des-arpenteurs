@@ -50,13 +50,16 @@ function montrer(contexte, contenu, personnage) {
     },
     "Enregistrer sur cet appareil",
   );
+  // replaceChildren écrirait « null » : les parties absentes sont retirées.
   contenu.replaceChildren(
-    el("p", {}, "Ce personnage est arrivé par un lien : il n'est pas encore sur cet appareil."),
-    etagere.durable ? null : el("p", { classe: "message" }, PHRASE_NON_DURABLE),
-    el("div", { classe: "boutons" }, enregistrer),
-    zoneDoublon,
-    zoneMessage,
-    verdict.erreur ? el("p", { classe: "message", role: "alert" }, verdict.erreur) : lecture(calculerFiche(banque, personnage, { index: indexerCreation(banque) })),
+    ...[
+      el("p", {}, "Ce personnage est arrivé par un lien : il n'est pas encore sur cet appareil."),
+      etagere.durable ? null : el("p", { classe: "message" }, PHRASE_NON_DURABLE),
+      el("div", { classe: "boutons" }, enregistrer),
+      zoneDoublon,
+      zoneMessage,
+      verdict.erreur ? el("p", { classe: "message", role: "alert" }, verdict.erreur) : lecture(calculerFiche(banque, personnage, { index: indexerCreation(banque) })),
+    ].filter(Boolean),
   );
 }
 

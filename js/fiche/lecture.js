@@ -172,7 +172,7 @@ export function lecture(fiche) {
             "ul",
             {},
             fiche.equipement.map((o) =>
-              el("li", {}, o.nom, el("span", { classe: "detail" }, [qualiteEcrite(o.qualite), o.porte ? "portée" : "", o.rang === attaque.rang && !attaque.mainsNues ? "arme principale" : "", o.rang === bouclier?.rang ? "bouclier" : ""].filter(Boolean).join(" · "))),
+              el("li", {}, o.nom, " ", el("span", { classe: "detail" }, [qualiteEcrite(o.qualite), o.porte ? "portée" : "", o.rang === attaque.rang && !attaque.mainsNues ? "arme principale" : "", o.rang === bouclier?.rang ? "bouclier" : ""].filter(Boolean).join(" · "))),
             ),
           )
         : el("p", { classe: "secondaire-texte" }, "Aucun objet."),

@@ -179,10 +179,12 @@ export function afficher(contexte) {
     }
     const { personnages, illisibles } = lu;
     liste.replaceChildren(
-      personnages.length
+      ...[
+        personnages.length
         ? el("ul", { classe: "personnages-liste" }, personnages.map((p) => carte(contexte, p, { utilisable, dire, rafraichir })))
         : el("p", { classe: "secondaire-texte" }, "Aucun personnage sur cet appareil."),
-      illisibles ? el("p", { classe: "secondaire-texte" }, `${compte(illisibles, "personnage illisible est ignoré", "personnages illisibles sont ignorés")}.`) : null,
+        illisibles ? el("p", { classe: "secondaire-texte" }, `${compte(illisibles, "personnage illisible est ignoré", "personnages illisibles sont ignorés")}.`) : null,
+      ].filter(Boolean),
     );
   };
 
