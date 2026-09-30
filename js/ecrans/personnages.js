@@ -18,6 +18,7 @@
 
 import { dateLisible } from "../banque/dates.js";
 import { lirePersonnage, nouveauPersonnage, nouvelIdentifiant } from "../personnage/format.js";
+import { PHRASE_CLE_CHANGEE } from "../personnage/depot.js";
 import { ETAPES, banqueUtilisable } from "../personnage/parcours.js";
 import { adressePersonnage } from "../routes.js";
 import { copieDeTravail } from "./creation.js";
@@ -90,15 +91,68 @@ function etatDe(personnage) {
 }
 
 // La phrase d'état d'une carte, selon d'où vient le personnage.
-function situation(genre, { personnage, note, original, enRetard, demo }) {
+function situation(genre, { personnage, note, original, enRetard, demo, plusAncienne, enLigne }) {
   if (genre === "en_ligne") return `en ligne · ${etatDe(personnage)}`;
   if (genre === "attente") return `envoyé le ${heure(note.depot.date)} : visible par tous d'ici quelques minutes`;
-  if (genre === "brouillon") return original ? `copie de travail de « ${nomDe(original)} » · ${etatDe(personnage)}` : etatDe(personnage);
+  if (genre === "brouillon") {
+    const nomOriginal = original ? nomDe(original) : note?.nom;
+    return nomOriginal ? `copie de travail de « ${nomOriginal} » · ${etatDe(personnage)}` : etatDe(personnage);
+  }
   if (demo) return `sur cet appareil · ${etatDe(personnage)}`;
-  if (note?.depot?.action === "supprimer") return enRetard ? "suppression envoyée, sans effet encore" : `suppression non envoyée : ${note.depot.erreur ?? "raison inconnue"}`;
+  if (plusAncienne) return `copie de cet appareil, plus ancienne que la version en ligne · modifiée le ${dateLisible(personnage.modifie_le)}`;
   if (enRetard) return `envoyé le ${heure(note.depot.date)}, toujours pas en ligne`;
   if (note?.depot?.erreur) return `non envoyé : ${note.depot.erreur}`;
+  if (enLigne) return `modifié sur cet appareil, pas encore envoyé · ${etatDe(personnage)}`;
   return `sur cet appareil seulement · ${etatDe(personnage)}`;
+}
+
+// Une suppression pour tous qui n'est pas partie, ou qui tarde : la carte
+// se montre même quand le personnage en ligne ne se lit plus (son nom vient
+// alors de la note).
+function carteSuppression(contexte, entree, { dire, rafraichir }) {
+  const { etagere, mode, depot } = contexte.etat;
+  const { personnage, note, enRetard } = entree;
+  const nom = personnage ? nomDe(personnage) : (note.nom ?? `personnage ${note.id.slice(0, 8)}`);
+  const actions = [];
+  if (mode === "reel") {
+    const reessayer = el(
+      "button",
+      {
+        type: "button",
+        classe: "bouton",
+        onclick: async () => {
+          reessayer.disabled = true;
+          const resultat = await depot.reessayer(note.id);
+          dire(resultat.envoye ? `La suppression de « ${nom} » part en ligne : effective d'ici quelques minutes.` : resultat.erreur, !resultat.envoye);
+          await rafraichir();
+        },
+      },
+      "Réessayer la suppression",
+    );
+    actions.push(reessayer);
+  }
+  actions.push(
+    el(
+      "button",
+      {
+        type: "button",
+        classe: "bouton secondaire",
+        onclick: async () => {
+          await etagere.garderNote(note.id, { depot: null });
+          dire(`La suppression de « ${nom} » est abandonnée.`);
+          await rafraichir();
+        },
+      },
+      "Garder en ligne",
+    ),
+  );
+  return el(
+    "li",
+    { classe: "carte-personnage" },
+    el("h2", {}, nom),
+    el("p", { classe: "secondaire-texte" }, enRetard ? "suppression envoyée, sans effet encore" : `suppression non envoyée : ${note.depot.erreur ?? "raison inconnue"}`),
+    el("div", { classe: "boutons" }, actions),
+  );
 }
 
 /**
@@ -106,13 +160,13 @@ function situation(genre, { personnage, note, original, enRetard, demo }) {
  * « non_envoye », « brouillon ». outils : { utilisable, dire, rafraichir }.
  */
 function carte(contexte, genre, entree, { utilisable, dire, rafraichir }) {
+  if (entree.suppression) return carteSuppression(contexte, entree, { dire, rafraichir });
   const { etagere, mode, depot } = contexte.etat;
   const { personnage, note } = entree;
   const nom = nomDe(personnage);
   const zoneTelephone = el("div", {});
   const zoneConfirmation = el("div", {});
   const actions = [];
-  const suppressionEnAttente = note?.depot?.action === "supprimer";
 
   const confirmer = (question, libelle, agir) => {
     const annuler = el("button", { type: "button", classe: "bouton secondaire", onclick: () => zoneConfirmation.replaceChildren() }, "Annuler");
@@ -137,7 +191,7 @@ function carte(contexte, genre, entree, { utilisable, dire, rafraichir }) {
     annuler.focus();
   };
 
-  if (utilisable && !suppressionEnAttente) {
+  if (utilisable) {
     if (personnage.etat === "brouillon") {
       actions.push(el("a", { classe: "bouton", href: adressePersonnage(personnage.id, personnage.etape) }, "Reprendre"));
       actions.push(el("a", { classe: "bouton secondaire", href: adressePersonnage(personnage.id) }, "Aperçu"));
@@ -163,8 +217,15 @@ function carte(contexte, genre, entree, { utilisable, dire, rafraichir }) {
       actions.push(modifier);
     }
   }
-  // « Réessayer » : un dépôt non envoyé, ou envoyé mais toujours pas en ligne.
+  // « Réessayer » : un dépôt non envoyé, ou envoyé mais toujours pas en
+  // ligne. Une version en ligne plus récente arrête l'envoi : il faut alors
+  // le vouloir expressément, ou retirer la copie de l'appareil.
   if (genre === "non_envoye" && mode === "reel" && personnage.etat === "enregistre") {
+    const envoyer = (forcer) => (note?.depot ? depot.reessayer(personnage.id, { forcer }) : depot.envoyer(personnage, { action: "creer", forcer }));
+    const conclure = async (resultat) => {
+      dire(resultat.envoye ? `« ${nom} » est parti en ligne : visible par tous d'ici quelques minutes.` : resultat.erreur, !resultat.envoye);
+      await rafraichir();
+    };
     const reessayer = el(
       "button",
       {
@@ -172,32 +233,41 @@ function carte(contexte, genre, entree, { utilisable, dire, rafraichir }) {
         classe: "bouton",
         onclick: async () => {
           reessayer.disabled = true;
-          const resultat = note?.depot ? await depot.reessayer(personnage.id) : await depot.envoyer(personnage, { action: "creer" });
-          dire(resultat.envoye ? `« ${nom} » est parti en ligne : visible par tous d'ici quelques minutes.` : resultat.erreur, !resultat.envoye);
-          await rafraichir();
+          const resultat = await envoyer(false);
+          if (resultat.plusAncienne) {
+            reessayer.disabled = false;
+            confirmer(`Une version plus récente de « ${nom} » est en ligne. L'envoyer quand même la remplacera pour tous ; « Retirer de l'appareil » garde la version en ligne.`, "Envoyer quand même", async () => {
+              const force = await envoyer(true);
+              dire(force.envoye ? `« ${nom} » est parti en ligne : visible par tous d'ici quelques minutes.` : force.erreur, !force.envoye);
+            });
+            return;
+          }
+          await conclure(resultat);
         },
       },
-      note?.depot ? (suppressionEnAttente ? "Réessayer la suppression" : "Réessayer") : "Envoyer en ligne",
+      note?.depot ? "Réessayer" : "Envoyer en ligne",
     );
     actions.push(reessayer);
-  }
-  if (suppressionEnAttente) {
-    actions.push(
-      el(
-        "button",
-        {
-          type: "button",
-          classe: "bouton secondaire",
-          onclick: async () => {
-            await etagere.garderNote(personnage.id, { depot: null });
-            dire(`La suppression de « ${nom} » est abandonnée.`);
-            await rafraichir();
+    if (entree.plusAncienne) {
+      actions.push(
+        el(
+          "button",
+          {
+            type: "button",
+            classe: "bouton secondaire",
+            onclick: async () => {
+              await etagere.effacer(personnage.id);
+              await etagere.garderNote(personnage.id, { depot: null });
+              dire(`La copie de « ${nom} » a quitté cet appareil ; la version en ligne reste.`);
+              await rafraichir();
+            },
           },
-        },
-        "Garder en ligne",
-      ),
-    );
-  } else {
+          "Retirer de l'appareil",
+        ),
+      );
+    }
+  }
+  {
     const fichier = boutonFichier(personnage);
     fichier.className = `${fichier.className} secondaire`;
     actions.push(fichier);
@@ -236,7 +306,7 @@ function carte(contexte, genre, entree, { utilisable, dire, rafraichir }) {
               "Supprimer",
               async () => {
                 if (pourTous) {
-                  const resultat = await depot.supprimer(personnage.id);
+                  const resultat = await depot.supprimer(personnage.id, { nom });
                   await etagere.effacer(personnage.id);
                   dire(resultat.envoye ? `La suppression de « ${nom} » part en ligne : effective d'ici quelques minutes.` : resultat.erreur, !resultat.envoye);
                 } else {
@@ -321,6 +391,9 @@ export function afficher(contexte) {
         ),
       );
       if (lu.erreur) parties.push(el("p", { classe: "message", role: "alert" }, lu.erreur));
+      // Un fichier du sel de la banque en place que la page ne lit pas : c'est
+      // la page qui tient l'ancienne clé (un changement pendant la visite).
+      if (lu.cleChangee) parties.push(el("p", { classe: "message", role: "alert" }, `${PHRASE_CLE_CHANGEE} (${compte(lu.cleChangee, "personnage en ligne attend", "personnages en ligne attendent")} la nouvelle clé.)`));
       if (lu.ancienneCle) parties.push(el("p", { classe: "message" }, `${compte(lu.ancienneCle, "personnage en ligne est chiffré", "personnages en ligne sont chiffrés")} avec une ancienne clé de table : l'auteur doit les rechiffrer.`));
     }
     parties.push(section(mode === "reel" ? "Sur cet appareil : non envoyés" : "Sur cet appareil", "non_envoye", lu.nonEnvoyes, mode === "reel" ? "Aucun personnage en attente d'envoi." : "Aucun personnage enregistré."));
@@ -387,7 +460,7 @@ export function afficher(contexte) {
     { classe: "personnages" },
     titre("Personnages"),
     verdict.erreur ? el("p", { classe: "message", role: "alert" }, verdict.erreur) : null,
-    etagere.durable ? null : el("p", { classe: "message" }, PHRASE_NON_DURABLE),
+    etagere.bloquee ? el("p", { classe: "message", role: "alert" }, etagere.bloquee) : etagere.durable ? null : el("p", { classe: "message" }, PHRASE_NON_DURABLE),
     depot?.raison ? el("p", { classe: "message" }, depot.raison) : null,
     utilisable
       ? [

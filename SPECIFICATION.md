@@ -712,8 +712,14 @@ la dérivation donne lui aussi un message.
   passe a aussi la clé de dépôt, dans la banque : il peut créer, modifier
   et supprimer n'importe quel personnage en ligne (décision de l'auteur,
   lot 2 bis) ; l'historique de GitHub garde chaque version, et l'auteur peut
-  en restaurer une. La clé de dépôt ne permet que d'ouvrir des tickets sur
-  ce dépôt ; si elle fuit, l'auteur la révoque et en publie une autre.
+  en restaurer une. La clé de dépôt agit **au nom de l'auteur** dans les
+  tickets de ce dépôt : qui l'a peut y écrire des textes publics (tickets,
+  commentaires), en fermer ou en rouvrir, et rouvrir un ancien dépôt, que
+  l'automate rejoue ; elle n'écrit ni dans le code ni dans la banque
+  (relecture du lot 2 bis). Si elle fuit, l'auteur la révoque et en publie
+  une autre. **Un joueur écarté par un changement de mot de passe** garde la
+  clé de dépôt qu'il a pu lire : pour l'écarter aussi en écriture, l'auteur
+  remplace la clé de dépôt au même changement, puis révoque l'ancienne.
 - **L'historique garde les anciennes versions**, chiffrées avec le mot de
   passe de leur époque. Changer de mot de passe protège les publications
   suivantes, pas les précédentes : un joueur qui part garde l'accès à ce
@@ -845,8 +851,10 @@ l'automate) : tout recommence depuis la lecture, trois fois au plus, avec
 une nouvelle confirmation, et le personnage rangé entre-temps est rechiffré
 aussi. **Une avance restée sans réponse** (connexion tombée) a pu se faire :
 la branche est relue une fois, sans cache ; sur le commit écrit, c'est un
-succès ; ailleurs, la panne, et rien n'est écrit ; si la relecture échoue
-aussi, l'issue est inconnue (code `incertain`), l'écran dit de recharger la
+succès ; sur le commit lu (la branche n'a pas bougé), la panne, et rien
+n'est écrit ; sur un autre commit (la branche a bougé depuis l'envoi : le
+commit écrit a pu passer, puis être suivi d'un autre), ou si la relecture
+échoue aussi, l'issue est inconnue (code `incertain`), l'écran dit de recharger la
 page et d'essayer d'abord le nouveau mot de passe, et l'ancienne clé reste
 sur l'appareil. Le message : « … — nouveau mot de passe de table, 3 personnages
 rechiffrés ». Un personnage chiffré sous une clé plus ancienne encore, ou
@@ -1180,15 +1188,15 @@ Chaque contrôle nouveau se vérifie **armé puis désarmé**.
 | Import | la banque du classeur d'essai a le format du § 5.1 ; colonnes retrouvées malgré la casse, les accents et l'ordre des en-têtes ; valeurs en chaînes, telles qu'écrites ; brut et `lisez_moi`, où une colonne nommée `__proto__` ou `constructor` reste ; ligne sans nom exclue ; fichier illisible : un message |
 | Contrôle | le classeur d'essai déclenche **chaque** code du § 6.3 (E1, A8, A9 et A10 sur ses variantes, § 10.3), et exactement les anomalies qu'il annonce, ligne par ligne ; un classeur propre n'en déclenche aucun ; gravités du § 6.3 (le tableau lu dans la spécification, codes à deux chiffres compris) et tri du § 6.4 ; la colonne « Type » attendue, les types comparés sans casse, accents ni espaces ; E7 : un paramètre ciblé à côté du même sans cible admis, dans les deux ordres ; deux sans cible, ou la même cible deux fois (casse comprise), une erreur ; E4 toujours sur la cible ; A10 : deux pièces d'un même type sur une zone, pas deux types différents, pas une valeur écrite « 0 » ou « 0,0 » |
 | Chiffrement | aller-retour, au format 2 du § 7.1 : l'empreinte est celle des octets chiffrés, vérifiée avant le déchiffrement, et change à chaque publication ; le format 1 ne se lit plus : il se dit abîmé, avant toute dérivation ; mauvais mot de passe refusé proprement ; fichier abîmé ou inconnu, ou en-tête hors des bornes du § 7.1 (itérations, sel, IV, données), ou dérivation refusée : un message ; une clé sous le plancher ne chiffre pas ; IV différent à chaque chiffrement ; sel inchangé tant que le mot de passe ne change pas ; la clé gardée déchiffre la publication suivante (§ 7.1), et un sel renouvelé la rend inutilisable ; normalisation du mot de passe : NFC, espaces de bord, **minuscules** (« İ » compris), la même clé quelle que soit la casse ; une banque chiffrée sous la forme exacte reste lisible avec le mot de passe tel qu'il se saisissait, et la clé rendue republie sous la même forme ; 8 signes au moins, sans autre exigence ; coffre : seule une clé AES-GCM non extractible, clés réelle et de démonstration séparées, jeton à part (§ 7.2) |
-| Publication | `fetch` simulé, **aucun appel réel à GitHub** : adresses, en-têtes et corps de la requête ; auteur et committer explicites, en adresse privée (§ 8.2) ; **première publication** : fichier absent, réponse 404, écriture sans `sha` ; mise à jour avec le `sha` lu ; refus pour `sha` périmé (409, ou 422 sans `sha`) : rechargement, nouvelles différences, nouvelle confirmation ; clé refusée (401), droits, réseau, JSON illisible, réponse qui n'est pas du JSON : un message ; écriture acceptée au corps perdu : un succès ; trois refus 422 : le motif du dernier ; contenu de plus d'un mégaoctet relu en brut. Lot 2 bis : la clé de dépôt ajoutée, gardée, remplacée, retirée, en fin de banque et seulement avec une valeur ; une forme invalide refusée sans recopier la saisie ; jamais dans le message de commit ni en clair dans une requête ; la clé GitHub de l'auteur refusée comme clé de dépôt, saisie comme publiée ; le changement de mot de passe en un seul commit Git Data (banque, personnages rechiffrés, déchiffrables avec la nouvelle clé et plus avec l'ancienne, autres champs gardés, index aux versions nouvelles ; branche lue sans cache, avance sans forcer, auteur et committer explicites) ; un refus d'avance relance tout et rechiffre le personnage rangé entre-temps ; une avance sans réponse : succès si la branche relue est sur le commit écrit, panne sinon, `incertain` si la relecture tombe aussi ; autre clé, fichier reçu entier mais abîmé, ou trop gros : laissés et comptés, index abîmé régénéré ; réponse illisible, coupée ou inattendue sur un personnage ou l'index, arbre tronqué, clé refusée, droits, réseau, 409 : un message, rien d'écrit ; la reprise avec l'ancien mot de passe (minuscules puis forme exacte), en un seul commit sans la banque |
+| Publication | `fetch` simulé, **aucun appel réel à GitHub** : adresses, en-têtes et corps de la requête ; auteur et committer explicites, en adresse privée (§ 8.2) ; **première publication** : fichier absent, réponse 404, écriture sans `sha` ; mise à jour avec le `sha` lu ; refus pour `sha` périmé (409, ou 422 sans `sha`) : rechargement, nouvelles différences, nouvelle confirmation ; clé refusée (401), droits, réseau, JSON illisible, réponse qui n'est pas du JSON : un message ; écriture acceptée au corps perdu : un succès ; trois refus 422 : le motif du dernier ; contenu de plus d'un mégaoctet relu en brut. Lot 2 bis : la clé de dépôt ajoutée, gardée, remplacée, retirée, en fin de banque et seulement avec une valeur ; une forme invalide refusée sans recopier la saisie ; jamais dans le message de commit ni en clair dans une requête ; la clé GitHub de l'auteur refusée comme clé de dépôt, saisie comme publiée ; le changement de mot de passe en un seul commit Git Data (banque, personnages rechiffrés, déchiffrables avec la nouvelle clé et plus avec l'ancienne, autres champs gardés, index aux versions nouvelles ; branche lue sans cache, avance sans forcer, auteur et committer explicites) ; un refus d'avance relance tout et rechiffre le personnage rangé entre-temps ; une avance sans réponse : succès si la branche relue est sur le commit écrit, panne sur le commit lu, `incertain` sur un autre commit ou si la relecture tombe aussi ; autre clé, fichier reçu entier mais abîmé, ou trop gros : laissés et comptés, index abîmé régénéré ; réponse illisible, coupée ou inattendue sur un personnage ou l'index, arbre tronqué, clé refusée, droits, réseau, 409 : un message, rien d'écrit ; la reprise avec l'ancien mot de passe (minuscules puis forme exacte), en un seul commit sans la banque |
 | Dépôt | aucun `.xlsx` hors `essais/`, et chaque `.xlsx` d'`essais/` fabriqué, octet pour octet, par l'outil des essais ; le `.gitignore` ignore les classeurs, leurs formats voisins, les documents et tout JSON hors liste ; aucun autre format de classeur ou de document, aucun JSON hors liste (le personnage de démonstration y entre) ; une seule page (`index.html`), une seule image SVG (l'icône) ; dans tout l'historique, aucun fichier interdit et aucun jeton, chaque contenu lu une seule fois (un historique de 900 révisions se lit, là où la ligne de commande de Windows n'en passerait que quelque 790) ; un jeton écrit en UTF-16 se voit, dans l'arbre comme dans l'historique ; deux workflows et eux seuls : « Contrôles » (actions fixées sur un commit avec leur version, `contents: read`, aucune écriture, `persist-credentials: false`, ni `pull_request_target` ni `workflow_run`, ni texte d'un événement) et « Personnages » (les mêmes règles, et son texte exact, ligne utile par ligne utile : l'ouverture d'un ticket et le lancement à la main pour seuls déclencheurs, `contents: read` au workflow, le groupe `personnages` sans annulation, un seul job sur `ubuntu-latest`, `contents`, `issues` et `pages` en écriture à ce seul job, les actions de « Contrôles » sur les mêmes commits, une seule commande, l'automate, le jeton pour seule expression ; la faute donne le numéro de ligne, jamais la ligne trouvée), chacun vu refusé sur des variantes fautives (dont un interpréteur, `NODE_OPTIONS`, un conteneur, une autre machine, un second checkout) ; `personnages/` ne contient que `<identifiant>.chiffre.json` et `index.json`, dans l'arbre comme dans l'historique ; chaque fichier se lit par le vérificateur de la page, sous l'identifiant de son chemin, et son contenu ne se lit pas comme du texte ; l'index se lit, **sans aucun nom en clair**, et dit exactement les fichiers présents, avec leur date et leur version ; le `.gitignore` ignore tout autre fichier de `personnages/` ; **aucun `.docx`** ; `donnees/` (quelle que soit la casse) ne contient que `banque.chiffree.json`, sans autre champ que ceux du § 7.1, aux valeurs du § 7.1 (600 000 itérations, sel de 16 octets, IV de 12), au format 2 seulement (l'empreinte est vérifiée sur les octets chiffrés ; le format 1 n'est plus permis nulle part, pas même au fichier du 29/09/2026), et des données qui ne se lisent pas comme du texte ; la banque d'`essais/` a la même forme, au format 2 ; le fichier figé du format 1, retiré, n'est permis que dans l'historique ; le crochet `pre-push` existe, en `sh`, exécutable, extrait en LF, et `core.hooksPath` le désigne sur le poste (pas sur GitHub Actions, qui n'envoie rien) ; un envoi vers un dépôt d'essai est refusé quand un contrôle échoue (même avec `NODE_TEST_CONTEXT` hérité), quand tout n'est pas commité, ou sans `node`, et accepté sinon ; aucun **jeton GitHub entier** : un préfixe (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`) suivi d'au moins 36 caractères alphanumériques ou soulignés, le contrôle fabriquant son faux jeton au moment de l'essai ; dans l'historique, des **auteurs** en `…@users.noreply.github.com`, des **committers** aussi ou en `noreply@github.com` (commits faits sur le site de GitHub), la ligne `Co-Authored-By` d'un message n'étant pas une adresse d'auteur ; ni `innerHTML`, ni `outerHTML`, ni `insertAdjacentHTML`, ni `document.write` dans les fichiers du site et dans `outils/` (§ 10.1) |
 | Différences | ajout, modification champ par champ, retrait ; variantes de puissance ; ordre des lignes et écriture d'une même notation sans effet ; doublons ; résumé d'une ligne et ses accords ; dates ; le type d'un bloc, et une banque publiée avant la colonne « Type » |
 | Préparation | première publication, mise à jour sous le même secret ; mot de passe à choisir, à saisir ou changé ; E1 refusé ; changement de mot de passe ; la clé de dépôt suivie d'une publication à l'autre ; circuit complet, de l'import à la lecture par un joueur |
-| En ligne | les trois formats du § 15.8 dans les deux sens : personnage chiffré, ticket, fichier rangé, déchiffré, le même personnage ; aucun nom en clair dans le ticket, le fichier ni l'index ; seul un personnage enregistré, de la banque réelle, part ; « supprimer » sans personnage ; un ticket hostile (JSON, tableau, champ en plus, `__proto__`, format, action, identifiant hostile, date locale ou impossible, sel, IV, contenu, base64 sans remplissage ou url, signe non ASCII, trop gros) refusé avec une raison ; un personnage trop gros pour un ticket ne part pas ; un chiffré recopié sous un autre identifiant, ou d'une autre clé, ne se lit pas ; le contenu déchiffré hostile (bombe, format, UTF-8, autre identifiant, brouillon, démonstration) refusé ; l'index trié, trois champs, un doublon de casse refusé ; le rechiffrement sans lecture. La page : la démonstration ne dépose ni ne lit rien ; sans clé de dépôt, « non envoyé » et sa raison ; le ticket ouvert avec la clé, le sel de la banque en place vérifié d'abord ; les refus de GitHub (401, 403, 404, 410, 422, réseau) laissent « non envoyé », « Réessayer » le refait ; l'index lu sans cache, chaque fichier par sa version, une seconde lecture sans nouvelle requête ; une ancienne clé et un fichier hostile comptés à part ; le rapprochement (rattrapé, attente, retard, suppression) |
+| En ligne | les trois formats du § 15.8 dans les deux sens : personnage chiffré, ticket, fichier rangé, déchiffré, le même personnage ; aucun nom en clair dans le ticket, le fichier ni l'index ; seul un personnage enregistré, de la banque réelle, part ; « supprimer » sans personnage ; un ticket hostile (JSON, tableau, champ en plus, `__proto__`, format, action, identifiant hostile, date locale ou impossible, sel, IV, contenu, base64 sans remplissage ou url, signe non ASCII, trop gros) refusé avec une raison ; un personnage trop gros pour un ticket ne part pas ; un chiffré recopié sous un autre identifiant, ou d'une autre clé, ne se lit pas ; le contenu déchiffré hostile (bombe, format, UTF-8, autre identifiant, brouillon, démonstration) refusé ; l'index trié, trois champs, un doublon de casse refusé ; le rechiffrement sans lecture. La page : la démonstration ne dépose ni ne lit rien ; sans clé de dépôt, « non envoyé » et sa raison ; le ticket ouvert avec la clé, le sel de la banque en place vérifié d'abord ; les refus de GitHub (401, 403, 404, 410, 422, réseau) laissent « non envoyé », « Réessayer » le refait ; l'index lu sans cache, chaque fichier par sa version, une seconde lecture sans nouvelle requête ; une ancienne clé et un fichier hostile comptés à part, un mot de passe changé pendant la visite distingué d'une ancienne clé ; GitHub Pages en retard juste après un changement fait d'ici ne bloque pas le dépôt, une page en retard, si ; une version en ligne plus récente arrête l'envoi, sauf confirmation ; une lecture échouée n'est pas un personnage absent ; le rapprochement (rattrapé, attente, retard, suppression gardée tant que l'index ne se lit pas, copie plus ancienne qui ne cache pas la version en ligne) |
 | Automate | lancé hors de GitHub, sur une simulation de l'API et de vrais dépôts git jetables : un ticket « creer » conforme rangé (fichier qui se déchiffre, index, commit du robot aux deux seuls chemins, message sans nom, ticket fermé et verrouillé, Pages demandée) ; « remplacer », ticket repassé sans effet (même deux tickets rejoués, déjà rangés : aucun commit), « supprimer », suppression d'un absent, passage sans ticket ; tickets non conformes (JSON illisible, autre titre, identifiant hostile ou en forme de jeton, trop gros, base64 faux, contenu en clair, sel périmé, corps vide, champ en plus, commandes de shell et chemins) fermés avec leur raison, sans rien recopier, écrire ni exécuter ; collision de casse ; inconnu (autre login, ou même login d'un autre compte) fermé et verrouillé sans commentaire, même quand la partie git s'arrête ; avalanche d'inconnus au-delà de la limite de pages : les plus anciens fermés, les autres au passage suivant, les tickets du propriétaire lus à part et rangés ; demande de fusion ignorée ; envoi refusé puis réussi, tickets rejugés sur la banque republiée ; cinq refus : aucun ticket du propriétaire fermé ; fichier illisible, intrus, ou `.gitignore` qui cache les fichiers rangés : arrêt sans commit ni fermeture ; chemin hors de `personnages/` : arrêt avant l'envoi ; la variable du jeton ôtée de toute commande git, le jeton à la seule commande d'envoi, jamais sur le disque ; Pages refusée ; lancé à la main, l'automate redemande Pages ; l'API et l'environnement de GitHub Actions. Aucun nom en clair nulle part |
 | Routes et fiches | décodage des adresses de fiche (`#/capacite/Attaque%20de%20base`) et aller-retour des noms difficiles ; la fiche et la liste des blocs montrent leur type ; adresses abîmées, dont les noms d'`Object.prototype` ; un nom introuvable n'est jamais le titre ; recherche sans casse ni accents, sur les noms et les descriptions ; renvois résolus comme au contrôle ; « octroyée par », « porté par », nom affiché ; anomalies d'une ligne |
 | Site | politique de sécurité du `<meta>`, avant scripts et styles, toute la table des directives et rien d'autre ; zoom permis ; ni script, ni style, ni gestionnaire en ligne ; chaque fichier appelé existe ; le graphe des modules se résout et atteint les douze écrans ; manifeste, couleurs des jetons, icônes aux tailles dites, telles que les dessine leur outil ; contrastes ; valeurs de `ecran.css` et de `personnage.css` tirées des jetons, aucune police téléchargée par l'interface ; la banque de démonstration, au format 2, se déchiffre et vient du classeur d'essai ; le mot de passe de démonstration, déjà en minuscules, saisi en majuscules, ouvre la banque, et la clé gardée la rouvre ; le format 1 ne s'ouvre plus ; au téléchargement, une empreinte de format 2 fausse et un format plus récent donnent leur message ; le diagnostic dit le format ; chargement : absente, présente, abîmée, `?v=`, clé gardée, mot de passe requis ou changé, stockage durable ; l'attente du mot de passe ne dépend pas de la peinture de la fenêtre ; le déverrouillage n'attend pas la réponse sur le stockage durable ; sans IndexedDB, la phrase au lieu de la case ; une erreur inattendue : un message. Dans un document simulé : le bouton « Publier » existe dans chaque état de l'espace auteur, et sa raison s'affiche ; la barre de publication reste collée au bas de l'écran ; « Oublier le mot de passe » ne laisse ni clé ni différences, même pendant une comparaison ; « Oublier la clé GitHub » annule la publication en attente ; « Se souvenir » décide de garder la clé ; la veille de 15 secondes, et rien sur une page chargée ; l'aide dit d'ajouter l'Atelier depuis son accueil ; `dom.js` refuse gestionnaires en texte, `style`, `srcdoc` et adresses étrangères ; le document simulé refuse d'ajouter null ou undefined, que le navigateur afficherait. L'espace auteur (lot 2 bis) : la section de la clé de dépôt (aide, état, saisie vérifiée ; la clé jamais à l'écran, dans un attribut ou un champ, ni gardée ; retirer, garder ; oubliée avec le mot de passe, et après une publication réussie ; la clé GitHub de l'auteur refusée ; une phrase en démonstration) ; le mot de passe : 7 signes refusés, 8 acceptés, deux saisies qui ne diffèrent que par la casse acceptées ; le changement compte les personnages avant l'envoi, puis écrit un seul commit ; s'il en laisse sous une autre clé, la section « Personnages en ligne » les montre aussitôt, avec la reprise ; une avance sans réponse : « Publiée » si la branche a avancé, sinon l'incertitude dite, et l'ancienne clé reste ; la vérification n'écrit rien, la reprise rechiffre. Le serveur local : la seule machine, les seuls fichiers du site, dont les polices, le personnage de démonstration et `personnages/` sous ses deux seules formes, casse comprise |
-| Personnage | chaque règle du § 15.2 : la table des dés, bornes comprises ; les paires d'attaque et de défense ; les types mêlés et le cas sans armure ; l'ordre des zones, la grille et le maximum par zone, et l'interdiction du livret ; la qualité (X, 1, 2, 3, 1,5) et l'arrondi une fois l'opération faite, dont un cas où la virgule flottante se tromperait ; les expressions et leurs refus ; l'expression de mains nues et son dé vide ; le coût à la puissance ; les coûts 1, 3 et 6, le plafond de 10, le reliquat, les capacités reçues au-delà de 10 ; la capacité reçue deux fois ; le niveau 0 et les capacités à venir hors décompte ; les groupes ( ) et [ ], un choix disparu ; le style de combat ; le tirage (chaque constellation atteignable, rejet des valeurs biaisées) ; les points de lien ; la banque sans types ; les choix modifiés ou disparus ; ce qui manque à chaque étape, un bloc d'un autre type. Le format : aller-retour du fichier, champ inconnu ou manquant, `__proto__`, chaque champ et ses bornes, 64 Ko, JSON illisible, mode inversé, nom de fichier sûr ; le lien : aller-retour dans le fragment, lien abîmé, forgé, bombe de décompression, UTF-8 invalide, mode inversé. L'étagère : modes séparés, ordre, illisibles comptés, un personnage du format 1 converti, les notes. Le format 2 (lot 2 bis) : les places d'un objet, une seule arme tenue, les tirages ; le format 1 converti (arme principale, bouclier, armures portées, tirage) ou refusé s'il est abîmé ; un personnage neuf à 2 partout. Les places dans le calcul : pièces du pack portées, bouclier équipé (un seul), rangés sans effet ; le parcours signale une place fautive. Les adresses des écrans du personnage. La répartition du recto et son débordement ; le recto et le verso dans un document simulé (en-tête, cases cochées et grisées, reliquat, souffle, zones, corps, équipement, liens, légende, pied de page, suite du recto, toutes les capacités et les armes, un nom en HTML qui reste du texte) ; l'impression (A4 sans marge, couleurs, saut de page, barre non imprimée) ; les polices hébergées et leurs licences ; le personnage de démonstration, fabriqué par son outil et complet. Les écrans : liste, parcours, réception, fiche (vues, impression, banque sans types). Le parcours du lot 2 bis : les descriptions, dépliées sur grand écran et repliées sur téléphone ; les boutons + et − des caractéristiques (de 2 à 6, « + » arrêté à 36, le focus qui passe au voisin) ; le tirage refait et compté, la saisie ; l'arme tenue remplacée, les packs (un seul à la fois, la pièce portée seule renvoyée au sac), un pack non proposé (A10) avec sa raison, tous les objets au sac, qualité 2, la pièce refusée sur une zone couverte, un seul bouclier, l'arme prise en main ; l'étape 8 : seules les capacités qui peuvent évoluer, + et − dans les bornes, la raison d'un « + » inactif, avant et après ; « Modifier » : la copie de travail, reprise, « Enregistrer » à la place de l'original, « Enregistrer sous un autre nom » (un autre nom exigé) ; l'enregistrement dépose (« creer », « remplacer »). La liste en ligne : les rubriques, l'attente, « Réessayer », « Supprimer » pour tous, « Modifier » d'un personnage en ligne, la phrase de la démonstration. La fiche : la qualité des objets (saisie fautive refusée, redépôt), « Modifier », un personnage ouvert depuis le site, « tirée N fois ». La mise en page se mesure dans un vrai navigateur (§ 15.4) |
+| Personnage | chaque règle du § 15.2 : la table des dés, bornes comprises ; les paires d'attaque et de défense ; les types mêlés et le cas sans armure ; l'ordre des zones, la grille et le maximum par zone, et l'interdiction du livret ; la qualité (X, 1, 2, 3, 1,5) et l'arrondi une fois l'opération faite, dont un cas où la virgule flottante se tromperait ; les expressions et leurs refus ; l'expression de mains nues et son dé vide ; le coût à la puissance ; les coûts 1, 3 et 6, le plafond de 10, le reliquat, les capacités reçues au-delà de 10 ; la capacité reçue deux fois ; le niveau 0 et les capacités à venir hors décompte ; les groupes ( ) et [ ], un choix disparu ; le style de combat ; le tirage (chaque constellation atteignable, rejet des valeurs biaisées) ; les points de lien ; la banque sans types ; les choix modifiés ou disparus ; ce qui manque à chaque étape, un bloc d'un autre type. Le format : aller-retour du fichier, champ inconnu ou manquant, `__proto__`, chaque champ et ses bornes, 64 Ko, JSON illisible, mode inversé, nom de fichier sûr ; le lien : aller-retour dans le fragment, lien abîmé, forgé, bombe de décompression, UTF-8 invalide, mode inversé. L'étagère : modes séparés, ordre, illisibles comptés, un personnage du format 1 converti, les notes ; une base bloquée par un autre onglet : l'étagère en mémoire et la raison, sans attendre. Le format 2 (lot 2 bis) : les places d'un objet, une seule arme tenue, les tirages ; le format 1 converti (arme principale, bouclier, armures portées, tirage) ou refusé s'il est abîmé ; un personnage neuf à 2 partout. Les places dans le calcul : pièces du pack portées, bouclier équipé (un seul), rangés sans effet ; le parcours signale une place fautive. Les adresses des écrans du personnage. La répartition du recto et son débordement ; le recto et le verso dans un document simulé (en-tête, cases cochées et grisées, reliquat, souffle, zones, corps, équipement, liens, légende, pied de page, suite du recto, toutes les capacités et les armes, un nom en HTML qui reste du texte) ; l'impression (A4 sans marge, couleurs, saut de page, barre non imprimée) ; les polices hébergées et leurs licences ; le personnage de démonstration, fabriqué par son outil et complet. Les écrans : liste, parcours, réception, fiche (vues, impression, banque sans types). Le parcours du lot 2 bis : les descriptions, dépliées sur grand écran et repliées sur téléphone ; les boutons + et − des caractéristiques (de 2 à 6, « + » arrêté à 36, le focus qui passe au voisin) ; le tirage refait et compté, la saisie ; l'arme tenue remplacée, les packs (un seul à la fois, la pièce portée seule renvoyée au sac), un pack non proposé (A10) avec sa raison, tous les objets au sac, qualité 2, la pièce refusée sur une zone couverte, un seul bouclier, l'arme prise en main ; l'étape 8 : seules les capacités qui peuvent évoluer, + et − dans les bornes, la raison d'un « + » inactif, avant et après, le focus gardé sur le bouton actionné ; les descriptions gardent leur état quand l'étape se redessine ; « — choisir — » ne défait pas la constellation ; le catalogue des armes, l'objet décrit avant d'être ajouté, un refus dit près de l'objet et le focus sur lui ; « Modifier » : la copie de travail, reprise, « Enregistrer » à la place de l'original, « Enregistrer sous un autre nom » (un autre nom exigé) ; l'enregistrement dépose (« creer », « remplacer »). La liste en ligne : les rubriques, l'attente, « Réessayer », « Supprimer » pour tous, « Modifier » d'un personnage en ligne, la phrase de la démonstration ; le mot de passe changé pendant la visite, une suppression dont le personnage ne se lit plus, une copie plus ancienne (« Envoyer quand même », « Retirer de l'appareil »), une base bloquée. La fiche : la qualité des objets (saisie fautive refusée, redépôt, panneau resté ouvert, focus sur la confirmation, deux objets de même nom distingués), « Modifier », un personnage ouvert depuis le site, ou dont la lecture échoue (« Réessayer »), « tirée N fois ». La mise en page se mesure dans un vrai navigateur (§ 15.4) |
 
 Les contrôles du dépôt portent sur les fichiers suivis et sur ceux que Git
 suivrait, c'est-à-dire non ignorés : une faute se voit avant d'être commitée.
@@ -1411,9 +1419,64 @@ relus. Ce qui reste à l'auteur : les essais du compte rendu (Firefox,
 téléphone, site en ligne), la republication de la banque réelle depuis le
 classeur à jour (le créateur en a besoin), et les points du § 12.
 
+**Le lot 2 bis est livré** (30/09/2026, spécification 1.2), d'un seul
+tenant, selon l'instruction du 30/09/2026 (`plans/instruction_lot2bis.md`),
+sans validation entre ses étapes. Les étapes : une étude à quatre agents,
+au début, en guise de revue de sécurité ; E7 assoupli, A10, le format 1
+retiré, le mot de passe à 8 signes et sans casse, les formats en ligne ;
+puis, en deux pistes menées par des agents et relues, l'automate et son
+workflow, la clé de dépôt et le rechiffrement ; le parcours amélioré et les
+personnages en ligne ; la relecture finale à quatre angles ; la
+spécification 1.2. Ce qui reste à l'auteur, et à lui seul : créer le jeton
+de dépôt, le saisir dans l'espace auteur, changer le mot de passe de table
+(ce qui publie la banque avec la clé de dépôt), puis les essais du compte
+rendu (`plans/compte_rendu_lot2bis.md`).
+
 ---
 
 ## 14. Révisions
+
+**1.2 — 30/09/2026.** Lot 2 bis : les améliorations du créateur, les
+personnages en ligne.
+
+- Décisions de l'auteur du 30/09/2026 (§ 1, § 2) ; interdits 2 et 3 (§ 0)
+  et `CLAUDE.md` : la clé de dépôt ne vit que dans la banque chiffrée ;
+  `git pull --rebase` avant d'envoyer, l'automate commitant aussi ; les
+  mutations se lancent sur une copie hors de OneDrive.
+- Le contrôle : E7 assoupli (un paramètre ciblé à côté du même sans cible
+  est admis ; deux sans cible, ou la même cible deux fois, restent une
+  erreur ; E4 vérifie toujours la cible) ; A10, deux pièces d'armure d'un
+  même type sur une zone, avertissement : le pack de ce type n'est pas
+  proposé ; dix-neuf codes (§ 6.3 ; § 12, l'entrée E7 du lot 1 tranchée).
+- Le mot de passe : 8 signes au moins, sans autre exigence ; sans casse
+  (NFC, espaces de bord, minuscules), avec un repli sur la forme exacte,
+  qui garde lisible la banque en place ; le risque accepté, écrit, et le
+  conseil de deux ou trois mots sans rapport (§ 7.1, § 7.3, § 9). Le format
+  1 de la banque ne se lit plus (§ 7.1, § 11).
+- Le personnage au format 2 : la place de chaque objet (arme, pack, équipé,
+  sac), les tirages de la constellation, la conversion du format 1 ; les
+  notes de l'appareil (§ 15.1). Les règles : qualité 2 à la création, le
+  tirage refait, le pack d'armure (§ 15.2 ; § 12, trois entrées). Le
+  parcours : les descriptions partout, les boutons + et −, l'équipement en
+  trois entrées, l'étape 8 réduite aux capacités qui peuvent évoluer, avec
+  leur description avant et après (demande de l'auteur), « Modifier » et
+  ses deux enregistrements ; « Personnages » ; la qualité des objets sur la
+  fiche (§ 15.3).
+- Les personnages en ligne (§ 15.8, nouveau) : le chiffré, le ticket, le
+  fichier rangé, l'index ; l'automate et son workflow, avec `pages: write`
+  (§ 10.2 : les envois faits avec le jeton d'un workflow ne déclenchent pas
+  GitHub Pages) ; la clé de dépôt, le changement de mot de passe en un seul
+  commit qui rechiffre les personnages, la vérification et la reprise
+  (§ 5.1, § 8.4, nouveau) ; `.gitignore` (§ 10.3), fichiers (§ 3.2),
+  serveur local ; contrôles (§ 11 : 318 contrôles).
+- Relectures : l'étude du début (4 agents) ; les deux pistes, chacune
+  relue (6 agents) ; la relecture finale à quatre angles (sécurité de la
+  file, conformité au livret, ergonomie du téléphone, rechiffrement), par
+  35 agents : 30 constats, 20 confirmés par un sceptique, tous corrigés
+  (§ 8.4, § 15.1, § 15.3, § 15.8 ; § 7.3, le pouvoir exact de la clé de
+  dépôt). Mesures : 62 mutations du lot, une équivalente, et 25 des
+  corrections, vues échouer ; le banc sur le classeur réel (§ 15.2).
+
 
 **1.1 — 30/09/2026.** Lot 2 : le créateur de personnage.
 
@@ -1594,10 +1657,13 @@ réel et un pour la démonstration : ils ne se mêlent jamais (`stockage.js`).
 Depuis le lot 2 bis (version 2 de la base), un troisième entrepôt,
 « notes », garde ce que l'appareil sait d'un personnage hors de son
 format : l'original d'une copie de travail (« Modifier ») et l'état de son
-dépôt en ligne (§ 15.8) ; une note illisible s'ignore. La montée de version
-ne fait qu'ajouter cet entrepôt : les personnages gardés restent. Sans
-IndexedDB, les personnages vivent en mémoire le temps de la visite, et
-l'écran le dit. Dans un **fichier** `*.arpenteur.json`, que l'on enregistre
+dépôt en ligne (§ 15.8), avec le nom du personnage, pour dire encore de quoi
+il s'agit quand le personnage ne se lit plus ; une note illisible s'ignore.
+La montée de version ne fait qu'ajouter cet entrepôt : les personnages
+gardés restent. Un autre onglet, resté sur la version précédente, bloque la
+montée : la page ne l'attend pas, les personnages vivent en mémoire, et la
+liste dit de fermer cet onglet puis de recharger. Sans IndexedDB, les
+personnages vivent en mémoire le temps de la visite, et l'écran le dit. Dans un **fichier** `*.arpenteur.json`, que l'on enregistre
 et que l'on importe. Dans un **lien « Ouvrir sur mon téléphone »**, qui
 porte le personnage dans l'adresse elle-même, sans serveur. Et **en ligne**,
 chiffré, visible par tous les joueurs qui ont le mot de passe (§ 15.8). Le
@@ -1702,9 +1768,14 @@ mutations des règles, du format et du lien, désarmées une à une, font
 niveau 0, dont le coût est nul). Au lot 2 bis, 62 mutations de plus (E7,
 A10, packs, format 2 et sa conversion, places, parcours, dépôt en ligne,
 mot de passe), une survivante équivalente (la borne de 6 d'une
-caractéristique, que le bouton inactif et le format gardent déjà). Banc du 30/09/2026 sur le classeur réel,
-hors dépôt : les 320 combinaisons d'archétype, d'espèce et de primordial
-se calculent sans manque ni exception.
+caractéristique, que le bouton inactif et le format gardent déjà), et 25
+pour les corrections de la relecture finale, toutes vues échouer. Banc du
+29/09/2026 sur le classeur réel, hors dépôt : les 320 combinaisons
+d'archétype, d'espèce et de primordial se calculent sans manque ni
+exception ; au banc du 30/09/2026 (lot 2 bis), 1 280 combinaisons, avec
+l'arme et les packs, aucun E7 ni A10, les packs lourd, agile et précis
+proposés (6, 6 et 5 pièces), 108 descriptions évaluées sans crochet
+restant.
 
 ### 15.3 Le parcours et les écrans
 
@@ -1721,7 +1792,12 @@ version), enregistrer le fichier, importer un fichier, ouvrir sur mon
 téléphone ; en démonstration, « Ajouter le personnage de démonstration », et
 la phrase « La démonstration ne dépose rien en ligne ». Les personnages
 illisibles, de l'appareil ou du site, sont comptés, jamais montrés ; ceux
-d'une ancienne clé de table aussi, à part. Un personnage déjà
+d'une ancienne clé de table aussi, à part ; un mot de passe changé pendant
+la visite se dit (« rechargez la page »). Une copie de l'appareil plus
+ancienne que la version en ligne se montre avec « Envoyer quand même »
+(après confirmation) et « Retirer de l'appareil » ; une suppression qui
+n'est pas partie, avec le nom gardé par sa note et « Réessayer ». Un
+personnage déjà
 présent (même identifiant) : la question montre les deux versions (nom,
 état, date), et dit en clair quand la version reçue est un brouillon face
 à une version enregistrée, ou plus ancienne ; remplacer est définitif.
@@ -1737,7 +1813,10 @@ champ sous le pli. **Partout où le joueur choisit, chaque capacité en jeu
 se présente avec sa description**, ses `[N]` et expressions évalués au
 niveau 1, avec les caractéristiques du personnage et les paramètres du bloc
 qui la donne (`descriptionA`) : dépliée sur un grand écran, à déplier sous
-son nom sur un téléphone. 1. Identité (nom obligatoire ; âge, description,
+son nom sur un téléphone ; une description ouverte ou fermée le reste quand
+l'étape se redessine, et le focus va au bouton actionné, ou à son voisin
+quand il devient inactif. Un refus (une pièce qui ne se porte pas) se dit
+près de ce qui l'a causé, et le focus y va. 1. Identité (nom obligatoire ; âge, description,
 histoire). 2. Caractéristiques : toutes à 2 au départ, des **boutons + et
 −** de 2 à 6, la somme en direct (36 exigés : « + » s'arrête à 36), l'aperçu
 des dés. 3. Archétype : chaque archétype avec ses capacités décrites, puis
@@ -1746,9 +1825,11 @@ combat » ou « Maîtrise » d'après la convention du § 15.2. 4. Espèce, de
 même. 5. Constellation : « Tirer au sort » (`crypto.getRandomValues`, sans
 biais : les valeurs au-delà du dernier multiple sont rejetées), puis
 « Refaire le tirage », à volonté, chaque tirage compté ; ou « Saisir le
-tirage fait à la table » (marqué « saisie à la main » sur la fiche). 6.
+tirage fait à la table » (marqué « saisie à la main » sur la fiche) ;
+revenir à « — choisir — » ne défait rien. 6.
 Primordial, décrit, puis ses groupes. 7. Équipement, en **trois entrées** :
-« Arme », une seule, tenue d'office (changer d'arme la remplace) ; « Pack
+« Arme », une seule, tenue d'office (changer d'arme la remplace), avec le
+catalogue replié des armes et de ce qu'elles donnent ; « Pack
 d'armure », un par type, formé de toutes les pièces de ce type, portées
 d'office, un type à deux pièces sur une zone proposé inactif avec sa raison
 (A10) ; « Tous les objets », armes, pièces isolées, bouclier, consommables
@@ -1756,7 +1837,8 @@ et équipement, **rangés dans le sac** : une pièce se porte si aucune pièce
 portée ne couvre déjà ses zones, un bouclier s'équipe (un seul), une arme
 se prend en main à la place de l'arme tenue. Qualité 2 d'office, sans
 champ : elle se change sur l'écran du personnage. Chaque objet montre les
-capacités qu'il donne, décrites. 8. Capacités : **seules celles qui peuvent
+capacités qu'il donne, décrites, et l'objet choisi dans la liste se décrit
+avant d'être ajouté. 8. Capacités : **seules celles qui peuvent
 évoluer** (demande de l'auteur, 30/09/2026), même quand les points
 manquent, avec des **boutons + et −** dans les bornes (plafond de 10,
 niveau 3), la raison d'un « + » inactif (« il manque 2 point(s) »), et leur
@@ -1783,9 +1865,12 @@ garde que « Enregistrer le fichier » et « Supprimer ».
 lecture ou vue fiche, « Imprimer / PDF », « Enregistrer le fichier »,
 « Ouvrir sur mon téléphone », « Reprendre la création » pour un brouillon,
 « Modifier » pour un enregistré, et « Qualité des objets » (un champ par
-objet dont le classeur ne fixe pas la qualité ; « Enregistrer les
-qualités » garde le personnage et, en ligne, le redépose). Un personnage
-absent de l'appareil s'ouvre depuis le site (« · en ligne »). Le pied de la
+objet dont le classeur ne fixe pas la qualité, deux objets de même nom
+distingués par leur rang, « (objet 2) » ; « Enregistrer les qualités »
+garde le personnage et, en ligne, le redépose ; le panneau reste ouvert, et
+le focus va à la confirmation). Un personnage absent de l'appareil s'ouvre
+depuis le site (« · en ligne ») ; une lecture en ligne qui échoue le dit,
+avec « Réessayer », sans le déclarer introuvable. Le pied de la
 fiche dit « constellation tirée N fois » ou « saisie à la main ».
 
 **La réception** (`#/recevoir/<code>`, `js/ecrans/reception.js`) : § 15.1.
@@ -2021,24 +2106,40 @@ rattrape ses tickets.
 (« creer », ou « remplacer » pour une copie de travail enregistrée à la
 place de l'original, § 15.3), au changement des qualités, et à « Supprimer »
 d'un personnage en ligne. Avant d'ouvrir un ticket, la page relit sans cache
-l'en-tête de la banque en place : si son sel n'est plus celui de sa clé, le
-mot de passe de table a changé, et rien ne part (« rechargez la page »).
+l'en-tête de la banque en place : si son sel n'est plus celui de sa clé, et
+que cette banque n'est pas plus ancienne que celle de la page, le mot de
+passe de table a changé, et rien ne part (« rechargez la page »). Plus
+ancienne (juste après un changement fait de cet appareil, GitHub Pages en
+retard), c'est le site qui est en retard : le dépôt part, et l'automate juge
+sur la banque du dépôt. Une version en ligne plus récente que la copie de
+l'appareil, connue de la page, arrête l'envoi (« l'envoyer la
+remplacerait ») ; le joueur peut l'envoyer quand même, après confirmation.
 **Lire** : l'index sans cache (`?v=<horodatage>`, `no-store`), puis chaque
 fichier par sa version (`?v=<version>`), vérifié, déchiffré, le personnage
 vérifié comme un fichier reçu (§ 15.6), du bon identifiant, enregistré, de
 la banque réelle ; une seconde lecture ne redemande pas un fichier de même
-version. Un fichier d'une ancienne clé et un fichier illisible se comptent
-à part. **Sur l'appareil**, une note garde l'état de chaque dépôt : « non
+version. Un fichier illisible se compte à part ; un fichier d'une autre clé
+aussi, de deux façons : si sa clé est celle de la banque en place, c'est le
+mot de passe qui a changé pendant la visite (« rechargez la page ») ; sinon,
+c'est un fichier d'une ancienne clé, pas encore rechiffré. Une fiche ouverte
+par son lien distingue « ni sur cet appareil, ni en ligne » d'une lecture
+qui a échoué (« ne se lit pas pour l'instant », avec « Réessayer »).
+**Sur l'appareil**, une note garde l'état de chaque dépôt : « non
 envoyé » (pas de réseau, clé révoquée, droits, dépôt pas encore ouvert),
 avec sa raison et « Réessayer » ; « envoyé » : le personnage reste sur
 l'appareil, « visible par tous d'ici quelques minutes », jusqu'à ce que la
 version en ligne le rattrape (sa date de modification au moins aussi
 récente) ; il quitte alors l'appareil. Au-delà de 15 minutes sans
-apparaître, il repasse sous « Réessayer ». Une suppression envoyée cache la
-version en ligne jusqu'à ce qu'elle quitte l'index ; sa note s'efface
-alors. Les brouillons restent locaux jusqu'à « Enregistrer ». **Le délai** :
-l'automate, puis GitHub Pages (une à deux minutes, puis jusqu'à dix minutes
-de cache, que l'adresse unique de l'index contourne).
+apparaître, il repasse sous « Réessayer ». Une copie de l'appareil plus
+ancienne que la version en ligne ne la cache pas : elle se montre à part,
+avec « Envoyer quand même » et « Retirer de l'appareil ». Une suppression
+envoyée cache la version en ligne jusqu'à ce qu'elle quitte l'index ; sa
+note, qui garde le nom du personnage, ne s'efface que si l'index s'est lu
+et ne porte plus l'identifiant : une suppression non envoyée se montre avec
+« Réessayer », même quand la version en ligne ne se lit pas. Les brouillons
+restent locaux jusqu'à « Enregistrer ». **Le délai** : l'automate, puis
+GitHub Pages (une à deux minutes, puis jusqu'à dix minutes de cache, que
+l'adresse unique de l'index contourne).
 
 **Sans clé de dépôt dans la banque** (tant que l'auteur ne l'a pas publiée),
 un personnage enregistré reste sur l'appareil, « non envoyé », avec la

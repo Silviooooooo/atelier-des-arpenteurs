@@ -9,7 +9,7 @@ import { importerFichier } from "../js/banque/importation.js";
 import { svg } from "../js/ecrans/dom.js";
 import { lireFichierChoisi, panneauTelephone } from "../js/ecrans/partage.js";
 import { TAILLE_MAX, lireCode } from "../js/personnage/format.js";
-import { creerEtagere, magasinPersonnagesMemoire } from "../js/personnage/stockage.js";
+import { creerEtagere, magasinPersonnagesMemoire, ouvrirEtagere } from "../js/personnage/stockage.js";
 import { adressePersonnage, lireRoute } from "../js/routes.js";
 import { installerDom, laisserFiler, texteDe } from "./outils/dom_simule.js";
 import { personnageEssai } from "./outils/personnage_essai.js";
@@ -239,7 +239,10 @@ test("écran de la fiche — la qualité des objets se change ici, objet par obj
     await laisserFiler(20);
     assert.equal((await etagere.lire(personnage.id)).equipement[1].qualite, "3");
     assert.deepEqual(envois.at(-1), ["envoyer", personnage.id, "remplacer", "3"]);
-    assert.match(texteDe(ecran), /Les qualités sont gardées\. Il part en ligne : visible par tous d'ici quelques minutes\./);
+    const panneau = ecran.querySelector(".qualites");
+    assert.notEqual(panneau.getAttribute("open"), null, "le panneau reste ouvert");
+    assert.match(texteDe(panneau.querySelector(".qualites-resultat")), /Les qualités sont gardées\. Il part en ligne : visible par tous d'ici quelques minutes\./);
+    assert.equal(document.activeElement, panneau.querySelector(".qualites-resultat").querySelector("p"), "le focus sur la confirmation");
     // « Modifier » : une copie de travail, puis le parcours.
     await Promise.all(ecran.querySelectorAll("button").find((b) => texteDe(b) === "Modifier").click());
     await laisserFiler(20);
@@ -257,7 +260,7 @@ test("écran de la fiche — un personnage qui n'est pas sur l'appareil s'ouvre 
     const etagere = creerEtagere(magasinPersonnagesMemoire(), "reel");
     const enLigne = personnageEssai((p) => Object.assign(p, { id: "AAAAAAAAAAAAAAAAAAAAAA", mode: "reel", etat: "enregistre", enregistre_le: "2026-09-30T10:00:00.000Z" }));
     const contexte = contexteDe(etagere);
-    contexte.etat = { ...contexte.etat, mode: "reel", depot: { lire: async (id) => (id === enLigne.id ? enLigne : null) } };
+    contexte.etat = { ...contexte.etat, mode: "reel", depot: { chercher: async (id) => (id === enLigne.id ? { personnage: enLigne } : { absent: true }) } };
     const ecran = fichePersonnage.afficher(contexte, { ecran: "personnage", id: enLigne.id });
     document.body.replaceChildren(ecran);
     await laisserFiler(20);
@@ -268,6 +271,14 @@ test("écran de la fiche — un personnage qui n'est pas sur l'appareil s'ouvre 
     document.body.replaceChildren(absent);
     await laisserFiler(20);
     assert.match(texteDe(absent), /Ce personnage n'est ni sur cet appareil, ni en ligne\./);
+    // Hors réseau : la lecture a échoué, le personnage n'est pas « introuvable ».
+    contexte.etat.depot = { chercher: async () => ({ erreur: "Pas de réseau : les personnages en ligne ne se lisent pas." }) };
+    const horsReseau = fichePersonnage.afficher(contexte, { ecran: "personnage", id: enLigne.id });
+    document.body.replaceChildren(horsReseau);
+    await laisserFiler(20);
+    assert.match(texteDe(horsReseau), /Ce personnage ne se lit pas pour l'instant : Pas de réseau/);
+    assert.doesNotMatch(texteDe(horsReseau), /introuvable|ni en ligne/);
+    assert.equal(horsReseau.querySelectorAll("button").filter((b) => texteDe(b) === "Réessayer").length, 1);
   } finally {
     retirer();
   }
@@ -290,4 +301,43 @@ test("étagère — un personnage du format 1 gardé sur l'appareil (lot 2) se l
   assert.equal(personnages[0].format, 2);
   assert.deepEqual(personnages[0].equipement.map((o) => o.place), personnageEssai().equipement.map((o) => o.place));
   assert.equal((await etagere.lire(reste.id)).constellation.tirages, 1);
+});
+
+test("écran de la fiche — deux objets de même nom ont deux champs de qualité distincts", async () => {
+  const retirer = installerDom();
+  try {
+    const etagere = creerEtagere(magasinPersonnagesMemoire(), "demo");
+    await etagere.garder(personnageEssai((p) => p.equipement.push({ nom: "Rouleau de fonte", choix: [], qualite: "2", place: "sac" })));
+    const ecran = fichePersonnage.afficher(contexteDe(etagere), { ecran: "personnage", id: "demo-aubepine-0000000001" });
+    document.body.replaceChildren(ecran);
+    await laisserFiler(20);
+    const libelles = ecran.querySelector(".qualites").querySelectorAll("label").map(texteDe);
+    assert.ok(libelles.includes("Rouleau de fonte (objet 2)") && libelles.includes("Rouleau de fonte (objet 10)"), libelles.join(" | "));
+  } finally {
+    retirer();
+  }
+});
+
+// Relecture du lot 2 bis : un onglet resté sur l'ancienne version garde sa
+// connexion à la base ; la montée à la version 2 est bloquée. La page ne
+// reste pas sur « Chargement » : l'étagère vit en mémoire et le dit.
+test("étagère — une base bloquée par un autre onglet : l'étagère en mémoire, et la raison, sans attendre", { timeout: 3000 }, async () => {
+  const avant = globalThis.indexedDB;
+  try {
+    globalThis.indexedDB = {
+      open() {
+        const requete = {};
+        setTimeout(() => requete.onblocked?.(), 0);
+        return requete;
+      },
+    };
+    const etagere = await ouvrirEtagere("demo");
+    assert.equal(etagere.durable, false);
+    assert.match(etagere.bloquee, /Un autre onglet de l'Atelier, ouvert sur une version précédente, bloque la mise à jour/);
+    await etagere.garder(personnageEssai());
+    assert.equal((await etagere.lister()).personnages.length, 1, "l'étagère en mémoire fonctionne");
+  } finally {
+    if (avant === undefined) delete globalThis.indexedDB;
+    else globalThis.indexedDB = avant;
+  }
 });

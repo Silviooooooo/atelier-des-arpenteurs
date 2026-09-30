@@ -12,7 +12,9 @@
 // Le lot 2 bis ajoute un troisième entrepôt, « notes » (version 2 de la
 // base) : ce que l'appareil sait d'un personnage hors de son format, par
 // mode et par identifiant. remplace : l'original d'une copie de travail
-// (« Modifier ») ; depot : l'état de son dépôt en ligne (§ 15.8). Une note
+// (« Modifier ») ; nom : le nom de cet original, ou du personnage dont la
+// suppression attend, pour le dire même quand il ne se lit plus ; depot :
+// l'état de son dépôt en ligne (§ 15.8). Une note
 // illisible s'ignore.
 
 import { MODES } from "../securite/coffre.js";
@@ -26,7 +28,7 @@ const ACTIONS_DEPOT = ["creer", "remplacer", "supprimer"];
 const cleDeNote = (mode, id) => `${mode}/${id}`;
 
 /**
- * Une note lue de l'appareil, vérifiée : { cle, mode, id, remplace, depot },
+ * Une note lue de l'appareil, vérifiée : { cle, mode, id, remplace, nom, depot },
  * ou null. depot : null, ou { etat, action, ticket, date, erreur }.
  */
 export function verifierNote(note) {
@@ -34,6 +36,8 @@ export function verifierNote(note) {
   const texteCourt = (v, max) => typeof v === "string" && v.length <= max && !/[\u0000-\u001f\u007f]/.test(v);
   if (!estObjet(note) || !MODES.includes(note.mode) || typeof note.id !== "string" || !IDENTIFIANT.test(note.id) || note.cle !== cleDeNote(note.mode, note.id)) return null;
   if (note.remplace !== null && (typeof note.remplace !== "string" || !IDENTIFIANT.test(note.remplace))) return null;
+  const nom = note.nom ?? null;
+  if (nom !== null && !texteCourt(nom, 120)) return null;
   const d = note.depot;
   if (d !== null) {
     if (!estObjet(d) || !ETATS_DEPOT.includes(d.etat) || !ACTIONS_DEPOT.includes(d.action)) return null;
@@ -41,7 +45,7 @@ export function verifierNote(note) {
     if (!texteCourt(d.date, 40) || Number.isNaN(Date.parse(d.date))) return null;
     if (d.erreur !== null && !texteCourt(d.erreur, 400)) return null;
   }
-  return { cle: note.cle, mode: note.mode, id: note.id, remplace: note.remplace, depot: d === null ? null : { etat: d.etat, action: d.action, ticket: d.ticket, date: d.date, erreur: d.erreur } };
+  return { cle: note.cle, mode: note.mode, id: note.id, remplace: note.remplace, nom, depot: d === null ? null : { etat: d.etat, action: d.action, ticket: d.ticket, date: d.date, erreur: d.erreur } };
 }
 
 function verifierMode(mode) {
@@ -96,7 +100,14 @@ export async function magasinPersonnagesIndexedDB(nom = NOM_BASE) {
     for (const mode of MODES) if (!base.objectStoreNames.contains(mode)) base.createObjectStore(mode, { keyPath: "id" });
     if (!base.objectStoreNames.contains("notes")) base.createObjectStore("notes", { keyPath: "cle" });
   };
-  const base = await attendre(ouverture);
+  // Un autre onglet ouvert sur l'ancienne version garde sa connexion : la
+  // montée attendrait sans fin, et la page avec elle (relecture du lot 2 bis).
+  const bloquee = new Promise((_, rejeter) => {
+    ouverture.onblocked = () => rejeter(new ErreurBaseBloquee());
+  });
+  const base = await Promise.race([attendre(ouverture), bloquee]);
+  // Une montée future, demandée par un autre onglet : celui-ci s'efface.
+  base.onversionchange = () => base.close();
   const transaction = (mode, acces, faire) =>
     new Promise((resoudre, rejeter) => {
       const t = base.transaction(mode, acces);
@@ -167,14 +178,14 @@ export function creerEtagere(magasin, mode) {
       return (await this.listerNotes()).find((n) => n.id === id) ?? null;
     },
     /**
-     * Complète la note d'un personnage ({ remplace } et/ou { depot }) ; null
+     * Complète la note d'un personnage ({ remplace }, { nom }, { depot }) ; null
      * l'efface. Une note qui ne dit plus rien s'efface aussi.
      */
     async garderNote(id, changement) {
       if (!IDENTIFIANT.test(String(id))) throw new TypeError("Identifiant illisible.");
       const cleNote = cleDeNote(mode, id);
       if (changement === null) return magasin.effacerNote?.(cleNote);
-      const actuelle = (await this.lireNote(id)) ?? { cle: cleNote, mode, id, remplace: null, depot: null };
+      const actuelle = (await this.lireNote(id)) ?? { cle: cleNote, mode, id, remplace: null, nom: null, depot: null };
       const note = verifierNote({ ...actuelle, ...changement, cle: cleNote, mode, id });
       if (!note) throw new TypeError("Note illisible.");
       if (note.remplace === null && note.depot === null) return magasin.effacerNote?.(cleNote);
@@ -183,13 +194,26 @@ export function creerEtagere(magasin, mode) {
   };
 }
 
-/** Ouvre l'étagère de l'appareil pour un mode ; en mémoire sans IndexedDB. */
+/** La base des personnages attend qu'un autre onglet de l'Atelier se ferme. */
+export class ErreurBaseBloquee extends Error {
+  constructor() {
+    super("Un autre onglet de l'Atelier, ouvert sur une version précédente, bloque la mise à jour des personnages de cet appareil : fermez-le, puis rechargez cette page.");
+  }
+}
+
+/**
+ * Ouvre l'étagère de l'appareil pour un mode ; en mémoire sans IndexedDB.
+ * Une base bloquée par un autre onglet : en mémoire aussi, et l'étagère le
+ * dit (bloquee), pour que la page le dise à son tour.
+ */
 export async function ouvrirEtagere(mode) {
   let magasin;
+  let bloquee = null;
   try {
     magasin = await magasinPersonnagesIndexedDB();
-  } catch {
+  } catch (erreur) {
+    if (erreur instanceof ErreurBaseBloquee) bloquee = erreur.message;
     magasin = magasinPersonnagesMemoire();
   }
-  return creerEtagere(magasin, mode);
+  return { ...creerEtagere(magasin, mode), bloquee };
 }

@@ -113,12 +113,14 @@ async function imprimer(mesurer) {
 function qualites(contexte, personnage, fiche, zone) {
   const modifiables = fiche.equipement.filter((o) => o.qualite.applicable && !o.qualite.fixee);
   if (!modifiables.length) return null;
-  const message = el("div", {});
+  const message = el("div", { classe: "qualites-resultat" });
+  const doubles = (nom) => fiche.equipement.filter((autre) => autre.nom === nom).length > 1;
   const champs = modifiables.map((o) => {
     const id = `qualite-${o.rang}`;
+    const libelle = doubles(o.nom) ? `${o.nom} (objet ${o.rang + 1})` : o.nom;
     const entree = el("input", { type: "text", id, classe: "champ champ-court", inputmode: "decimal", pattern: "\\d{1,3}(,\\d{1,2})?", maxlength: 6, autocomplete: "off" });
     entree.value = personnage.equipement[o.rang].qualite ?? "";
-    return { rang: o.rang, entree, noeud: el("div", {}, el("label", { for: id }, o.nom), entree) };
+    return { rang: o.rang, entree, noeud: el("div", {}, el("label", { for: id }, libelle), entree) };
   });
   const dire = (texte, erreur = false) => message.replaceChildren(el("p", { classe: "message", role: erreur ? "alert" : "status" }, texte));
   const enregistrer = el(
@@ -152,7 +154,11 @@ function qualites(contexte, personnage, fiche, zone) {
         const envoi = depot && copie.etat === "enregistre" && contexte.etat.mode === "reel" ? await depot.envoyer(copie, { action: "remplacer" }) : null;
         afficherPersonnage(contexte, copie, zone);
         const suite = envoi ? (envoi.envoye ? " Il part en ligne : visible par tous d'ici quelques minutes." : ` Non envoyé : ${envoi.erreur}`) : "";
-        zone.querySelector(".qualites-message")?.replaceChildren(el("p", { classe: "message", role: "status" }, `Les qualités sont gardées.${suite}`));
+        const panneau = zone.querySelector(".qualites");
+        panneau?.setAttribute("open", "");
+        const confirmation = el("p", { classe: "message", role: "status", tabindex: "-1" }, `Les qualités sont gardées.${suite}`);
+        panneau?.querySelector(".qualites-resultat")?.replaceChildren(confirmation);
+        confirmation.focus();
       },
     },
     "Enregistrer les qualités",
@@ -287,7 +293,15 @@ export function afficher(contexte, route) {
     .lire(route.id)
     .then(async (local) => {
       // Sur l'appareil d'abord ; sinon, en ligne (§ 15.8).
-      const enLigne = local ? null : ((await contexte.etat.depot?.lire(route.id)) ?? null);
+      const cherche = local ? null : ((await contexte.etat.depot?.chercher?.(route.id)) ?? null);
+      if (cherche?.erreur) {
+        // La lecture a échoué (réseau, ancienne clé) : le dire, sans parler
+        // de personnage introuvable (relecture du lot 2 bis).
+        const reessayer = el("button", { type: "button", classe: "bouton", onclick: () => contexte.afficher() }, "Réessayer");
+        zone.replaceChildren(titre("Personnage en ligne"), el("p", { classe: "message", role: "alert" }, `Ce personnage ne se lit pas pour l'instant : ${cherche.erreur}`), el("div", { classe: "boutons" }, reessayer), el("p", { classe: "lien-retour" }, el("a", { href: "#/personnages" }, "Tous les personnages")));
+        return;
+      }
+      const enLigne = cherche?.personnage ?? null;
       const personnage = local ?? enLigne;
       if (!personnage) {
         zone.replaceChildren(titre("Personnage introuvable"), el("p", { classe: "message" }, "Ce personnage n'est ni sur cet appareil, ni en ligne."), el("p", { classe: "lien-retour" }, el("a", { href: "#/personnages" }, "Tous les personnages")));

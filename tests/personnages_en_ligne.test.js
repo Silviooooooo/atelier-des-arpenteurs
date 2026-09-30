@@ -26,18 +26,19 @@ const enregistre = (id = "Qx7-aZ_09bcdEFGHijklmn", modifier = null) =>
 
 // Un site simulé : la banque en place (son sel), l'API des tickets, les
 // fichiers rangés. Chaque appel est noté.
-function site({ sel = SECRET.sel, ticket = { status: 201, corps: { number: 12 } }, fichiers = null, index = undefined } = {}) {
+function site({ sel = SECRET.sel, publieeLe = null, ticket = { status: 201, corps: { number: 12 } }, fichiers = null, index = undefined } = {}) {
   const appels = [];
   const reponse = (status, corps, texte = null) => ({ ok: status >= 200 && status < 300, status, json: async () => corps, text: async () => texte ?? JSON.stringify(corps) });
   const fetch = async (adresse, init = {}) => {
     appels.push({ adresse, init });
-    if (adresse.startsWith("donnees/banque.chiffree.json?v=")) return reponse(200, { kdf: { sel } });
+    if (adresse.startsWith("donnees/banque.chiffree.json?v=")) return reponse(200, { publiee_le: publieeLe, kdf: { sel } });
     if (adresse === `${ADRESSE_DEPOT}/issues`) {
       if (ticket === "reseau") throw new TypeError("Failed to fetch");
       return reponse(ticket.status, ticket.corps);
     }
     if (adresse.startsWith("personnages/index.json?v=")) {
       if (index === null) return reponse(404, {});
+      if (index === "erreur") return reponse(503, {});
       return reponse(200, null, index ?? ecrireIndex(Object.values(fichiers ?? {})));
     }
     const trouve = /^personnages\/([A-Za-z0-9_-]+)\.chiffre\.json\?v=/.exec(adresse);
@@ -52,9 +53,9 @@ async function fichierEnLigne(personnage, secret = SECRET, rangeLe = "2026-09-30
   return fichierDuTicket(ticket, { rangeLe, numero: 7 });
 }
 
-const depotDe = ({ mode = "reel", cle = CLE, secret = SECRET, etagere = creerEtagere(magasinPersonnagesMemoire(), mode), fetch, maintenant = () => MAINTENANT } = {}) => ({
+const depotDe = ({ mode = "reel", cle = CLE, secret = SECRET, publieeLe = null, etagere = creerEtagere(magasinPersonnagesMemoire(), mode), fetch, maintenant = () => MAINTENANT } = {}) => ({
   etagere,
-  depot: creerDepot({ mode, banque: cle ? { cle_depot: cle } : {}, secret, etagere, fetch, maintenant }),
+  depot: creerDepot({ mode, banque: { ...(cle ? { cle_depot: cle } : {}), ...(publieeLe ? { publiee_le: publieeLe } : {}) }, secret, etagere, fetch, maintenant }),
 });
 
 test("en ligne — la démonstration ne dépose rien et ne lit rien en ligne, et le dit", async () => {
@@ -65,7 +66,7 @@ test("en ligne — la démonstration ne dépose rien et ne lit rien en ligne, et
   assert.equal(depot.phraseEnregistrement, PHRASE_DEMO);
   const personnage = enregistre("demo-aubepine-0000000001", (p) => (p.mode = "demo"));
   assert.deepEqual(await depot.envoyer(personnage), { envoye: false, erreur: PHRASE_DEMO });
-  assert.deepEqual(await depot.lireEnLigne(), { personnages: [], illisibles: 0, ancienneCle: 0 });
+  assert.deepEqual(await depot.lireEnLigne(), { personnages: [], ids: new Set(), illisibles: 0, ancienneCle: 0, cleChangee: 0 });
   assert.equal(appels.length, 0, "aucun réseau");
   assert.deepEqual(await etagere.listerNotes(), [], "aucune note : rien n'attend d'envoi");
 });
@@ -167,7 +168,8 @@ test("en ligne — lire : l'index sans cache, chaque fichier par sa version, dé
   const { depot } = depotDe({ fetch: fetchAbime });
   const lu = await depot.lireEnLigne();
   assert.deepEqual(lu.personnages.map((p) => p.identite.nom).sort(), ["Aubépine Crèmebrûlée", "Bourrache"]);
-  assert.deepEqual([lu.illisibles, lu.ancienneCle], [1, 1]);
+  assert.deepEqual([lu.illisibles, lu.ancienneCle, lu.cleChangee], [1, 1, 0]);
+  assert.deepEqual([...lu.ids].sort(), ["AAAAAAAAAAAAAAAAAAAAAA", "BBBBBBBBBBBBBBBBBBBBBB", "CCCCCCCCCCCCCCCCCCCCCC", "DDDDDDDDDDDDDDDDDDDDDD"]);
   const indexLu = appels.find((a) => a.adresse.startsWith("personnages/index.json"));
   assert.match(indexLu.adresse, /\?v=\d+$/);
   assert.equal(indexLu.init.cache, "no-store");
@@ -178,7 +180,7 @@ test("en ligne — lire : l'index sans cache, chaque fichier par sa version, dé
   assert.equal(appels.filter((a, i) => i >= avant && a.adresse.startsWith("personnages/AAAA")).length, 0);
   assert.equal((await depot.lire("BBBBBBBBBBBBBBBBBBBBBB")).identite.nom, "Bourrache");
   // Sans index : aucun personnage ; un index hostile : un message.
-  assert.deepEqual(await depotDe({ fetch: site({ index: null }).fetch }).depot.lireEnLigne(), { personnages: [], illisibles: 0, ancienneCle: 0 });
+  assert.deepEqual(await depotDe({ fetch: site({ index: null }).fetch }).depot.lireEnLigne(), { personnages: [], ids: new Set(), illisibles: 0, ancienneCle: 0, cleChangee: 0 });
   assert.match((await depotDe({ fetch: site({ index: '{"format":1,"personnages":[{"identifiant":"AAAAAAAAAAAAAAAAAAAAAA","nom":"x"}]}' }).fetch }).depot.lireEnLigne()).erreur, /index des personnages en ligne est illisible/);
 });
 
@@ -222,4 +224,77 @@ test("en ligne — rapprocher : l'envoyé rattrapé quitte l'appareil, l'attente
   const sansC = site({ fichiers: { AAAAAAAAAAAAAAAAAAAAAA: fichiers.AAAAAAAAAAAAAAAAAAAAAA, BBBBBBBBBBBBBBBBBBBBBB: fichiers.BBBBBBBBBBBBBBBBBBBBBB } });
   await depotDe({ fetch: sansC.fetch, etagere }).depot.rapprocher();
   assert.equal(await etagere.lireNote(supprime.id), null);
+});
+
+// ─── La relecture du lot 2 bis ──────────────────────────────────────────────
+
+test("relecture — juste après un changement fait d'ici, GitHub Pages en retard ne bloque pas le dépôt ; une page en retard, si", async () => {
+  // La page tient la nouvelle clé (AUTRE) ; Pages sert encore l'ancienne banque.
+  const enRetard = site({ sel: SECRET.sel, publieeLe: "2026-09-29T22:14:00+02:00" });
+  const { depot } = depotDe({ secret: AUTRE, publieeLe: "2026-09-30T12:00:00+02:00", fetch: enRetard.fetch });
+  assert.equal((await depot.envoyer(enregistre())).envoye, true);
+  // La page tient l'ancienne clé ; le site sert une banque plus récente : rien ne part.
+  const nouvelle = site({ sel: AUTRE.sel, publieeLe: "2026-09-30T13:00:00+02:00" });
+  const retard = await depotDe({ publieeLe: "2026-09-30T12:00:00+02:00", fetch: nouvelle.fetch }).depot.envoyer(enregistre());
+  assert.equal(retard.envoye, false);
+  assert.match(retard.erreur, /Le mot de passe de table a changé : rechargez la page/);
+  assert.equal(nouvelle.appels.filter((a) => a.adresse.endsWith("/issues")).length, 0);
+});
+
+test("relecture — un changement de mot de passe pendant la visite : la page le dit, au lieu d'accuser l'auteur", async () => {
+  const x = enregistre("AAAAAAAAAAAAAAAAAAAAAA");
+  // Les fichiers sont sous la nouvelle clé, celle de la banque en place ; la page a l'ancienne.
+  const { fetch } = site({ sel: AUTRE.sel, fichiers: { AAAAAAAAAAAAAAAAAAAAAA: await fichierEnLigne(x, AUTRE) } });
+  const { depot } = depotDe({ fetch });
+  const lu = await depot.lireEnLigne();
+  assert.deepEqual([lu.cleChangee, lu.ancienneCle, lu.personnages.length], [1, 0, 0]);
+  assert.match((await depot.chercher(x.id)).erreur, /Le mot de passe de table a changé/);
+  // Un fichier d'un sel qui n'est ni celui de la page ni celui de la banque en place : une ancienne clé.
+  const ancien = site({ sel: SECRET.sel, fichiers: { AAAAAAAAAAAAAAAAAAAAAA: await fichierEnLigne(x, AUTRE) } });
+  assert.deepEqual((await depotDe({ fetch: ancien.fetch }).depot.lireEnLigne()).ancienneCle, 1);
+});
+
+test("relecture — une suppression en attente ne s'efface pas quand l'index ne se lit pas, et se montre même illisible, avec son nom", async () => {
+  const etagere = creerEtagere(magasinPersonnagesMemoire(), "reel");
+  const x = enregistre("AAAAAAAAAAAAAAAAAAAAAA", (p) => (p.identite.nom = "Bourrache"));
+  await etagere.garderNote(x.id, { nom: "Bourrache", depot: { etat: "non_envoye", action: "supprimer", ticket: null, date: "2026-09-30T11:00:00.000Z", erreur: "Pas de réseau" } });
+  // L'index ne se lit pas : la note reste, et la carte se montre.
+  let vue = await depotDe({ etagere, fetch: site({ index: "erreur" }).fetch }).depot.rapprocher();
+  assert.ok(vue.erreur);
+  assert.deepEqual(vue.nonEnvoyes.map((e) => [e.suppression, e.personnage, e.note.nom]), [[true, null, "Bourrache"]]);
+  assert.ok(await etagere.lireNote(x.id));
+  // L'index le porte, mais son fichier ne se lit pas (une autre clé) : toujours montrée.
+  vue = await depotDe({ etagere, fetch: site({ fichiers: { AAAAAAAAAAAAAAAAAAAAAA: await fichierEnLigne(x, AUTRE) } }).fetch }).depot.rapprocher();
+  assert.deepEqual(vue.nonEnvoyes.map((e) => e.note.nom), ["Bourrache"]);
+  // L'index s'est lu et ne le porte plus : la suppression est faite, la note s'efface.
+  await depotDe({ etagere, fetch: site({ fichiers: {} }).fetch }).depot.rapprocher();
+  assert.equal(await etagere.lireNote(x.id), null);
+});
+
+test("relecture — une copie de l'appareil plus ancienne ne cache pas la version en ligne, et ne part pas sans qu'on le veuille ; identique, elle s'efface", async () => {
+  const etagere = creerEtagere(magasinPersonnagesMemoire(), "reel");
+  const v1 = enregistre("AAAAAAAAAAAAAAAAAAAAAA", (p) => (p.identite.age = "v1"));
+  const v2 = enregistre("AAAAAAAAAAAAAAAAAAAAAA", (p) => Object.assign(p, { modifie_le: "2026-09-30T11:30:00.000Z", identite: { ...p.identite, age: "v2" } }));
+  await etagere.garder(v1);
+  const enLigne = site({ fichiers: { AAAAAAAAAAAAAAAAAAAAAA: await fichierEnLigne(v2) } });
+  const { depot } = depotDe({ etagere, fetch: enLigne.fetch });
+  const vue = await depot.rapprocher();
+  assert.deepEqual(vue.enLigne.map((p) => p.identite.age), ["v2"], "la version en ligne se montre");
+  assert.deepEqual(vue.nonEnvoyes.map((e) => [e.personnage.identite.age, e.plusAncienne]), [["v1", true]]);
+  // L'envoi s'arrête : la version en ligne est plus récente.
+  const arret = await depot.envoyer(v1);
+  assert.deepEqual([arret.envoye, arret.plusAncienne], [false, true]);
+  assert.equal(enLigne.appels.filter((a) => a.adresse.endsWith("/issues")).length, 0);
+  // Expressément voulu, il part.
+  assert.equal((await depot.envoyer(v1, { forcer: true })).envoye, true);
+  // Une copie identique (même date) à la version en ligne quitte l'appareil.
+  const autre = creerEtagere(magasinPersonnagesMemoire(), "reel");
+  await autre.garder(v2);
+  await depotDe({ etagere: autre, fetch: enLigne.fetch }).depot.rapprocher();
+  assert.equal(await autre.lire(v2.id), null);
+});
+
+test("relecture — chercher un personnage en ligne distingue l'absent de l'illisible pour l'instant", async () => {
+  assert.deepEqual(await depotDe({ fetch: site({ fichiers: {} }).fetch }).depot.chercher("AAAAAAAAAAAAAAAAAAAAAA"), { absent: true });
+  assert.match((await depotDe({ fetch: site({ index: "erreur" }).fetch }).depot.chercher("AAAAAAAAAAAAAAAAAAAAAA")).erreur, /réponse 503/);
 });

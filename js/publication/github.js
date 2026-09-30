@@ -294,12 +294,18 @@ export async function lireDepot({ jeton, fetch = globalThis.fetch }) {
 // écrit). Sans relecture, on ne sait pas, et l'écran doit le dire : au
 // changement du mot de passe, la banque serait peut-être déjà sous le
 // nouveau.
-async function avanceSansReponse({ jeton, fetch, commit, panne }) {
+async function avanceSansReponse({ jeton, fetch, commit, parent, panne }) {
   const relue = await appelerJson(fetch, `${ADRESSE_DEPOT}/git/ref/heads/${DEPOT.branche}`, { headers: entetes(jeton), cache: "no-store" });
   if (relue.erreur) {
     return { code: "incertain", erreur: "GitHub ne répond plus depuis l'envoi : le commit a peut-être été écrit. Rechargez la page, puis vérifiez avant de recommencer." };
   }
-  return relue.json.object?.sha === commit ? { commit } : panne;
+  const sha = relue.json.object?.sha;
+  // Sur le commit : l'avance s'est faite. Encore sur le parent : rien n'a
+  // été écrit. Ailleurs (l'automate a pu commiter par-dessus entre-temps) :
+  // l'issue est inconnue (relecture du lot 2 bis).
+  if (sha === commit) return { commit };
+  if (sha === parent) return panne;
+  return { code: "incertain", erreur: "La branche a bougé depuis l'envoi : le commit a peut-être été écrit. Rechargez la page, puis vérifiez avant de recommencer." };
 }
 
 /**
@@ -338,7 +344,7 @@ export async function ecrireCommit({ jeton, parent, base, fichiers, message, fet
     headers: ecriture,
     body: JSON.stringify({ sha: commit.json.sha, force: false }),
   });
-  if (!avance.reponse) return avanceSansReponse({ jeton, fetch, commit: commit.json.sha, panne: avance });
+  if (!avance.reponse) return avanceSansReponse({ jeton, fetch, commit: commit.json.sha, parent, panne: avance });
   if (avance.reponse.status === 422 || avance.reponse.status === 409) {
     return { code: "avance_refusee", erreur: "Le dépôt a changé sur GitHub entre-temps.", motif: await motifDe(avance.reponse) };
   }

@@ -1057,3 +1057,185 @@ test("parcours — enregistrer dépose en ligne : « creer » pour un nouveau, �
     retirer();
   }
 });
+
+// ─── La relecture finale du lot 2 bis ───────────────────────────────────────
+
+test("relecture — étape 8 : après « + », le focus reste sur « + » tant qu'il est actif ; les descriptions gardent leur état", async () => {
+  const retirer = installerDom();
+  const avant = globalThis.matchMedia;
+  try {
+    globalThis.matchMedia = (requete) => ({ matches: requete.includes("max-width") });
+    const contexte = contexteDe();
+    // Un personnage neuf : le seul bloc de base, 2 points dépensés, 8 de reliquat.
+    const personnage = await garde(contexte, nouveauPersonnage("demo"));
+    const ecran = await etape(contexte, personnage.id, 8);
+    const ligne = () => ecran.querySelectorAll(".capacite-ligne").find((l) => texteDe(l.querySelector("strong")) === "Taloche");
+    const plus = () => ligne().querySelectorAll("button").find((b) => b.id.endsWith("-plus"));
+    // Sur téléphone, repliées ; le joueur déplie « Après l'évolution ».
+    const apres = () => ligne().querySelectorAll("details")[1];
+    assert.equal(apres().getAttribute("open"), null);
+    apres().setAttribute("open", "");
+    plus().click();
+    await laisserFiler(10);
+    assert.match(texteDe(ligne().querySelector(".valeur-pas")), /niveau 2/);
+    assert.equal(plus().disabled, false, "le niveau 3 reste permis");
+    assert.equal(document.activeElement?.id, plus().id, "le focus reste sur « + »");
+    assert.notEqual(apres().getAttribute("open"), null, "la description dépliée le reste");
+  } finally {
+    globalThis.matchMedia = avant;
+    retirer();
+  }
+});
+
+test("relecture — étape 5 : « — choisir — » ne défait ni la constellation ni le compte des tirages", async () => {
+  const retirer = installerDom();
+  try {
+    const contexte = contexteDe();
+    const personnage = await garde(contexte, nouveauPersonnage("demo"));
+    const ecran = await etape(contexte, personnage.id, 5);
+    boutons(ecran, "Tirer au sort")[0].click();
+    boutons(ecran, "Refaire le tirage")[0].click();
+    boutons(ecran, "Refaire le tirage")[0].click();
+    saisir(ecran.querySelector("#constellation-saisie"), "Constellation de la Cuillère", "change");
+    saisir(ecran.querySelector("#constellation-saisie"), "", "change");
+    await laisserFiler(10);
+    assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).constellation, { nom: "Constellation de la Cuillère", choix: [], obtention: "saisie", tirages: 3 });
+    boutons(ecran, "Tirer au sort")[0].click();
+    await laisserFiler(10);
+    assert.equal((await contexte.etat.etagere.lire(personnage.id)).constellation.tirages, 4);
+  } finally {
+    retirer();
+  }
+});
+
+test("relecture — étape 7 : les armes et l'objet choisi décrits avant d'être pris ; un refus dit près de l'objet, le focus sur lui", async () => {
+  const retirer = installerDom();
+  try {
+    const contexte = contexteDe();
+    const personnage = await garde(contexte, nouveauPersonnage("demo"));
+    const ecran = await etape(contexte, personnage.id, 7);
+    const catalogue = ecran.querySelector(".catalogue");
+    assert.match(texteDe(catalogue.querySelector("summary")), /^Les \d+ armes et ce qu'elles donnent$/);
+    assert.ok(catalogue.querySelectorAll(".capacite-texte").some((p) => /inflige 3\/8\/20/.test(texteDe(p))), "le couteau d'office, décrit");
+    // L'objet choisi se décrit avant « Ajouter ».
+    saisir(ecran.querySelector("#objet-a-ajouter"), "Bouillon revigorant", "change");
+    assert.match(texteDe(ecran.querySelector(".apercu-objet")), /Boire le bouillon/);
+    // « Ajouter » sans choix : le refus sous le bouton, le focus sur lui.
+    saisir(ecran.querySelector("#objet-a-ajouter"), "", "change");
+    boutons(ecran, "Ajouter")[0].click();
+    assert.equal(texteDe(document.activeElement), "Choisissez d'abord un objet dans la liste.");
+    // « Porter » refusé : le refus dans la carte de l'objet.
+    ecran.querySelector("#pack-agile").checked = true;
+    ecran.querySelector("#pack-agile").declencher("change");
+    await laisserFiler(10);
+    saisir(ecran.querySelector("#objet-a-ajouter"), "Plastron de fonte", "change");
+    boutons(ecran, "Ajouter")[0].click();
+    await laisserFiler(10);
+    parLibelle(ecran, "Porter Plastron de fonte").click();
+    const carte = ecran.querySelectorAll(".objet").find((c) => texteDe(c.querySelector("h4")).startsWith("Plastron de fonte"));
+    assert.match(texteDe(alerte(carte)), /ne se porte pas : torse déjà couvert par « Tablier de cuir »/);
+    assert.equal(document.activeElement, alerte(carte));
+  } finally {
+    retirer();
+  }
+});
+
+test("relecture — une copie de travail dont l'original ne se lit pas pour l'instant le remplace quand même, par son identifiant", async () => {
+  const retirer = installerDom();
+  try {
+    const contexte = contexteDe();
+    const depot = faussePorte();
+    depot.chercher = async () => ({ erreur: "Pas de réseau : les personnages en ligne ne se lisent pas." });
+    contexte.etat.depot = depot;
+    const original = personnageEssai((p) => Object.assign(p, { id: "AAAAAAAAAAAAAAAAAAAAAA", etat: "enregistre", enregistre_le: "2026-09-29T20:30:00.000Z" }));
+    const copie = await garde(contexte, { ...structuredClone(original), id: "BBBBBBBBBBBBBBBBBBBBBB", etat: "brouillon", etape: 9 });
+    await contexte.etat.etagere.garderNote(copie.id, { remplace: original.id, nom: original.identite.nom });
+    const ecran = await etape(contexte, copie.id, 9);
+    assert.match(texteDe(ecran.querySelector("h1")), /^Modification — /);
+    assert.match(texteDe(ecran), /« Enregistrer » remplace « Aubépine Crèmebrûlée »/);
+    await Promise.all(boutons(ecran, "Enregistrer")[0].click());
+    await laisserFiler(10);
+    assert.deepEqual(depot.appels.at(-1), ["envoyer", original.id, "remplacer"]);
+    const enregistre = await contexte.etat.etagere.lire(original.id);
+    assert.deepEqual([enregistre.etat, enregistre.cree_le, enregistre.enregistre_le], ["enregistre", original.cree_le, original.enregistre_le]);
+    assert.equal(await contexte.etat.etagere.lire(copie.id), null);
+  } finally {
+    retirer();
+  }
+});
+
+test("relecture — la liste dit qu'un autre onglet bloque la base des personnages", async () => {
+  const retirer = installerDom();
+  try {
+    const etagere = { ...creerEtagere(magasinPersonnagesMemoire(), "demo"), bloquee: "Un autre onglet de l'Atelier, ouvert sur une version précédente, bloque la mise à jour des personnages de cet appareil : fermez-le, puis rechargez cette page." };
+    const ecran = await liste(contexteDe({ etagere }));
+    assert.match(texteDe(alerte(ecran)), /Un autre onglet de l'Atelier/);
+    assert.doesNotMatch(texteDe(ecran), /Cet appareil ne garde rien/);
+  } finally {
+    retirer();
+  }
+});
+
+test("relecture — la liste : la clé changée pendant la visite, une suppression illisible, une copie plus ancienne", async () => {
+  const retirer = installerDom();
+  try {
+    const contexte = contexteDe({ mode: "reel", etagere: creerEtagere(magasinPersonnagesMemoire(), "reel") });
+    const ancienne = personnageEssai((p) => Object.assign(p, { id: "CCCCCCCCCCCCCCCCCCCCCC", mode: "reel", etat: "enregistre", enregistre_le: "2026-09-30T10:00:00.000Z" }));
+    await contexte.etat.etagere.garder(ancienne);
+    const appels = [];
+    let force = null;
+    contexte.etat.depot = {
+      raison: null,
+      phraseEnregistrement: "",
+      async envoyer(p, options) {
+        appels.push(["envoyer", p.id, options.forcer]);
+        if (!options.forcer) return { envoye: false, erreur: "Une version plus récente de ce personnage est en ligne : l'envoyer la remplacerait.", plusAncienne: true };
+        force = p.id;
+        return { envoye: true };
+      },
+      async reessayer(id) {
+        appels.push(["reessayer", id]);
+        return { envoye: true };
+      },
+      async rapprocher() {
+        return {
+          enLigne: [],
+          attente: [],
+          nonEnvoyes: [
+            ...((await contexte.etat.etagere.lire(ancienne.id)) ? [{ personnage: await contexte.etat.etagere.lire(ancienne.id), note: undefined, plusAncienne: true }] : []),
+            { personnage: null, note: { id: "DDDDDDDDDDDDDDDDDDDDDD", nom: "Cerfeuil", depot: { etat: "non_envoye", action: "supprimer", ticket: null, date: "2026-09-30T11:00:00.000Z", erreur: "Pas de réseau" } }, suppression: true },
+          ],
+          brouillons: [],
+          illisibles: 0,
+          ancienneCle: 0,
+          cleChangee: 3,
+        };
+      },
+    };
+    const ecran = await liste(contexte);
+    assert.match(texteDe(ecran), /Le mot de passe de table a changé : rechargez la page et saisissez le nouveau\. \(3 personnages en ligne attendent la nouvelle clé\.\)/);
+    assert.doesNotMatch(texteDe(ecran), /l'auteur doit les rechiffrer/);
+    // La suppression dont le personnage ne se lit plus : son nom vient de la note.
+    const suppression = carteDe(ecran, "Cerfeuil");
+    assert.match(texteDe(suppression), /suppression non envoyée : Pas de réseau/);
+    await Promise.all(boutons(suppression, "Réessayer la suppression")[0].click());
+    assert.deepEqual(appels.at(-1), ["reessayer", "DDDDDDDDDDDDDDDDDDDDDD"]);
+    // La copie plus ancienne : dite telle, l'envoi demande confirmation.
+    const copie = carteDe(await liste(contexte), "Aubépine Crèmebrûlée");
+    assert.match(texteDe(copie), /copie de cet appareil, plus ancienne que la version en ligne/);
+    await Promise.all(boutons(copie, "Envoyer en ligne")[0].click());
+    await laisserFiler(10);
+    assert.match(texteDe(copie), /Une version plus récente de « Aubépine Crèmebrûlée » est en ligne\. L'envoyer quand même la remplacera pour tous/);
+    assert.equal(force, null, "rien n'est parti sans confirmation");
+    await Promise.all(boutons(copie, "Envoyer quand même")[0].click());
+    await laisserFiler(10);
+    assert.equal(force, ancienne.id);
+    // « Retirer de l'appareil » : la copie s'en va, la version en ligne reste.
+    const encore = carteDe(await liste(contexte), "Aubépine Crèmebrûlée");
+    await Promise.all(boutons(encore, "Retirer de l'appareil")[0].click());
+    await laisserFiler(10);
+    assert.equal(await contexte.etat.etagere.lire(ancienne.id), null);
+  } finally {
+    retirer();
+  }
+});

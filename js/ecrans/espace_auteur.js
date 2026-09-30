@@ -746,7 +746,7 @@ function sectionCleDeDepot() {
     el(
       "p",
       {},
-      "Elle voyage dans la banque chiffrée : tout joueur qui a le mot de passe de table peut déposer des personnages, et rien d'autre. Saisie ici, elle attend en mémoire la prochaine publication ou le prochain changement de mot de passe, sans être gardée sur l'appareil.",
+      "Elle voyage dans la banque chiffrée : tout joueur qui a le mot de passe de table peut déposer, modifier et supprimer des personnages ; il peut aussi écrire en votre nom dans les tickets de ce dépôt (des textes publics), et rouvrir un ancien dépôt, que l'automate rejouerait. Rien d'autre : ni le code, ni la banque. Si elle fuit, révoquez-la sur GitHub et saisissez-en une autre. Saisie ici, elle attend en mémoire la prochaine publication ou le prochain changement de mot de passe, sans être gardée sur l'appareil.",
     ),
     el("p", { classe: "etat-cle-depot" }, etatDeLaCle()),
   ];

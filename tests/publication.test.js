@@ -890,7 +890,7 @@ test("changement — la requête d'avance restée sans réponse : la branche rel
   const preparer = (lu) => preparerChangement({ publiee: lu, ancien, nouveau });
   // La connexion tombe pendant l'avance, que GitHub a faite (passee) ou non ;
   // la relecture de la branche répond (relue), ou tombe aussi.
-  const coupure = async ({ passee, relue }) => {
+  const coupure = async ({ passee, relue, parDessus = false }) => {
     const depot = simulerDepot({ fichiers });
     const depart = depot.ref;
     let coupee = false;
@@ -898,6 +898,8 @@ test("changement — la requête d'avance restée sans réponse : la branche rel
       if (init.method === "PATCH") {
         coupee = true;
         if (passee) await depot.fetch(adresse, init);
+        // L'automate commite par-dessus avant la relecture (relecture du lot 2 bis).
+        if (parDessus) depot.commiterAilleurs({ [cheminDuPersonnage(ID_B)]: "{}" });
         throw new TypeError("Failed to fetch");
       }
       if (coupee && !relue) throw new TypeError("Failed to fetch");
@@ -921,6 +923,12 @@ test("changement — la requête d'avance restée sans réponse : la branche rel
   const ratee = await coupure({ passee: false, relue: true });
   assert.equal(ratee.resultat.code, "reseau");
   assert.equal(ratee.depot.ref, ratee.depart);
+
+  // L'avance a eu lieu, puis un commit est venu par-dessus avant la
+  // relecture : ni le commit ni le parent ; l'issue est inconnue, pas une panne.
+  const depassee = await coupure({ passee: true, relue: true, parDessus: true });
+  assert.equal(depassee.resultat.code, "incertain");
+  assert.match(depassee.resultat.erreur, /a peut-être été écrit/);
 
   // La relecture tombe aussi : l'issue est inconnue, et le message le dit.
   for (const passee of [true, false]) {

@@ -814,8 +814,29 @@ dl {
   padding-left: 0;
 }
 
-.choix-option input:disabled + span {
+/* Seul le nom d'une option inactive s'atténue : sa raison (un pack non
+   proposé, A10) reste lisible (relecture du lot 2 bis). */
+.choix-option input:disabled + span .choix-nom {
   opacity: var(--opacite-inactif);
+}
+
+/* Les panneaux repliés du lot 2 bis : la qualité des objets, le catalogue
+   des armes ; leur résumé est une cible tactile, repère natif gardé. */
+.qualites,
+.catalogue {
+  margin: var(--espace-2) 0 var(--espace-3);
+}
+
+.qualites summary,
+.catalogue summary {
+  min-height: var(--cible-tactile);
+  padding: var(--espace-2) 0;
+  font-weight: var(--graisse-forte);
+  cursor: pointer;
+}
+
+.apercu-objet {
+  margin-bottom: var(--espace-2);
 }
 
 .suite-etapes {

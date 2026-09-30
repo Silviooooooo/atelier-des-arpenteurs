@@ -67,6 +67,15 @@ function renommer(entete, texte) {
 
 const versLaListe = () => el("p", { classe: "lien-retour" }, el("a", { href: "#/personnages" }, "Personnages"));
 
+// Un refus dit près de ce qui l'a causé, et le focus y va : sur un
+// téléphone, un message écrit au bas de l'étape passerait inaperçu
+// (relecture du lot 2 bis).
+function direIci(zone, texte) {
+  const message = el("p", { classe: "message", role: "alert", tabindex: "-1" }, texte);
+  zone.replaceChildren(message);
+  message.focus();
+}
+
 // ─── Les descriptions ───────────────────────────────────────────────────────
 
 const coutLisible = (cout) => {
@@ -79,7 +88,7 @@ const coutLisible = (cout) => {
  * niveau demandé (par défaut son niveau de création) : ouverte sur un grand
  * écran, à déplier sous son nom sur un téléphone.
  */
-function capaciteDecrite(o, nom, { bloc = null, niveau = null, qualite = QUALITE_CREATION, intitule = null } = {}) {
+function capaciteDecrite(o, nom, { bloc = null, niveau = null, qualite = QUALITE_CREATION, intitule = null, cle: cleEtat = null } = {}) {
   const d = descriptionA(o.index, o.personnage, nom, { bloc, niveau, qualite });
   if (!d) return el("li", { classe: "capacite-decrite" }, el("span", { classe: "capacite-nom" }, intitule ?? nom), el("span", { classe: "detail" }, " — capacité à venir"));
   return el(
@@ -87,7 +96,7 @@ function capaciteDecrite(o, nom, { bloc = null, niveau = null, qualite = QUALITE
     { classe: "capacite-decrite" },
     el(
       "details",
-      { open: !estEtroit() },
+      { open: !estEtroit(), "data-cle": cleEtat ?? `${bloc ?? ""}|${nom}|${niveau ?? ""}|${intitule ?? ""}` },
       el("summary", {}, el("span", { classe: "capacite-nom" }, intitule ?? d.nom), " ", el("span", { classe: "detail" }, `niveau ${d.niveau} · ${coutLisible(d.cout)}`)),
       el("p", { classe: "capacite-texte" }, d.texte.trim() || "Sans description."),
     ),
@@ -345,6 +354,12 @@ function etapeConstellation(o) {
       classe: "champ",
       onchange: (evenement) => {
         const nom = evenement.target.value;
+        // « — choisir — » ne défait rien : le compte des tirages resterait
+        // perdu avec la constellation (relecture du lot 2 bis).
+        if (!nom) {
+          o.refaire("constellation-saisie");
+          return;
+        }
         o.modifier(
           (q) => {
             const compte = q.constellation?.tirages ?? 0;
@@ -443,11 +458,21 @@ function entreeArme(o) {
     el("option", { value: "", selected: !tenue }, "Aucune : mains nues"),
     armes.map((bloc) => el("option", { value: bloc.nom, selected: tenue ? cle(tenue.nom) === cle(bloc.nom) : false }, bloc.nom)),
   );
+  // Chaque arme de la banque, décrite, pour choisir en connaissance de cause.
+  const catalogue = armes.length
+    ? el(
+        "details",
+        { classe: "catalogue", "data-cle": "catalogue-armes" },
+        el("summary", {}, `Les ${armes.length} armes et ce qu'elles donnent`),
+        armes.map((bloc) => el("div", { classe: "choix-bloc" }, el("p", { classe: "choix-nom" }, bloc.nom), blocDecrit(o, bloc, { siVide: "Aucune capacité." }))),
+      )
+    : null;
   return [
     el("h3", {}, "Arme"),
     el("p", { classe: "secondaire-texte petit" }, "Une seule arme se tient, équipée d'office (livret, « Objet »). Changer d'arme remplace celle-ci ; une arme de rechange s'ajoute dans « Tous les objets », rangée dans le sac."),
     el("label", { for: "arme" }, "Arme tenue"),
     choix,
+    catalogue,
     tenue ? objetDecrit(o, tenue, rangTenue) : null,
   ];
 }
@@ -529,6 +554,7 @@ function carteObjet(o, objet, rang, { retirable = true } = {}) {
   const libelle = libelleObjet(o.personnage.equipement, rang);
   const placer = (place, focus = `${prefixe}-titre`) => o.modifier((p) => { p.equipement[rang].place = place; }, { refaire: true, focus });
   const boutons = [];
+  const zoneCarte = el("div", {});
   let etat = "dans le sac";
   if (objet.place === "pack") etat = "pièce du pack, portée";
   else if (objet.place === "arme") etat = "tenue";
@@ -572,7 +598,7 @@ function carteObjet(o, objet, rang, { retirable = true } = {}) {
               const prises = zonesPortees(o, o.personnage, { sauf: rang });
               const genees = zonesCouvertes(bloc).filter((z) => prises[z]);
               if (genees.length) {
-                o.dire(`« ${objet.nom} » ne se porte pas : ${genees.map((z) => `${NOM_ZONE[z]} déjà couvert par « ${prises[z]} »`).join(" ; ")} (livret, « Objet »). Rangez d'abord l'autre pièce.`);
+                direIci(zoneCarte, `« ${objet.nom} » ne se porte pas : ${genees.map((z) => `${NOM_ZONE[z]} déjà couvert par « ${prises[z]} »`).join(" ; ")} (livret, « Objet »). Rangez d'abord l'autre pièce.`);
                 return;
               }
               placer("equipe");
@@ -639,6 +665,7 @@ function carteObjet(o, objet, rang, { retirable = true } = {}) {
     { classe: "objet" },
     el("h4", { id: `${prefixe}-titre`, tabindex: "-1" }, libelle, " ", el("span", { classe: "detail" }, bloc ? `${TYPES[type]?.nom ?? ""} · ${etat}` : "n'existe plus dans la banque")),
     boutons.length ? el("div", { classe: "boutons" }, boutons) : null,
+    zoneCarte,
     objetDecrit(o, objet, rang),
   );
 }
@@ -647,9 +674,20 @@ function carteObjet(o, objet, rang, { retirable = true } = {}) {
 // consommables et équipement, rangés dans le sac par défaut.
 function entreeObjets(o) {
   const p = o.personnage;
+  const apercu = el("div", { classe: "apercu-objet", "aria-live": "polite" });
+  const zoneAjout = el("div", {});
   const choixObjet = el(
     "select",
-    { id: "objet-a-ajouter", classe: "champ" },
+    {
+      id: "objet-a-ajouter",
+      classe: "champ",
+      // L'objet choisi se décrit avant d'être ajouté.
+      onchange: (evenement) => {
+        const bloc = evenement.target.value ? o.index.bloc(evenement.target.value) : null;
+        zoneAjout.replaceChildren();
+        apercu.replaceChildren(...(bloc ? [blocDecrit(o, bloc, { siVide: "Aucune capacité." })].flat(Infinity).filter(Boolean) : []));
+      },
+    },
     el("option", { value: "" }, "— choisir un objet —"),
     RUBRIQUES.map(([type, rubrique]) => {
       const blocs = o.index.blocsDeType(type);
@@ -664,7 +702,7 @@ function entreeObjets(o) {
       onclick: () => {
         const bloc = choixObjet.value ? o.index.bloc(choixObjet.value) : null;
         if (!bloc) {
-          o.dire("Choisissez d'abord un objet dans la liste.");
+          direIci(zoneAjout, "Choisissez d'abord un objet dans la liste.");
           return;
         }
         o.modifier((q) => { q.equipement.push({ nom: bloc.nom, choix: [], qualite: QUALITE_CREATION, place: "sac" }); }, { refaire: true, focus: `objet-${o.personnage.equipement.length}-titre` });
@@ -678,7 +716,9 @@ function entreeObjets(o) {
     el("p", { classe: "secondaire-texte petit" }, "Un objet ajouté est rangé dans le sac ; une pièce d'armure se porte, un bouclier s'équipe, une arme se prend en main à la place de l'arme tenue. La qualité vaut 2 ; elle se change ensuite, sur l'écran du personnage."),
     el("label", { for: "objet-a-ajouter" }, "Objet"),
     choixObjet,
+    apercu,
     el("div", { classe: "boutons" }, ajouter),
+    zoneAjout,
     autres.length ? el("ul", { classe: "objets" }, autres) : el("p", { classe: "secondaire-texte" }, "Aucun autre objet."),
   ];
 }
@@ -718,19 +758,20 @@ function etapeCapacites(o) {
           : `Niveau ${suivant} : il manque ${manque} point(s).`;
     const moins = el(
       "button",
-      { type: "button", id: `${id}-moins`, classe: "bouton secondaire bouton-pas", "aria-label": `Baisser ${capacite.nom}`, disabled: capacite.niveau <= capacite.niveauCreation, onclick: () => changer(capacite, capacite.niveau - 1, `${id}-plus`) },
+      { type: "button", id: `${id}-moins`, classe: "bouton secondaire bouton-pas", "aria-label": `Baisser ${capacite.nom}`, disabled: capacite.niveau <= capacite.niveauCreation, onclick: () => changer(capacite, capacite.niveau - 1, [`${id}-moins`, `${id}-plus`]) },
       "−",
     );
     const plus = el(
       "button",
-      { type: "button", id: `${id}-plus`, classe: "bouton secondaire bouton-pas", "aria-label": `Monter ${capacite.nom}`, "aria-describedby": `${id}-raison`, disabled: !peutMonter, onclick: () => changer(capacite, suivant, `${id}-moins`) },
+      { type: "button", id: `${id}-plus`, classe: "bouton secondaire bouton-pas", "aria-label": `Monter ${capacite.nom}`, "aria-describedby": `${id}-raison`, disabled: !peutMonter, onclick: () => changer(capacite, suivant, [`${id}-plus`, `${id}-moins`]) },
       "+",
     );
     // Avant : le niveau de départ ; après : le niveau choisi, sinon le suivant.
     const apres = Math.min(Math.max(capacite.niveau, capacite.niveauCreation + 1), capacite.niveauMax);
     const source = capacite.origines[0] ?? null;
     const objet = o.personnage.equipement.find((e) => cle(e.nom) === cle(source ?? ""));
-    const decrite = (niveau, intitule) => capaciteDecrite(o, capacite.nom, { bloc: source, niveau, qualite: objet?.qualite ?? QUALITE_CREATION, intitule });
+    // La clé de l'état (ouvert, fermé) suit la place, avant ou après, pas le niveau.
+    const decrite = (niveau, intitule, place) => capaciteDecrite(o, capacite.nom, { bloc: source, niveau, qualite: objet?.qualite ?? QUALITE_CREATION, intitule, cle: `etape8|${capacite.nom}|${place}` });
     return el(
       "li",
       { classe: "capacite-ligne" },
@@ -745,8 +786,8 @@ function etapeCapacites(o) {
       el(
         "ul",
         { classe: "capacites-decrites avant-apres" },
-        decrite(capacite.niveauCreation, "Avant l'évolution"),
-        decrite(apres, apres === capacite.niveau ? "Après l'évolution (choisie)" : "Après l'évolution"),
+        decrite(capacite.niveauCreation, "Avant l'évolution", "avant"),
+        decrite(apres, apres === capacite.niveau ? "Après l'évolution (choisie)" : "Après l'évolution", "apres"),
       ),
     );
   });
@@ -774,7 +815,7 @@ function etapeRecapitulatif(o) {
     "Enregistrer",
   );
   const parties = [lecture(fiche), el("h3", {}, "Enregistrer")];
-  if (o.original) {
+  if (o.remplaceId) {
     // Une copie de travail : elle remplace le personnage, ou devient un autre.
     const nom = el("input", { type: "text", id: "autre-nom", classe: "champ", maxlength: 120, autocomplete: "off" });
     nom.value = `${nomDe(o.personnage)} (copie)`;
@@ -784,7 +825,7 @@ function etapeRecapitulatif(o) {
       "Enregistrer sous un autre nom",
     );
     parties.push(
-      el("p", {}, `« Enregistrer » remplace « ${o.original.identite.nom} » ; « Enregistrer sous un autre nom » en fait un nouveau personnage et laisse l'original tel quel.`),
+      el("p", {}, `« Enregistrer » remplace ${o.nomOriginal ? `« ${o.nomOriginal} »` : "l'original"} ; « Enregistrer sous un autre nom » en fait un nouveau personnage et laisse l'original tel quel.`),
       el("div", { classe: "boutons" }, enregistrer),
       el("label", { for: "autre-nom" }, "Autre nom"),
       nom,
@@ -812,7 +853,11 @@ const CONSTRUCTEURS = {
 
 // ─── Le parcours ────────────────────────────────────────────────────────────
 
-function parcours(contexte, n, lu, entete, contenu, { original = null } = {}) {
+function parcours(contexte, n, lu, entete, contenu, { original = null, remplaceId = null, nomOriginal = null } = {}) {
+  // Une copie de travail remplace son original par son identifiant, même
+  // quand l'original ne se lit pas pour l'instant (relecture du lot 2 bis) :
+  // ses dates viennent de la copie, qui en est un clone.
+  const copie = Boolean(remplaceId);
   const { banque, etagere } = contexte.etat;
   const index = indexerCreation(banque);
   const depot = contexte.etat.depot ?? null;
@@ -859,13 +904,28 @@ function parcours(contexte, n, lu, entete, contenu, { original = null } = {}) {
       el("p", { classe: "manques-titre" }, "Ce qui manque"),
       liste[n].length ? el("ul", {}, liste[n].map((m) => el("li", {}, m))) : el("p", {}, "Rien ne manque à cette étape."),
     );
-    renommer(entete, original ? `Modification — ${nomDe(personnage)}` : `Création — ${nomDe(personnage)}`);
+    renommer(entete, copie ? `Modification — ${nomDe(personnage)}` : `Création — ${nomDe(personnage)}`);
   };
 
+  // Refaire l'étape garde l'état, ouvert ou fermé, des descriptions ; le
+  // focus va au premier élément actif de la liste donnée.
   const refaire = (focus = null) => {
+    const etats = new Map(corps.querySelectorAll("details").filter((d) => d.getAttribute("data-cle")).map((d) => [d.getAttribute("data-cle"), d.getAttribute("open") !== null]));
     corps.replaceChildren(...[CONSTRUCTEURS[n](outils)].flat(Infinity).filter((partie) => partie !== null && partie !== undefined && partie !== false));
+    for (const d of corps.querySelectorAll("details")) {
+      const cleDetails = d.getAttribute("data-cle");
+      if (!cleDetails || !etats.has(cleDetails)) continue;
+      if (etats.get(cleDetails)) d.setAttribute("open", "");
+      else d.removeAttribute("open");
+    }
     actualiser();
-    if (focus) corps.querySelector(`#${focus}`)?.focus();
+    for (const id of [focus].flat().filter(Boolean)) {
+      const cible = corps.querySelector(`#${id}`);
+      if (cible && !cible.disabled) {
+        cible.focus();
+        break;
+      }
+    }
   };
 
   // Un changement se fait sur une copie, vérifiée comme un fichier reçu :
@@ -909,21 +969,21 @@ function parcours(contexte, n, lu, entete, contenu, { original = null } = {}) {
         dire("Donnez l'autre nom, 120 signes au plus.");
         return;
       }
-      if (original && cle(propre) === cle(original.identite.nom)) {
+      if (copie && nomOriginal && cle(propre) === cle(nomOriginal)) {
         dire(`« ${propre} » est le nom de l'original : choisissez-en un autre, ou « Enregistrer » pour le remplacer.`);
         return;
       }
     }
     const maintenant = new Date().toISOString();
-    const remplace = original && nom === null;
+    const remplace = copie && nom === null;
     const final = {
       ...structuredClone(personnage),
-      id: remplace ? original.id : personnage.id,
+      id: remplace ? remplaceId : personnage.id,
       etat: "enregistre",
       etape: n,
       modifie_le: maintenant,
-      cree_le: remplace ? original.cree_le : nom !== null ? maintenant : personnage.cree_le,
-      enregistre_le: remplace ? (original.enregistre_le ?? maintenant) : maintenant,
+      cree_le: remplace ? (original?.cree_le ?? personnage.cree_le) : nom !== null ? maintenant : personnage.cree_le,
+      enregistre_le: remplace ? (original?.enregistre_le ?? personnage.enregistre_le ?? maintenant) : maintenant,
       banque: { empreinte: contexte.etat.chargement?.enveloppe?.empreinte ?? "", publiee_le: banque.publiee_le ?? null },
       empreintes: relever(index, fiche, personnage),
     };
@@ -954,7 +1014,10 @@ function parcours(contexte, n, lu, entete, contenu, { original = null } = {}) {
       return personnage;
     },
     original,
+    remplaceId,
+    nomOriginal,
     enLigne: depot?.phraseEnregistrement ?? null,
+    refaire: (focus) => refaire(focus),
     modifier,
     dire,
     enregistrerDefinitivement,
@@ -964,12 +1027,12 @@ function parcours(contexte, n, lu, entete, contenu, { original = null } = {}) {
   const suivant = n < ETAPES.length ? el("a", { classe: "bouton", href: adressePersonnage(personnage.id, n + 1) }, "Suivant") : null;
   // Sur un téléphone, les neuf étapes viennent après le contenu : en tête,
   // elles repoussaient chaque champ sous le pli (relecture du lot 2).
-  const navigation = el("nav", { classe: "navigation-etapes", "aria-label": original ? "Étapes de la modification" : "Étapes de la création" }, etapes);
+  const navigation = el("nav", { classe: "navigation-etapes", "aria-label": copie ? "Étapes de la modification" : "Étapes de la création" }, etapes);
   const etroit = estEtroit();
   contenu.replaceChildren(
     ...[
       etroit ? null : navigation,
-      original ? el("p", { classe: "message" }, `Copie de travail de « ${original.identite.nom} » : l'original ne change qu'à l'enregistrement.`) : null,
+      copie ? el("p", { classe: "message" }, `Copie de travail de ${nomOriginal ? `« ${nomOriginal} »` : "l'original"} : l'original ne change qu'à l'enregistrement.`) : null,
       el("h2", {}, `Étape ${n} sur ${ETAPES.length} : ${ETAPES[n - 1].titre}`),
       zoneManques,
       corps,
@@ -1002,7 +1065,7 @@ export async function copieDeTravail(etagere, original) {
   const copie = { ...structuredClone(original), id: nouvelIdentifiant(), etat: "brouillon", etape: 1, modifie_le: new Date().toISOString() };
   verifier(copie);
   await etagere.garder(copie);
-  await etagere.garderNote?.(copie.id, { remplace: original.id });
+  await etagere.garderNote?.(copie.id, { remplace: original.id, nom: original.identite.nom.trim() || null });
   return copie.id;
 }
 
@@ -1053,8 +1116,8 @@ export function afficher(contexte, route) {
         return;
       }
       const note = (await etagere.lireNote?.(personnage.id)) ?? null;
-      const original = note?.remplace ? ((await etagere.lire(note.remplace)) ?? (await contexte.etat.depot?.lire?.(note.remplace)) ?? null) : null;
-      parcours(contexte, route.etape, personnage, entete, contenu, { original });
+      const original = note?.remplace ? ((await etagere.lire(note.remplace)) ?? (await contexte.etat.depot?.chercher?.(note.remplace))?.personnage ?? null) : null;
+      parcours(contexte, route.etape, personnage, entete, contenu, { original, remplaceId: note?.remplace ?? null, nomOriginal: note?.nom ?? original?.identite.nom ?? null });
     })
     .catch((erreur) => contenu.replaceChildren(el("p", { classe: "message", role: "alert" }, `Le personnage n'a pas pu être lu : ${texteErreur(erreur)}`), versLaListe()));
   return ecran;

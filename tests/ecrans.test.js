@@ -658,7 +658,8 @@ test("espace auteur — la clé de dépôt : l'aide, l'état, une saisie vérifi
     assert.match(texte, /Repository access : Only select repositories, et le seul dépôt atelier-des-arpenteurs\./);
     assert.match(texte, /Permissions : Issues, en Read and write\. Rien d'autre\./);
     assert.match(texte, /Expiration : un an/);
-    assert.match(texte, /tout joueur qui a le mot de passe de table peut déposer des personnages, et rien d'autre/);
+    assert.match(texte, /tout joueur qui a le mot de passe de table peut déposer, modifier et supprimer des personnages ; il peut aussi écrire en votre nom dans les tickets de ce dépôt/);
+    assert.match(texte, /Rien d'autre : ni le code, ni la banque. Si elle fuit, révoquez-la sur GitHub/);
     assert.match(texte, /La banque publiée ne porte aucune clé de dépôt\./);
     const champ = ecran.querySelector("#cle-depot");
     assert.equal(champ.getAttribute("type"), "password");
