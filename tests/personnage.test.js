@@ -45,18 +45,18 @@ test("dés — attaque : lourde For+Pré, agile Agi+For, précise Pré+Agi ; dé
 test("défense — types mêlés : le dé le plus faible, et la mention du désavantage ; un seul type : son dé", () => {
   const meles = fiche((p) => {
     p.caracteristiques = { force: 6, agilite: 2, precision: 4, sens: 5, culture_neruvienne: 4, savoir_sauvage: 4, parole: 4, empathie: 3, creativite: 4 };
-    p.equipement[2].porte = false; // Tablier de cuir, agile
-    p.equipement[3].porte = true; // Plastron de fonte, lourde
-    p.equipement[5].porte = false; // Maniques, agile
-    p.equipement[6].porte = false; // Toque, agile
+    p.equipement[2].place = "sac"; // Tablier de cuir, agile
+    p.equipement[3].place = "equipe"; // Plastron de fonte, lourde
+    p.equipement[5].place = "sac"; // Maniques, agile
+    p.equipement[6].place = "sac"; // Toque, agile
   });
   // Lourde For+Sen = 11 → d10 ; précise Pré+Emp = 7 → d6 : le plus faible.
   assert.deepEqual([meles.defense.type, meles.defense.de.de, meles.defense.meles], ["precise", "d6", true]);
   assert.equal(meles.defense.mention, "désavantage sans la maîtrise de toutes les pièces");
   assert.deepEqual(meles.defense.pieces, ["Plastron de fonte", "Guêtres de toile"]);
   const seul = fiche((p) => {
-    p.equipement.forEach((o) => (o.porte = false));
-    p.equipement[3].porte = true;
+    for (const rang of [2, 4, 5, 6]) p.equipement[rang].place = "sac";
+    p.equipement[3].place = "equipe";
   });
   assert.deepEqual([seul.defense.type, seul.defense.de.de, seul.defense.meles, seul.defense.mention], ["lourde", "d6", false, ""]);
 });
@@ -64,7 +64,7 @@ test("défense — types mêlés : le dé le plus faible, et la mention du désa
 test("défense — sans aucune pièce : le dé le plus avantageux des trois, avec son type", () => {
   const f = fiche((p) => {
     p.caracteristiques = { force: 6, agilite: 2, precision: 4, sens: 5, culture_neruvienne: 4, savoir_sauvage: 4, parole: 4, empathie: 3, creativite: 4 };
-    p.equipement.forEach((o) => (o.porte = false));
+    for (const rang of [2, 4, 5, 6]) p.equipement[rang].place = "sac";
   });
   assert.deepEqual(f.defense.pieces, []);
   assert.deepEqual([f.defense.type, f.defense.de.de], ["lourde", "d10"]);
@@ -79,11 +79,11 @@ test("armure — l'ordre des six zones de l'élément Armure, et la plus élevé
   const f = fiche();
   assert.deepEqual(f.armure.zones, { torse: 30, jambe_gauche: 10, jambe_droite: 10, bras_gauche: 10, bras_droit: 10, tete: 6 });
   // Deux pièces sur le torse : la plus élevée, et le livret les interdit ensemble.
-  const deux = fiche((p) => (p.equipement[3].porte = true)); // Plastron de fonte 40, qualité X
+  const deux = fiche((p) => (p.equipement[3].place = "equipe")); // Plastron de fonte 40, qualité X
   assert.equal(deux.armure.zones.torse, 40, "la plus élevée des deux, pas 70");
   assert.deepEqual(deux.armure.couvertes.torse, ["Tablier de cuir", "Plastron de fonte"]);
   assert.ok(deux.avertissements.some((a) => /Torse : Tablier de cuir et Plastron de fonte couvrent la même zone/.test(a.texte)));
-  assert.ok(manques(BANQUE, personnageEssai((p) => (p.equipement[3].porte = true)), { index: INDEX })[7].some((m) => /même zone/.test(m)));
+  assert.ok(manques(BANQUE, personnageEssai((p) => (p.equipement[3].place = "equipe")), { index: INDEX })[7].some((m) => /même zone/.test(m)));
 });
 
 test("qualité — 1/3 + q/3, en fractions exactes, arrondi inférieur une fois l'opération faite ; X laisse les valeurs brutes", () => {
@@ -128,7 +128,7 @@ test("expressions — nombres à virgule, priorités, arrondi inférieur ; toute
 test("mains nues — {force}*0,5/{force}/{force}*2 : les dégâts calculés, et un dé vide faute de règle", () => {
   const avec = (force) =>
     fiche((p) => {
-      p.arme_principale = null;
+      p.equipement[0].place = "sac";
       p.caracteristiques.force = force;
     });
   const f5 = avec(5);
@@ -182,7 +182,7 @@ test("points — des capacités reçues au-delà de 10 : aucune montée possible
   const f = fiche((p) => {
     p.primordial.choix = ["Braise"];
     p.constellation.nom = "Constellation du Chaudron";
-    p.equipement.push({ nom: "Spatule souple", choix: [], qualite: null, porte: false });
+    p.equipement.push({ nom: "Spatule souple", choix: [], qualite: null, place: "sac" });
     p.niveaux = [];
   });
   assert.deepEqual([f.points.recus, f.points.depenses, f.points.reliquat], [11, 11, 0]);
@@ -191,7 +191,7 @@ test("points — des capacités reçues au-delà de 10 : aucune montée possible
 
 test("capacité reçue deux fois : une seule capacité, comptée une fois ; ses deux origines dites", () => {
   const f = fiche((p) => {
-    p.equipement.push({ nom: "Spatule souple", choix: [], qualite: null, porte: false }, { nom: "Louche d'acier", choix: [], qualite: null, porte: false });
+    p.equipement.push({ nom: "Spatule souple", choix: [], qualite: null, place: "sac" }, { nom: "Louche d'acier", choix: [], qualite: null, place: "sac" });
     p.niveaux = [];
   });
   const moulinets = f.capacites.filter((c) => c.nom === "Moulinet farineux");
@@ -204,7 +204,7 @@ test("capacité reçue deux fois : une seule capacité, comptée une fois ; ses 
 });
 
 test("capacité absente de Capacites : « capacité à venir », hors du décompte", () => {
-  const f = fiche((p) => p.equipement.push({ nom: "Poêle en fonte", choix: [], qualite: null, porte: false }));
+  const f = fiche((p) => p.equipement.push({ nom: "Poêle en fonte", choix: [], qualite: null, place: "sac" }));
   const omelette = capacite(f, "Omelette fantôme");
   assert.deepEqual([omelette.aVenir, omelette.niveau], [true, null]);
   assert.ok(f.avertissements.some((a) => a.genre === "a_venir" && /Omelette fantôme/.test(a.texte)));
@@ -324,7 +324,7 @@ test("parcours — ce qui manque, étape par étape ; le personnage d'essai est 
 
 test("relecture — mains nues : les dégâts de la capacité à sa puissance, comme sa description", () => {
   const f = fiche((p) => {
-    p.arme_principale = null;
+    p.equipement[0].place = "sac";
     p.caracteristiques.force = 5;
     p.niveaux = [{ capacite: "Taloche", niveau: 2 }];
   });
@@ -338,7 +338,7 @@ test("relecture — une montée orpheline ne bloque pas l'enregistrement ; un pa
     p.archetype = { nom: "Pâtissier", choix: ["Brigade", "Maîtrise de l'agile"] };
     p.primordial.choix = ["Braise"];
     p.constellation.nom = "Constellation du Chaudron";
-    p.equipement.push({ nom: "Spatule souple", choix: [], qualite: null, porte: false });
+    p.equipement.push({ nom: "Spatule souple", choix: [], qualite: null, place: "sac" });
   });
   const f = calculerFiche(BANQUE, orpheline, { index: INDEX });
   assert.equal(f.points.depasse, true);
@@ -354,4 +354,37 @@ test("relecture — une montée orpheline ne bloque pas l'enregistrement ; un pa
   const givre = fiche((p) => (p.primordial = { nom: "Givre éternel", choix: [] }));
   const aVenir = givre.avertissements.filter((a) => a.genre === "a_venir").map((a) => a.texte);
   assert.deepEqual(aVenir, ["« Constellation du Sablier » : capacités à venir.", "« Givre éternel » : capacités à venir."]);
+});
+
+// Lot 2 bis : la place de chaque objet décide de ce qui compte.
+test("places — les pièces du pack sont portées ; le bouclier équipé compte, un seul ; rangés, ils ne comptent pas", () => {
+  const pack = fiche((p) => {
+    p.equipement = [
+      { nom: "Maniques", choix: [], qualite: "2", place: "pack" },
+      { nom: "Tablier de cuir", choix: [], qualite: "2", place: "pack" },
+      { nom: "Toque renforcée", choix: [], qualite: "2", place: "pack" },
+    ];
+  });
+  assert.deepEqual(pack.defense.pieces, ["Maniques", "Tablier de cuir", "Toque renforcée"]);
+  assert.deepEqual(pack.armure.zones, { torse: 30, jambe_gauche: 0, jambe_droite: 0, bras_gauche: 15, bras_droit: 15, tete: 5 });
+  const range = fiche((p) => p.equipement.forEach((o) => (o.place = "sac")));
+  assert.deepEqual([range.defense.pieces, range.bouclier, range.attaque.mainsNues], [[], null, true]);
+  const bouclier = fiche();
+  assert.deepEqual([bouclier.bouclier.nom, bouclier.bouclier.defense], ["Couvercle de marmite", 8]);
+  const deux = fiche((p) => p.equipement.push({ nom: "Couvercle de marmite", choix: [], qualite: "2", place: "equipe" }));
+  assert.ok(deux.avertissements.some((a) => /Plusieurs boucliers sont équipés : seul « Couvercle de marmite » compte\./.test(a.texte)));
+});
+
+test("places — le parcours signale une place fautive : une arme tenue qui n'en est pas une, un objet équipé qui ne s'équipe pas, deux boucliers", () => {
+  const avec = (modifier) => manques(BANQUE, personnageEssai(modifier), { index: INDEX })[7];
+  const tablierTenu = avec((p) => {
+    p.equipement[0].place = "sac";
+    p.equipement[2].place = "arme";
+  });
+  assert.ok(tablierTenu.includes("« Tablier de cuir » n'est pas une arme : choisissez l'arme tenue dans la liste « Arme »."), tablierTenu.join(" | "));
+  assert.ok(avec((p) => (p.equipement[8].place = "equipe")).includes("« Bouillon revigorant » ne s'équipe pas : rangez-le dans le sac."));
+  assert.ok(avec((p) => (p.equipement[1].place = "equipe")).includes("« Rouleau de fonte » : une seule arme se tient, celle de la liste « Arme » ; rangez celle-ci."));
+  assert.ok(avec((p) => p.equipement.push({ nom: "Couvercle de marmite", choix: [], qualite: "2", place: "equipe" })).includes("Un seul bouclier s'équipe : rangez les autres dans le sac."));
+  assert.ok(avec((p) => (p.equipement[1].place = "pack")).includes("« Rouleau de fonte » n'est pas une pièce d'armure : choisissez de nouveau le pack."));
+  assert.deepEqual(avec(() => {}), []);
 });

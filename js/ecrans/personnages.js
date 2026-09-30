@@ -1,11 +1,17 @@
-// L'écran « Mes personnages » (SPECIFICATION.md, § 15.3 et § 15.1).
+// L'écran « Personnages » (SPECIFICATION.md, § 15.3, § 15.1 et § 15.8).
 //
-// Les personnages de l'appareil, dans le mode de la page : créer, reprendre
-// un brouillon, ouvrir une fiche, enregistrer le fichier, importer un
-// fichier, ouvrir sur le téléphone, supprimer après confirmation. Tout
-// fichier importé est une donnée hostile : lireFichierChoisi le borne et le
-// vérifie avant que rien ne soit gardé. Les confirmations se font dans la
-// page, jamais par window.confirm, que certains navigateurs bloquent.
+// Depuis le lot 2 bis : tous les personnages en ligne, visibles par tous les
+// joueurs qui ont le mot de passe ; à part, ceux de cet appareil : les
+// brouillons (et les copies de travail d'un « Modifier »), les envoyés en
+// attente de l'automate, les non-envoyés avec « Réessayer ». Créer,
+// reprendre, ouvrir, modifier, enregistrer le fichier, importer, ouvrir sur
+// le téléphone, supprimer après confirmation. Tout fichier importé est une
+// donnée hostile : lireFichierChoisi le borne et le vérifie avant que rien
+// ne soit gardé. Les confirmations se font dans la page, jamais par
+// window.confirm, que certains navigateurs bloquent.
+//
+// La démonstration ne dépose rien en ligne : tous ses personnages restent
+// sur l'appareil, et la page le dit.
 //
 // Sans banque typée, le créateur ne peut ni créer ni ouvrir : la liste
 // reste, pour enregistrer le fichier d'un personnage ou le supprimer.
@@ -14,6 +20,7 @@ import { dateLisible } from "../banque/dates.js";
 import { lirePersonnage, nouveauPersonnage, nouvelIdentifiant } from "../personnage/format.js";
 import { ETAPES, banqueUtilisable } from "../personnage/parcours.js";
 import { adressePersonnage } from "../routes.js";
+import { copieDeTravail } from "./creation.js";
 import { compte, el, titre } from "./dom.js";
 import { boutonFichier, lireFichierChoisi, panneauTelephone } from "./partage.js";
 
@@ -22,6 +29,7 @@ const FICHIER_DEMO = "essais/personnage_demo.arpenteur.json";
 
 const nomDe = (personnage) => personnage.identite.nom.trim() || "Sans nom";
 const texteErreur = (erreur) => erreur?.message ?? String(erreur);
+const heure = (iso) => dateLisible(iso);
 
 // Une version, telle que la question la montre : nom, état, date.
 const version = (personnage) => `« ${nomDe(personnage)} », ${etatDe(personnage)}, modifié le ${dateLisible(personnage.modifie_le)}`;
@@ -31,7 +39,7 @@ function demanderDoublon(zone, present, recu) {
   // se dit en clair : c'est définitif (relecture du lot 2).
   const risques = [
     present.etat === "enregistre" && recu.etat === "brouillon" ? "La version reçue est un brouillon, celle de l'appareil est enregistrée." : null,
-    recu.modifie_le < present.modifie_le ? "La version reçue est plus ancienne que celle de l'appareil." : null,
+    Date.parse(recu.modifie_le) < Date.parse(present.modifie_le) ? "La version reçue est plus ancienne que celle de l'appareil." : null,
   ].filter(Boolean);
   return new Promise((resoudre) => {
     const repondre = (choix) => {
@@ -81,88 +89,175 @@ function etatDe(personnage) {
   return `brouillon, étape ${personnage.etape} sur ${ETAPES.length}`;
 }
 
-function carte(contexte, personnage, { utilisable, dire, rafraichir }) {
-  const { etagere, mode } = contexte.etat;
+// La phrase d'état d'une carte, selon d'où vient le personnage.
+function situation(genre, { personnage, note, original, enRetard, demo }) {
+  if (genre === "en_ligne") return `en ligne · ${etatDe(personnage)}`;
+  if (genre === "attente") return `envoyé le ${heure(note.depot.date)} : visible par tous d'ici quelques minutes`;
+  if (genre === "brouillon") return original ? `copie de travail de « ${nomDe(original)} » · ${etatDe(personnage)}` : etatDe(personnage);
+  if (demo) return `sur cet appareil · ${etatDe(personnage)}`;
+  if (note?.depot?.action === "supprimer") return enRetard ? "suppression envoyée, sans effet encore" : `suppression non envoyée : ${note.depot.erreur ?? "raison inconnue"}`;
+  if (enRetard) return `envoyé le ${heure(note.depot.date)}, toujours pas en ligne`;
+  if (note?.depot?.erreur) return `non envoyé : ${note.depot.erreur}`;
+  return `sur cet appareil seulement · ${etatDe(personnage)}`;
+}
+
+/**
+ * Une carte de personnage. genre : « en_ligne », « attente »,
+ * « non_envoye », « brouillon ». outils : { utilisable, dire, rafraichir }.
+ */
+function carte(contexte, genre, entree, { utilisable, dire, rafraichir }) {
+  const { etagere, mode, depot } = contexte.etat;
+  const { personnage, note } = entree;
   const nom = nomDe(personnage);
   const zoneTelephone = el("div", {});
   const zoneConfirmation = el("div", {});
   const actions = [];
+  const suppressionEnAttente = note?.depot?.action === "supprimer";
 
-  if (utilisable) {
+  const confirmer = (question, libelle, agir) => {
+    const annuler = el("button", { type: "button", classe: "bouton secondaire", onclick: () => zoneConfirmation.replaceChildren() }, "Annuler");
+    const valider = el(
+      "button",
+      {
+        type: "button",
+        classe: "bouton",
+        onclick: async () => {
+          valider.disabled = true;
+          try {
+            await agir();
+          } catch (erreur) {
+            dire(`${libelle} n'a pas abouti : ${texteErreur(erreur)}`, true);
+          }
+          await rafraichir();
+        },
+      },
+      libelle,
+    );
+    zoneConfirmation.replaceChildren(el("div", { classe: "confirmation", role: "group", "aria-label": `Confirmer : ${libelle}` }, el("p", {}, question), el("div", { classe: "boutons" }, valider, annuler)));
+    annuler.focus();
+  };
+
+  if (utilisable && !suppressionEnAttente) {
     if (personnage.etat === "brouillon") {
       actions.push(el("a", { classe: "bouton", href: adressePersonnage(personnage.id, personnage.etape) }, "Reprendre"));
       actions.push(el("a", { classe: "bouton secondaire", href: adressePersonnage(personnage.id) }, "Aperçu"));
     } else {
       actions.push(el("a", { classe: "bouton", href: adressePersonnage(personnage.id) }, "Ouvrir"));
+      const modifier = el(
+        "button",
+        {
+          type: "button",
+          classe: "bouton secondaire",
+          onclick: async () => {
+            modifier.disabled = true;
+            try {
+              contexte.naviguer(adressePersonnage(await copieDeTravail(etagere, personnage), 1));
+            } catch (erreur) {
+              modifier.disabled = false;
+              dire(`La copie de travail n'a pas pu être créée : ${texteErreur(erreur)}`, true);
+            }
+          },
+        },
+        "Modifier",
+      );
+      actions.push(modifier);
     }
   }
-  const fichier = boutonFichier(personnage);
-  fichier.className = `${fichier.className} secondaire`;
-  actions.push(fichier);
-  if (utilisable) {
-    const telephone = el(
+  // « Réessayer » : un dépôt non envoyé, ou envoyé mais toujours pas en ligne.
+  if (genre === "non_envoye" && mode === "reel" && personnage.etat === "enregistre") {
+    const reessayer = el(
       "button",
       {
         type: "button",
-        classe: "bouton secondaire",
-        "aria-expanded": "false",
-        onclick: () => {
-          const ouvert = telephone.getAttribute("aria-expanded") === "true";
-          telephone.setAttribute("aria-expanded", String(!ouvert));
-          zoneTelephone.replaceChildren(...(ouvert ? [] : [panneauTelephone(personnage, { mode })]));
+        classe: "bouton",
+        onclick: async () => {
+          reessayer.disabled = true;
+          const resultat = note?.depot ? await depot.reessayer(personnage.id) : await depot.envoyer(personnage, { action: "creer" });
+          dire(resultat.envoye ? `« ${nom} » est parti en ligne : visible par tous d'ici quelques minutes.` : resultat.erreur, !resultat.envoye);
+          await rafraichir();
         },
       },
-      "Ouvrir sur mon téléphone",
+      note?.depot ? (suppressionEnAttente ? "Réessayer la suppression" : "Réessayer") : "Envoyer en ligne",
     );
-    actions.push(telephone);
+    actions.push(reessayer);
   }
-  actions.push(
-    el(
-      "button",
-      {
-        type: "button",
-        classe: "bouton secondaire",
-        onclick: () => {
-          const annuler = el("button", { type: "button", classe: "bouton secondaire", onclick: () => zoneConfirmation.replaceChildren() }, "Annuler");
-          const supprimer = el(
-            "button",
-            {
-              type: "button",
-              classe: "bouton",
-              onclick: async () => {
-                supprimer.disabled = true;
-                try {
-                  await etagere.effacer(personnage.id);
-                  dire(`Le personnage « ${nom} » est supprimé de cet appareil.`);
-                } catch (erreur) {
-                  dire(`Le personnage n'a pas pu être supprimé : ${texteErreur(erreur)}`, true);
-                }
-                await rafraichir();
-              },
-            },
-            "Supprimer",
-          );
-          zoneConfirmation.replaceChildren(
-            el(
-              "div",
-              { classe: "confirmation", role: "group", "aria-label": "Confirmer la suppression" },
-              el("p", {}, `Supprimer « ${nom} » de cet appareil ? C'est définitif.`),
-              el("div", { classe: "boutons" }, supprimer, annuler),
-            ),
-          );
-          annuler.focus();
+  if (suppressionEnAttente) {
+    actions.push(
+      el(
+        "button",
+        {
+          type: "button",
+          classe: "bouton secondaire",
+          onclick: async () => {
+            await etagere.garderNote(personnage.id, { depot: null });
+            dire(`La suppression de « ${nom} » est abandonnée.`);
+            await rafraichir();
+          },
         },
-      },
-      "Supprimer",
-    ),
-  );
+        "Garder en ligne",
+      ),
+    );
+  } else {
+    const fichier = boutonFichier(personnage);
+    fichier.className = `${fichier.className} secondaire`;
+    actions.push(fichier);
+    if (utilisable) {
+      const telephone = el(
+        "button",
+        {
+          type: "button",
+          classe: "bouton secondaire",
+          "aria-expanded": "false",
+          onclick: () => {
+            const ouvert = telephone.getAttribute("aria-expanded") === "true";
+            telephone.setAttribute("aria-expanded", String(!ouvert));
+            zoneTelephone.replaceChildren(...(ouvert ? [] : [panneauTelephone(personnage, { mode })]));
+          },
+        },
+        "Ouvrir sur mon téléphone",
+      );
+      actions.push(telephone);
+    }
+    // Supprimer : de l'appareil seulement (brouillon, non envoyé), ou pour
+    // tous (en ligne, envoyé) par un ticket, l'historique de GitHub gardant
+    // chaque version.
+    const pourTous = mode === "reel" && (genre === "en_ligne" || genre === "attente");
+    actions.push(
+      el(
+        "button",
+        {
+          type: "button",
+          classe: "bouton secondaire",
+          onclick: () =>
+            confirmer(
+              pourTous
+                ? `Supprimer « ${nom} » pour tous les joueurs ? L'historique de GitHub garde chaque version : l'auteur peut la restaurer.`
+                : `Supprimer « ${nom} » de cet appareil ? C'est définitif.`,
+              "Supprimer",
+              async () => {
+                if (pourTous) {
+                  const resultat = await depot.supprimer(personnage.id);
+                  await etagere.effacer(personnage.id);
+                  dire(resultat.envoye ? `La suppression de « ${nom} » part en ligne : effective d'ici quelques minutes.` : resultat.erreur, !resultat.envoye);
+                } else {
+                  await etagere.effacer(personnage.id);
+                  await etagere.garderNote(personnage.id, null);
+                  dire(`Le personnage « ${nom} » est supprimé de cet appareil.`);
+                }
+              },
+            ),
+        },
+        "Supprimer",
+      ),
+    );
+  }
 
   const origines = [personnage.espece?.nom, personnage.archetype?.nom].filter(Boolean).join(" · ");
   return el(
     "li",
     { classe: "carte-personnage" },
     el("h2", {}, nom),
-    el("p", { classe: "secondaire-texte" }, etatDe(personnage)),
+    el("p", { classe: "secondaire-texte" }, situation(genre, entree)),
     origines ? el("p", {}, origines) : null,
     el("div", { classe: "boutons" }, actions),
     zoneConfirmation,
@@ -170,9 +265,9 @@ function carte(contexte, personnage, { utilisable, dire, rafraichir }) {
   );
 }
 
-/** L'écran « Mes personnages ». */
+/** L'écran « Personnages ». */
 export function afficher(contexte) {
-  const { etagere, mode, banque } = contexte.etat;
+  const { etagere, mode, banque, depot } = contexte.etat;
   const verdict = banqueUtilisable(banque);
   const utilisable = !verdict.erreur;
   const zoneMessage = el("div", {});
@@ -181,23 +276,57 @@ export function afficher(contexte) {
 
   const dire = (texte, erreur = false) => zoneMessage.replaceChildren(el("p", { classe: "message", role: erreur ? "alert" : "status" }, texte));
 
+  const section = (intitule, genre, entrees, vide) =>
+    el(
+      "section",
+      { classe: "rubrique-personnages" },
+      el("h2", { classe: "titre-rubrique" }, intitule),
+      entrees.length
+        ? el("ul", { classe: "personnages-liste" }, entrees.map((entree) => carte(contexte, entree.genre ?? genre, entree, { utilisable, dire, rafraichir })))
+        : el("p", { classe: "secondaire-texte" }, vide),
+    );
+
   const rafraichir = async () => {
     let lu;
     try {
-      lu = await etagere.lister();
+      lu = depot ? await depot.rapprocher() : null;
+      if (!lu) {
+        const { personnages, illisibles } = await etagere.lister();
+        const notes = (await etagere.listerNotes?.()) ?? [];
+        const noteDe = new Map(notes.map((n) => [n.id, n]));
+        lu = {
+          enLigne: [],
+          attente: [],
+          brouillons: personnages.filter((p) => p.etat === "brouillon").map((p) => ({ personnage: p, note: noteDe.get(p.id) })),
+          nonEnvoyes: personnages.filter((p) => p.etat === "enregistre").map((p) => ({ personnage: p, note: noteDe.get(p.id), demo: mode !== "reel" })),
+          illisibles,
+          ancienneCle: 0,
+        };
+      }
     } catch (erreur) {
-      liste.replaceChildren(el("p", { classe: "message", role: "alert" }, `Les personnages de cet appareil n'ont pas pu être lus : ${texteErreur(erreur)}`));
+      liste.replaceChildren(el("p", { classe: "message", role: "alert" }, `Les personnages n'ont pas pu être lus : ${texteErreur(erreur)}`));
       return;
     }
-    const { personnages, illisibles } = lu;
-    liste.replaceChildren(
-      ...[
-        personnages.length
-        ? el("ul", { classe: "personnages-liste" }, personnages.map((p) => carte(contexte, p, { utilisable, dire, rafraichir })))
-        : el("p", { classe: "secondaire-texte" }, "Aucun personnage sur cet appareil."),
-        illisibles ? el("p", { classe: "secondaire-texte" }, `${compte(illisibles, "personnage illisible est ignoré", "personnages illisibles sont ignorés")}.`) : null,
-      ].filter(Boolean),
-    );
+    // L'original d'une copie de travail, pour la nommer.
+    const tous = [...lu.enLigne, ...lu.attente.map((e) => e.personnage), ...lu.nonEnvoyes.map((e) => e.personnage)];
+    for (const b of lu.brouillons) if (b.note?.remplace) b.original = tous.find((p) => p.id === b.note.remplace) ?? null;
+    const parties = [];
+    if (mode === "reel") {
+      parties.push(
+        section(
+          "En ligne",
+          "en_ligne",
+          [...lu.attente.map((e) => ({ ...e, genre: "attente" })), ...lu.enLigne.map((p) => ({ personnage: p }))],
+          lu.erreur ? "Les personnages en ligne ne se lisent pas pour l'instant." : "Aucun personnage en ligne.",
+        ),
+      );
+      if (lu.erreur) parties.push(el("p", { classe: "message", role: "alert" }, lu.erreur));
+      if (lu.ancienneCle) parties.push(el("p", { classe: "message" }, `${compte(lu.ancienneCle, "personnage en ligne est chiffré", "personnages en ligne sont chiffrés")} avec une ancienne clé de table : l'auteur doit les rechiffrer.`));
+    }
+    parties.push(section(mode === "reel" ? "Sur cet appareil : non envoyés" : "Sur cet appareil", "non_envoye", lu.nonEnvoyes, mode === "reel" ? "Aucun personnage en attente d'envoi." : "Aucun personnage enregistré."));
+    parties.push(section("Brouillons", "brouillon", lu.brouillons, "Aucun brouillon."));
+    if (lu.illisibles) parties.push(el("p", { classe: "secondaire-texte" }, `${compte(lu.illisibles, "personnage illisible est ignoré", "personnages illisibles sont ignorés")}.`));
+    liste.replaceChildren(...parties);
   };
 
   // Un personnage lu (fichier ou démonstration) : gardé, doublon compris.
@@ -259,6 +388,7 @@ export function afficher(contexte) {
     titre("Personnages"),
     verdict.erreur ? el("p", { classe: "message", role: "alert" }, verdict.erreur) : null,
     etagere.durable ? null : el("p", { classe: "message" }, PHRASE_NON_DURABLE),
+    depot?.raison ? el("p", { classe: "message" }, depot.raison) : null,
     utilisable
       ? [
           el(

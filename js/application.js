@@ -22,6 +22,7 @@ import * as liste from "./ecrans/liste.js";
 import * as motDePasse from "./ecrans/mot_de_passe.js";
 import * as personnages from "./ecrans/personnages.js";
 import * as reception from "./ecrans/reception.js";
+import { creerDepot } from "./personnage/depot.js";
 import { ouvrirEtagere } from "./personnage/stockage.js";
 import { lireRoute } from "./routes.js";
 import { ouvrirCoffre } from "./securite/coffre.js";
@@ -58,6 +59,7 @@ const etat = {
   stockage: null, // { resultat, le } : la demande de stockage durable
   nouvelles: null, // un message après « Vérifier les mises à jour »
   etagere: null, // les personnages de l'appareil, pour ce mode (§ 15.1)
+  depot: null, // les personnages en ligne : dépôt et lecture (§ 15.8)
 };
 
 function installer(banque, secret) {
@@ -65,11 +67,13 @@ function installer(banque, secret) {
   etat.index = indexer(banque);
   etat.secret = secret ?? etat.secret;
   etat.motDePasse = null;
+  // La clé de dépôt voyage dans la banque : le dépôt suit chaque banque ouverte.
+  etat.depot = creerDepot({ mode: etat.mode, banque, secret: etat.secret, etagere: etat.etagere });
 }
 
 async function charger(telecharge = null) {
   etat.chargement = telecharge ?? (await telecharger(etat.mode));
-  Object.assign(etat, { banque: null, index: null, motDePasse: null });
+  Object.assign(etat, { banque: null, index: null, depot: null, motDePasse: null });
   if (!etat.chargement.enveloppe) return;
   const ouverte = await ouvrirAvecCoffre(etat.chargement.enveloppe, etat.coffre, etat.mode);
   if (ouverte.banque) installer(ouverte.banque, ouverte.secret);
@@ -107,7 +111,7 @@ const contexte = {
     await etat.coffre.oublierCle(etat.mode);
     // L'espace auteur ne garde aucune copie : son circuit en cours s'annule.
     espaceAuteur.oublier();
-    Object.assign(etat, { banque: null, index: null, secret: null, nouvelles: null, motDePasse: etat.chargement?.enveloppe ? "requis" : null });
+    Object.assign(etat, { banque: null, index: null, secret: null, depot: null, nouvelles: null, motDePasse: etat.chargement?.enveloppe ? "requis" : null });
     afficher();
   },
 

@@ -133,7 +133,7 @@ test("recto — le modèle rempli : en-tête, caractéristiques, attaque, défen
     assert.equal(lien.querySelectorAll(".case-lien").filter((c) => !c.className.includes("grisee")).length, 1);
     assert.match(texteDe(recto.querySelector(".legende-primordiaux")), /Derkat vengeance · Enaël savoir · Ithilvion choix · Kalester endurance · Neru équilibre/);
     assert.match(texteDe(recto.querySelector(".legende-primordiaux")), /Makith noirceur · Kouvîmäar protection · Sillybir pardon/);
-    assert.equal(texteDe(recto.querySelector(".fiche-pied")), "Banque du 29/09/2026");
+    assert.equal(texteDe(recto.querySelector(".fiche-pied")), "Banque du 29/09/2026 · constellation tirée 3 fois", "le pied dit le nombre de tirages (lot 2 bis)");
   } finally {
     retirer();
   }
@@ -144,7 +144,7 @@ test("recto — la constellation saisie à la main se dit en pied de page ; sans
   try {
     const f = fiche((p) => {
       p.constellation.obtention = "saisie";
-      p.arme_principale = null;
+      p.equipement[0].place = "sac";
     });
     const recto = feuilles(f).querySelector(".recto");
     assert.equal(texteDe(recto.querySelector(".fiche-pied")), "Banque du 29/09/2026 · constellation saisie à la main");
@@ -160,7 +160,7 @@ test("recto — la constellation saisie à la main se dit en pied de page ; sans
 test("verso — suite du recto, contexte, historique, toutes les armes, toutes les capacités, points et avertissements", () => {
   const retirer = installerDom();
   try {
-    const f = fiche((p) => p.equipement.push({ nom: "Poêle en fonte", choix: [], qualite: null, porte: false }));
+    const f = fiche((p) => p.equipement.push({ nom: "Poêle en fonte", choix: [], qualite: null, place: "sac" }));
     const verso = feuilles(f).querySelector(".verso");
     const texte = texteDe(verso);
     assert.match(texte, /Suite du recto/);

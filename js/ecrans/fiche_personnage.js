@@ -6,6 +6,11 @@
 // le verso, quelle que soit la vue. La fiche se recalcule avec la banque du
 // jour (calcul.js).
 //
+// Depuis le lot 2 bis : un personnage en ligne s'ouvre aussi (lu du site,
+// déchiffré) ; « Modifier » en ouvre une copie de travail ; la qualité des
+// objets, 2 à la création, se change ici, objet par objet, et le personnage
+// modifié repart en ligne.
+//
 // Le recto ne déborde jamais : repartition.js répartit les lignes selon les
 // places mesurées du modèle ; si le navigateur mesure malgré tout un
 // débordement (une police qui manque), une ligne de plus passe au verso.
@@ -15,12 +20,16 @@ import { feuilles } from "../fiche/feuilles.js";
 import { lecture } from "../fiche/lecture.js";
 import { PLACES } from "../fiche/repartition.js";
 import { calculerFiche } from "../personnage/calcul.js";
-import { banqueUtilisable } from "../personnage/parcours.js";
+import { ErreurPersonnage, verifier } from "../personnage/format.js";
+import { ETAPES, banqueUtilisable } from "../personnage/parcours.js";
+import { copieDeTravail } from "./creation.js";
 import { adressePersonnage } from "../routes.js";
 import { el, titre, titrer } from "./dom.js";
 import { boutonFichier, panneauTelephone } from "./partage.js";
 
 const LARGEUR_FEUILLE = 794;
+// Le motif d'une qualité saisie : celui que format.js vérifie.
+const QUALITE = /^\d{1,3}(?:,\d{1,2})?$/;
 const MEMOIRE_VUE = "atelier.vue-personnage";
 
 function vueMemorisee() {
@@ -98,7 +107,68 @@ async function imprimer(mesurer) {
   globalThis.print();
 }
 
-function afficherPersonnage(contexte, personnage, zone) {
+// La qualité des objets, que le MJ fixe (2 à la création) : un champ par
+// objet dont la qualité n'est pas fixée par le classeur. Enregistrer garde
+// le personnage sur l'appareil et, en ligne, le redépose.
+function qualites(contexte, personnage, fiche, zone) {
+  const modifiables = fiche.equipement.filter((o) => o.qualite.applicable && !o.qualite.fixee);
+  if (!modifiables.length) return null;
+  const message = el("div", {});
+  const champs = modifiables.map((o) => {
+    const id = `qualite-${o.rang}`;
+    const entree = el("input", { type: "text", id, classe: "champ champ-court", inputmode: "decimal", pattern: "\\d{1,3}(,\\d{1,2})?", maxlength: 6, autocomplete: "off" });
+    entree.value = personnage.equipement[o.rang].qualite ?? "";
+    return { rang: o.rang, entree, noeud: el("div", {}, el("label", { for: id }, o.nom), entree) };
+  });
+  const dire = (texte, erreur = false) => message.replaceChildren(el("p", { classe: "message", role: erreur ? "alert" : "status" }, texte));
+  const enregistrer = el(
+    "button",
+    {
+      type: "button",
+      classe: "bouton",
+      onclick: async () => {
+        const copie = structuredClone(personnage);
+        for (const { rang, entree } of champs) {
+          const texte = entree.value.trim();
+          if (texte !== "" && !QUALITE.test(texte)) {
+            dire(`« ${copie.equipement[rang].nom} » : un nombre comme 2 ou 1,5, ou rien pour X.`, true);
+            entree.focus();
+            return;
+          }
+          copie.equipement[rang].qualite = texte === "" ? null : texte;
+        }
+        copie.modifie_le = new Date().toISOString();
+        enregistrer.disabled = true;
+        try {
+          verifier(copie);
+          await contexte.etat.etagere.garder(copie);
+        } catch (erreur) {
+          if (!(erreur instanceof ErreurPersonnage)) throw erreur;
+          enregistrer.disabled = false;
+          dire(`Les qualités n'ont pas pu être gardées : ${erreur.message}`, true);
+          return;
+        }
+        const depot = contexte.etat.depot;
+        const envoi = depot && copie.etat === "enregistre" && contexte.etat.mode === "reel" ? await depot.envoyer(copie, { action: "remplacer" }) : null;
+        afficherPersonnage(contexte, copie, zone);
+        const suite = envoi ? (envoi.envoye ? " Il part en ligne : visible par tous d'ici quelques minutes." : ` Non envoyé : ${envoi.erreur}`) : "";
+        zone.querySelector(".qualites-message")?.replaceChildren(el("p", { classe: "message", role: "status" }, `Les qualités sont gardées.${suite}`));
+      },
+    },
+    "Enregistrer les qualités",
+  );
+  return el(
+    "details",
+    { classe: "qualites ne-pas-imprimer" },
+    el("summary", {}, "Qualité des objets"),
+    el("p", { classe: "secondaire-texte petit" }, "2 à la création ; le MJ la fixe ensuite. Un nombre comme 2 ou 1,5 ; vide : X."),
+    champs.map((c) => c.noeud),
+    el("div", { classe: "boutons" }, enregistrer),
+    message,
+  );
+}
+
+function afficherPersonnage(contexte, personnage, zone, { enLigne = false } = {}) {
   const { banque, mode } = contexte.etat;
   const fiche = calculerFiche(banque, personnage);
   const places = { ...PLACES };
@@ -140,13 +210,33 @@ function afficherPersonnage(contexte, personnage, zone) {
   const etat =
     personnage.etat === "enregistre"
       ? `Enregistré le ${dateLisible(personnage.enregistre_le).slice(0, 10)}`
-      : `Brouillon, étape ${personnage.etape} sur 9 : la fiche n'est pas définitive.`;
+      : `Brouillon, étape ${personnage.etape} sur ${ETAPES.length} : la fiche n'est pas définitive.`;
+  const modifier =
+    personnage.etat === "enregistre"
+      ? el(
+          "button",
+          {
+            type: "button",
+            classe: "bouton",
+            onclick: async () => {
+              modifier.disabled = true;
+              try {
+                contexte.naviguer(adressePersonnage(await copieDeTravail(contexte.etat.etagere, personnage), 1));
+              } catch (erreur) {
+                modifier.disabled = false;
+                zone.querySelector(".qualites-message")?.replaceChildren(el("p", { classe: "message", role: "alert" }, `La copie de travail n'a pas pu être créée : ${erreur.message}`));
+              }
+            },
+          },
+          "Modifier",
+        )
+      : null;
   racine.append(
     el(
       "div",
       { classe: "barre-personnage ne-pas-imprimer" },
       titre(personnage.identite.nom || "Personnage sans nom"),
-      el("p", { classe: "secondaire-texte" }, etat),
+      el("p", { classe: "secondaire-texte" }, enLigne ? `${etat} · en ligne` : etat),
       el(
         "div",
         { classe: "actions" },
@@ -156,9 +246,12 @@ function afficherPersonnage(contexte, personnage, zone) {
         boutonFichier(personnage),
         boutonTelephone,
         personnage.etat === "brouillon" ? el("a", { classe: "bouton", href: adressePersonnage(personnage.id, personnage.etape) }, "Reprendre la création") : null,
+        modifier,
         el("a", { href: "#/personnages" }, "Tous les personnages"),
       ),
       telephone,
+      el("div", { classe: "qualites-message" }),
+      qualites(contexte, personnage, fiche, zone),
     ),
     el("div", { classe: "vue-lecture-contenu ne-pas-imprimer" }, lecture(fiche)),
     cadreImpression,
@@ -192,12 +285,15 @@ export function afficher(contexte, route) {
   }
   contexte.etat.etagere
     .lire(route.id)
-    .then((personnage) => {
+    .then(async (local) => {
+      // Sur l'appareil d'abord ; sinon, en ligne (§ 15.8).
+      const enLigne = local ? null : ((await contexte.etat.depot?.lire(route.id)) ?? null);
+      const personnage = local ?? enLigne;
       if (!personnage) {
-        zone.replaceChildren(titre("Personnage introuvable"), el("p", { classe: "message" }, "Ce personnage n'est pas sur cet appareil."), el("p", { classe: "lien-retour" }, el("a", { href: "#/personnages" }, "Tous les personnages")));
+        zone.replaceChildren(titre("Personnage introuvable"), el("p", { classe: "message" }, "Ce personnage n'est ni sur cet appareil, ni en ligne."), el("p", { classe: "lien-retour" }, el("a", { href: "#/personnages" }, "Tous les personnages")));
         return;
       }
-      afficherPersonnage(contexte, personnage, zone);
+      afficherPersonnage(contexte, personnage, zone, { enLigne: Boolean(enLigne) });
     })
     .catch((erreur) => {
       zone.replaceChildren(el("p", { classe: "message", role: "alert" }, `Ce personnage n'a pas pu s'ouvrir : ${erreur?.message ?? String(erreur)}`));

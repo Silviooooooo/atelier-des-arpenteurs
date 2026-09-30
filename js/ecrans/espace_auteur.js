@@ -1,12 +1,14 @@
 // L'espace auteur (SPECIFICATION.md, § 6, § 7, § 8 et § 9).
 //
 // La clé GitHub ; l'import d'un classeur, lu sur l'appareil ; le rapport ;
-// les différences avec la banque publiée ; la publication ; le changement
-// de mot de passe. Sans clé GitHub, il n'affiche que la saisie de la clé
-// (§ 8.1), et le bouton « Publier », inactif. Ce bouton est toujours là,
-// dans une barre collée au bas de l'écran ; inactif, il dit pourquoi en une
-// ligne (§ 9). Une erreur bloque la publication, sauf si l'auteur coche « Je
-// publie en connaissance de cause », sous la liste complète (§ 6.3).
+// les différences avec la banque publiée ; la publication ; la clé de dépôt
+// des personnages ; le changement de mot de passe, qui rechiffre aussi les
+// personnages en ligne ; leur vérification et leur reprise (§ 8.4). Sans clé
+// GitHub, il n'affiche que la saisie de la clé (§ 8.1), et le bouton
+// « Publier », inactif. Ce bouton est toujours là, dans une barre collée au
+// bas de l'écran ; inactif, il dit pourquoi en une ligne (§ 9). Une erreur
+// bloque la publication, sauf si l'auteur coche « Je publie en connaissance
+// de cause », sous la liste complète (§ 6.3).
 //
 // En démonstration, rien n'est publié et aucune clé GitHub n'est demandée :
 // l'import, le rapport et les différences s'essaient contre la banque de
@@ -14,9 +16,11 @@
 
 import { MOT_DE_PASSE_DEMO } from "../banque/chargement.js";
 import { importerFichier } from "../banque/importation.js";
-import { DEPOT, publier } from "../publication/github.js";
-import { preparerChangement, preparerPublication } from "../publication/preparation.js";
-import { LONGUEUR_MINIMALE, defautDuMotDePasse, normaliserMotDePasse, nouveauSecret, ouvrirAvecMotDePasse } from "../securite/chiffrement.js";
+import { cleDepotValide } from "../personnage/en_ligne.js";
+import { DEPOT, lireDepot, publier, publierParCommit } from "../publication/github.js";
+import { inventaire } from "../publication/personnages.js";
+import { preparerChangement, preparerPublication, preparerReprise } from "../publication/preparation.js";
+import { LONGUEUR_MINIMALE, defautDuMotDePasse, lireEnTete, normaliserMotDePasse, nouveauSecret, ouvrirAvecMotDePasse } from "../securite/chiffrement.js";
 import { decompte, listeAnomalies } from "./anomalies.js";
 import { compte, el, titre } from "./dom.js";
 
@@ -34,13 +38,23 @@ const auteur = {
   confirmation: null, // { preparation, essai, resoudre }
   attente: null, // le texte de l'attente
   resultat: null, // { publie, commit, message } ou { erreur } ou { message }
-  genre: "publication", // ou « changement »
+  genre: "publication", // ou « changement », « verification », « reprise »
   nouveau: null, // le secret du nouveau mot de passe, pendant un changement
+  // La décision sur la clé de dépôt des personnages, pour la prochaine
+  // publication : { action: "garder" }, { action: "remplacer", valeur } ou
+  // { action: "retirer" }. Une clé saisie ne vit qu'ici, en mémoire, jusqu'à
+  // la publication : ni coffre ni localStorage (§ 8.4).
+  cleDepot: { action: "garder" },
+  enLigne: null, // { inventaire }, { erreur }, ou { message, commit } après une reprise
 };
 let conteneur = null;
 let ctx = null;
 
 const demo = () => ctx.etat.mode === "demo";
+// La vérification et la reprise des personnages en ligne ont leur section :
+// leur attente s'y affiche, pas sous « Publication ».
+const circuitEnLigne = () => auteur.genre === "verification" || auteur.genre === "reprise";
+const enCircuit = () => Boolean(auteur.attente || auteur.besoin || auteur.confirmation);
 
 // Les parties d'un écran, aplaties et sans les absentes.
 const noeuds = (parties) => parties.flat(Infinity).filter((partie) => partie !== null && partie !== undefined && partie !== false);
@@ -111,6 +125,7 @@ function etatDuJeton() {
           disabled: Boolean(auteur.attente),
           onclick: async () => {
             annulerCircuit();
+            auteur.cleDepot = { action: "garder" };
             await ctx.etat.coffre.oublierJeton();
             auteur.jeton = null;
             rendre();
@@ -195,23 +210,30 @@ async function garder(secret) {
 function annulerCircuit() {
   const enCours = auteur.confirmation;
   auteur.circuit += 1;
-  Object.assign(auteur, { confirmation: null, besoin: null, attente: null, nouveau: null, publiee: null, resultat: null });
+  Object.assign(auteur, { confirmation: null, besoin: null, attente: null, nouveau: null, publiee: null, resultat: null, enLigne: null });
   enCours?.resoudre(false);
 }
 
-/** « Oublier le mot de passe sur cet appareil » (§ 7.2) : l'accueil l'appelle. */
+/**
+ * « Oublier le mot de passe sur cet appareil » (§ 7.2) : l'accueil l'appelle.
+ * Une clé de dépôt saisie et pas encore publiée s'oublie aussi.
+ */
 export function oublier() {
   annulerCircuit();
+  auteur.cleDepot = { action: "garder" };
   rendre();
 }
 
 async function preparer(publiee) {
   auteur.publiee = publiee;
-  auteur.attente = "Calcul des différences…";
+  auteur.attente = auteur.genre === "changement" ? "Rechiffrement de la banque et des personnages en ligne…" : "Calcul des différences…";
   rendre();
   const secret = await secretGarde();
-  if (auteur.genre === "changement") return preparerChangement({ publiee, ancien: secret, nouveau: auteur.nouveau });
-  return preparerPublication({ publiee, banque: auteur.fichier.banque, secret });
+  // La clé GitHub de l'auteur ne doit jamais devenir la clé de dépôt : la
+  // préparation la compare, y compris à une clé saisie avant elle.
+  const cle = { cle: auteur.cleDepot, jetonAuteur: auteur.jeton };
+  if (auteur.genre === "changement") return preparerChangement({ publiee, ancien: secret, nouveau: auteur.nouveau, ...cle });
+  return preparerPublication({ publiee, banque: auteur.fichier.banque, secret, ...cle });
 }
 
 function confirmer(preparation, { essai }) {
@@ -238,9 +260,12 @@ async function lancer(genre) {
   const confirmerIci = (preparation, options) => (courant() ? confirmer(preparation, options) : Promise.resolve(false));
   Object.assign(auteur, { genre, resultat: null, besoin: null, confirmation: null, attente: "Lecture de la banque publiée…" });
   rendre();
+  // Le changement écrit la banque et les personnages en ligne en un seul
+  // commit (§ 8.4) ; la publication ordinaire garde son PUT d'un fichier.
+  const circuitReel = genre === "changement" ? publierParCommit : publier;
   let resultat;
   try {
-    resultat = demo() ? await circuitDemo(preparerIci, confirmerIci) : await publier({ jeton: auteur.jeton, preparer: preparerIci, confirmer: confirmerIci });
+    resultat = demo() ? await circuitDemo(preparerIci, confirmerIci) : await circuitReel({ jeton: auteur.jeton, preparer: preparerIci, confirmer: confirmerIci });
   } catch (erreur) {
     resultat = { erreur: `Erreur inattendue : ${erreur.message}` };
   }
@@ -252,6 +277,12 @@ async function lancer(genre) {
     if (resultat.code === "sel_change") ctx.etat.secret = null;
   } else if (resultat.annulee) {
     auteur.resultat = resultat.demo ? null : { message: "Publication annulée : rien n'a été écrit." };
+  } else if (resultat.code === "incertain" && genre === "changement") {
+    // L'ancienne clé reste : on ne sait pas laquelle ouvre la banque publiée.
+    auteur.resultat = {
+      ...resultat,
+      erreur: "GitHub ne répond plus depuis l'envoi : le changement a peut-être eu lieu. Rechargez la page ; si l'Atelier redemande le mot de passe de table, essayez d'abord le nouveau.",
+    };
   } else if (resultat.erreur) {
     auteur.resultat = resultat;
   } else {
@@ -264,9 +295,12 @@ async function lancer(genre) {
         avertissement = `La nouvelle clé n'a pas pu être gardée sur cet appareil (${erreur.message}) : elle vit en mémoire le temps de la visite.`;
       }
       auteur.nouveau = null;
+      auteur.enLigne = inventaireApresChangement(resultat.preparation.personnages);
     }
     ctx.publiee(resultat.preparation, ctx.etat.secret);
-    auteur.resultat = { publie: true, commit: resultat.commit, message: resultat.preparation.message, avertissement };
+    // La clé de dépôt est partie avec la banque : la banque ouverte la porte.
+    auteur.cleDepot = { action: "garder" };
+    auteur.resultat = { publie: true, commit: resultat.commit, message: resultat.preparation.message, avertissement, personnages: resultat.preparation.personnages ?? null };
   }
   rendre();
 }
@@ -305,6 +339,66 @@ function listeDesDifferences(d) {
   return parties.length ? parties : [el("p", {}, "Aucune différence de contenu.")];
 }
 
+// Ce qu'il advient de la clé de dépôt (§ 8.4) : l'écran le dit, le message
+// de commit, public, jamais.
+const SORTS_DE_LA_CLE = {
+  ajoutee: "ajoutée à la banque : les joueurs pourront déposer leurs personnages en ligne.",
+  remplacee: "remplacée par la nouvelle clé saisie.",
+  retiree: "retirée de la banque : plus personne ne pourra déposer de personnage en ligne.",
+  gardee: "gardée, telle que la banque publiée la porte.",
+  absente: "aucune : personne ne peut déposer de personnage en ligne.",
+};
+
+function sortDeLaCle(sort) {
+  if (!SORTS_DE_LA_CLE[sort]) return null;
+  return el("p", { classe: "sort-cle-depot" }, el("strong", {}, "Clé de dépôt des personnages : "), SORTS_DE_LA_CLE[sort]);
+}
+
+const telQuel = (n) => (n > 1 ? "restent tels quels" : "reste tel quel");
+
+/**
+ * Ce que le changement de mot de passe a lu des personnages en ligne, pour la
+ * section « Personnages en ligne » : s'il en a laissé sous une autre clé,
+ * elle les montre aussitôt, avec leur reprise, sans rien relire. Sinon null.
+ * Un fichier que l'ancienne clé n'a pas ouvert compte parmi les illisibles,
+ * comme au résultat du changement.
+ */
+function inventaireApresChangement(p) {
+  if (!p?.autreCle.length) return null;
+  return { inventaire: { total: p.total, aJour: p.rechiffres.length + p.aJour.length, autreCle: p.autreCle, illisibles: [...p.illisibles, ...p.echecs] } };
+}
+
+// Les personnages en ligne d'un changement de mot de passe, comptés.
+function personnagesDuChangement(p, { fait = false } = {}) {
+  if (!p) return [];
+  if (!p.total) return [el("p", {}, "Aucun personnage n'est en ligne.")];
+  const rechiffres = p.rechiffres.length;
+  const parties = [
+    el(
+      "p",
+      { classe: "personnages-rechiffres" },
+      fait
+        ? `${compte(rechiffres, "personnage en ligne rechiffré", "personnages en ligne rechiffrés")} sous le nouveau mot de passe.`
+        : `${compte(rechiffres, "personnage en ligne sera rechiffré", "personnages en ligne seront rechiffrés")} sous le nouveau mot de passe, dans le même commit que la banque.`,
+    ),
+  ];
+  const laisses = p.autreCle.length;
+  if (laisses) {
+    parties.push(
+      el(
+        "p",
+        {},
+        `${compte(laisses, "personnage est chiffré", "personnages sont chiffrés")} avec un mot de passe plus ancien : ${laisses > 1 ? "ils" : "il"} ${telQuel(laisses)}. ${
+          fait ? `Plus bas, « Personnages en ligne » propose de ${laisses > 1 ? "les" : "le"} reprendre` : `« Personnages en ligne » ${laisses > 1 ? "les" : "le"} reprend ensuite`
+        }, avec ce mot de passe-là.`,
+      ),
+    );
+  }
+  const abimes = p.echecs.length + p.illisibles.length;
+  if (abimes) parties.push(el("p", {}, `${compte(abimes, "fichier de personnage est illisible", "fichiers de personnages sont illisibles")} : ${abimes > 1 ? "ils" : "il"} ${telQuel(abimes)}.`));
+  return parties;
+}
+
 // accepte : la case « en connaissance de cause », ou null sans erreur.
 function confirmation(accepte) {
   const { preparation, essai } = auteur.confirmation;
@@ -313,12 +407,22 @@ function confirmation(accepte) {
   const pluriel = erreurs > 1;
   return [
     essai > 1
-      ? el("p", { classe: "message", role: "alert", tabindex: "-1", "data-focus": true }, "La banque a été publiée entre-temps depuis un autre appareil : voici les différences recalculées.")
+      ? el(
+          "p",
+          { classe: "message", role: "alert", tabindex: "-1", "data-focus": true },
+          changement
+            ? "Le dépôt a changé sur GitHub entre-temps (une publication, ou un personnage rangé) : voici le décompte recalculé."
+            : "La banque a été publiée entre-temps depuis un autre appareil : voici les différences recalculées.",
+        )
       : null,
     el("h3", { tabindex: "-1", "data-focus": essai > 1 ? null : true }, changement ? "Changement du mot de passe" : "Différences avec la banque publiée"),
     changement
-      ? el("p", {}, "La banque publiée sera republiée telle quelle, sous le nouveau mot de passe. Transmettez-le ensuite aux joueurs : leur appareil le leur redemandera.")
+      ? [
+          el("p", {}, "La banque publiée sera republiée telle quelle, sous le nouveau mot de passe. Transmettez-le ensuite aux joueurs : leur appareil le leur redemandera."),
+          personnagesDuChangement(preparation.personnages),
+        ]
       : listeDesDifferences(preparation.differences),
+    demo() ? null : sortDeLaCle(preparation.cle_depot),
     el("h3", {}, "Message de la publication"),
     el("p", { classe: "resume" }, preparation.message),
     accepte
@@ -504,6 +608,7 @@ function resultat() {
       el("p", {}, el("strong", {}, "Publiée — visible par tous d'ici quelques minutes.")),
       el("p", {}, r.message),
       r.commit ? el("p", { classe: "petit" }, el("a", { href: adresse, rel: "noreferrer" }, `Voir le commit ${r.commit.slice(0, 7)} sur GitHub`)) : null,
+      auteur.genre === "changement" ? personnagesDuChangement(r.personnages, { fait: true }) : null,
       auteur.genre === "changement" ? el("p", {}, "Transmettez maintenant le nouveau mot de passe aux joueurs.") : null,
       r.avertissement ? el("p", {}, r.avertissement) : null,
     );
@@ -535,7 +640,7 @@ function resultat() {
 // résultat. « Comparer » et « Publier » sont dans la barre de publication.
 function publication(accepte) {
   const parties = [];
-  if (auteur.attente) parties.push(el("p", { classe: "attente", role: "status" }, auteur.attente));
+  if (auteur.attente && !circuitEnLigne()) parties.push(el("p", { classe: "attente", role: "status" }, auteur.attente));
   if (auteur.besoin) parties.push(formulaireMotDePasse());
   if (auteur.confirmation) parties.push(...confirmation(accepte));
   parties.push(resultat());
@@ -547,7 +652,7 @@ function publication(accepte) {
 
 function changement() {
   // Sans banque publiée, le mot de passe se choisit à la première publication.
-  if (auteur.attente || auteur.besoin || auteur.confirmation || !ctx.etat.chargement?.enveloppe) return [];
+  if (enCircuit() || !ctx.etat.chargement?.enveloppe) return [];
   const premier = champMotDePasse("nouveau-mdp", "new-password");
   const second = champMotDePasse("nouveau-mdp-2", "new-password");
   const erreur = erreurDeFormulaire();
@@ -556,7 +661,7 @@ function changement() {
     el(
       "p",
       {},
-      "La banque publiée est republiée sous le nouveau mot de passe ; transmettez-le ensuite aux joueurs. Les versions précédentes, dans l'historique de GitHub, restent lisibles avec l'ancien.",
+      "La banque publiée est republiée sous le nouveau mot de passe, et les personnages en ligne sont rechiffrés avec elle, dans le même commit ; transmettez-le ensuite aux joueurs. Les versions précédentes, dans l'historique de GitHub, restent lisibles avec l'ancien.",
     ),
     el(
       "form",
@@ -593,6 +698,233 @@ function changement() {
   ];
 }
 
+// La clé de dépôt des personnages (§ 8.4)
+
+// Ce que la banque ouverte dit de sa clé de dépôt, sans jamais la montrer.
+function etatDeLaCle() {
+  if (!ctx.etat.chargement?.enveloppe) return "Aucune banque n'est publiée : la clé partira avec la première publication.";
+  if (!ctx.etat.banque) return "La banque publiée n'est pas ouverte sur cet appareil : son mot de passe dira si elle porte une clé de dépôt.";
+  return ctx.etat.banque.cle_depot ? "La banque publiée porte une clé de dépôt." : "La banque publiée ne porte aucune clé de dépôt.";
+}
+
+function boutonDeLaCle(libelle, action) {
+  return el(
+    "button",
+    {
+      type: "button",
+      classe: "bouton secondaire",
+      onclick: () => {
+        auteur.cleDepot = { action };
+        rendre();
+      },
+    },
+    libelle,
+  );
+}
+
+function sectionCleDeDepot() {
+  const intitule = el("h2", {}, "Clé de dépôt des personnages");
+  if (demo()) {
+    return [intitule, el("p", {}, "Démonstration : rien n'est déposé en ligne, et aucune clé de dépôt ne se saisit ici. Les personnages de la démonstration restent sur l'appareil.")];
+  }
+  if (enCircuit()) return [];
+  const parties = [
+    intitule,
+    el(
+      "p",
+      {},
+      "Elle permet au site de déposer les personnages enregistrés, chiffrés, dans la file d'attente du dépôt. C'est une autre clé que la clé GitHub de l'auteur : créez-la à part.",
+    ),
+    el(
+      "ol",
+      {},
+      el("li", {}, "Sur GitHub : Settings, Developer settings, Personal access tokens, Fine-grained tokens, puis Generate new token."),
+      el("li", {}, `Repository access : Only select repositories, et le seul dépôt ${DEPOT.nom}.`),
+      el("li", {}, "Permissions : Issues, en Read and write. Rien d'autre."),
+      el("li", {}, "Expiration : un an (Custom, à la date d'aujourd'hui dans un an), puis Generate token : copiez la clé ici."),
+    ),
+    el(
+      "p",
+      {},
+      "Elle voyage dans la banque chiffrée : tout joueur qui a le mot de passe de table peut déposer des personnages, et rien d'autre. Saisie ici, elle attend en mémoire la prochaine publication ou le prochain changement de mot de passe, sans être gardée sur l'appareil.",
+    ),
+    el("p", { classe: "etat-cle-depot" }, etatDeLaCle()),
+  ];
+  const { action } = auteur.cleDepot;
+  if (action === "remplacer") {
+    parties.push(
+      el("p", { classe: "etat-cle-depot", role: "status" }, "Nouvelle clé saisie : elle partira avec la prochaine publication ou le prochain changement de mot de passe."),
+      el("div", { classe: "boutons" }, boutonDeLaCle("Oublier la clé saisie", "garder")),
+    );
+    return parties;
+  }
+  if (action === "retirer") {
+    parties.push(
+      el("p", { classe: "etat-cle-depot", role: "status" }, "La clé de dépôt sera retirée à la prochaine publication ou au prochain changement de mot de passe."),
+      el("div", { classe: "boutons" }, boutonDeLaCle("Garder la clé publiée", "garder")),
+    );
+    return parties;
+  }
+  const champ = champMotDePasse("cle-depot", "off");
+  const erreur = erreurDeFormulaire();
+  parties.push(
+    el(
+      "form",
+      {
+        classe: "formulaire",
+        onsubmit: (evenement) => {
+          evenement.preventDefault();
+          const valeur = champ.value.trim();
+          // Le message ne reprend jamais ce qui a été saisi.
+          if (!cleDepotValide(valeur)) {
+            erreur.textContent = "Ce n'est pas une clé de dépôt : un jeton GitHub à portée fine commence par « github_pat_ », sans espace. Recopiez-le en entier depuis GitHub.";
+            erreur.hidden = false;
+            return;
+          }
+          // Même forme, même écran de GitHub : la confusion se rattrape ici.
+          if (valeur === auteur.jeton) {
+            erreur.textContent = "C'est la clé GitHub de l'auteur, qui peut écrire dans le dépôt : elle ne doit jamais partir dans la banque. Créez une clé à part, permission Issues seule.";
+            erreur.hidden = false;
+            return;
+          }
+          auteur.cleDepot = { action: "remplacer", valeur };
+          rendre();
+        },
+      },
+      el("label", { for: "cle-depot" }, ctx.etat.banque?.cle_depot ? "Nouvelle clé de dépôt, qui remplacera la clé publiée" : "Clé de dépôt"),
+      champ,
+      erreur,
+      el("div", { classe: "boutons" }, el("button", { type: "submit", classe: "bouton secondaire" }, "Garder cette clé jusqu'à la publication")),
+    ),
+  );
+  if (ctx.etat.banque?.cle_depot) parties.push(el("div", { classe: "boutons" }, boutonDeLaCle("Retirer la clé de dépôt à la prochaine publication", "retirer")));
+  return parties;
+}
+
+// Les personnages en ligne : vérification et reprise (§ 8.4)
+
+async function verifierEnLigne() {
+  auteur.circuit += 1;
+  const circuit = auteur.circuit;
+  Object.assign(auteur, { genre: "verification", resultat: null, enLigne: null, attente: "Lecture des personnages en ligne…" });
+  rendre();
+  let enLigne;
+  try {
+    const depot = await lireDepot({ jeton: auteur.jeton });
+    if (depot.erreur) enLigne = { erreur: depot.erreur };
+    else if (!depot.enveloppe) enLigne = { erreur: "Aucune banque n'est publiée sur GitHub." };
+    else {
+      // Le sel de la banque publiée, lu dans son en-tête en clair : rien ne
+      // se déchiffre pour compter.
+      const enTete = lireEnTete(depot.enveloppe);
+      enLigne = enTete.erreur ? { erreur: enTete.erreur } : { inventaire: inventaire(depot.personnages, enTete.sel) };
+    }
+  } catch (erreur) {
+    enLigne = { erreur: `Erreur inattendue : ${erreur.message}` };
+  }
+  if (circuit !== auteur.circuit) return;
+  Object.assign(auteur, { attente: null, enLigne });
+  rendre();
+}
+
+async function reprendreEnLigne(motDePasse) {
+  auteur.circuit += 1;
+  const circuit = auteur.circuit;
+  const courant = () => circuit === auteur.circuit;
+  const avant = auteur.enLigne;
+  Object.assign(auteur, { genre: "reprise", resultat: null, attente: "Rechiffrement des personnages en ligne…" });
+  rendre();
+  // Les clés dérivées de l'ancien mot de passe servent d'un essai à l'autre.
+  const cles = new Map();
+  let resultat;
+  try {
+    resultat = await publierParCommit({
+      jeton: auteur.jeton,
+      preparer: async (depot) => (courant() ? preparerReprise({ publiee: depot, secret: await secretGarde(), motDePasse, cles }) : { annulee: true }),
+      confirmer: async () => courant(),
+    });
+  } catch (erreur) {
+    resultat = { erreur: `Erreur inattendue : ${erreur.message}` };
+  }
+  if (!courant()) return;
+  auteur.attente = null;
+  if (resultat.annulee) auteur.enLigne = null;
+  // Une erreur laisse l'inventaire, et donc la saisie, pour réessayer.
+  else if (resultat.erreur) auteur.enLigne = { inventaire: avant?.inventaire ?? null, erreur: resultat.erreur };
+  else {
+    const { rechiffres, echecs } = resultat.preparation.personnages;
+    const restent = echecs.length ? ` ${compte(echecs.length, "reste", "restent")} : l'ancien mot de passe saisi ne ${echecs.length > 1 ? "les " : "l'"}ouvre pas.` : "";
+    auteur.enLigne = {
+      message: `${compte(rechiffres.length, "personnage rechiffré", "personnages rechiffrés")} sous le mot de passe de table actuel : ${rechiffres.length > 1 ? "visibles" : "visible"} par tous d'ici quelques minutes.${restent}`,
+      commit: resultat.commit,
+    };
+  }
+  rendre();
+}
+
+function inventaireAffiche({ total, aJour, autreCle, illisibles }) {
+  if (!total) return [el("p", {}, "Aucun personnage n'est en ligne.")];
+  const parties = [el("p", {}, `${compte(total, "personnage est en ligne", "personnages sont en ligne")} ; ${compte(aJour, "s'ouvre", "s'ouvrent")} avec le mot de passe de table actuel.`)];
+  if (autreCle.length) {
+    const n = autreCle.length;
+    parties.push(
+      el("p", { classe: "message", role: "status" }, `${compte(n, "est chiffré", "sont chiffrés")} avec un mot de passe plus ancien : les joueurs ne peuvent pas ${n > 1 ? "les " : "l'"}ouvrir.`),
+    );
+  }
+  if (illisibles.length) {
+    const n = illisibles.length;
+    parties.push(el("p", {}, `${compte(n, "fichier est illisible", "fichiers sont illisibles")} : ${n > 1 ? "abîmés, ils ne se rechiffrent" : "abîmé, il ne se rechiffre"} pas.`));
+  }
+  return parties;
+}
+
+function formulaireDeReprise() {
+  const champ = champMotDePasse("ancien-mdp", "off");
+  return el(
+    "form",
+    {
+      classe: "formulaire",
+      onsubmit: (evenement) => {
+        evenement.preventDefault();
+        if (!champ.value.trim()) return;
+        reprendreEnLigne(champ.value);
+      },
+    },
+    el("label", { for: "ancien-mdp" }, "Ancien mot de passe de table"),
+    champ,
+    el("div", { classe: "boutons" }, el("button", { type: "submit", classe: "bouton secondaire" }, "Rechiffrer sous le mot de passe actuel")),
+  );
+}
+
+function sectionEnLigne() {
+  if (!ctx.etat.chargement?.enveloppe) return [];
+  const intitule = el("h2", {}, "Personnages en ligne");
+  if (circuitEnLigne() && auteur.attente) return [intitule, el("p", { classe: "attente", role: "status" }, auteur.attente)];
+  if (enCircuit()) return [];
+  const e = auteur.enLigne;
+  const adresse = e?.commit ? `https://github.com/${DEPOT.proprietaire}/${DEPOT.nom}/commit/${e.commit}` : null;
+  return [
+    intitule,
+    el(
+      "p",
+      {},
+      "Au changement du mot de passe de table, les personnages en ligne sont rechiffrés avec la banque. Un personnage déposé sous un ancien mot de passe ne s'ouvre plus pour les joueurs : vérifiez, puis rechiffrez-le avec cet ancien mot de passe.",
+    ),
+    e?.erreur ? el("p", { classe: "message", role: "alert" }, e.erreur) : null,
+    e?.message
+      ? el(
+          "div",
+          { classe: "message", role: "status" },
+          el("p", {}, e.message),
+          adresse ? el("p", { classe: "petit" }, el("a", { href: adresse, rel: "noreferrer" }, `Voir le commit ${e.commit.slice(0, 7)} sur GitHub`)) : null,
+        )
+      : null,
+    e?.inventaire ? inventaireAffiche(e.inventaire) : null,
+    e?.inventaire?.autreCle.length ? formulaireDeReprise() : null,
+    el("div", { classe: "boutons" }, el("button", { type: "button", classe: "bouton secondaire", onclick: () => verifierEnLigne() }, "Vérifier les personnages en ligne")),
+  ];
+}
+
 function contenu() {
   const parties = [titre("Espace auteur")];
   if (demo()) {
@@ -610,8 +942,8 @@ function contenu() {
   } else parties.push(etatDuJeton());
   // La case n'existe qu'en confirmation d'une publication avec des erreurs.
   const accepte = auteur.confirmation?.preparation.erreurs > 0 && !demo() ? el("input", { type: "checkbox", id: "connaissance" }) : null;
-  parties.push(...importation(), ...rapport(), ...publication(accepte));
-  if (!demo()) parties.push(...changement());
+  parties.push(...importation(), ...rapport(), ...publication(accepte), ...sectionCleDeDepot());
+  if (!demo()) parties.push(...changement(), ...sectionEnLigne());
   parties.push(barreDePublication(accepte));
   return parties;
 }

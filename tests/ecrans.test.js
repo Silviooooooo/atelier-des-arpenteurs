@@ -7,12 +7,16 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { creerCoffre, magasinMemoire } from "../js/securite/coffre.js";
 import { importerFichier } from "../js/banque/importation.js";
-import { chiffrer, nouveauSecret } from "../js/securite/chiffrement.js";
+import { CHEMIN_INDEX, cheminDuPersonnage, chiffrerPersonnage, dechiffrerPersonnage, ecrireFichier, ecrireIndex, ecrireTicket, fichierDuTicket, lireFichier, lireTicket } from "../js/personnage/en_ligne.js";
+import { CHEMIN_BANQUE, texteDeLaBanque } from "../js/publication/github.js";
+import { chiffrer, nouveauSecret, ouvrirAvecMotDePasse } from "../js/securite/chiffrement.js";
 import { boutons, installerDom, laisserFiler, texteDe } from "./outils/dom_simule.js";
+import { DATE_ESSAI, personnageEssai } from "./outils/personnage_essai.js";
 
 const RACINE = new URL("../", import.meta.url);
 const lire = (chemin) => readFileSync(new URL(chemin, RACINE), "utf8");
@@ -29,10 +33,10 @@ const RAISONS = {
 
 // Chaque état part d'un espace auteur neuf : son état vit dans le module.
 let instance = 0;
-async function espaceAuteur(etat) {
+async function espaceAuteur(etat, publiee = () => {}) {
   instance += 1;
   const module = await import(`../js/ecrans/espace_auteur.js?instance=${instance}`);
-  const contexte = { etat, publiee() {} };
+  const contexte = { etat, publiee };
   const ecran = module.afficher(contexte);
   document.body.replaceChildren(ecran);
   await laisserFiler();
@@ -214,12 +218,17 @@ const PHRASE = "une phrase de controle assez longue";
 const JETON = "jeton-fictif-de-controle";
 
 // GitHub simulé, en lecture seule : le fichier publié (ou 404), et chaque
-// méthode notée ; une écriture est refusée, et se verrait.
-function simulerGithub(enveloppe = null) {
-  const github = { methodes: [] };
+// méthode notée ; une écriture est refusée, et se verrait. Avec ecriture, le
+// PUT est accepté, et son corps gardé (github.ecrit).
+function simulerGithub(enveloppe = null, { ecriture = false } = {}) {
+  const github = { methodes: [], ecrit: null };
   github.fetch = async (adresse, init = {}) => {
     const methode = init.method ?? "GET";
     github.methodes.push(methode);
+    if (methode === "PUT" && ecriture) {
+      github.ecrit = JSON.parse(init.body);
+      return new Response(JSON.stringify({ content: { sha: "sha-ecrit" }, commit: { sha: "c".repeat(40) } }), { status: 200 });
+    }
     if (methode !== "GET") return new Response(JSON.stringify({ message: "écriture interdite dans ce contrôle" }), { status: 403 });
     if (!enveloppe) return new Response(JSON.stringify({ message: "Not Found" }), { status: 404 });
     const content = Buffer.from(JSON.stringify(enveloppe)).toString("base64");
@@ -541,6 +550,484 @@ test("accueil — le diagnostic dit le format de la banque (§ 7.1, § 9)", asyn
     await attendre(() => ecran.querySelector(".diagnostic"), "le diagnostic ne s'affiche pas");
     assert.match(texteDe(ecran.querySelector(".diagnostic")), /format 2, empreinte [0-9a-f]{12}/);
   } finally {
+    retirer();
+  }
+});
+
+// — Le lot 2 bis : la clé de dépôt, le mot de passe de 8 signes, le
+// rechiffrement des personnages en ligne (§ 7.3, § 8.4)
+
+// Une clé de dépôt fictive, fabriquée à l'exécution (tests/depot.test.js).
+const CLE_DEPOT = `github_pat_${"Q".repeat(82)}`;
+
+// GitHub simulé pour l'API Git Data : main, ses fichiers, les commits
+// écrits. Juste ce que lisent et écrivent le changement de mot de passe et
+// la reprise ; tests/publication.test.js en contrôle le détail.
+function simulerGit(fichiers) {
+  const hache = (texte) => createHash("sha1").update(texte).digest("hex");
+  const git = { methodes: [], commits: [], fichiers: new Map(Object.entries(fichiers)) };
+  const blobs = new Map();
+  const arbres = new Map();
+  const enAttente = new Map();
+  let ref = hache("depart");
+  const blob = (texte) => {
+    const sha = hache(`blob ${texte}`);
+    blobs.set(sha, texte);
+    return sha;
+  };
+  const repondre = (statut, corps) => new Response(JSON.stringify(corps), { status: statut });
+  git.fetch = async (adresse, init = {}) => {
+    const methode = init.method ?? "GET";
+    git.methodes.push(methode);
+    const corps = init.body ? JSON.parse(init.body) : null;
+    const chemin = adresse.replace(/^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/git\//, "").split("?")[0];
+    if (methode === "GET" && chemin === "ref/heads/main") return repondre(200, { object: { sha: ref } });
+    if (methode === "GET" && chemin.startsWith("commits/")) return repondre(200, { tree: { sha: hache(`arbre ${ref}`) } });
+    if (methode === "GET" && chemin.startsWith("trees/")) {
+      const tree = [...git.fichiers].map(([path, texte]) => ({ path, type: "blob", sha: blob(texte), size: Buffer.byteLength(texte) }));
+      return repondre(200, { tree, truncated: false });
+    }
+    if (methode === "GET" && blobs.has(chemin.slice(6))) return repondre(200, { encoding: "base64", content: Buffer.from(blobs.get(chemin.slice(6))).toString("base64") });
+    if (methode === "POST" && chemin === "blobs") return repondre(201, { sha: blob(Buffer.from(corps.content, "base64").toString()) });
+    if (methode === "POST" && chemin === "trees") {
+      const sha = hache(`arbre ${JSON.stringify(corps)}`);
+      arbres.set(sha, corps.tree);
+      return repondre(201, { sha });
+    }
+    if (methode === "POST" && chemin === "commits") {
+      const sha = hache(`commit ${JSON.stringify(corps)}`);
+      enAttente.set(sha, corps);
+      return repondre(201, { sha });
+    }
+    if (methode === "PATCH" && chemin === "refs/heads/main") {
+      const commit = enAttente.get(corps.sha);
+      if (corps.force || commit.parents[0] !== ref) return repondre(422, { message: "Update is not a fast forward" });
+      for (const entree of arbres.get(commit.tree)) git.fichiers.set(entree.path, entree.content ?? blobs.get(entree.sha));
+      ref = corps.sha;
+      git.commits.push(commit);
+      return repondre(200, { object: { sha: ref } });
+    }
+    return repondre(404, { message: "Not Found" });
+  };
+  return git;
+}
+
+// Un personnage en ligne, rangé par l'automate, chiffré sous secret.
+async function personnageRange(identifiant, secret) {
+  const personnage = personnageEssai((p) => Object.assign(p, { id: identifiant, mode: "reel", etat: "enregistre", etape: 9, enregistre_le: DATE_ESSAI.toISOString() }));
+  const chiffre = await chiffrerPersonnage(personnage, secret);
+  const { corps } = ecrireTicket({ action: "creer", identifiant, date: "2026-09-30T10:21:36.536Z", personnage: chiffre });
+  return { personnage, fichier: fichierDuTicket(lireTicket(corps).ticket, { rangeLe: "2026-09-30T10:22:05Z", numero: 5 }) };
+}
+
+// Un espace auteur réel, clé GitHub (jeton) gardée, devant une banque publiée
+// et ouverte (sa clé en mémoire), avec ou sans clé de dépôt ; GitHub simulé
+// (l'API des contenus, en lecture sauf ecriture), sauf dépôt Git simulé
+// fourni. Une publication réussie ouvre la banque publiée, comme le fait
+// l'application (ctx.publiee).
+async function espaceOuvert({ cleDepot = null, magasin = magasinMemoire(), secret = null, depot = null, jeton = JETON, ecriture = false } = {}) {
+  const cle = secret ?? (await nouveauSecret(PHRASE));
+  const { banque: importee } = await importerFichier(ESSAI, "classeur_essai.xlsx");
+  const banque = { ...importee, publiee_le: "2026-09-28T14:32:00+02:00", ...(cleDepot ? { cle_depot: cleDepot } : {}) };
+  const enveloppe = await chiffrer(banque, cle);
+  const coffre = creerCoffre(magasin);
+  await coffre.garderJeton(jeton);
+  await coffre.garderCle("reel", cle);
+  const etat = { mode: "reel", coffre, chargement: { enveloppe }, secret: cle, banque };
+  const git = depot ? simulerGit(depot(enveloppe)) : null;
+  const github = git ? null : simulerGithub(enveloppe, { ecriture });
+  globalThis.fetch = (git ?? github).fetch;
+  const publiee = (preparation, ouverte) => Object.assign(etat, { chargement: { enveloppe: preparation.enveloppe }, banque: preparation.banque, secret: ouverte });
+  const { ecran, module } = await espaceAuteur(etat, publiee);
+  return { ecran, module, etat, git, github, enveloppe };
+}
+
+// Tout ce que l'écran montre ou tient : textes, attributs, valeurs des champs.
+const toutLEcran = (ecran) => [texteDe(ecran), ...[...ecran.descendants()].flatMap((e) => [e.value, ...e.attributs.values()])].join(" ");
+
+test("espace auteur — la clé de dépôt : l'aide, l'état, une saisie vérifiée, jamais affichée ni gardée (§ 8.4)", async () => {
+  const retirer = installerDom();
+  const fetchAvant = globalThis.fetch;
+  try {
+    const memoire = magasinMemoire();
+    const ecrits = [];
+    const magasin = { ...memoire, ecrire: async (cle, valeur) => (ecrits.push(valeur), memoire.ecrire(cle, valeur)) };
+    const { ecran } = await espaceOuvert({ magasin });
+    assert.ok(ecran.querySelectorAll("h2").some((h) => texteDe(h) === "Clé de dépôt des personnages"));
+    const texte = texteDe(ecran);
+    assert.match(texte, /Repository access : Only select repositories, et le seul dépôt atelier-des-arpenteurs\./);
+    assert.match(texte, /Permissions : Issues, en Read and write\. Rien d'autre\./);
+    assert.match(texte, /Expiration : un an/);
+    assert.match(texte, /tout joueur qui a le mot de passe de table peut déposer des personnages, et rien d'autre/);
+    assert.match(texte, /La banque publiée ne porte aucune clé de dépôt\./);
+    const champ = ecran.querySelector("#cle-depot");
+    assert.equal(champ.getAttribute("type"), "password");
+    assert.equal(champ.getAttribute("autocomplete"), "off");
+    assert.equal(boutons(ecran, "Retirer la clé de dépôt").length, 0, "rien à retirer");
+
+    // Une forme invalide : un message, qui ne recopie pas la saisie.
+    const classique = `ghp_${"q".repeat(36)}`;
+    champ.value = classique;
+    await soumettre(formulaireDe(ecran, "cle-depot"));
+    const erreur = formulaireDe(ecran, "cle-depot").querySelector(".message");
+    assert.equal(erreur.hidden, false);
+    assert.match(texteDe(erreur), /commence par « github_pat_ »/);
+    assert.equal(texteDe(ecran).includes(classique), false);
+
+    // La bonne : en mémoire seulement, nulle part à l'écran.
+    ecran.querySelector("#cle-depot").value = `  ${CLE_DEPOT}  `;
+    await soumettre(formulaireDe(ecran, "cle-depot"));
+    assert.match(texteDe(ecran), /Nouvelle clé saisie : elle partira avec la prochaine publication ou le prochain changement de mot de passe\./);
+    assert.equal(ecran.querySelector("#cle-depot"), null);
+    assert.equal(toutLEcran(ecran).includes(CLE_DEPOT), false, "la clé n'est nulle part à l'écran");
+
+    // La comparaison dit ce qu'il advient d'elle ; le message de commit, rien.
+    await importer(ecran);
+    await comparer(ecran);
+    assert.ok(differencesAffichees(ecran));
+    assert.match(texteDe(ecran), /Clé de dépôt des personnages : ajoutée à la banque/);
+    assert.doesNotMatch(texteDe(ecran.querySelector(".resume")), /github_pat_|clé|dépôt/i);
+    assert.equal(toutLEcran(ecran).includes(CLE_DEPOT), false);
+    boutons(ecran, "Annuler")[0].click();
+    await laisserFiler(20);
+    assert.match(texteDe(ecran), /Nouvelle clé saisie/, "annuler la publication garde la clé saisie");
+
+    // « Oublier la clé saisie » : retour à la saisie.
+    boutons(ecran, "Oublier la clé saisie")[0].click();
+    assert.ok(ecran.querySelector("#cle-depot"));
+    assert.equal(
+      ecrits.some((valeur) => JSON.stringify(valeur ?? null).includes(CLE_DEPOT)),
+      false,
+      "rien n'en est gardé sur l'appareil",
+    );
+  } finally {
+    globalThis.fetch = fetchAvant;
+    retirer();
+  }
+  assert.doesNotMatch(lire("js/ecrans/espace_auteur.js"), /(?:local|session)Storage\s*[.[]/, "ni localStorage ni sessionStorage");
+});
+
+test("espace auteur — une clé de dépôt publiée se garde ou se retire ; en démonstration, aucune ne se saisit", async () => {
+  const retirer = installerDom();
+  const fetchAvant = globalThis.fetch;
+  try {
+    const { ecran, module } = await espaceOuvert({ cleDepot: CLE_DEPOT });
+    assert.match(texteDe(ecran), /La banque publiée porte une clé de dépôt\./);
+    assert.equal(toutLEcran(ecran).includes(CLE_DEPOT), false, "la clé publiée n'est pas montrée");
+    assert.match(texteDe(ecran), /Nouvelle clé de dépôt, qui remplacera la clé publiée/);
+    boutons(ecran, "Retirer la clé de dépôt à la prochaine publication")[0].click();
+    assert.match(texteDe(ecran), /La clé de dépôt sera retirée à la prochaine publication ou au prochain changement de mot de passe\./);
+    await importer(ecran);
+    await comparer(ecran);
+    assert.match(texteDe(ecran), /Clé de dépôt des personnages : retirée de la banque/);
+    boutons(ecran, "Annuler")[0].click();
+    await laisserFiler(20);
+    boutons(ecran, "Garder la clé publiée")[0].click();
+    await comparer(ecran);
+    assert.match(texteDe(ecran), /Clé de dépôt des personnages : gardée/);
+    boutons(ecran, "Annuler")[0].click();
+    await laisserFiler(20);
+    // « Oublier le mot de passe » oublie aussi une clé saisie.
+    ecran.querySelector("#cle-depot").value = CLE_DEPOT.replace(/Q/g, "R");
+    await soumettre(formulaireDe(ecran, "cle-depot"));
+    assert.match(texteDe(ecran), /Nouvelle clé saisie/);
+    module.oublier();
+    assert.ok(ecran.querySelector("#cle-depot"), "la clé saisie est oubliée");
+
+    const demo = (await espaceAuteur({ mode: "demo", coffre: creerCoffre(magasinMemoire()), chargement: { enveloppe: DEMO }, secret: null })).ecran;
+    assert.match(texteDe(demo), /Démonstration : rien n'est déposé en ligne, et aucune clé de dépôt ne se saisit ici\./);
+    assert.equal(demo.querySelector("#cle-depot"), null);
+    assert.equal(boutons(demo, "Vérifier les personnages en ligne").length, 0);
+  } finally {
+    globalThis.fetch = fetchAvant;
+    retirer();
+  }
+});
+
+test("espace auteur — une clé de dépôt saisie part avec la publication, puis quitte la mémoire (§ 8.4)", async () => {
+  const retirer = installerDom();
+  const fetchAvant = globalThis.fetch;
+  try {
+    const { ecran, github } = await espaceOuvert({ ecriture: true });
+    ecran.querySelector("#cle-depot").value = CLE_DEPOT;
+    await soumettre(formulaireDe(ecran, "cle-depot"));
+    await importer(ecran);
+    await comparer(ecran);
+    assert.match(texteDe(ecran), /Clé de dépôt des personnages : ajoutée à la banque/);
+    const coche = ecran.querySelector("#connaissance");
+    coche.checked = true;
+    coche.declencher("change");
+    publier(ecran).bouton.click();
+    await attendre(() => texteDe(ecran).includes("Publiée"), "la publication n'aboutit pas");
+    const ecrite = JSON.parse(Buffer.from(github.ecrit.content, "base64").toString());
+    assert.equal((await ouvrirAvecMotDePasse(ecrite, PHRASE)).banque.cle_depot, CLE_DEPOT, "partie avec la banque chiffrée");
+    // Partie : elle ne vit plus dans l'espace auteur. La saisie revient, et
+    // la banque ouverte, la nouvelle, la porte.
+    assert.ok(ecran.querySelector("#cle-depot"), "la saisie revient");
+    assert.doesNotMatch(texteDe(ecran), /Nouvelle clé saisie/);
+    assert.match(texteDe(ecran), /La banque publiée porte une clé de dépôt\./);
+    assert.equal(toutLEcran(ecran).includes(CLE_DEPOT), false);
+  } finally {
+    globalThis.fetch = fetchAvant;
+    retirer();
+  }
+});
+
+test("espace auteur — la clé GitHub de l'auteur ne se saisit ni ne se garde comme clé de dépôt (§ 8.4)", async () => {
+  const retirer = installerDom();
+  const fetchAvant = globalThis.fetch;
+  try {
+    // La clé GitHub de l'auteur a la même forme qu'une clé de dépôt.
+    const jeton = `github_pat_${"J".repeat(82)}`;
+    const { ecran } = await espaceOuvert({ jeton });
+    ecran.querySelector("#cle-depot").value = ` ${jeton} `;
+    await soumettre(formulaireDe(ecran, "cle-depot"));
+    const erreur = formulaireDe(ecran, "cle-depot")?.querySelector(".message");
+    assert.ok(erreur, "la saisie reste");
+    assert.equal(erreur.hidden, false);
+    assert.match(texteDe(erreur), /^C'est la clé GitHub de l'auteur, qui peut écrire dans le dépôt : elle ne doit jamais partir dans la banque\. Créez une clé à part, permission Issues seule\.$/);
+    assert.doesNotMatch(texteDe(ecran), /Nouvelle clé saisie/);
+    assert.equal(texteDe(ecran).includes(jeton), false);
+
+    // Déjà dans la banque publiée : la comparaison refuse de la garder ; le
+    // retrait passe.
+    const { ecran: autre } = await espaceOuvert({ jeton, cleDepot: jeton });
+    await importer(autre);
+    await comparer(autre);
+    assert.equal(differencesAffichees(autre), false);
+    assert.match(texteDe(autre), /La clé de dépôt de la banque publiée est la clé GitHub de l'auteur.*révoquez-la/);
+    assert.equal(toutLEcran(autre).includes(jeton), false);
+    boutons(autre, "Retirer la clé de dépôt à la prochaine publication")[0].click();
+    await comparer(autre);
+    assert.match(texteDe(autre), /Clé de dépôt des personnages : retirée de la banque/);
+  } finally {
+    globalThis.fetch = fetchAvant;
+    retirer();
+  }
+});
+
+test("espace auteur — le mot de passe de table : 8 signes acceptés, 7 refusés, majuscules indifférentes (§ 7.3)", async () => {
+  const retirer = installerDom();
+  const fetchAvant = globalThis.fetch;
+  try {
+    // Première publication : le mot de passe se choisit.
+    const { ecran } = await espaceReel({ publiee: false });
+    await comparer(ecran);
+    const essayer = async ([id, id2], premier, second) => {
+      ecran.querySelector(`#${id}`).value = premier;
+      ecran.querySelector(`#${id2}`).value = second;
+      await soumettre(formulaireDe(ecran, id));
+      return formulaireDe(ecran, id)?.querySelector(".message");
+    };
+    let erreur = await essayer(["mdp-auteur", "mdp-auteur-2"], "Marmite", "marmite");
+    assert.ok(erreur, "7 signes : le formulaire reste, avec son message");
+    assert.equal(erreur.hidden, false);
+    assert.match(texteDe(erreur), /compte 7 signe\(s\) : il en faut 8 au moins/, "7 signes refusés, pour leur longueur seule");
+    erreur = await essayer(["mdp-auteur", "mdp-auteur-2"], "Marmites", "marmitez");
+    assert.equal(texteDe(erreur), "Les deux saisies diffèrent.");
+    await essayer(["mdp-auteur", "mdp-auteur-2"], "Marmites", "marmites");
+    await attendre(() => ecran.querySelector("#connaissance"), "8 signes, majuscules indifférentes : la confirmation n'arrive pas");
+
+    // Le changement de mot de passe : les mêmes règles.
+    const { ecran: autre } = await espaceOuvert({ depot: (enveloppe) => ({ [CHEMIN_BANQUE]: texteDeLaBanque(enveloppe) }) });
+    const changer = async (premier, second) => {
+      autre.querySelector("#nouveau-mdp").value = premier;
+      autre.querySelector("#nouveau-mdp-2").value = second;
+      await soumettre(formulaireDe(autre, "nouveau-mdp"));
+      return formulaireDe(autre, "nouveau-mdp")?.querySelector(".message");
+    };
+    erreur = await changer("Marmite", "Marmite");
+    assert.equal(erreur.hidden, false);
+    assert.match(texteDe(erreur), /il en faut 8 au moins/);
+    assert.equal(texteDe(await changer("Marmites", "Marmitez")), "Les deux saisies diffèrent.");
+    await changer("MARMITES", "marmites");
+    await attendre(() => texteDe(autre).includes("Changement du mot de passe"), "8 signes, majuscules indifférentes : la confirmation n'arrive pas");
+  } finally {
+    globalThis.fetch = fetchAvant;
+    retirer();
+  }
+});
+
+test("espace auteur — changer le mot de passe : la confirmation compte les personnages, puis un seul commit (§ 8.4)", async () => {
+  const retirer = installerDom();
+  const fetchAvant = globalThis.fetch;
+  try {
+    const secret = await nouveauSecret(PHRASE);
+    const ranges = [await personnageRange("PersonnageAlpha000001", secret), await personnageRange("PersonnageBravo000002", secret)];
+    const { ecran, etat, git } = await espaceOuvert({
+      secret,
+      depot: (enveloppe) => ({
+        [CHEMIN_BANQUE]: texteDeLaBanque(enveloppe),
+        ...Object.fromEntries(ranges.map(({ fichier }) => [cheminDuPersonnage(fichier.identifiant), ecrireFichier(fichier)])),
+        [CHEMIN_INDEX]: ecrireIndex(ranges.map(({ fichier }) => fichier)),
+      }),
+    });
+    ecran.querySelector("#nouveau-mdp").value = "Écumoire fouet tamis";
+    ecran.querySelector("#nouveau-mdp-2").value = "écumoire fouet tamis";
+    await soumettre(formulaireDe(ecran, "nouveau-mdp"));
+    await attendre(() => texteDe(ecran).includes("Changement du mot de passe"), "la confirmation n'arrive pas");
+    assert.match(texteDe(ecran), /2 personnages en ligne seront rechiffrés sous le nouveau mot de passe, dans le même commit que la banque\./);
+    assert.match(texteDe(ecran), /Clé de dépôt des personnages : aucune/);
+    assert.match(texteDe(ecran.querySelector(".resume")), /— nouveau mot de passe de table, 2 personnages rechiffrés$/);
+    assert.deepEqual([...new Set(git.methodes)], ["GET"], "rien d'écrit avant la confirmation");
+
+    boutons(ecran, "Republier sous le nouveau mot de passe")[0].click();
+    await attendre(() => texteDe(ecran).includes("Publiée"), "le changement n'aboutit pas");
+    assert.match(texteDe(ecran), /2 personnages en ligne rechiffrés sous le nouveau mot de passe\./);
+    assert.equal(git.commits.length, 1, "un seul commit");
+    assert.equal(git.methodes.includes("PUT"), false, "pas de PUT : l'API Git Data");
+    assert.notEqual(etat.secret, secret, "la nouvelle clé est en mémoire");
+    for (const { personnage, fichier } of ranges) {
+      const relu = lireFichier(git.fichiers.get(cheminDuPersonnage(fichier.identifiant)), { identifiant: fichier.identifiant }).fichier;
+      assert.deepEqual((await dechiffrerPersonnage(relu, etat.secret)).personnage, personnage);
+      assert.equal((await dechiffrerPersonnage(relu, secret)).code, "cle");
+    }
+  } finally {
+    globalThis.fetch = fetchAvant;
+    retirer();
+  }
+});
+
+// Change le mot de passe de table depuis l'écran, jusqu'au résultat de l'envoi.
+async function changerLeMotDePasse(ecran, motDePasse) {
+  ecran.querySelector("#nouveau-mdp").value = motDePasse;
+  ecran.querySelector("#nouveau-mdp-2").value = motDePasse;
+  await soumettre(formulaireDe(ecran, "nouveau-mdp"));
+  await attendre(() => texteDe(ecran).includes("Changement du mot de passe"), "la confirmation n'arrive pas");
+  boutons(ecran, "Republier sous le nouveau mot de passe")[0].click();
+  await attendre(() => /Publiée|GitHub ne répond/.test(texteDe(ecran)), "le changement n'aboutit pas");
+}
+
+// Les fichiers d'un dépôt : la banque, des personnages rangés, leur index.
+const fichiersEnLigne = (ranges) => (enveloppe) => ({
+  [CHEMIN_BANQUE]: texteDeLaBanque(enveloppe),
+  ...Object.fromEntries(ranges.map(({ fichier }) => [cheminDuPersonnage(fichier.identifiant), ecrireFichier(fichier)])),
+  [CHEMIN_INDEX]: ecrireIndex(ranges.map(({ fichier }) => fichier)),
+});
+
+test("espace auteur — un changement qui laisse des personnages d'une autre clé les montre aussitôt, avec leur reprise (§ 8.4)", async () => {
+  const retirer = installerDom();
+  const fetchAvant = globalThis.fetch;
+  try {
+    const secret = await nouveauSecret(PHRASE);
+    const ANCIEN = "un mot de passe plus ancien";
+    const ranges = [await personnageRange("PersonnageAlpha000001", secret), await personnageRange("PersonnageBravo000002", await nouveauSecret(ANCIEN))];
+    const { ecran, git } = await espaceOuvert({ secret, depot: fichiersEnLigne(ranges) });
+    await changerLeMotDePasse(ecran, "écumoire fouet tamis");
+    assert.match(texteDe(ecran), /Publiée/);
+    assert.match(texteDe(ecran), /1 personnage est chiffré avec un mot de passe plus ancien : il reste tel quel\./);
+    // Sans « Vérifier » : ce que le changement a lu suffit, rien ne se relit.
+    const lectures = git.methodes.length;
+    assert.match(texteDe(ecran), /2 personnages sont en ligne ; 1 s'ouvre avec le mot de passe de table actuel\./);
+    assert.match(texteDe(ecran), /1 est chiffré avec un mot de passe plus ancien : les joueurs ne peuvent pas l'ouvrir\./);
+    assert.ok(ecran.querySelector("#ancien-mdp"), "la reprise est proposée aussitôt");
+    assert.equal(git.methodes.length, lectures);
+
+    // La reprise, sous le nouveau mot de passe.
+    ecran.querySelector("#ancien-mdp").value = ANCIEN;
+    await soumettre(formulaireDe(ecran, "ancien-mdp"));
+    await attendre(() => texteDe(ecran).includes("personnage rechiffré sous le mot de passe de table actuel"), "la reprise n'aboutit pas");
+    assert.equal(git.commits.length, 2);
+  } finally {
+    globalThis.fetch = fetchAvant;
+    retirer();
+  }
+});
+
+test("espace auteur — changer le mot de passe quand la réponse de l'avance se perd : la branche relue tranche (§ 8.4)", async () => {
+  const retirer = installerDom();
+  const fetchAvant = globalThis.fetch;
+  try {
+    // La connexion tombe après que GitHub a avancé la branche ; la relecture
+    // de la branche répond (relue), ou tombe aussi.
+    const essai = async ({ relue }) => {
+      const secret = await nouveauSecret(PHRASE);
+      const ranges = [await personnageRange("PersonnageAlpha000001", secret)];
+      const espace = await espaceOuvert({ secret, depot: fichiersEnLigne(ranges) });
+      let coupee = false;
+      globalThis.fetch = async (adresse, init = {}) => {
+        if (init.method === "PATCH") {
+          await espace.git.fetch(adresse, init);
+          coupee = true;
+          throw new TypeError("Failed to fetch");
+        }
+        if (coupee && !relue) throw new TypeError("Failed to fetch");
+        return espace.git.fetch(adresse, init);
+      };
+      await changerLeMotDePasse(espace.ecran, "écumoire fouet tamis");
+      return { ...espace, secret };
+    };
+
+    const faite = await essai({ relue: true });
+    assert.match(texteDe(faite.ecran), /Publiée/);
+    assert.equal(faite.git.commits.length, 1);
+    assert.notEqual(faite.etat.secret, faite.secret, "la nouvelle clé est gardée");
+
+    const inconnue = await essai({ relue: false });
+    assert.match(
+      texteDe(inconnue.ecran),
+      /GitHub ne répond plus depuis l'envoi : le changement a peut-être eu lieu\. Rechargez la page ; si l'Atelier redemande le mot de passe de table, essayez d'abord le nouveau\./,
+    );
+    assert.doesNotMatch(texteDe(inconnue.ecran), /Publiée/);
+    assert.equal(inconnue.etat.secret, inconnue.secret, "l'ancienne clé reste, faute de savoir");
+  } finally {
+    globalThis.fetch = fetchAvant;
+    retirer();
+  }
+});
+
+test("espace auteur — vérifier les personnages en ligne, puis les reprendre avec l'ancien mot de passe (§ 8.4)", async () => {
+  const retirer = installerDom();
+  const fetchAvant = globalThis.fetch;
+  try {
+    const secret = await nouveauSecret(PHRASE);
+    const ANCIEN = "un ancien mot de passe";
+    const a = await personnageRange("PersonnageAlpha000001", secret);
+    const b = await personnageRange("PersonnageBravo000002", await nouveauSecret(ANCIEN));
+    let banqueEcrite = null;
+    const { ecran, git } = await espaceOuvert({
+      secret,
+      depot: (enveloppe) => {
+        banqueEcrite = texteDeLaBanque(enveloppe);
+        return {
+          [CHEMIN_BANQUE]: banqueEcrite,
+          [cheminDuPersonnage(a.fichier.identifiant)]: ecrireFichier(a.fichier),
+          [cheminDuPersonnage(b.fichier.identifiant)]: ecrireFichier(b.fichier),
+          [CHEMIN_INDEX]: ecrireIndex([a.fichier, b.fichier]),
+        };
+      },
+    });
+    assert.ok(ecran.querySelectorAll("h2").some((h) => texteDe(h) === "Personnages en ligne"));
+    assert.equal(ecran.querySelector("#ancien-mdp"), null);
+    boutons(ecran, "Vérifier les personnages en ligne")[0].click();
+    await attendre(() => texteDe(ecran).includes("sont en ligne"), "l'inventaire n'arrive pas");
+    assert.match(texteDe(ecran), /2 personnages sont en ligne ; 1 s'ouvre avec le mot de passe de table actuel\./);
+    assert.match(texteDe(ecran), /1 est chiffré avec un mot de passe plus ancien : les joueurs ne peuvent pas l'ouvrir\./);
+    assert.deepEqual([...new Set(git.methodes)], ["GET"], "la vérification n'écrit rien");
+    assert.ok(ecran.querySelector("#ancien-mdp"), "la reprise est proposée");
+
+    // Un faux ancien mot de passe : un message, et la saisie reste.
+    ecran.querySelector("#ancien-mdp").value = "pas le bon mot de passe";
+    await soumettre(formulaireDe(ecran, "ancien-mdp"));
+    await attendre(() => texteDe(ecran).includes("n'ouvre pas le personnage"), "le refus ne s'affiche pas");
+    assert.ok(ecran.querySelector("#ancien-mdp"));
+    assert.deepEqual([...new Set(git.methodes)], ["GET"]);
+
+    ecran.querySelector("#ancien-mdp").value = ANCIEN;
+    await soumettre(formulaireDe(ecran, "ancien-mdp"));
+    await attendre(() => texteDe(ecran).includes("personnage rechiffré"), "la reprise n'aboutit pas");
+    assert.match(texteDe(ecran), /1 personnage rechiffré sous le mot de passe de table actuel : visible par tous d'ici quelques minutes\./);
+    assert.equal(git.commits.length, 1);
+    assert.equal(git.fichiers.get(CHEMIN_BANQUE), banqueEcrite, "la banque ne bouge pas");
+    const relu = lireFichier(git.fichiers.get(cheminDuPersonnage(b.fichier.identifiant)), { identifiant: b.fichier.identifiant }).fichier;
+    assert.deepEqual((await dechiffrerPersonnage(relu, secret)).personnage, b.personnage);
+
+    boutons(ecran, "Vérifier les personnages en ligne")[0].click();
+    await attendre(() => texteDe(ecran).includes("sont en ligne"), "l'inventaire n'arrive pas");
+    assert.match(texteDe(ecran), /2 personnages sont en ligne ; 2 s'ouvrent avec le mot de passe de table actuel\./);
+    assert.equal(ecran.querySelector("#ancien-mdp"), null);
+  } finally {
+    globalThis.fetch = fetchAvant;
     retirer();
   }
 });

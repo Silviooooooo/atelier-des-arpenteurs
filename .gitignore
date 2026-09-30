@@ -18,14 +18,20 @@
 *.odt
 *.pdf
 
-# Données : aucun JSON, sauf ces quatre-là (interdit 2) : le personnage de
+# Données : aucun JSON, sauf ceux-là (interdit 2) : le personnage de
 # démonstration est fictif. Une banque en clair gardée pour déboguer, où
-# qu'elle soit, reste dehors, comme un personnage réel exporté ici.
+# qu'elle soit, reste dehors, comme un personnage réel exporté ici. Les
+# personnages en ligne entrent chiffrés, avec leur index, que range
+# l'automate (§ 15.8) : rien d'autre de personnages/, ni fichier d'un autre
+# genre ni sous-dossier.
 *.json
 !package.json
 !essais/banque_demo.chiffree.json
 !donnees/banque.chiffree.json
 !essais/personnage_demo.arpenteur.json
+personnages/*
+!personnages/*.chiffre.json
+!personnages/index.json
 
 # Documents de travail, et le dossier du classeur réel s'il venait ici.
 ressources/

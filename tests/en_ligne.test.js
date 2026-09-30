@@ -137,7 +137,7 @@ test("en ligne — un ticket hostile est refusé, avec une raison, jamais une ex
 
 test("en ligne — un personnage trop gros pour un ticket ne part pas, avec une raison", () => {
   const enorme = { sel: versBase64(new Uint8Array(16)), iv: versBase64(new Uint8Array(12)), contenu: versBase64(new Uint8Array(50_000)) };
-  assert.match(ecrireTicket({ action: "creer", identifiant: ID, date: DATE, personnage: enorme }).erreur, /dépasse 64 Ko/);
+  assert.match(ecrireTicket({ action: "creer", identifiant: ID, date: DATE, personnage: enorme }).erreur, /dépasse 64 Ko : il ne peut pas partir en ligne. Raccourcissez son histoire./);
 });
 
 test("en ligne — un chiffré recopié sous un autre identifiant, ou d'une autre clé, ne se lit pas", async () => {
@@ -166,7 +166,7 @@ test("en ligne — le contenu déchiffré est une donnée hostile : borné, vér
     return { format: 1, identifiant, depose_le: DATE, range_le: RANGE, ticket: 3, sel: secret.sel, iv: versBase64(iv), contenu: versBase64(contenu) };
   };
   const bombe = await forger(new Uint8Array(200 * 1024).fill(0x20));
-  assert.match((await dechiffrerPersonnage(bombe, secret)).erreur, /dépasse 64 Ko/);
+  assert.match((await dechiffrerPersonnage(bombe, secret)).erreur, /dépasse 64 Ko une fois décompressé/);
   assert.equal((await dechiffrerPersonnage(await forger('{"format":1}'), secret)).code, "illisible");
   assert.equal((await dechiffrerPersonnage(await forger(new Uint8Array([0xff, 0xfe, 0x00])), secret)).code, "illisible");
   const autre = enregistre((p) => (p.id = "AutreIdentifiant000001"));

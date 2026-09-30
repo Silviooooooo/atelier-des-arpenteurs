@@ -85,8 +85,8 @@ export function typeObjet(bloc) {
 }
 
 // Les paramètres qu'un bloc transmet à une capacité : ceux sans cible, puis
-// ceux qui la visent, qui priment (lisez_moi, « Syntaxe »). Rend une Map
-// clé du nom → { nom, valeur }, et les conflits (E7) dans conflits.
+// ceux qui la visent, qui priment (lisez_moi, « Syntaxe » ; E7 l'admet
+// depuis le lot 2 bis). Rend une Map clé du nom → { nom, valeur }.
 function parametresPour(index, bloc, nomCapacite) {
   const sansCible = new Map();
   const visant = new Map();
@@ -214,6 +214,27 @@ function contexte(index, personnage, bloc, qualite, capacite, niveau, avertir = 
     variables.set(cle(recus[0]), lu.valeurs ? { valeurs: lu.valeurs } : { brut: e.valeur });
   }
   return variables;
+}
+
+/**
+ * La description d'une capacité telle que le joueur la voit en choisissant
+ * (lot 2 bis) : sa variante au niveau demandé (par défaut son niveau de
+ * création), ses [N] et expressions évalués avec les caractéristiques du
+ * personnage et les paramètres du bloc qui la donne (bloc : son nom ; pour
+ * un objet, qualite : la qualité saisie, 2 par défaut). Rend { nom, niveau,
+ * texte, cout, evolution } ou null pour une capacité absente de la banque.
+ */
+export function descriptionA(index, personnage, nomCapacite, { bloc = null, niveau = null, qualite = "2" } = {}) {
+  const capacite = index.capacite(nomCapacite);
+  if (!capacite) return null;
+  const evo = evolution(capacite);
+  const n = niveau ?? evo.niveauCreation;
+  const variante = varianteA(capacite, n);
+  if (!variante) return { nom: capacite.nom, niveau: n, texte: "", cout: coutA(capacite, n), evolution: evo };
+  const source = bloc ? index.bloc(bloc) : null;
+  const q = source ? qualiteDe(source, qualite) : null;
+  const variables = contexte(index, personnage, source, q, capacite, n);
+  return { nom: capacite.nom, niveau: n, texte: decrire(variante.description, variables, personnage.caracteristiques, n).texte, cout: coutA(capacite, n), evolution: evo };
 }
 
 function ecrireValeurs(valeurs) {
@@ -454,26 +475,31 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
   const recus = comptees.reduce((total, c) => total + COUT_NIVEAU[c.niveauCreation], 0);
   if (montees.size && points > POINTS_CREATION) avertir("regle", `Les montées portent les points de capacité à ${points}, au-delà de ${POINTS_CREATION}.`);
 
-  // L'équipement.
+  // L'équipement, et la place de chaque objet (format 2) : l'arme tenue, une
+  // pièce du pack d'armure, un objet équipé, le sac.
   const equipement = (personnage.equipement ?? []).map((objet, rang) => {
     const bloc = index.bloc(objet.nom);
     const type = bloc ? typeDe(bloc) : null;
     const qualite = bloc ? qualiteDe(bloc, objet.qualite) : { applicable: false, texte: "" };
-    return { rang, nom: bloc?.nom ?? objet.nom, bloc, type, qualite, porte: Boolean(objet.porte), absent: !bloc };
+    const place = objet.place ?? "sac";
+    return { rang, nom: bloc?.nom ?? objet.nom, bloc, type, qualite, place, porte: type === "armure" && (place === "pack" || place === "equipe"), absent: !bloc };
   });
 
-  // L'arme principale (livret, « Objet » : une seule arme équipée) et son
-  // jet d'attaque (livret, « Jets d'attaque »).
+  // L'arme tenue (livret, « Objet » : une seule arme équipée) et son jet
+  // d'attaque (livret, « Jets d'attaque »). Une arme ailleurs que dans la
+  // main compte comme rangée.
   const armes = equipement.filter((o) => o.type === "arme").map((o) => ({ ...o, ...arme(index, personnage, o, des, avertir) }));
   let attaque;
-  const principale = armes.find((a) => a.rang === personnage.arme_principale);
-  if (personnage.arme_principale !== null && personnage.arme_principale !== undefined && !principale) avertir("regle", "L'arme principale n'est pas une arme de l'équipement.");
+  const tenue = equipement.find((o) => o.place === "arme");
+  const principale = armes.find((a) => a.place === "arme");
+  if (tenue && !tenue.absent && !principale) avertir("regle", `« ${tenue.nom} » est tenu comme arme, mais ce n'est pas une arme.`);
+  for (const a of armes.filter((a) => a.place === "pack" || a.place === "equipe")) avertir("regle", `« ${a.nom} » : une seule arme se tient, celle de l'entrée « Arme » ; celle-ci compte comme rangée dans le sac.`);
   if (principale) attaque = { ...principale, mainsNues: false };
   else attaque = mainsNues(index, personnage, capacites, avertir);
 
   // La défense (livret, « Jets de défense ») et l'armure par zone (élément
   // Armure du classeur).
-  const portees = equipement.filter((o) => o.type === "armure" && o.porte);
+  const portees = equipement.filter((o) => o.porte);
   const defense = defenseDe(portees, des, avertir, personnage);
   const armure = armureParZone(portees, personnage, avertir);
   const bouclier = bouclierDe(equipement, personnage, avertir);
@@ -503,7 +529,9 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
   // Un choix disparu de la banque ou modifié depuis l'enregistrement.
   for (const phrase of changements(index, personnage.empreintes)) avertir("banque", phrase);
 
-  const constellation = personnage.constellation?.nom ? { nom: personnage.constellation.nom, saisie: personnage.constellation.obtention === "saisie" } : null;
+  const constellation = personnage.constellation?.nom
+    ? { nom: personnage.constellation.nom, saisie: personnage.constellation.obtention === "saisie", tirages: personnage.constellation.tirages ?? 0 }
+    : null;
   const groupe = (nom) => capacites.filter((c) => c.groupe === nom);
 
   return {
@@ -656,15 +684,17 @@ function armureParZone(portees, personnage, avertir) {
   return { zones, couvertes };
 }
 
-// Le bouclier : l'objet désigné, qui transmet une défense (§ 12).
+// Le bouclier : l'objet équipé qui transmet une défense (§ 12) ; un seul
+// compte. Un objet équipé qui n'est ni armure, ni bouclier, ni arme compte
+// comme rangé dans le sac.
 function bouclierDe(equipement, personnage, avertir) {
-  if (personnage.bouclier === null || personnage.bouclier === undefined) return null;
-  const objet = equipement.find((o) => o.rang === personnage.bouclier);
-  const parametre = objet?.bloc?.parametres.find((p) => p.nom && !p.cible && cle(p.nom) === PARAMETRES.defense);
-  if (!objet || !parametre) {
-    avertir("regle", "Le bouclier désigné ne transmet pas de défense.");
-    return null;
-  }
+  const equipes = equipement.filter((o) => o.place === "equipe" && o.type !== "armure" && o.type !== "arme" && !o.absent);
+  const boucliers = equipes.filter((o) => estBouclier(o.bloc));
+  for (const o of equipes.filter((o) => !estBouclier(o.bloc))) avertir("regle", `« ${o.nom} » est équipé, mais ce n'est ni une armure ni un bouclier : il compte comme rangé dans le sac.`);
+  if (boucliers.length > 1) avertir("regle", `Plusieurs boucliers sont équipés : seul « ${boucliers[0].nom} » compte.`);
+  const objet = boucliers[0];
+  if (!objet) return null;
+  const parametre = objet.bloc.parametres.find((p) => p.nom && !p.cible && cle(p.nom) === PARAMETRES.defense);
   const lu = valeursParametre(parametre.nom, parametre.valeur, { caracteristiques: personnage.caracteristiques, qualite: objet.qualite });
   if (lu.erreur) avertir("expression", `« ${objet.nom} » : ${lu.erreur}`);
   return { rang: objet.rang, nom: objet.nom, defense: lu.valeurs ? lu.valeurs[0] : null, defenseBrute: parametre.valeur, qualite: objet.qualite };

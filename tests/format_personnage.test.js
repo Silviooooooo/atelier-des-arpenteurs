@@ -33,7 +33,7 @@ test("format — un personnage neuf et le personnage d'essai se vérifient ; le 
   // Aucune donnée copiée de la banque : les seules chaînes sont des noms,
   // des dates, des textes du joueur et des qualités.
   assert.deepEqual(Object.keys(essai).sort(), [
-    "archetype", "arme_principale", "banque", "bouclier", "caracteristiques", "constellation", "cree_le", "empreintes", "enregistre_le",
+    "archetype", "banque", "caracteristiques", "constellation", "cree_le", "empreintes", "enregistre_le",
     "equipement", "espece", "etape", "etat", "format", "id", "identite", "mode", "modifie_le", "niveaux", "primordial",
   ]);
 });
@@ -55,7 +55,7 @@ test("format — un champ inconnu, un champ manquant ou « __proto__ » font ref
 
 test("format — chaque champ vérifié : types, bornes, dates, index, qualité, caractères de contrôle", () => {
   const refus = [
-    [(p) => (p.format = 2), /version plus récente de l'Atelier : rechargez la page/],
+    [(p) => (p.format = 3), /version plus récente de l'Atelier : rechargez la page/],
     [(p) => (p.format = "1"), /format inconnu/],
     [(p) => (p.id = "court"), /identifiant/],
     [(p) => (p.mode = "admin"), /mode du personnage est inconnu/],
@@ -71,16 +71,21 @@ test("format — chaque champ vérifié : types, bornes, dates, index, qualité,
     [(p) => (p.archetype = { nom: "", choix: [] }), /L'archétype, nom est vide/],
     [(p) => (p.archetype.choix = "Solo du chef"), /n'est pas une liste/],
     [(p) => (p.constellation.obtention = "magie"), /« tirage » ou « saisie »/],
+    [(p) => (p.constellation.tirages = -1), /nombre de tirages doit être un entier de 0 à 9999/],
+    [(p) => (p.constellation.tirages = 1.5), /nombre de tirages doit être un entier/],
+    [(p) => (p.constellation.tirages = 0), /une constellation tirée l'a été une fois au moins/],
+    [(p) => delete p.constellation.tirages, /le champ « tirages » manque/],
     [(p) => (p.equipement = Array(81).fill(p.equipement[0])), /plus de 80 éléments/],
     [(p) => (p.equipement[0].qualite = "deux"), /la qualité est un nombre/],
     [(p) => (p.equipement[0].qualite = 2), /la qualité est un nombre/],
-    [(p) => (p.equipement[0].porte = "oui"), /« porte » est vrai ou faux/],
-    [(p) => (p.arme_principale = 9), /L'arme principale doit être un entier de 0 à 8/],
-    [(p) => (p.bouclier = -1), /Le bouclier doit être un entier/],
+    [(p) => (p.equipement[0].place = "main"), /sa place est « arme », « pack », « equipe » ou « sac »/],
+    [(p) => (p.equipement[0].place = null), /sa place est/],
+    [(p) => (p.equipement[1].place = "arme"), /ne tient qu'une arme à la fois/],
+    [(p) => (p.equipement[0].porte = false), /le champ « porte » est inconnu/],
+    [(p) => (p.arme_principale = 0), /le champ « arme_principale » est inconnu/],
     [(p) => (p.niveaux = [{ capacite: "Flambage", niveau: 4 }]), /niveau doit être un entier de 2 à 3/],
     [(p) => (p.empreintes = [{ genre: "bloc", nom: "Saucier", empreinte: "<script>" }]), /L'empreinte 1 est illisible/],
     [(p) => (p.etat = "enregistre"), /date d'enregistrement/],
-    [(p) => (p.equipement = []), /désigne un objet absent/],
   ];
   for (const [modifier, attendu] of refus) {
     const p = personnageEssai();
@@ -185,4 +190,68 @@ test("relecture — la plus grosse bombe qu'un lien peut porter est refusée", a
   const debut = performance.now();
   assert.match((await lireCode(versBase64Url(bombe), { mode: "demo" })).erreur, /dépasse 64 Ko une fois décompressé/);
   assert.ok(performance.now() - debut < 2000);
+});
+
+// Lot 2 bis : le format 2 range chaque objet à sa place ; un personnage du
+// format 1 (lot 2 : fichier, lien, appareil) se lit encore, converti.
+function auFormat1(p = personnageEssai()) {
+  const { equipement, constellation, ...reste } = structuredClone(p);
+  const arme = equipement.findIndex((o) => o.place === "arme");
+  const bouclier = equipement.findIndex((o) => o.nom === "Couvercle de marmite");
+  return {
+    ...reste,
+    format: 1,
+    constellation: { nom: constellation.nom, choix: constellation.choix, obtention: constellation.obtention },
+    equipement: equipement.map(({ place, ...o }, i) => ({ ...o, porte: place === "equipe" && i !== bouclier })),
+    arme_principale: arme === -1 ? null : arme,
+    bouclier: bouclier === -1 ? null : bouclier,
+  };
+}
+
+test("format 1 — un personnage du lot 2 se lit encore : arme principale, bouclier et armures portées deviennent des places", async () => {
+  const ancien = auFormat1();
+  assert.equal(ancien.format, 1);
+  const { personnage, erreur } = lire(ancien);
+  assert.equal(erreur, undefined, erreur);
+  assert.equal(personnage.format, 2);
+  assert.deepEqual(
+    personnage.equipement.map((o) => [o.nom, o.place]),
+    personnageEssai().equipement.map((o) => [o.nom, o.place]),
+  );
+  // Une constellation tirée au format 1 l'a été une fois ; saisie, aucune.
+  assert.deepEqual(personnage.constellation, { nom: "Constellation du Sablier", choix: [], obtention: "tirage", tirages: 1 });
+  const saisie = auFormat1(personnageEssai((p) => Object.assign(p.constellation, { obtention: "saisie", tirages: 0 })));
+  assert.equal(lire(saisie).personnage.constellation.tirages, 0);
+  assert.equal("arme_principale" in personnage, false);
+  // Écrit ensuite au format 2 ; le lien d'un personnage du lot 2 aussi.
+  assert.equal(JSON.parse(ecrirePersonnage(personnage)).format, 2);
+  const code = versBase64Url(new Uint8Array(await new Response(new Blob([JSON.stringify(ancien)]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer()));
+  assert.equal((await lireCode(code, { mode: "demo" })).personnage.format, 2);
+  // Sans arme ni bouclier : tout au sac, sauf les armures portées.
+  const nu = auFormat1(personnageEssai((p) => p.equipement.forEach((o) => (o.place = o.place === "arme" ? "sac" : o.place))));
+  assert.equal(lire({ ...nu, bouclier: null }).personnage.equipement.find((o) => o.nom === "Couvercle de marmite").place, "sac");
+});
+
+test("format 1 — un format 1 abîmé est refusé : rang hors de l'équipement, champ inconnu, « porte » faux", () => {
+  const cas = [
+    [(p) => (p.arme_principale = 9), /L'arme principale désigne un objet absent/],
+    [(p) => (p.bouclier = -1), /Le bouclier désigne un objet absent/],
+    [(p) => (p.bouclier = "7"), /Le bouclier désigne un objet absent/],
+    [(p) => (p.pouvoir = "tout"), /le champ « pouvoir » est inconnu/],
+    [(p) => (p.equipement[0].porte = "oui"), /« porte » est vrai ou faux/],
+    [(p) => (p.equipement[0].place = "arme"), /le champ « place » est inconnu/],
+    [(p) => (p.constellation.tirages = 2), /le champ « tirages » est inconnu/],
+  ];
+  for (const [modifier, attendu] of cas) {
+    const p = auFormat1();
+    modifier(p);
+    assert.match(lire(p).erreur ?? "", attendu, String(attendu));
+  }
+});
+
+test("format 2 — un personnage neuf : caractéristiques toutes à 2, aucun objet", () => {
+  const neuf = nouveauPersonnage("reel");
+  assert.deepEqual(Object.values(neuf.caracteristiques), Array(9).fill(2));
+  assert.deepEqual(neuf.equipement, []);
+  assert.equal(neuf.format, 2);
 });

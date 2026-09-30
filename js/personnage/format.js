@@ -11,10 +11,21 @@
 // Le lien « Ouvrir sur mon téléphone » porte le personnage dans le fragment
 // de l'adresse (#/recevoir/…), qui n'est jamais envoyé à un serveur : son
 // texte compressé (deflate), en base64url.
+//
+// Le format 2 (lot 2 bis) : chaque objet a sa place (l'arme tenue, une pièce
+// du pack d'armure, un objet équipé, le sac), au lieu du rang de l'arme
+// principale et du bouclier ; la constellation compte ses tirages. Un
+// personnage au format 1 (fichier, lien ou appareil) se lit encore : il est
+// converti à la lecture (migrer), et s'écrit ensuite au format 2.
 
 import { CARACTERISTIQUES, CARACTERISTIQUE_MAX, CARACTERISTIQUE_MIN, NIVEAU_MAX, SOMME_CARACTERISTIQUES } from "./regles.js";
 
-export const FORMAT = 1;
+export const FORMAT = 2;
+// Les places d'un objet : « arme », l'arme tenue (une au plus, livret,
+// « Objet ») ; « pack », une pièce du pack d'armure ; « equipe », une pièce
+// d'armure portée seule ou un bouclier tenu ; « sac », rangé.
+export const PLACES = ["arme", "pack", "equipe", "sac"];
+export const TIRAGES_MAX = 9999;
 export const EXTENSION = ".arpenteur.json";
 export const TAILLE_MAX = 64 * 1024;
 export const ETAPES = 9;
@@ -48,14 +59,13 @@ export function nouveauPersonnage(mode, maintenant = new Date()) {
     enregistre_le: null,
     banque: null,
     identite: { nom: "", age: "", description: "", histoire: "" },
-    caracteristiques: Object.fromEntries(CARACTERISTIQUES.map((c) => [c.code, null])),
+    // Toutes au minimum au départ (lot 2 bis) : le joueur les monte.
+    caracteristiques: Object.fromEntries(CARACTERISTIQUES.map((c) => [c.code, CARACTERISTIQUE_MIN])),
     archetype: null,
     espece: null,
     constellation: null,
     primordial: null,
     equipement: [],
-    arme_principale: null,
-    bouclier: null,
     niveaux: [],
     empreintes: [],
   };
@@ -106,11 +116,58 @@ function liste(valeur, lieu, max) {
 
 function choixDe(valeur, lieu, { constellation = false } = {}) {
   if (valeur === null) return;
-  champs(valeur, lieu, constellation ? ["nom", "choix", "obtention"] : ["nom", "choix"]);
+  champs(valeur, lieu, constellation ? ["nom", "choix", "obtention", "tirages"] : ["nom", "choix"]);
   texte(valeur.nom, `${lieu}, nom`, BORNES.nom, { vide: false });
   liste(valeur.choix, `${lieu}, choix`, BORNES.choix);
   valeur.choix.forEach((nom, i) => texte(nom, `${lieu}, choix ${i + 1}`, BORNES.nom, { vide: false }));
-  if (constellation && valeur.obtention !== "tirage" && valeur.obtention !== "saisie") refuser(`${lieu} : obtenue par « tirage » ou « saisie ».`);
+  if (constellation) {
+    if (valeur.obtention !== "tirage" && valeur.obtention !== "saisie") refuser(`${lieu} : obtenue par « tirage » ou « saisie ».`);
+    // Le tirage se refait à volonté ; la fiche en dit le nombre.
+    entier(valeur.tirages, `${lieu}, nombre de tirages`, 0, TIRAGES_MAX);
+    if (valeur.obtention === "tirage" && valeur.tirages < 1) refuser(`${lieu} : une constellation tirée l'a été une fois au moins.`);
+  }
+}
+
+const CHAMPS_FORMAT_1 = [
+  "format", "id", "mode", "etat", "etape", "cree_le", "modifie_le", "enregistre_le", "banque", "identite", "caracteristiques",
+  "archetype", "espece", "constellation", "primordial", "equipement", "arme_principale", "bouclier", "niveaux", "empreintes",
+];
+
+/**
+ * Convertit un personnage au format 1 (lot 2) au format 2 ; rend tel quel
+ * tout autre objet, que verifier juge ensuite. L'arme principale devient
+ * l'objet à la place « arme », le bouclier et les armures portées la place
+ * « equipe », le reste le sac ; une constellation tirée l'a été une fois.
+ */
+export function migrer(donnees) {
+  if (!estObjet(donnees) || donnees.format !== 1) return donnees;
+  champs(donnees, "Le personnage", CHAMPS_FORMAT_1);
+  liste(donnees.equipement, "L'équipement", BORNES.objets);
+  const rang = (valeur, lieu) => {
+    if (valeur === null) return null;
+    if (!Number.isInteger(valeur) || valeur < 0 || valeur >= donnees.equipement.length) refuser(`${lieu} désigne un objet absent.`);
+    return valeur;
+  };
+  const arme = rang(donnees.arme_principale, "L'arme principale");
+  const bouclier = rang(donnees.bouclier, "Le bouclier");
+  const equipement = donnees.equipement.map((objet, i) => {
+    champs(objet, `L'objet ${i + 1}`, ["nom", "choix", "qualite", "porte"]);
+    if (typeof objet.porte !== "boolean") refuser(`L'objet ${i + 1} : « porte » est vrai ou faux.`);
+    const place = i === arme ? "arme" : i === bouclier || objet.porte ? "equipe" : "sac";
+    return { nom: objet.nom, choix: objet.choix, qualite: objet.qualite, place };
+  });
+  let constellation = donnees.constellation;
+  if (constellation !== null) {
+    champs(constellation, "La constellation", ["nom", "choix", "obtention"]);
+    constellation = { ...constellation, tirages: constellation.obtention === "tirage" ? 1 : 0 };
+  }
+  const { arme_principale: _arme, bouclier: _bouclier, ...reste } = donnees;
+  return { ...reste, format: FORMAT, constellation, equipement };
+}
+
+/** Un personnage lu d'ailleurs (fichier, lien, appareil) : converti s'il le faut, puis vérifié. */
+export function accepter(donnees) {
+  return verifier(migrer(donnees));
 }
 
 /**
@@ -120,7 +177,7 @@ function choixDe(valeur, lieu, { constellation = false } = {}) {
 export function verifier(personnage) {
   champs(personnage, "Le personnage", [
     "format", "id", "mode", "etat", "etape", "cree_le", "modifie_le", "enregistre_le", "banque", "identite", "caracteristiques",
-    "archetype", "espece", "constellation", "primordial", "equipement", "arme_principale", "bouclier", "niveaux", "empreintes",
+    "archetype", "espece", "constellation", "primordial", "equipement", "niveaux", "empreintes",
   ]);
   if (personnage.format !== FORMAT) {
     if (Number.isInteger(personnage.format) && personnage.format > FORMAT) refuser("Ce personnage vient d'une version plus récente de l'Atelier : rechargez la page.");
@@ -153,19 +210,14 @@ export function verifier(personnage) {
   liste(personnage.equipement, "L'équipement", BORNES.objets);
   personnage.equipement.forEach((objet, i) => {
     const lieu = `L'objet ${i + 1}`;
-    champs(objet, lieu, ["nom", "choix", "qualite", "porte"]);
+    champs(objet, lieu, ["nom", "choix", "qualite", "place"]);
     texte(objet.nom, `${lieu}, nom`, BORNES.nom, { vide: false });
     liste(objet.choix, `${lieu}, choix`, BORNES.choix);
     objet.choix.forEach((nom, j) => texte(nom, `${lieu}, choix ${j + 1}`, BORNES.nom, { vide: false }));
     if (objet.qualite !== null && (typeof objet.qualite !== "string" || !/^\d{1,3}(?:,\d{1,2})?$/.test(objet.qualite))) refuser(`${lieu} : la qualité est un nombre (« 2 », « 1,5 ») ou rien.`);
-    if (typeof objet.porte !== "boolean") refuser(`${lieu} : « porte » est vrai ou faux.`);
+    if (!PLACES.includes(objet.place)) refuser(`${lieu} : sa place est « arme », « pack », « equipe » ou « sac ».`);
   });
-  if (personnage.equipement.length === 0) {
-    if (personnage.arme_principale !== null || personnage.bouclier !== null) refuser("L'arme principale ou le bouclier désigne un objet absent.");
-  } else {
-    entier(personnage.arme_principale, "L'arme principale", 0, personnage.equipement.length - 1, { nul: true });
-    entier(personnage.bouclier, "Le bouclier", 0, personnage.equipement.length - 1, { nul: true });
-  }
+  if (personnage.equipement.filter((objet) => objet.place === "arme").length > 1) refuser("Un personnage ne tient qu'une arme à la fois (livret, « Objet »).");
   liste(personnage.niveaux, "Les montées", BORNES.niveaux);
   personnage.niveaux.forEach((montee, i) => {
     champs(montee, `La montée ${i + 1}`, ["capacite", "niveau"]);
@@ -212,7 +264,7 @@ export function lirePersonnage(texteSource, { mode }) {
     } catch {
       refuser("Ce fichier n'est pas un personnage de l'Atelier (JSON illisible).");
     }
-    const personnage = verifier(donnees);
+    const personnage = accepter(donnees);
     if (personnage.mode !== mode) {
       refuser(
         personnage.mode === "reel"

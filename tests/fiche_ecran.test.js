@@ -208,3 +208,86 @@ test("relecture — une fiche affichée remplace les écouteurs de la précéden
     retirer();
   }
 });
+
+// Lot 2 bis : la qualité des objets se change sur l'écran du personnage ;
+// « Modifier » ouvre une copie de travail ; un personnage en ligne s'ouvre.
+test("écran de la fiche — la qualité des objets se change ici, objet par objet ; le personnage enregistré repart en ligne", async () => {
+  const retirer = installerDom();
+  try {
+    const etagere = creerEtagere(magasinPersonnagesMemoire(), "reel");
+    const personnage = personnageEssai((p) => Object.assign(p, { mode: "reel", etat: "enregistre", enregistre_le: "2026-09-30T10:00:00.000Z" }));
+    await etagere.garder(personnage);
+    const envois = [];
+    const contexte = { ...contexteDe(etagere), naviguer: (a) => envois.push(["naviguer", a]) };
+    contexte.etat = { ...contexte.etat, mode: "reel", depot: { envoyer: async (p, o) => (envois.push(["envoyer", p.id, o.action, p.equipement[1].qualite]), { envoye: true }), lire: async () => null } };
+    const ecran = fichePersonnage.afficher(contexte, { ecran: "personnage", id: personnage.id });
+    document.body.replaceChildren(ecran);
+    await laisserFiler(20);
+    const bloc = ecran.querySelector(".qualites");
+    assert.ok(bloc, "la rubrique des qualités");
+    assert.ok(bloc.className.includes("ne-pas-imprimer"));
+    // Les objets à qualité X du classeur : un champ chacun, prérempli.
+    const rouleau = ecran.querySelector("#qualite-1");
+    assert.equal(rouleau.value, "");
+    assert.equal(ecran.querySelector("#qualite-0").value, "2");
+    rouleau.value = "abc";
+    await Promise.all(ecran.querySelectorAll("button").find((b) => texteDe(b) === "Enregistrer les qualités").click());
+    assert.match(texteDe(ecran), /« Rouleau de fonte » : un nombre comme 2 ou 1,5, ou rien pour X\./);
+    assert.equal((await etagere.lire(personnage.id)).equipement[1].qualite, null, "rien n'est gardé");
+    ecran.querySelector("#qualite-1").value = "3";
+    await Promise.all(ecran.querySelectorAll("button").find((b) => texteDe(b) === "Enregistrer les qualités").click());
+    await laisserFiler(20);
+    assert.equal((await etagere.lire(personnage.id)).equipement[1].qualite, "3");
+    assert.deepEqual(envois.at(-1), ["envoyer", personnage.id, "remplacer", "3"]);
+    assert.match(texteDe(ecran), /Les qualités sont gardées\. Il part en ligne : visible par tous d'ici quelques minutes\./);
+    // « Modifier » : une copie de travail, puis le parcours.
+    await Promise.all(ecran.querySelectorAll("button").find((b) => texteDe(b) === "Modifier").click());
+    await laisserFiler(20);
+    const [, adresse] = envois.find(([genre]) => genre === "naviguer");
+    const idCopie = adresse.match(/^#\/personnage\/([A-Za-z0-9_-]+)\/etape\/1$/)[1];
+    assert.equal((await etagere.lireNote(idCopie)).remplace, personnage.id);
+  } finally {
+    retirer();
+  }
+});
+
+test("écran de la fiche — un personnage qui n'est pas sur l'appareil s'ouvre depuis le site ; le pied dit « tirée N fois »", async () => {
+  const retirer = installerDom();
+  try {
+    const etagere = creerEtagere(magasinPersonnagesMemoire(), "reel");
+    const enLigne = personnageEssai((p) => Object.assign(p, { id: "AAAAAAAAAAAAAAAAAAAAAA", mode: "reel", etat: "enregistre", enregistre_le: "2026-09-30T10:00:00.000Z" }));
+    const contexte = contexteDe(etagere);
+    contexte.etat = { ...contexte.etat, mode: "reel", depot: { lire: async (id) => (id === enLigne.id ? enLigne : null) } };
+    const ecran = fichePersonnage.afficher(contexte, { ecran: "personnage", id: enLigne.id });
+    document.body.replaceChildren(ecran);
+    await laisserFiler(20);
+    assert.equal(texteDe(ecran.querySelector("h1")), "Aubépine Crèmebrûlée");
+    assert.match(texteDe(ecran.querySelector(".barre-personnage")), /Enregistré le 30\/09\/2026 · en ligne/);
+    assert.match(texteDe(ecran.querySelector(".recto .fiche-pied")), /constellation tirée 3 fois/);
+    const absent = fichePersonnage.afficher(contexte, { ecran: "personnage", id: "BBBBBBBBBBBBBBBBBBBBBB" });
+    document.body.replaceChildren(absent);
+    await laisserFiler(20);
+    assert.match(texteDe(absent), /Ce personnage n'est ni sur cet appareil, ni en ligne\./);
+  } finally {
+    retirer();
+  }
+});
+
+test("étagère — un personnage du format 1 gardé sur l'appareil (lot 2) se lit encore, converti au format 2", async () => {
+  const magasin = magasinPersonnagesMemoire();
+  const etagere = creerEtagere(magasin, "demo");
+  const { equipement, constellation, ...reste } = personnageEssai();
+  await magasin.ecrire("demo", {
+    ...reste,
+    format: 1,
+    constellation: { nom: constellation.nom, choix: [], obtention: "tirage" },
+    equipement: equipement.map(({ place, ...o }) => ({ ...o, porte: place === "equipe" && o.nom !== "Couvercle de marmite" })),
+    arme_principale: 0,
+    bouclier: 7,
+  });
+  const { personnages, illisibles } = await etagere.lister();
+  assert.equal(illisibles, 0);
+  assert.equal(personnages[0].format, 2);
+  assert.deepEqual(personnages[0].equipement.map((o) => o.place), personnageEssai().equipement.map((o) => o.place));
+  assert.equal((await etagere.lire(reste.id)).constellation.tirages, 1);
+});

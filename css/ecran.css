@@ -724,6 +724,100 @@ dl {
   margin-bottom: 0;
 }
 
+/* Le lot 2 bis : les boutons + et −, les blocs à choisir avec leurs
+   capacités décrites (des <details>, ouverts sur un grand écran, fermés sur
+   un téléphone), l'avant et l'après d'une évolution. */
+
+.caracteristique {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espace-1) var(--espace-2);
+  padding: var(--espace-1) 0;
+  border-bottom: var(--trait) solid var(--separateur);
+}
+
+.pas-a-pas {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espace-2);
+}
+
+.bouton-pas {
+  min-width: var(--cible-tactile);
+  min-height: var(--cible-tactile);
+  padding: 0;
+  font-size: var(--taille-sous-titre);
+  line-height: 1;
+}
+
+.bouton-pas:disabled {
+  opacity: var(--opacite-inactif);
+  cursor: not-allowed;
+}
+
+.valeur-pas {
+  min-width: 2ch;
+  font-weight: var(--graisse-forte);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.capacite-ligne .valeur-pas {
+  min-width: 7ch;
+}
+
+.choix-bloc,
+.option-decrite {
+  padding: var(--espace-1) 0 var(--espace-2);
+  border-bottom: var(--trait) solid var(--separateur);
+}
+
+.choix-bloc:last-child,
+.option-decrite:last-child {
+  border-bottom: 0;
+}
+
+.choix-bloc.choisi {
+  padding-left: var(--espace-2);
+  border-left: var(--trait-epais) solid var(--accent);
+}
+
+.capacites-decrites {
+  margin: 0 0 var(--espace-1);
+  padding: 0 0 0 calc(var(--taille-case) + var(--espace-3));
+  list-style: none;
+}
+
+.capacite-decrite details {
+  margin: var(--espace-1) 0;
+}
+
+/* Le résumé garde son affichage natif, et donc son repère de dépliage. */
+.capacite-decrite summary {
+  min-height: var(--cible-tactile);
+  padding: var(--espace-2) 0;
+  cursor: pointer;
+}
+
+.capacite-nom {
+  font-weight: var(--graisse-forte);
+}
+
+.capacite-texte {
+  max-width: var(--largeur-lecture);
+  margin: 0 0 var(--espace-2);
+}
+
+.avant-apres {
+  padding-left: 0;
+}
+
+.choix-option input:disabled + span {
+  opacity: var(--opacite-inactif);
+}
+
 .suite-etapes {
   justify-content: space-between;
   margin-top: var(--espace-5);

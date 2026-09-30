@@ -29,6 +29,17 @@ export function niveauEcrit(capacite) {
 const degatsEcrits = (degats) => (degats ? degats.join(" / ") : "—");
 const qualiteEcrite = (qualite) => (qualite?.applicable ? `qualité ${qualite.texte}` : "");
 
+/**
+ * Comment la constellation a été obtenue, pour le pied de la fiche (lot 2
+ * bis) : « constellation saisie à la main », ou le nombre de tirages, que le
+ * joueur peut refaire à volonté (« constellation tirée 3 fois »).
+ */
+export function obtentionEcrite(constellation) {
+  if (!constellation) return null;
+  if (constellation.saisie) return "constellation saisie à la main";
+  return constellation.tirages >= 1 ? `constellation tirée ${constellation.tirages} fois` : null;
+}
+
 function section(titre, ...contenu) {
   return el("section", { classe: "lecture-section" }, el("h2", {}, titre), ...contenu);
 }
@@ -198,7 +209,7 @@ export function lecture(fiche) {
     el(
       "p",
       { classe: "secondaire-texte petit" },
-      [fiche.banque.publiee_le ? `Banque du ${dateLisible(fiche.banque.publiee_le).slice(0, 10)}` : null, fiche.constellation?.saisie ? "constellation saisie à la main" : null].filter(Boolean).join(" · "),
+      [fiche.banque.publiee_le ? `Banque du ${dateLisible(fiche.banque.publiee_le).slice(0, 10)}` : null, obtentionEcrite(fiche.constellation)].filter(Boolean).join(" · "),
     ),
   );
 }

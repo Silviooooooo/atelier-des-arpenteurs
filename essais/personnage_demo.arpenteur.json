@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "id": "demo-aubepine-0000000001",
   "mode": "demo",
   "etat": "enregistre",
@@ -42,7 +42,8 @@
   "constellation": {
     "nom": "Constellation du Sablier",
     "choix": [],
-    "obtention": "tirage"
+    "obtention": "tirage",
+    "tirages": 3
   },
   "primordial": {
     "nom": "Grand Four",
@@ -55,59 +56,57 @@
       "nom": "Couteau d'office",
       "choix": [],
       "qualite": "2",
-      "porte": false
+      "place": "arme"
     },
     {
       "nom": "Rouleau de fonte",
       "choix": [],
       "qualite": null,
-      "porte": false
+      "place": "sac"
     },
     {
       "nom": "Tablier de cuir",
       "choix": [],
       "qualite": "2",
-      "porte": true
+      "place": "equipe"
     },
     {
       "nom": "Plastron de fonte",
       "choix": [],
       "qualite": null,
-      "porte": false
+      "place": "sac"
     },
     {
       "nom": "Guêtres de toile",
       "choix": [],
       "qualite": null,
-      "porte": true
+      "place": "equipe"
     },
     {
       "nom": "Maniques",
       "choix": [],
       "qualite": "1",
-      "porte": true
+      "place": "equipe"
     },
     {
       "nom": "Toque renforcée",
       "choix": [],
       "qualite": "3",
-      "porte": true
+      "place": "equipe"
     },
     {
       "nom": "Couvercle de marmite",
       "choix": [],
       "qualite": "2",
-      "porte": false
+      "place": "equipe"
     },
     {
       "nom": "Bouillon revigorant",
       "choix": [],
       "qualite": null,
-      "porte": false
+      "place": "sac"
     }
   ],
-  "arme_principale": 0,
-  "bouclier": 7,
   "niveaux": [
     {
       "capacite": "Flambage",

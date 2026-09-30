@@ -1,0 +1,50 @@
+# Range les personnages déposés par ticket (SPECIFICATION.md, § 15.8).
+# Tout le travail est dans outils/automate_personnages.js, contrôlé hors de
+# GitHub (tests/automate.test.js) : il balaie tous les tickets ouverts,
+# ferme ceux d'un inconnu sans les lire, et ne commite que dans personnages/.
+# Aucun texte du ticket n'entre dans ce fichier : le jeton seul passe, par
+# l'environnement. Les deux actions sont celles du workflow « Contrôles »,
+# fixées sur les mêmes commits (§ 10.2).
+name: Personnages
+
+on:
+  issues:
+    types: [opened]
+  # Lancé à la main, il rattrape les tickets restés ouverts, et redemande la
+  # construction du site (si une demande a été refusée).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Un passage à la fois, jamais interrompu : un passage en attente peut être
+# remplacé par le suivant, qui rattrape ses tickets.
+concurrency:
+  group: personnages
+  cancel-in-progress: false
+
+jobs:
+  ranger:
+    name: Ranger les personnages
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # contents : commiter dans personnages/ ; issues : fermer et verrouiller
+    # les tickets ; pages : demander la construction du site, qu'un envoi
+    # fait avec ce jeton ne déclenche pas.
+    permissions:
+      contents: write
+      issues: write
+      pages: write
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Installer Node 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Ranger les tickets ouverts
+        run: node outils/automate_personnages.js
+        env:
+          JETON: ${{ github.token }}

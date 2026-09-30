@@ -1,6 +1,6 @@
 // Contrôle de cohérence de la banque (SPECIFICATION.md, § 6.3).
 //
-// Les dix-huit codes du § 6.3 sont définis ici, avec leur gravité (A6, retiré,
+// Les dix-neuf codes du § 6.3 sont définis ici, avec leur gravité (A6, retiré,
 // ne revient pas : le bloc sans capacité est devenu I3). L'import en
 // relève cinq en lisant les lignes (E1, E2, E6, A7, I1) ; ce module relève
 // les autres sur la banque : doublons, renvois, paramètres, rattachements,
@@ -10,6 +10,8 @@
 import { cle, repertoire } from "./noms.js";
 import { parametresInvoques } from "./notation.js";
 import { TYPES, typeInconnu } from "./types.js";
+import { packsDArmure } from "../personnage/packs.js";
+import { TYPES_OBJET } from "../personnage/regles.js";
 
 export const GRAVITES = {
   E1: "bloquante",
@@ -27,6 +29,7 @@ export const GRAVITES = {
   A7: "avertissement",
   A8: "avertissement",
   A9: "avertissement",
+  A10: "avertissement",
   I1: "information",
   I2: "information",
   I3: "information",
@@ -163,6 +166,23 @@ export function controler(banque) {
         signaler("E7", lieu, `${lieu.sujet} transmet ${liste.length} fois le paramètre ${liste[0].nom} (${liste.map(ecrire).join(", ")}) : deux fois sans cible, ou deux fois vers la même capacité, qui en recevrait plusieurs valeurs.`);
       }
     }
+  }
+
+  // A10 : un type d'armure dont deux pièces couvrent une même zone n'a pas
+  // de pack (livret, « Objet » : deux pièces ne se portent pas sur une même
+  // zone). La règle des packs est celle du créateur (js/personnage/packs.js) ;
+  // un doublon (E3) n'y compte qu'une fois, comme dans le créateur.
+  const parNom = new Map();
+  for (const bloc of banque.blocs) if (!parNom.has(bloc.nom)) parNom.set(bloc.nom, bloc);
+  for (const pack of packsDArmure([...parNom.values()])) {
+    if (pack.propose) continue;
+    const zones = pack.conflits.map((c) => `${c.nomZone.toLowerCase()} : ${c.pieces.map((p) => `« ${p.nom} »`).join(" et ")}`).join(" ; ");
+    const seconde = pack.conflits[0].pieces[1];
+    signaler(
+      "A10",
+      { feuille: "Blocs", ligne: seconde.brut.ligne },
+      `Des pièces d'armure de type ${TYPES_OBJET[pack.type].nom} couvrent une même zone (${zones}) : le pack ${pack.nom} n'est pas proposé au créateur de personnage.`,
+    );
   }
 
   const recoit = (nomElement, parametre) =>

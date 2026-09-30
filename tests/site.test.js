@@ -327,6 +327,10 @@ test("serveur local — la seule machine, les seuls fichiers du site (§ 3.2)", 
     ".git/config": 403, ".git/x.js": 403, ".cache/x.js": 403, "plans/p.js": 403, "ressources/r.png": 403, "Système/s.js": 403,
     "essais/c.xlsx": 403, "donnees/banque.json": 403, "SPECIFICATION.md": 403, "package.json": 403,
     "polices/p.woff2": 200, "polices/OFL.txt": 403, "essais/personnage_demo.arpenteur.json": 200, "essais/autre.arpenteur.json": 403,
+    // Les personnages en ligne (§ 15.8) : les fichiers rangés et l'index, rien d'autre.
+    "personnages/Qx7-aZ_09bcdEFGHijklmn.chiffre.json": 200, "personnages/index.json": 200, "personnages/clair.json": 403,
+    "personnages/court.chiffre.json": 403, "personnages/Qx7-aZ_09bcdEFGHijklmn.json": 403, "personnages/sous/Qx7-aZ_09bcdEFGHijklmn.chiffre.json": 403,
+    "personnages/x.js": 403, "personnages/p.chiffree.json": 403, "index.json": 403,
   };
   for (const chemin of Object.keys(fichiers)) {
     mkdirSync(join(racine, dirname(chemin)), { recursive: true });
@@ -356,6 +360,9 @@ test("serveur local — la seule machine, les seuls fichiers du site (§ 3.2)", 
     assert.equal((await demander("/index.html", `exemple.com:${port}`)).statut, 403);
     assert.equal((await demander("/index.html", "localhost:1")).statut, 403);
     assert.equal((await demander("/..%2f..%2fwindows/win.ini")).statut, 403);
+    // GitHub Pages distingue la casse : le serveur aussi, pour personnages/.
+    assert.equal((await demander("/Personnages/index.json")).statut, 403);
+    assert.equal((await demander("/personnages/INDEX.json")).statut, 403);
     // Sous Windows, une barre inverse encodée sépare aussi les dossiers.
     for (const chemin of ["/plans\\p.js", "/.git\\x.js", "/tests\\outils\\x.js", "/js\\..\\plans\\p.js"]) assert.equal((await demander(chemin)).statut, 403, chemin);
   } finally {

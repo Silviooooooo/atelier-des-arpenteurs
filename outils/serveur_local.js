@@ -18,11 +18,13 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { CHEMIN_INDEX, FICHIER } from "../js/personnage/en_ligne.js";
 
 const RACINE = fileURLToPath(new URL("../", import.meta.url));
 
 // Les seuls types servis : ceux du site. Un JSON n'est servi que chiffré,
-// sauf le personnage de démonstration, fictif (§ 15.7).
+// sauf le personnage de démonstration, fictif (§ 15.7), et l'index des
+// personnages en ligne, qui ne porte ni nom ni texte (§ 15.8).
 const TYPES = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -35,6 +37,8 @@ const TYPES = {
 };
 const PERSONNAGE_DEMO = "/essais/personnage_demo.arpenteur.json";
 const TRAVAIL = /^\/(?:plans|ressources|système|tests)\//i;
+// De personnages/, les seules formes que range l'automate.
+const PERSONNAGES = /^\/personnages\//i;
 
 function servi(chemin) {
   // Sous Windows, « \ » sépare aussi les dossiers : /plans%5Cx passerait
@@ -42,6 +46,7 @@ function servi(chemin) {
   if (/[\\\u0000-\u001f]/.test(chemin)) return false;
   if (chemin.split("/").some((segment) => segment.startsWith("."))) return false;
   if (TRAVAIL.test(chemin.normalize("NFC"))) return false;
+  if (PERSONNAGES.test(chemin)) return chemin === `/${CHEMIN_INDEX}` || FICHIER.test(chemin.slice(1));
   const extension = extname(chemin);
   if (!Object.hasOwn(TYPES, extension)) return false;
   return extension !== ".json" || chemin.endsWith(".chiffree.json") || chemin === PERSONNAGE_DEMO;

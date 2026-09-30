@@ -11,7 +11,7 @@
 import { dateLisible } from "../banque/dates.js";
 import { el, svg } from "../ecrans/dom.js";
 import { LEGENDE_PRIMORDIAUX, LOCALISATION_20, ORDRE_FICHE_ZONES, TYPES_OBJET, ZONES } from "../personnage/regles.js";
-import { coutEcrit, niveauEcrit } from "./lecture.js";
+import { coutEcrit, niveauEcrit, obtentionEcrite } from "./lecture.js";
 import { MODELE_CAPACITES, repartir } from "./repartition.js";
 
 const ZONE = Object.fromEntries(ZONES.map((z) => [z.code, z]));
@@ -333,7 +333,7 @@ function liens(repartition) {
 }
 
 function pied(fiche) {
-  const parties = [fiche.banque.publiee_le ? `Banque du ${dateLisible(fiche.banque.publiee_le).slice(0, 10)}` : null, fiche.constellation?.saisie ? "constellation saisie à la main" : null];
+  const parties = [fiche.banque.publiee_le ? `Banque du ${dateLisible(fiche.banque.publiee_le).slice(0, 10)}` : null, obtentionEcrite(fiche.constellation)];
   return el("p", { classe: "fiche-pied" }, parties.filter(Boolean).join(" · "));
 }
 

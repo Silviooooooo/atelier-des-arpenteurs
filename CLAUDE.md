@@ -28,7 +28,9 @@ répond pas aux questions de règles en conversation.
 2. Aucune donnée réelle en clair dans le dépôt, hors les exemples de la
    spécification, réels mais non confidentiels.
 3. Aucune clé ni aucun mot de passe dans le code ou un fichier suivi,
-   hors le mot de passe public de la démonstration (§ 9).
+   hors le mot de passe public de la démonstration (§ 9). La clé de dépôt
+   des personnages ne vit que dans la banque chiffrée (§ 8.4) ; un contrôle
+   qui a besoin d'une clé la fabrique à l'exécution.
 4. Aucune écriture dans un classeur de l'auteur ; seul l'outil des essais
    (`tests/outils/`) fabrique le classeur fictif d'`essais/`.
 5. Aucune dépendance sans justification écrite dans la spécification.
@@ -51,6 +53,9 @@ répond pas aux questions de règles en conversation.
   `node --test` (installé par `git config core.hooksPath .githooks`, sans
   `--global`). **Ne jamais le contourner** (`--no-verify`) : un envoi
   refusé se corrige.
+- **L'automate des personnages commite dans `personnages/`** (§ 15.8) :
+  avant d'envoyer, récupérer ses commits (`git pull --rebase`), sans quoi
+  GitHub refuse l'envoi.
 - Banc sur le classeur réel, **hors dépôt** :
   `node tests/banc_classeur_reel.js chemin/vers/regles_jdr.xlsx`.
 
@@ -98,6 +103,9 @@ Le dépôt est dans OneDrive (décision de l'auteur). En cas d'erreur de verrou
 (`index.lock`, « Permission denied », fichier en cours d'utilisation) :
 s'arrêter ; ne jamais effacer un verrou ni relancer en boucle ; demander à
 l'auteur de suspendre la synchronisation OneDrive, puis réessayer une fois.
+Les écritures en rafale (vérifications armées par mutation) se font sur une
+copie du dépôt hors OneDrive : dans le dépôt synchronisé, une restauration
+peut heurter un verrou et laisser un fichier muté (lot 2 bis).
 
 ## Consignes de résumé
 

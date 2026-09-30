@@ -7,7 +7,7 @@
 
 import { TYPES, banqueSansTypes, typeDe } from "../banque/types.js";
 import { calculerFiche, capacitesDuBloc, estBouclier, indexerCreation } from "./calcul.js";
-import { CARACTERISTIQUES, COUT_NIVEAU, POINTS_CREATION, SOMME_CARACTERISTIQUES } from "./regles.js";
+import { CARACTERISTIQUES, CARACTERISTIQUE_MAX, CARACTERISTIQUE_MIN, COUT_NIVEAU, POINTS_CREATION, SOMME_CARACTERISTIQUES } from "./regles.js";
 
 export const ETAPES = [
   { numero: 1, cle: "identite", titre: "Identité" },
@@ -49,7 +49,7 @@ export function manques(banque, personnage, { index = indexerCreation(banque), f
   const valeurs = CARACTERISTIQUES.map((c) => personnage.caracteristiques[c.code]);
   const vides = CARACTERISTIQUES.filter((c) => personnage.caracteristiques[c.code] === null).map((c) => c.nom);
   const somme = valeurs.reduce((total, v) => total + (v ?? 0), 0);
-  if (vides.length) resultat[2].push(`Donnez une valeur de 2 à 6 à : ${vides.join(", ")}.`);
+  if (vides.length) resultat[2].push(`Donnez une valeur de ${CARACTERISTIQUE_MIN} à ${CARACTERISTIQUE_MAX} à : ${vides.join(", ")}.`);
   else if (somme !== SOMME_CARACTERISTIQUES) resultat[2].push(`La somme vaut ${somme} : il faut ${SOMME_CARACTERISTIQUES} (${somme > SOMME_CARACTERISTIQUES ? `${somme - SOMME_CARACTERISTIQUES} de trop` : `il manque ${SOMME_CARACTERISTIQUES - somme}`}).`);
 
   resultat[3].push(...manquesDuBloc(index, personnage.archetype, "archetype", "un archétype"));
@@ -59,12 +59,26 @@ export function manques(banque, personnage, { index = indexerCreation(banque), f
   else resultat[5].push(...manquesDuBloc(index, personnage.constellation, "constellation", "une constellation").filter((m) => !m.startsWith("Choisissez une constellation")));
   resultat[6].push(...manquesDuBloc(index, personnage.primordial, "primordial", "un primordial"));
 
-  personnage.equipement.forEach((objet, rang) => {
+  // La place de chaque objet (format 2) : une arme tenue, des pièces
+  // d'armure portées, un bouclier équipé ; tout le reste dans le sac.
+  let boucliers = 0;
+  personnage.equipement.forEach((objet) => {
     const bloc = index.bloc(objet.nom);
-    if (!bloc) resultat[7].push(`« ${objet.nom} » n'existe plus dans la banque : retirez-le.`);
-    else for (const m of capacitesDuBloc(bloc, objet.choix).manques) resultat[7].push(`« ${bloc.nom} » : ${m}.`);
-    if (bloc && rang === personnage.bouclier && !estBouclier(bloc)) resultat[7].push(`« ${objet.nom} » ne peut pas servir de bouclier.`);
+    if (!bloc) {
+      resultat[7].push(`« ${objet.nom} » n'existe plus dans la banque : retirez-le.`);
+      return;
+    }
+    for (const m of capacitesDuBloc(bloc, objet.choix).manques) resultat[7].push(`« ${bloc.nom} » : ${m}.`);
+    const type = typeDe(bloc);
+    if (objet.place === "arme" && type !== "arme") resultat[7].push(`« ${bloc.nom} » n'est pas une arme : choisissez l'arme tenue dans la liste « Arme ».`);
+    if (objet.place === "pack" && type !== "armure") resultat[7].push(`« ${bloc.nom} » n'est pas une pièce d'armure : choisissez de nouveau le pack.`);
+    if (objet.place === "equipe" && type === "arme") resultat[7].push(`« ${bloc.nom} » : une seule arme se tient, celle de la liste « Arme » ; rangez celle-ci.`);
+    else if (objet.place === "equipe" && type !== "armure") {
+      if (estBouclier(bloc)) boucliers += 1;
+      else resultat[7].push(`« ${bloc.nom} » ne s'équipe pas : rangez-le dans le sac.`);
+    }
   });
+  if (boucliers > 1) resultat[7].push("Un seul bouclier s'équipe : rangez les autres dans le sac.");
   const calculee = fiche ?? calculerFiche(banque, personnage, { index });
   for (const a of calculee.avertissements.filter((a) => a.genre === "regle" && /couvrent la même zone/.test(a.texte))) resultat[7].push(a.texte);
 

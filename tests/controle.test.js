@@ -33,7 +33,7 @@ const ANNONCEES = [
 function gravitesDeLaSpecification() {
   const texte = readFileSync(new URL("../SPECIFICATION.md", import.meta.url), "utf8");
   const section = texte.slice(texte.indexOf("### 6.3"), texte.indexOf("### 6.4"));
-  return Object.fromEntries([...section.matchAll(/^\| ([EAI]\d) \| (\S+) \|/gm)].map(([, code, gravite]) => [code, gravite]));
+  return Object.fromEntries([...section.matchAll(/^\| ([EAI]\d+) \| (\S+) \|/gm)].map(([, code, gravite]) => [code, gravite]));
 }
 
 async function importer(description) {
@@ -61,11 +61,19 @@ const TYPES_FAUTIFS = variante((feuilles) => {
   feuilles[1].lignes[2][5] = "Ustensile";
 });
 
-test("contrôle — les dix-huit codes du § 6.3 : quinze sur le classeur d'essai, E1, A8 et A9 sur ses variantes", async () => {
+// A10 : une seconde pièce agile sur le torse, ajoutée en fin de feuille ; le
+// pack agile n'est plus proposé. Le classeur d'essai lui-même garde ses trois
+// packs, pour la démonstration.
+const ARMURES_SUPERPOSEES = variante((feuilles) => {
+  feuilles[1].lignes.push(["Brassière de cuir", "Armure, Agile", null, "{armure:10/0/0/15/0/0}, {qualite:X}", "A10 : torse et bras gauche déjà couverts par le pack agile", "Armure"]);
+});
+
+test("contrôle — les dix-neuf codes du § 6.3 : quinze sur le classeur d'essai, E1, A8, A9 et A10 sur ses variantes", async () => {
   const essai = await importer();
   const sansFeuille = await importer(variante((feuilles) => feuilles.splice(2, 1)));
   const types = await importer(TYPES_FAUTIFS);
-  const codes = new Set([...essai.anomalies, ...sansFeuille.anomalies, ...types.anomalies].map((a) => a.code));
+  const armures = await importer(ARMURES_SUPERPOSEES);
+  const codes = new Set([...essai.anomalies, ...sansFeuille.anomalies, ...types.anomalies, ...armures.anomalies].map((a) => a.code));
   assert.deepEqual([...codes].sort(), Object.keys(GRAVITES).sort());
 });
 
@@ -89,6 +97,27 @@ test("A8, A9 — un bloc sans type, un bloc d'un type inconnu ; les types se com
   // « Equipement », « équipement », « Archetype » : reconnus, sans anomalie.
   const essai = await importer();
   assert.equal(essai.anomalies.filter((a) => a.code === "A8" || a.code === "A9").length, 0);
+});
+
+test("A10 — deux pièces d'armure d'un même type sur une même zone : le pack de ce type n'est pas proposé", async () => {
+  const { anomalies } = await importer(ARMURES_SUPERPOSEES);
+  const a10 = anomalies.filter((a) => a.code === "A10");
+  assert.deepEqual(a10, [
+    {
+      gravite: "avertissement",
+      code: "A10",
+      feuille: "Blocs",
+      ligne: 38,
+      message:
+        "Des pièces d'armure de type agile couvrent une même zone (torse : « Tablier de cuir » et « Brassière de cuir » ; bras gauche : « Maniques » et « Brassière de cuir ») : le pack agile n'est pas proposé au créateur de personnage.",
+    },
+  ]);
+  // Deux types différents sur le torse (Tablier de cuir, agile ; Plastron de
+  // fonte, lourde) ne se gênent pas : le classeur d'essai n'a aucun A10.
+  assert.equal((await importer()).anomalies.filter((a) => a.code === "A10").length, 0);
+  // Une valeur écrite « 0 » ou « 0,0 » ne couvre pas la zone.
+  const zero = variante((feuilles) => feuilles[1].lignes.push(["Brassière de cuir", "Armure, Agile", null, "{armure:0/0/0/0,0/0/0}, {qualite:X}", "", "Armure"]));
+  assert.equal((await importer(zero)).anomalies.filter((a) => a.code === "A10").length, 0);
 });
 
 test("E1 — la colonne « Type » est un en-tête attendu", async () => {
@@ -127,7 +156,8 @@ test("contrôle — un classeur propre ne déclenche aucune anomalie", async () 
 
 test("contrôle — gravité de chaque code, tri par gravité puis feuille puis ligne", async () => {
   const gravites = gravitesDeLaSpecification();
-  assert.equal(Object.keys(gravites).length, 18);
+  assert.equal(Object.keys(gravites).length, 19);
+  assert.equal(gravites.A10, "avertissement");
   assert.deepEqual({ ...GRAVITES }, gravites);
   const { anomalies } = await importer();
   for (const a of anomalies) assert.equal(a.gravite, gravites[a.code], a.code);
