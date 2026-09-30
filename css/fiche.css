@@ -71,6 +71,9 @@
   color: var(--fiche-encre);
   font-family: var(--police-fiche);
   line-height: normal;
+  /* Ce que body transmet à l'interface ne vaut pas pour le papier : le
+     modèle ne coupe pas les mots (« Arm. » dans sa colonne de 24 px). */
+  overflow-wrap: normal;
   text-wrap: pretty;
   /* Alegreya Sans écrit ses chiffres en bas de casse : sur une fiche, des
      chiffres alignés se lisent mieux. */
@@ -973,6 +976,17 @@ body {
     margin: 0;
     padding: 0;
     background: var(--fiche-papier);
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Imprimer depuis la vue lecture sort aussi la fiche. */
+  .cadre-feuilles {
+    display: block !important;
+    height: auto !important;
+    max-width: none !important;
+    overflow: visible !important;
+    visibility: visible !important;
   }
 
   body > :not(main),
@@ -1002,11 +1016,14 @@ body {
     break-inside: avoid;
   }
 
+  /* Firefox met tout le document en page à la largeur de la première
+     page, sans marge : le verso, à marges de 14 mm, a donc sa largeur
+     propre, 210 − 2 × 14 mm. */
   .feuille.verso {
     page: verso;
-    width: auto;
+    width: 182mm;
     min-height: 0;
     padding: 0;
-    background: none;
+    background: var(--fiche-papier);
   }
 }

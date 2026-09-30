@@ -310,8 +310,10 @@ dl {
   display: none;
 }
 
-/* Le retour à la liste, utile sur un téléphone seulement. */
-.retour a {
+/* Les liens de retour : des cibles tactiles de 44 px (§ 9). Celui des
+   fiches ne sert que sur un téléphone. */
+.retour a,
+.lien-retour a {
   display: inline-flex;
   align-items: center;
   min-height: var(--cible-tactile);

@@ -28,9 +28,19 @@
   border-color: var(--accent);
 }
 
-.ecran-personnage.vue-lecture .cadre-feuilles,
-.ecran-personnage.vue-fiche .vue-lecture-contenu {
-  display: none;
+/* À l'écran seulement : l'impression sort toujours le recto et le verso.
+   En vue lecture, la fiche reste mise en page, invisible et sans hauteur,
+   pour que la page puisse mesurer ses rubriques (§ 15.4). */
+@media screen {
+  .ecran-personnage.vue-lecture .cadre-feuilles {
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+  }
+
+  .ecran-personnage.vue-fiche .vue-lecture-contenu {
+    display: none;
+  }
 }
 
 .cadre-feuilles {
@@ -148,7 +158,19 @@
   border-bottom: var(--trait) solid var(--separateur);
 }
 
+/* Un repère qui dit que la ligne se déplie : le summary, mis en flex, perd
+   son triangle. */
+.lecture-capacites summary::before {
+  content: "▸";
+  color: var(--accent);
+}
+
+.lecture-capacites details[open] > summary::before {
+  content: "▾";
+}
+
 .lecture-capacites summary {
+  list-style: none;
   min-height: var(--cible-tactile);
   display: flex;
   flex-wrap: wrap;

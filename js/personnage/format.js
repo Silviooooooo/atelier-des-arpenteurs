@@ -12,7 +12,7 @@
 // de l'adresse (#/recevoir/…), qui n'est jamais envoyé à un serveur : son
 // texte compressé (deflate), en base64url.
 
-import { CARACTERISTIQUES, CARACTERISTIQUE_MAX, CARACTERISTIQUE_MIN, NIVEAU_MAX } from "./regles.js";
+import { CARACTERISTIQUES, CARACTERISTIQUE_MAX, CARACTERISTIQUE_MIN, NIVEAU_MAX, SOMME_CARACTERISTIQUES } from "./regles.js";
 
 export const FORMAT = 1;
 export const EXTENSION = ".arpenteur.json";
@@ -98,6 +98,10 @@ function entier(valeur, lieu, min, max, { nul = false } = {}) {
 function liste(valeur, lieu, max) {
   if (!Array.isArray(valeur)) refuser(`${lieu} n'est pas une liste.`);
   if (valeur.length > max) refuser(`${lieu} a plus de ${max} éléments.`);
+  // IndexedDB garde les trous d'un tableau et ses clés en plus, que JSON
+  // n'écrit jamais : une liste lue de l'appareil n'en a pas.
+  const cles = Object.keys(valeur);
+  if (cles.length !== valeur.length || cles.some((k, i) => k !== String(i))) refuser(`${lieu} est une liste abîmée.`);
 }
 
 function choixDe(valeur, lieu, { constellation = false } = {}) {
@@ -175,6 +179,18 @@ export function verifier(personnage) {
     texte(e.nom, `L'empreinte ${i + 1}, nom`, BORNES.nom, { vide: false });
     if (typeof e.empreinte !== "string" || !/^[0-9a-f]{14}$/.test(e.empreinte)) refuser(`L'empreinte ${i + 1} est illisible.`);
   });
+  // Un personnage enregistré est complet : son nom, ses caractéristiques
+  // (somme de 36, livret « Caractéristiques »), et les quatre blocs de la
+  // création (livret « Création »). Le reste se vérifie contre la banque,
+  // et la fiche le signale.
+  if (personnage.etat === "enregistre") {
+    const somme = CARACTERISTIQUES.reduce((total, c) => total + (personnage.caracteristiques[c.code] ?? NaN), 0);
+    if (personnage.identite.nom.trim() === "") refuser("Un personnage enregistré a un nom.");
+    if (somme !== SOMME_CARACTERISTIQUES) refuser(`Un personnage enregistré a ses neuf caractéristiques, pour une somme de ${SOMME_CARACTERISTIQUES}.`);
+    for (const [role, nom] of [["archetype", "un archétype"], ["espece", "une espèce"], ["constellation", "une constellation"], ["primordial", "un primordial"]]) {
+      if (personnage[role] === null) refuser(`Un personnage enregistré a ${nom}.`);
+    }
+  }
   return personnage;
 }
 
@@ -263,10 +279,26 @@ export async function codeDuLien(personnage) {
   return versBase64Url(await transformer(octetsDe(JSON.stringify(verifier(personnage))), new CompressionStream("deflate-raw")));
 }
 
-// Décompresse en s'arrêtant dès que la borne est passée : un lien forgé ne
-// peut pas faire gonfler des mégaoctets en mémoire.
+// Décompresse en s'arrêtant dès que la borne est passée. L'entrée passe
+// par tranches d'un kilo-octet, une à la demande : sinon Chromium
+// décompresse tout le code avant la première lecture, soit une soixantaine
+// de mégaoctets pour un lien forgé (relecture du lot 2).
 async function decompresserBorne(octets, borne) {
-  const lecteur = new Blob([octets]).stream().pipeThrough(new DecompressionStream("deflate-raw")).getReader();
+  let position = 0;
+  const entree = new ReadableStream(
+    {
+      pull(controleur) {
+        if (position >= octets.length) {
+          controleur.close();
+          return;
+        }
+        controleur.enqueue(octets.slice(position, position + 1024));
+        position += 1024;
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  const lecteur = entree.pipeThrough(new DecompressionStream("deflate-raw")).getReader();
   const morceaux = [];
   let total = 0;
   for (;;) {

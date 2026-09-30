@@ -150,3 +150,39 @@ test("lien — abîmé, forgé, trop gros une fois décompressé, ou de l'autre 
   const code = await codeDuLien(personnageEssai());
   assert.match((await lireCode(code, { mode: "reel" })).erreur, /créé dans la démonstration/);
 });
+
+test("relecture — un personnage enregistré est complet : nom, neuf caractéristiques de somme 36, les quatre blocs", () => {
+  const enregistre = (modifier) =>
+    personnageEssai((p) => {
+      p.etat = "enregistre";
+      p.enregistre_le = "2026-09-30T10:00:00.000Z";
+      modifier(p);
+    });
+  assert.ok(lire(enregistre(() => {})).personnage);
+  assert.match(lire(enregistre((p) => (p.identite.nom = " "))).erreur, /a un nom/);
+  assert.match(lire(enregistre((p) => (p.caracteristiques.force = 6))).erreur, /somme de 36/);
+  assert.match(lire(enregistre((p) => (p.caracteristiques.force = null))).erreur, /somme de 36/);
+  assert.match(lire(enregistre((p) => (p.archetype = null))).erreur, /a un archétype/);
+  assert.match(lire(enregistre((p) => (p.primordial = null))).erreur, /a un primordial/);
+  // Un brouillon, lui, peut être incomplet.
+  assert.ok(lire(personnageEssai((p) => (p.archetype = null))).personnage);
+});
+
+test("relecture — une liste abîmée (trou, clé en plus), comme IndexedDB peut en garder, est refusée", () => {
+  const creux = structuredClone(personnageEssai((p) => (p.niveaux = new Array(1))));
+  assert.throws(() => verifier(creux), /Les montées est une liste abîmée|liste abîmée/);
+  const plus = personnageEssai();
+  plus.empreintes.intrus = 1;
+  assert.throws(() => verifier(structuredClone(plus)), /liste abîmée/);
+  const equipement = structuredClone(personnageEssai((p) => (p.equipement = new Array(2))));
+  assert.throws(() => verifier(equipement), /liste abîmée/);
+});
+
+test("relecture — la plus grosse bombe qu'un lien peut porter est refusée", async () => {
+  // Cinquante mégaoctets de zéros tiennent en moins de 64 Ko compressés.
+  const bombe = new Uint8Array(await new Response(new Blob([new Uint8Array(50 * 1024 * 1024)]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer());
+  assert.ok(bombe.length < TAILLE_MAX);
+  const debut = performance.now();
+  assert.match((await lireCode(versBase64Url(bombe), { mode: "demo" })).erreur, /dépasse 64 Ko une fois décompressé/);
+  assert.ok(performance.now() - debut < 2000);
+});

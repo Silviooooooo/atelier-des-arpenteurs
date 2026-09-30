@@ -37,6 +37,9 @@ const PERSONNAGE_DEMO = "/essais/personnage_demo.arpenteur.json";
 const TRAVAIL = /^\/(?:plans|ressources|système|tests)\//i;
 
 function servi(chemin) {
+  // Sous Windows, « \ » sépare aussi les dossiers : /plans%5Cx passerait
+  // les contrôles qui suivent (relecture du lot 2).
+  if (/[\\\u0000-\u001f]/.test(chemin)) return false;
   if (chemin.split("/").some((segment) => segment.startsWith("."))) return false;
   if (TRAVAIL.test(chemin.normalize("NFC"))) return false;
   const extension = extname(chemin);

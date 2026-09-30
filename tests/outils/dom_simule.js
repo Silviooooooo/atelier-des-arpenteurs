@@ -135,7 +135,9 @@ class Element extends Noeud {
     return this.declencher("click");
   }
 
-  focus() {}
+  focus() {
+    if (document) document.activeElement = this;
+  }
 
   select() {}
 

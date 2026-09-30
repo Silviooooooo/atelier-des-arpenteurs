@@ -46,7 +46,8 @@ function ligneCapacite(capacite) {
     "summary",
     {},
     el("span", { classe: "lecture-nom" }, capacite.nom),
-    el("span", { classe: "detail" }, [niveauEcrit(capacite), capacite.aVenir ? null : coutEcrit(capacite.cout)].filter(Boolean).join(" · ")),
+    " ",
+    el("span", { classe: "detail" }, [niveauEcrit(capacite), capacite.aVenir ? null : coutEcrit(capacite.cout) === "0" ? "sans coût" : coutEcrit(capacite.cout)].filter(Boolean).join(" · ")),
   );
   const details = capacite.aVenir
     ? [el("p", { classe: "secondaire-texte" }, `Absente de la feuille Capacites. Donnée par : ${capacite.origines.join(", ")}.`)]

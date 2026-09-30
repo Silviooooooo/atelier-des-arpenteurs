@@ -360,6 +360,8 @@ test("serveur local — la seule machine, les seuls fichiers du site (§ 3.2)", 
     assert.equal((await demander("/index.html", `exemple.com:${port}`)).statut, 403);
     assert.equal((await demander("/index.html", "localhost:1")).statut, 403);
     assert.equal((await demander("/..%2f..%2fwindows/win.ini")).statut, 403);
+    // Sous Windows, une barre inverse encodée sépare aussi les dossiers.
+    for (const chemin of ["/plans\\p.js", "/.git\\x.js", "/tests\\outils\\x.js", "/js\\..\\plans\\p.js"]) assert.equal((await demander(chemin)).statut, 403, chemin);
   } finally {
     serveur.close();
     rmSync(racine, { recursive: true, force: true });

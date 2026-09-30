@@ -68,7 +68,10 @@ export function manques(banque, personnage, { index = indexerCreation(banque), f
   const calculee = fiche ?? calculerFiche(banque, personnage, { index });
   for (const a of calculee.avertissements.filter((a) => a.genre === "regle" && /couvrent la même zone/.test(a.texte))) resultat[7].push(a.texte);
 
-  if (calculee.points.depasse && personnage.niveaux.length) resultat[8].push(`Les montées portent les points de capacité à ${calculee.points.depenses} : ${POINTS_CREATION} au plus.`);
+  // Seules les montées appliquées comptent : une montée orpheline (capacité
+  // perdue) ne bloque rien.
+  const montees = calculee.capacites.some((c) => !c.aVenir && c.niveau !== null && c.niveau > c.niveauCreation);
+  if (calculee.points.depasse && montees) resultat[8].push(`Les montées portent les points de capacité à ${calculee.points.depenses} : ${POINTS_CREATION} au plus.`);
 
   resultat[9] = ETAPES.slice(0, 8).flatMap((e) => resultat[e.numero].map((m) => `${e.titre} : ${m}`));
   return resultat;

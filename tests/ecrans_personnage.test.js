@@ -13,6 +13,7 @@ import { calculerFiche, indexerCreation } from "../js/personnage/calcul.js";
 import { codeDuLien, ecrirePersonnage, nouveauPersonnage } from "../js/personnage/format.js";
 import { MESSAGE_BANQUE_SANS_TYPES, manques, niveauxPermis } from "../js/personnage/parcours.js";
 import { creerEtagere, magasinPersonnagesMemoire } from "../js/personnage/stockage.js";
+import { el } from "../js/ecrans/dom.js";
 import { boutons, installerDom, laisserFiler, texteDe } from "./outils/dom_simule.js";
 import { personnageEssai } from "./outils/personnage_essai.js";
 
@@ -449,7 +450,7 @@ test("parcours — étape 3 : archétype, groupes « Style de combat » et « Ma
   }
 });
 
-test("parcours — étape 5 : le tirage est figé ; la saisie reste modifiable", async () => {
+test("parcours — étape 5 : le tirage se confirme, puis il est figé ; la saisie reste modifiable", async () => {
   const retirer = installerDom();
   try {
     const contexte = contexteDe();
@@ -457,6 +458,16 @@ test("parcours — étape 5 : le tirage est figé ; la saisie reste modifiable",
     let ecran = await etape(contexte, personnage.id, 5);
     assert.match(zoneManques(ecran), /Tirez la constellation au sort/);
     boutons(ecran, "Tirer au sort")[0].click();
+    await laisserFiler(10);
+    // Rien n'est tiré avant la confirmation ; « Annuler » ne tire rien.
+    assert.equal((await contexte.etat.etagere.lire(personnage.id)).constellation, null);
+    assert.match(texteDe(ecran), /Tirer au sort \? Le tirage est définitif\./);
+    boutons(ecran, "Annuler")[0].click();
+    await laisserFiler(10);
+    assert.equal((await contexte.etat.etagere.lire(personnage.id)).constellation, null);
+    assert.equal(boutons(ecran, "Tirer").filter((b) => texteDe(b) === "Tirer").length, 0);
+    boutons(ecran, "Tirer au sort")[0].click();
+    boutons(ecran, "Tirer").find((b) => texteDe(b) === "Tirer").click();
     await laisserFiler(10);
     const tiree = (await contexte.etat.etagere.lire(personnage.id)).constellation;
     assert.equal(tiree.obtention, "tirage");
@@ -474,6 +485,8 @@ test("parcours — étape 5 : le tirage est figé ; la saisie reste modifiable",
     await laisserFiler(10);
     assert.deepEqual((await contexte.etat.etagere.lire(autre.id)).constellation, { nom: "Constellation de la Cuillère", choix: [], obtention: "saisie" });
     assert.equal(boutons(ecran, "Tirer au sort").length, 1, "la saisie ne fige rien");
+    boutons(ecran, "Tirer au sort")[0].click();
+    assert.match(texteDe(ecran), /Le tirage remplace « Constellation de la Cuillère », saisie à la main, et il est définitif\./);
   } finally {
     retirer();
   }
@@ -683,5 +696,78 @@ test("écrans des personnages — aucun data-chargement, aucune insertion de HTM
     const source = readFileSync(new URL(chemin, RACINE), "utf8");
     assert.doesNotMatch(source, /data-chargement/, chemin);
     assert.doesNotMatch(source, /\b(?:innerHTML|outerHTML|insertAdjacentHTML|confirm\()/, chemin);
+  }
+});
+
+test("relecture — changer d'archétype efface la montée d'une capacité perdue", async () => {
+  const retirer = installerDom();
+  try {
+    const contexte = contexteDe();
+    const personnage = await garde(contexte, personnageEssai());
+    const ecran = await etape(contexte, personnage.id, 3);
+    const patissier = ecran.querySelectorAll("input[type=radio][name=archetype]").find((r) => texteDe(r.parentNode).startsWith("Pâtissier"));
+    patissier.declencher("change");
+    await laisserFiler(10);
+    assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).niveaux, [], "Flambage n'est plus possédée");
+  } finally {
+    retirer();
+  }
+});
+
+test("relecture — la question du doublon montre les deux versions, et dit quand la reçue est un brouillon ou plus ancienne", async () => {
+  const retirer = installerDom();
+  try {
+    const contexte = contexteDe();
+    await garde(contexte, personnageEssai((p) => Object.assign(p, { etat: "enregistre", enregistre_le: "2026-09-30T10:00:00.000Z", modifie_le: "2026-09-30T10:00:00.000Z" })));
+    const zone = el("div", {});
+    document.body.replaceChildren(zone);
+    const vieux = personnageEssai((p) => (p.modifie_le = "2026-09-01T10:00:00.000Z"));
+    const garde2 = personnages.garderRecu(contexte.etat.etagere, vieux, zone);
+    await laisserFiler(10);
+    const texte = texteDe(zone);
+    assert.match(texte, /Le remplacer est définitif/);
+    assert.match(texte, /Sur l'appareil : « Aubépine Crèmebrûlée », enregistré le 30\/09\/2026/);
+    assert.match(texte, /Reçu : « Aubépine Crèmebrûlée », brouillon, étape 1 sur 9/);
+    assert.match(texte, /La version reçue est un brouillon, celle de l'appareil est enregistrée\./);
+    assert.match(texte, /La version reçue est plus ancienne que celle de l'appareil\./);
+    boutons(zone, "Annuler")[0].click();
+    assert.equal(await garde2, null);
+    assert.equal((await contexte.etat.etagere.lire(vieux.id)).etat, "enregistre");
+  } finally {
+    retirer();
+  }
+});
+
+test("relecture — sur un téléphone, les étapes viennent après le contenu ; les liens de retour ont leur cible ; le focus suit l'objet", async () => {
+  const retirer = installerDom();
+  const avant = globalThis.matchMedia;
+  try {
+    const contexte = contexteDe();
+    const personnage = await garde(contexte, personnageEssai());
+    const ordre = (ecran) => ecran.children[1].children.map((e) => e.tagName + (e.className ? `.${e.className.split(" ")[0]}` : ""));
+    let ecran = await etape(contexte, personnage.id, 2);
+    assert.equal(ordre(ecran)[0], "NAV.navigation-etapes", "grand écran : en tête");
+    globalThis.matchMedia = (requete) => ({ matches: requete.includes("max-width") });
+    ecran = await etape(contexte, personnage.id, 2);
+    const telephone = ordre(ecran);
+    assert.equal(telephone[0], "H2");
+    assert.ok(telephone.indexOf("NAV.navigation-etapes") > telephone.indexOf("DIV.boutons"), "téléphone : après « Suivant »");
+    assert.ok(ecran.querySelector(".lien-retour").querySelector("a"));
+    globalThis.matchMedia = avant;
+    // Étape 7 : après « Ajouter », le focus va au nouvel objet ; après
+    // « Retirer », à l'objet suivant.
+    ecran = await etape(contexte, personnage.id, 7);
+    const liste = ecran.querySelector("#objet-a-ajouter");
+    saisir(liste, "Spatule souple", "change");
+    boutons(ecran, "Ajouter")[0].click();
+    await laisserFiler(10);
+    assert.equal(document.activeElement?.id, "objet-9-titre");
+    assert.match(texteDe(document.activeElement), /Spatule souple/);
+    boutons(ecran, "Retirer")[2].click();
+    await laisserFiler(10);
+    assert.equal(document.activeElement?.id, "objet-2-titre");
+  } finally {
+    globalThis.matchMedia = avant;
+    retirer();
   }
 });

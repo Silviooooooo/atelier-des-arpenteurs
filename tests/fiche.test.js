@@ -10,6 +10,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { MOT_DE_PASSE_DEMO } from "../js/banque/chargement.js";
 import { importerFichier } from "../js/banque/importation.js";
 import { coutRecto, feuilles } from "../js/fiche/feuilles.js";
+import { lecture } from "../js/fiche/lecture.js";
 import { MINIMUM_CAPACITES, MODELE_CAPACITES, PLACES, repartir } from "../js/fiche/repartition.js";
 import { calculerFiche, indexerCreation } from "../js/personnage/calcul.js";
 import { ecrirePersonnage, lirePersonnage } from "../js/personnage/format.js";
@@ -199,6 +200,9 @@ test("impression — A4 sans marge, couleurs gardées, le recto seul sur la prem
   const impression = css.slice(css.indexOf("@media print"));
   assert.match(impression, /\.feuille\.recto\s*\{[^}]*width:\s*210mm;[^}]*height:\s*297mm;[^}]*break-after:\s*page;/);
   assert.match(impression, /\.feuille\.verso\s*\{[^}]*page:\s*verso;/);
+  // Firefox met le document en page à la largeur de la première page, sans
+  // marge : le verso, à marges, a sa largeur propre.
+  assert.match(impression, /\.feuille\.verso\s*\{[^}]*width:\s*182mm;/);
   assert.match(impression, /\.ne-pas-imprimer\s*\{\s*display:\s*none !important;/);
   // Le recto a la taille du modèle, et ne laisse rien dépasser.
   assert.match(css, /\.feuille\.recto\s*\{[^}]*height:\s*1123px;[^}]*overflow:\s*hidden;/);
@@ -239,4 +243,52 @@ test("démonstration — le personnage fourni vient de l'outil, est complet, et 
   assert.deepEqual(changements(index, personnage.empreintes), []);
   assert.deepEqual(manques(banque, personnage, { index })[9], []);
   assert.match(lirePersonnage(texte, { mode: "reel" }).erreur, /créé dans la démonstration/);
+});
+
+test("relecture — impression depuis la vue lecture : la fiche n'est masquée qu'à l'écran, et l'impression la rétablit", () => {
+  const personnage = lire("css/personnage.css");
+  const ecran = personnage.slice(personnage.indexOf("@media screen"));
+  assert.match(ecran, /^@media screen \{\s*\.ecran-personnage\.vue-lecture \.cadre-feuilles \{/);
+  // Hors de @media screen, rien ne masque le cadre de la fiche.
+  const horsEcran = personnage.replace(/@media screen \{[\s\S]*?\n\}/, "");
+  assert.doesNotMatch(horsEcran, /cadre-feuilles[^{]*\{[^}]*(?:display:\s*none|visibility:\s*hidden)/);
+  const impression = lire("css/fiche.css").slice(lire("css/fiche.css").indexOf("@media print"));
+  assert.match(impression, /\.cadre-feuilles \{\s*display: block !important;\s*height: auto !important;[\s\S]*?visibility: visible !important;/);
+  // Le verso garde la couleur du papier, même sans « imprimer les arrière-plans ».
+  assert.match(impression, /body \{[^}]*print-color-adjust: exact;/);
+  assert.match(impression, /\.feuille\.verso \{[^}]*background: var\(--fiche-papier\);/);
+});
+
+test("relecture — la feuille ne coupe pas les mots comme l'interface ; la vue lecture dit qu'une capacité se déplie, et un coût nul", () => {
+  assert.match(lire("css/fiche.css"), /\.feuille \{[^}]*overflow-wrap: normal;/);
+  assert.match(lire("css/personnage.css"), /\.lecture-capacites summary::before \{\s*content: "▸";/);
+  assert.match(lire("css/personnage.css"), /details\[open\] > summary::before \{\s*content: "▾";/);
+  const retirer = installerDom();
+  try {
+    const noeud = lecture(fiche());
+    const vif = noeud.querySelectorAll("summary").find((s) => texteDe(s).startsWith("Vif"));
+    assert.equal(texteDe(vif), "Vif niveau 1 / 3 · sans coût");
+  } finally {
+    retirer();
+  }
+});
+
+test("relecture — recto : primordial sans capacité, « capacités à venir » sur sa ligne ; « suite au verso » pour l'équipement et les pouvoirs", () => {
+  const retirer = installerDom();
+  try {
+    const givre = feuilles(fiche((p) => (p.primordial = { nom: "Givre éternel", choix: [] }))).querySelector(".recto");
+    const colonne = givre.querySelectorAll(".colonne-lien")[0];
+    assert.equal(texteDe(colonne.querySelector(".nom-primordial")), "Givre éternel");
+    assert.equal(texteDe(colonne.querySelectorAll(".nom-pouvoir")[0]), "capacités à venir");
+    assert.ok(colonne.querySelectorAll(".nom-pouvoir")[0].className.includes("a-venir"));
+    // Neuf objets : l'équipement le dit au recto.
+    assert.match(texteDe(feuilles(fiche()).querySelector(".rubrique-equipement")), /objet · qualité · suite au verso/);
+    assert.doesNotMatch(texteDe(feuilles(fiche((p) => p.equipement.pop())).querySelector(".rubrique-equipement")), /suite au verso/);
+    // Quatre pouvoirs : le quatrième au verso, et la colonne le dit.
+    const f = fiche();
+    f.liens[0].pouvoirs = ["A", "B", "C", "D"].map((nom) => ({ nom, niveau: 1, niveauMax: 3, aVenir: false }));
+    assert.match(texteDe(feuilles(f).querySelectorAll(".colonne-lien")[0]), /Pouvoirs choisis · suite au verso/);
+  } finally {
+    retirer();
+  }
 });

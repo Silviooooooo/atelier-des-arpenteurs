@@ -41,25 +41,42 @@ function memoriserVue(vue) {
   }
 }
 
-/** Les places du recto, réduites tant qu'une rubrique déborde (mesure du navigateur). */
-function ajuster(conteneur, fiche) {
-  const places = { ...PLACES };
+/**
+ * Réduit les places du recto tant qu'une rubrique déborde, mesure du
+ * navigateur faite. Ce sont les rubriques elles-mêmes qui ont la hauteur du
+ * modèle et cachent ce qui dépasse : c'est elles qu'on mesure. Une rubrique
+ * sans hauteur (fiche pas encore mise en page) ne dit rien.
+ */
+export function ajuster(conteneur, fiche, places) {
   for (let essai = 0; essai < 8; essai += 1) {
     const rectoNoeud = conteneur.querySelector(".recto");
-    if (!rectoNoeud || typeof rectoNoeud.getBoundingClientRect !== "function") return;
+    if (!rectoNoeud) return places;
     const deborde = (selecteur) => {
       const noeud = rectoNoeud.querySelector(selecteur);
-      return noeud && noeud.scrollHeight > noeud.clientHeight + 1;
+      return Boolean(noeud && noeud.clientHeight > 0 && noeud.scrollHeight > noeud.clientHeight + 1);
     };
-    const capacites = deborde(".rubrique-capacites .rubrique-corps");
-    const equipement = deborde(".rubrique-equipement .rubrique-corps");
-    const liens = deborde(".rubrique-liens .rubrique-corps");
-    if (!capacites && !equipement && !liens) return;
+    const capacites = deborde(".rubrique-capacites");
+    const equipement = deborde(".rubrique-equipement");
+    const liens = deborde(".rubrique-liens");
+    if (!capacites && !equipement && !liens) return places;
     if (capacites) places.capacites -= 1;
     if (equipement) places.equipement -= 1;
     if (liens) places.pouvoirs -= 1;
     conteneur.replaceChildren(feuilles(fiche, places));
   }
+  return places;
+}
+
+// Les écouteurs de la fiche affichée : une seule fiche à la fois, et ceux
+// de la précédente se retirent (§ 15.5).
+let ecouteurs = [];
+function ecouter(type, fonction) {
+  globalThis.addEventListener?.(type, fonction);
+  ecouteurs.push([type, fonction]);
+}
+function retirerEcouteurs() {
+  for (const [type, fonction] of ecouteurs) globalThis.removeEventListener?.(type, fonction);
+  ecouteurs = [];
 }
 
 function echelle(conteneur) {
@@ -68,21 +85,23 @@ function echelle(conteneur) {
   conteneur.style?.setProperty("--echelle", String(facteur));
 }
 
-async function imprimer() {
+async function imprimer(mesurer) {
   // Les polices de la fiche avant l'impression : sinon le PDF prend celles
-  // du système.
+  // du système. Puis une dernière mesure, avec elles.
   try {
     await Promise.all(["11px Marcellus", "11px 'Alegreya Sans'", "italic 11px 'Alegreya Sans'", "500 11px 'Alegreya Sans'"].map((police) => document.fonts.load(police)));
     await document.fonts.ready;
   } catch {
     // polices indisponibles : l'impression se fait avec celles de secours
   }
+  mesurer();
   globalThis.print();
 }
 
 function afficherPersonnage(contexte, personnage, zone) {
   const { banque, mode } = contexte.etat;
   const fiche = calculerFiche(banque, personnage);
+  const places = { ...PLACES };
   titrer(personnage.identite.nom || "Personnage");
   let vue = vueMemorisee();
   const racine = el("div", { classe: `ecran-personnage vue-${vue}` });
@@ -98,7 +117,7 @@ function afficherPersonnage(contexte, personnage, zone) {
     memoriserVue(vue);
     racine.className = `ecran-personnage vue-${vue}`;
     for (const [nom, bouton] of Object.entries(boutonsVue)) bouton.setAttribute("aria-pressed", String(nom === vue));
-    if (vue === "fiche") globalThis.requestAnimationFrame?.(() => echelle(impression));
+    globalThis.requestAnimationFrame?.(() => mesurer());
   };
   boutonsVue.lecture.addEventListener("click", () => changerVue("lecture"));
   boutonsVue.fiche.addEventListener("click", () => changerVue("fiche"));
@@ -133,7 +152,7 @@ function afficherPersonnage(contexte, personnage, zone) {
         { classe: "actions" },
         boutonsVue.lecture,
         boutonsVue.fiche,
-        el("button", { type: "button", classe: "bouton bouton-principal", onclick: () => imprimer() }, "Imprimer / PDF"),
+        el("button", { type: "button", classe: "bouton bouton-principal", onclick: () => imprimer(mesurer) }, "Imprimer / PDF"),
         boutonFichier(personnage),
         boutonTelephone,
         personnage.etat === "brouillon" ? el("a", { classe: "bouton", href: adressePersonnage(personnage.id, personnage.etape) }, "Reprendre la création") : null,
@@ -145,15 +164,22 @@ function afficherPersonnage(contexte, personnage, zone) {
     cadreImpression,
   );
   zone.replaceChildren(racine);
-  // La mesure demande la page affichée, et ses polices chargées.
-  const mesurer = () => {
-    ajuster(impression, fiche);
+  // La mesure demande la page affichée, et ses polices chargées ; en vue
+  // lecture, la fiche reste mise en page, invisible, et se mesure aussi.
+  function mesurer() {
+    if (!impression.isConnected) {
+      retirerEcouteurs();
+      return;
+    }
+    ajuster(impression, fiche, places);
     if (vue === "fiche") echelle(impression);
-  };
+  }
+  retirerEcouteurs();
   if (globalThis.requestAnimationFrame && document.fonts?.ready) {
     requestAnimationFrame(mesurer);
     document.fonts.ready.then(mesurer).catch(() => {});
-    globalThis.addEventListener?.("resize", () => vue === "fiche" && echelle(impression));
+    ecouter("resize", mesurer);
+    ecouter("beforeprint", mesurer);
   }
 }
 
@@ -162,13 +188,13 @@ export function afficher(contexte, route) {
   const zone = el("section", { classe: "zone-personnage" }, el("p", { classe: "attente", role: "status" }, "Lecture du personnage…"));
   const utilisable = banqueUtilisable(contexte.etat.banque);
   if (utilisable.erreur) {
-    return el("section", {}, titre("Personnage"), el("p", { classe: "message", role: "alert" }, utilisable.erreur), el("p", {}, el("a", { href: "#/personnages" }, "Tous les personnages")));
+    return el("section", {}, titre("Personnage"), el("p", { classe: "message", role: "alert" }, utilisable.erreur), el("p", { classe: "lien-retour" }, el("a", { href: "#/personnages" }, "Tous les personnages")));
   }
   contexte.etat.etagere
     .lire(route.id)
     .then((personnage) => {
       if (!personnage) {
-        zone.replaceChildren(titre("Personnage introuvable"), el("p", { classe: "message" }, "Ce personnage n'est pas sur cet appareil."), el("p", {}, el("a", { href: "#/personnages" }, "Tous les personnages")));
+        zone.replaceChildren(titre("Personnage introuvable"), el("p", { classe: "message" }, "Ce personnage n'est pas sur cet appareil."), el("p", { classe: "lien-retour" }, el("a", { href: "#/personnages" }, "Tous les personnages")));
         return;
       }
       afficherPersonnage(contexte, personnage, zone);

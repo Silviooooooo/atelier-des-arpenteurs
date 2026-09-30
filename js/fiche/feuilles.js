@@ -270,7 +270,7 @@ function equipement(repartition) {
   return rubrique(
     "rubrique-equipement",
     "Équipement",
-    "objet · qualité",
+    repartition.suite.equipement.length ? "objet · qualité · suite au verso" : "objet · qualité",
     el(
       "div",
       { classe: "lignes-equipement" },
@@ -288,19 +288,26 @@ function colonneLien(lien) {
       "div",
       { classe: "ligne-primordial" },
       el("span", { classe: "titre-primordial" }, "Primordial"),
-      trait(lien ? (lien.aVenir ? `${lien.nom} — capacités à venir` : lien.nom) : "", "nom-primordial"),
+      trait(lien ? lien.nom : "", "nom-primordial"),
       etiquette("Lien", "petite"),
       el("span", { classe: "cases-lien" }, cases(8, { taille: "lien", grisees: lien ? lien.points : Infinity })),
     ),
-    el("div", { classe: "entete-pouvoirs" }, el("span", { classe: "vide-flexible libelle petite" }, "Pouvoirs choisis"), el("span", { classe: "col-pui libelle petite" }, "Pui.")),
-    pouvoirs.map((p) =>
-      el(
+    el(
+      "div",
+      { classe: "entete-pouvoirs" },
+      el("span", { classe: "vide-flexible libelle petite" }, lien?.suite.length ? "Pouvoirs choisis · suite au verso" : "Pouvoirs choisis"),
+      el("span", { classe: "col-pui libelle petite" }, "Pui."),
+    ),
+    pouvoirs.map((p) => {
+      const texte = p.aVenirGroupe ? "capacités à venir" : p.vide ? "" : p.aVenir ? `${p.nom} — à venir` : p.nom;
+      const grisees = p.vide ? Infinity : p.aVenir || p.aVenirGroupe ? 0 : (p.niveauMax ?? 3);
+      return el(
         "div",
         { classe: "ligne-pouvoir" },
-        trait(p.vide ? "" : p.aVenir ? `${p.nom} — à venir` : p.nom, "nom-pouvoir"),
-        el("span", { classe: "cases-puissance" }, cases(3, { taille: "petite", cochees: p.niveau ?? 0, grisees: p.vide ? Infinity : p.aVenir ? 0 : (p.niveauMax ?? 3) })),
-      ),
-    ),
+        trait(texte, `nom-pouvoir${p.aVenir || p.aVenirGroupe ? " a-venir" : ""}`),
+        el("span", { classe: "cases-puissance" }, cases(3, { taille: "petite", cochees: p.niveau ?? 0, grisees })),
+      );
+    }),
   );
 }
 

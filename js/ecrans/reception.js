@@ -15,7 +15,7 @@ import { el, titre, titrer } from "./dom.js";
 import { PHRASE_NON_DURABLE, garderRecu } from "./personnages.js";
 
 const texteErreur = (erreur) => erreur?.message ?? String(erreur);
-const versLaListe = () => el("p", {}, el("a", { href: "#/personnages" }, "Personnages"));
+const versLaListe = () => el("p", { classe: "lien-retour" }, el("a", { href: "#/personnages" }, "Personnages"));
 
 function refuser(entete, contenu, message) {
   entete.textContent = "Lien refusé";

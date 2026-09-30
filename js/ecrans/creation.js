@@ -50,7 +50,7 @@ function renommer(entete, texte) {
   titrer(texte);
 }
 
-const versLaListe = () => el("p", {}, el("a", { href: "#/personnages" }, "Personnages"));
+const versLaListe = () => el("p", { classe: "lien-retour" }, el("a", { href: "#/personnages" }, "Personnages"));
 
 // ─── Les groupes de choix d'un bloc ─────────────────────────────────────────
 
@@ -264,14 +264,41 @@ function etapeConstellation(o) {
     ];
   }
 
+  // Le tirage est définitif : il se confirme dans la page, comme une
+  // suppression, et remplace une saisie faite à la table.
+  const confirmation = el("div", {});
   const tirer = el(
     "button",
     {
       type: "button",
       classe: "bouton",
       onclick: () => {
-        const nom = tirerConstellation(o.banque);
-        if (nom) o.modifier((q) => { q.constellation = { nom, choix: [], obtention: "tirage" }; }, { refaire: true, focus: "constellation-tiree" });
+        const annuler = el("button", { type: "button", classe: "bouton secondaire", onclick: () => confirmation.replaceChildren() }, "Annuler");
+        confirmation.replaceChildren(
+          el(
+            "div",
+            { classe: "confirmation", role: "group", "aria-label": "Confirmer le tirage" },
+            el("p", {}, actuelle?.nom ? `Tirer au sort ? Le tirage remplace « ${actuelle.nom} », saisie à la main, et il est définitif.` : "Tirer au sort ? Le tirage est définitif."),
+            el(
+              "div",
+              { classe: "boutons" },
+              el(
+                "button",
+                {
+                  type: "button",
+                  classe: "bouton",
+                  onclick: () => {
+                    const nom = tirerConstellation(o.banque);
+                    if (nom) o.modifier((q) => { q.constellation = { nom, choix: [], obtention: "tirage" }; }, { refaire: true, focus: "constellation-tiree" });
+                  },
+                },
+                "Tirer",
+              ),
+              annuler,
+            ),
+          ),
+        );
+        annuler.focus();
       },
     },
     "Tirer au sort",
@@ -298,6 +325,7 @@ function etapeConstellation(o) {
     el("h3", {}, "Tirer au sort"),
     el("p", {}, "L'Atelier tire une constellation parmi celles de la banque. Le tirage est définitif : il ne se refait pas."),
     el("div", { classe: "boutons" }, tirer),
+    confirmation,
     el("h3", {}, "Saisir le tirage fait à la table"),
     el("p", { classe: "secondaire-texte petit" }, "Une constellation saisie est marquée « saisie à la main » sur la fiche."),
     el("label", { for: "constellation-saisie" }, "Constellation tirée à la table"),
@@ -376,7 +404,9 @@ function carteObjet(o, objet, rang) {
             p.arme_principale = recaler(p.arme_principale);
             p.bouclier = recaler(p.bouclier);
           },
-          { refaire: true, focus: "objet-a-ajouter" },
+          // Le focus va à l'objet suivant (ou au précédent) : la page ne
+          // remonte pas en haut d'une longue liste.
+          { refaire: true, focus: o.personnage.equipement.length > 1 ? `objet-${Math.min(rang, o.personnage.equipement.length - 2)}-titre` : "objet-a-ajouter" },
         ),
     },
     "Retirer",
@@ -384,7 +414,7 @@ function carteObjet(o, objet, rang) {
   return el(
     "li",
     { classe: "objet" },
-    el("h4", {}, libelleObjet(o.personnage.equipement, rang), " ", el("span", { classe: "detail" }, bloc ? (TYPES[type]?.nom ?? "") : "n'existe plus dans la banque")),
+    el("h4", { id: `${prefixe}-titre`, tabindex: "-1" }, libelleObjet(o.personnage.equipement, rang), " ", el("span", { classe: "detail" }, bloc ? (TYPES[type]?.nom ?? "") : "n'existe plus dans la banque")),
     qualite,
     porte,
     bloc ? groupesDeChoix(o, bloc, objet.choix, prefixe, (p, choix) => { p.equipement[rang].choix = choix; }) : null,
@@ -434,7 +464,7 @@ function etapeEquipement(o) {
           o.dire("Choisissez d'abord un objet dans la liste.");
           return;
         }
-        o.modifier((q) => { q.equipement.push({ nom: bloc.nom, choix: [], qualite: null, porte: typeDe(bloc) === "armure" }); }, { refaire: true, focus: "objet-a-ajouter" });
+        o.modifier((q) => { q.equipement.push({ nom: bloc.nom, choix: [], qualite: null, porte: typeDe(bloc) === "armure" }); }, { refaire: true, focus: `objet-${o.personnage.equipement.length}-titre` });
       },
     },
     "Ajouter",
@@ -591,6 +621,12 @@ function parcours(contexte, n, lu, entete, contenu) {
   const modifier = (changer, { refaire: aRefaire = false, focus = null } = {}) => {
     const essai = structuredClone(personnage);
     changer(essai);
+    // Une montée dont la capacité n'est plus possédée (archétype, option ou
+    // objet changé) s'efface : l'étape 8 ne pourrait plus la retirer.
+    if (essai.niveaux.length) {
+      const possedees = new Set(calculerFiche(banque, essai, { index }).capacites.filter((c) => !c.aVenir).map((c) => cle(c.nom)));
+      essai.niveaux = essai.niveaux.filter((m) => possedees.has(cle(index.capacite(m.capacite)?.nom ?? m.capacite)));
+    }
     essai.etape = n;
     essai.modifie_le = new Date().toISOString();
     try {
@@ -646,15 +682,22 @@ function parcours(contexte, n, lu, entete, contenu) {
 
   const precedent = n > 1 ? el("a", { classe: "bouton secondaire", href: adressePersonnage(personnage.id, n - 1) }, "Précédent") : null;
   const suivant = n < ETAPES.length ? el("a", { classe: "bouton", href: adressePersonnage(personnage.id, n + 1) }, "Suivant") : null;
+  // Sur un téléphone, les neuf étapes viennent après le contenu : en tête,
+  // elles repoussaient chaque champ sous le pli (relecture du lot 2).
+  const navigation = el("nav", { classe: "navigation-etapes", "aria-label": "Étapes de la création" }, etapes);
+  const etroit = Boolean(globalThis.matchMedia?.("(max-width: 55.99rem)").matches);
   contenu.replaceChildren(
-    el("nav", { classe: "navigation-etapes", "aria-label": "Étapes de la création" }, etapes),
-    el("h2", {}, `Étape ${n} sur ${ETAPES.length} : ${ETAPES[n - 1].titre}`),
-    zoneManques,
-    corps,
-    zoneMessage,
-    el("div", { classe: "boutons suite-etapes" }, precedent, suivant),
-    ligneEtat,
-    versLaListe(),
+    ...[
+      etroit ? null : navigation,
+      el("h2", {}, `Étape ${n} sur ${ETAPES.length} : ${ETAPES[n - 1].titre}`),
+      zoneManques,
+      corps,
+      zoneMessage,
+      el("div", { classe: "boutons suite-etapes" }, precedent, suivant),
+      ligneEtat,
+      etroit ? navigation : null,
+      versLaListe(),
+    ].filter(Boolean),
   );
   refaire();
   // « Reprendre » rouvre la dernière étape vue ; la date de modification
@@ -687,7 +730,7 @@ export function afficher(contexte, route) {
         renommer(entete, `Création — ${nomDe(personnage)}`);
         contenu.replaceChildren(
           el("p", { classe: "message" }, "Ce personnage est enregistré : il n'est plus modifiable ; la progression viendra dans un lot ultérieur."),
-          el("p", {}, el("a", { href: adressePersonnage(personnage.id) }, "Ouvrir sa fiche")),
+          el("p", { classe: "lien-retour" }, el("a", { href: adressePersonnage(personnage.id) }, "Ouvrir sa fiche")),
         );
         return;
       }

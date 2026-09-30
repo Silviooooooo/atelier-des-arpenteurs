@@ -167,7 +167,7 @@ function ecran(route) {
   if (route.ecran === "personnage") return fichePersonnage.afficher(contexte, route);
   if (route.ecran === "creation") return creation.afficher(contexte, route);
   if (route.ecran === "recevoir") return reception.afficher(contexte, route);
-  return el("section", {}, titre("Page introuvable"), el("p", {}, "Cette adresse ne mène à aucun écran de l'Atelier."), el("p", {}, el("a", { href: "#/" }, "Retour à l'accueil")));
+  return el("section", {}, titre("Page introuvable"), el("p", {}, "Cette adresse ne mène à aucun écran de l'Atelier."), el("p", { classe: "lien-retour" }, el("a", { href: "#/" }, "Retour à l'accueil")));
 }
 
 let adressePrecedente = null;

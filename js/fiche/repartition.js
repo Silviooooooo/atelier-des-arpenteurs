@@ -76,7 +76,9 @@ export function repartir(fiche, places = PLACES) {
     const pouvoirs = lien.pouvoirs.map(ligne);
     const recto = pouvoirs.slice(0, places.pouvoirs);
     while (recto.length < Math.min(PLACES.pouvoirs, places.pouvoirs)) recto.push(vide());
-    return { nom: lien.nom, points: lien.points, aVenir: lien.pouvoirs.every((p) => p.aVenir), pouvoirs: recto, suite: pouvoirs.slice(places.pouvoirs) };
+    // Un primordial sans capacité : sa première ligne dit « capacités à venir ».
+    if (lien.pouvoirs.length === 0 && recto.length) recto[0] = { aVenirGroupe: true };
+    return { nom: lien.nom, points: lien.points, pouvoirs: recto, suite: pouvoirs.slice(places.pouvoirs) };
   });
   const suitePouvoirs = liens.flatMap((l) => l.suite.map((p) => ({ primordial: l.nom, ...p })));
 

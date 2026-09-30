@@ -23,7 +23,16 @@ const FICHIER_DEMO = "essais/personnage_demo.arpenteur.json";
 const nomDe = (personnage) => personnage.identite.nom.trim() || "Sans nom";
 const texteErreur = (erreur) => erreur?.message ?? String(erreur);
 
-function demanderDoublon(zone) {
+// Une version, telle que la question la montre : nom, état, date.
+const version = (personnage) => `« ${nomDe(personnage)} », ${etatDe(personnage)}, modifié le ${dateLisible(personnage.modifie_le)}`;
+
+function demanderDoublon(zone, present, recu) {
+  // Remplacer une version enregistrée par un brouillon, ou par plus ancien,
+  // se dit en clair : c'est définitif (relecture du lot 2).
+  const risques = [
+    present.etat === "enregistre" && recu.etat === "brouillon" ? "La version reçue est un brouillon, celle de l'appareil est enregistrée." : null,
+    recu.modifie_le < present.modifie_le ? "La version reçue est plus ancienne que celle de l'appareil." : null,
+  ].filter(Boolean);
   return new Promise((resoudre) => {
     const repondre = (choix) => {
       zone.replaceChildren();
@@ -34,7 +43,9 @@ function demanderDoublon(zone) {
       el(
         "div",
         { classe: "confirmation", role: "group", "aria-label": "Personnage déjà présent" },
-        el("p", {}, "Ce personnage est déjà sur cet appareil."),
+        el("p", {}, "Ce personnage est déjà sur cet appareil. Le remplacer est définitif."),
+        el("ul", {}, el("li", {}, `Sur l'appareil : ${version(present)}.`), el("li", {}, `Reçu : ${version(recu)}.`)),
+        risques.map((texte) => el("p", { classe: "message", role: "alert" }, texte)),
         el(
           "div",
           { classe: "boutons" },
@@ -55,8 +66,9 @@ function demanderDoublon(zone) {
  */
 export async function garderRecu(etagere, personnage, zone) {
   let aGarder = personnage;
-  if (await etagere.lire(personnage.id)) {
-    const choix = await demanderDoublon(zone);
+  const present = await etagere.lire(personnage.id);
+  if (present) {
+    const choix = await demanderDoublon(zone, present, personnage);
     if (choix === "annuler") return null;
     if (choix === "les_deux") aGarder = { ...personnage, id: nouvelIdentifiant() };
   }

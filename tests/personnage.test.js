@@ -321,3 +321,37 @@ test("parcours — ce qui manque, étape par étape ; le personnage d'essai est 
   const trop = manques(BANQUE, personnageEssai((p) => (p.caracteristiques.force = 6)), { index: INDEX });
   assert.deepEqual(trop[2], ["La somme vaut 38 : il faut 36 (2 de trop)."]);
 });
+
+test("relecture — mains nues : les dégâts de la capacité à sa puissance, comme sa description", () => {
+  const f = fiche((p) => {
+    p.arme_principale = null;
+    p.caracteristiques.force = 5;
+    p.niveaux = [{ capacite: "Taloche", niveau: 2 }];
+  });
+  assert.deepEqual(f.attaque.degats, [4, 10, 20], "[N*{degats}] au niveau 2");
+  assert.equal(capacite(f, "Taloche").descriptions[0].texte, "Une taloche qui inflige 4/10/20.");
+});
+
+test("relecture — une montée orpheline ne bloque pas l'enregistrement ; un paramètre incalculable se signale ; « capacités à venir »", () => {
+  // Flambage monté, puis l'archétype change : la montée ne vise plus rien.
+  const orpheline = personnageEssai((p) => {
+    p.archetype = { nom: "Pâtissier", choix: ["Brigade", "Maîtrise de l'agile"] };
+    p.primordial.choix = ["Braise"];
+    p.constellation.nom = "Constellation du Chaudron";
+    p.equipement.push({ nom: "Spatule souple", choix: [], qualite: null, porte: false });
+  });
+  const f = calculerFiche(BANQUE, orpheline, { index: INDEX });
+  assert.equal(f.points.depasse, true);
+  assert.deepEqual(manques(BANQUE, orpheline, { index: INDEX })[8], [], "aucune montée appliquée : rien à retirer");
+  // Un paramètre de bloc qui ne se calcule pas : gardé tel quel, et signalé.
+  const modifiee = structuredClone(BANQUE);
+  modifiee.blocs.find((b) => b.nom === "Couteau d'office").parametres.push({ nom: "chaleur", valeur: "(3)", cible: null });
+  modifiee.capacites.find((c) => c.nom === "Émincer").variantes[0].description = "Émince pour {chaleur}.";
+  const g = calculerFiche(modifiee, personnageEssai());
+  assert.equal(g.capacites.find((c) => c.nom === "Émincer").descriptions[0].texte, "Émince pour (3).");
+  assert.ok(g.avertissements.some((a) => a.genre === "expression" && /Couteau d'office.*\(3\)/.test(a.texte)));
+  // Un primordial et une constellation sans capacité : « capacités à venir ».
+  const givre = fiche((p) => (p.primordial = { nom: "Givre éternel", choix: [] }));
+  const aVenir = givre.avertissements.filter((a) => a.genre === "a_venir").map((a) => a.texte);
+  assert.deepEqual(aVenir, ["« Constellation du Sablier » : capacités à venir.", "« Givre éternel » : capacités à venir."]);
+});

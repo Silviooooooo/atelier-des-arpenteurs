@@ -194,11 +194,12 @@ export function coutA(capacite, niveau) {
 // Les valeurs qu'une capacité voit : N, les caractéristiques, les
 // paramètres de son bloc (qualité appliquée), et ceux de ses éléments
 // propres, qui priment (livret, « Paramètre »).
-function contexte(index, personnage, bloc, qualite, capacite, niveau) {
+function contexte(index, personnage, bloc, qualite, capacite, niveau, avertir = () => {}) {
   const variables = new Map();
   if (bloc) {
     for (const [k, p] of parametresPour(index, bloc, capacite.nom)) {
       const lu = valeursParametre(p.nom, p.valeur, { caracteristiques: personnage.caracteristiques, qualite });
+      if (lu.erreur) avertir("expression", `« ${bloc.nom} », paramètre ${lu.erreur}, gardé tel qu'écrit`);
       variables.set(k, lu.valeurs ? { valeurs: lu.valeurs } : { brut: p.valeur });
     }
   }
@@ -209,6 +210,7 @@ function contexte(index, personnage, bloc, qualite, capacite, niveau) {
     const recus = (element?.parametres_recus ?? []).filter((r) => typeof r === "string");
     if (recus.length !== 1) continue;
     const lu = valeursParametre(recus[0], e.valeur, { caracteristiques: personnage.caracteristiques });
+    if (lu.erreur) avertir("expression", `« ${capacite.nom} », élément ${e.nom} : ${lu.erreur}, gardé tel qu'écrit`);
     variables.set(cle(recus[0]), lu.valeurs ? { valeurs: lu.valeurs } : { brut: e.valeur });
   }
   return variables;
@@ -219,12 +221,12 @@ function ecrireValeurs(valeurs) {
 }
 
 /**
- * La description d'une capacité, ses « [expression] » et ses « {nom} »
- * remplacés par leur valeur (livret, « Paramètre » ; lisez_moi, « Syntaxe »).
- * Ce qui ne se calcule pas reste tel qu'écrit, avec un avertissement.
+ * La valeur d'une expression entre crochets, pour une capacité à un
+ * niveau : un entier par rang quand elle invoque un paramètre à rangs
+ * ([N*{degats}] → trois valeurs), « X » pour une valeur décidée en jeu,
+ * ou null si elle ne se calcule pas.
  */
-export function decrire(texte, variables, caracteristiques, niveau) {
-  const avertissements = [];
+export function valeursCrochet(expression, variables, caracteristiques, niveau) {
   const valeurDe = (rang) => (nom) => {
     if (nom === "N") return fraction(niveau);
     const code = caracteristique(nom);
@@ -234,26 +236,33 @@ export function decrire(texte, variables, caracteristiques, niveau) {
     const valeurs = variable.valeurs;
     return fraction(valeurs.length === 1 ? valeurs[0] : valeurs[rang] ?? NaN);
   };
-  const rangsDe = (expression) => {
-    const longueurs = new Set();
-    for (const [, nom] of expression.matchAll(/\{([^{}]*)\}/g)) {
-      const valeurs = variables.get(cle(nom))?.valeurs;
-      if (valeurs && valeurs.length > 1 && !caracteristique(nom)) longueurs.add(valeurs.length);
-    }
-    return longueurs;
-  };
+  const longueurs = new Set();
+  for (const [, nom] of String(expression).matchAll(/\{([^{}]*)\}/g)) {
+    const valeurs = variables.get(cle(nom))?.valeurs;
+    if (valeurs && valeurs.length > 1 && !caracteristique(nom)) longueurs.add(valeurs.length);
+  }
+  if (longueurs.size > 1) return null;
+  const nombre = longueurs.size ? [...longueurs][0] : 1;
+  const resultats = [];
+  for (let rang = 0; rang < nombre; rang += 1) {
+    const r = evaluer(expression, valeurDe(rang));
+    if (r.x) return "X";
+    if (!r.valeur) return null;
+    resultats.push(r.entier);
+  }
+  return resultats;
+}
+
+/**
+ * La description d'une capacité, ses « [expression] » et ses « {nom} »
+ * remplacés par leur valeur (livret, « Paramètre » ; lisez_moi, « Syntaxe »).
+ * Ce qui ne se calcule pas reste tel qu'écrit, avec un avertissement.
+ */
+export function decrire(texte, variables, caracteristiques, niveau) {
+  const avertissements = [];
   const calculer = (expression) => {
-    const longueurs = rangsDe(expression);
-    if (longueurs.size > 1) return null;
-    const nombre = longueurs.size ? [...longueurs][0] : 1;
-    const resultats = [];
-    for (let rang = 0; rang < nombre; rang += 1) {
-      const r = evaluer(expression, valeurDe(rang));
-      if (r.x) return "X";
-      if (!r.valeur) return null;
-      resultats.push(r.entier);
-    }
-    return resultats.join("/");
+    const valeurs = valeursCrochet(expression, variables, caracteristiques, niveau);
+    return Array.isArray(valeurs) ? valeurs.join("/") : valeurs;
   };
   // D'abord les crochets, qui peuvent contenir des accolades ; puis les
   // accolades restées seules.
@@ -266,6 +275,7 @@ export function decrire(texte, variables, caracteristiques, niveau) {
     const code = caracteristique(nom);
     if (code && Number.isInteger(caracteristiques?.[code])) return String(caracteristiques[code]);
     const variable = variables.get(cle(nom));
+    if (nom === "N") return String(niveau);
     if (variable?.valeurs) return ecrireValeurs(variable.valeurs);
     if (variable?.brut) return variable.brut;
     avertissements.push(`« ${tout} » n'a pas de valeur ici`);
@@ -344,7 +354,9 @@ function aElementPropre(capacite, nomElement) {
  */
 export function calculerFiche(banque, personnage, { index = indexerCreation(banque) } = {}) {
   const avertissements = [];
-  const avertir = (genre, texte) => avertissements.push({ genre, texte });
+  const avertir = (genre, texte) => {
+    if (!avertissements.some((a) => a.texte === texte)) avertissements.push({ genre, texte });
+  };
   const caracteristiques = personnage.caracteristiques ?? {};
 
   // Les caractéristiques et les dés (livret, « Caractéristiques »).
@@ -411,7 +423,7 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
     if (variante) {
       for (const source of entree.sources) {
         const qualite = source.bloc && source.objet ? qualiteDe(source.bloc, source.objet.qualite) : null;
-        const variables = contexte(index, personnage, source.bloc, qualite, entree.capacite, entree.niveau);
+        const variables = contexte(index, personnage, source.bloc, qualite, entree.capacite, entree.niveau, avertir);
         const decrite = decrire(variante.description, variables, caracteristiques, entree.niveau);
         decrite.avertissements.forEach((a) => avertir("expression", `${entree.nom} : ${a}`));
         if (!descriptions.some((d) => d.texte === decrite.texte)) descriptions.push({ source: source.nom, texte: decrite.texte });
@@ -457,7 +469,7 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
   const principale = armes.find((a) => a.rang === personnage.arme_principale);
   if (personnage.arme_principale !== null && personnage.arme_principale !== undefined && !principale) avertir("regle", "L'arme principale n'est pas une arme de l'équipement.");
   if (principale) attaque = { ...principale, mainsNues: false };
-  else attaque = mainsNues(index, personnage, avertir);
+  else attaque = mainsNues(index, personnage, capacites, avertir);
 
   // La défense (livret, « Jets de défense ») et l'armure par zone (élément
   // Armure du classeur).
@@ -479,6 +491,14 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
         },
       ]
     : [];
+
+  // Un primordial ou une constellation sans capacité encore écrite : la
+  // fiche dit « capacités à venir » (instruction du lot 2), au recto comme
+  // au verso.
+  for (const role of ["constellation", "primordial"]) {
+    const source = blocs.find((b) => b.role === role && b.bloc);
+    if (source && !capacites.some((c) => !c.aVenir && c.origines.includes(source.nom))) avertir("a_venir", `« ${source.nom} » : capacités à venir.`);
+  }
 
   // Un choix disparu de la banque ou modifié depuis l'enregistrement.
   for (const phrase of changements(index, personnage.empreintes)) avertir("banque", phrase);
@@ -544,16 +564,33 @@ function arme(index, personnage, objet, des, avertir) {
   };
 }
 
-// Sans arme : l'attaque à mains nues du bloc de base, ses dégâts calculés,
-// et un dé vide : aucune règle ne le donne (§ 12).
-function mainsNues(index, personnage, avertir) {
+// Sans arme : l'attaque à mains nues, la capacité que vise le paramètre
+// degats du bloc de base. Ses dégâts sont ceux que dit sa description à sa
+// puissance (« [N*{degats}] » dans le classeur), sinon le paramètre
+// lui-même ; recto et verso disent ainsi la même chose. Le dé reste vide :
+// aucune règle ne le donne (§ 12).
+function mainsNues(index, personnage, capacites, avertir) {
   for (const bloc of index.blocsDeType("base")) {
     const parametre = bloc.parametres.find((p) => p.nom && cle(p.nom) === PARAMETRES.degats);
     if (!parametre) continue;
     const lu = valeursParametre(parametre.nom, parametre.valeur, { caracteristiques: personnage.caracteristiques });
     if (lu.erreur) avertir("expression", `Mains nues : ${lu.erreur}`);
-    const nom = parametre.cible ? (index.capacite(parametre.cible)?.nom ?? parametre.cible) : "Mains nues";
-    return { mainsNues: true, nom, de: null, degats: lu.valeurs ?? null, degatsBruts: parametre.valeur, portee: "", qualite: { applicable: false, texte: "" } };
+    const capacite = parametre.cible ? index.capacite(parametre.cible) : null;
+    const nom = parametre.cible ? (capacite?.nom ?? parametre.cible) : "Mains nues";
+    let degats = lu.valeurs ?? null;
+    const possedee = capacite ? capacites.find((c) => !c.aVenir && c.nom === capacite.nom) : null;
+    if (degats && possedee) {
+      const description = varianteA(capacite, possedee.niveau)?.description ?? "";
+      const crochet = [...description.matchAll(/\[([^[\]]*)\]/g)]
+        .map(([, expression]) => expression)
+        .find((expression) => [...expression.matchAll(/\{([^{}]*)\}/g)].some(([, n]) => cle(n) === PARAMETRES.degats));
+      if (crochet) {
+        const variables = contexte(index, personnage, bloc, null, capacite, possedee.niveau, avertir);
+        const valeurs = valeursCrochet(crochet, variables, personnage.caracteristiques, possedee.niveau);
+        if (Array.isArray(valeurs) && valeurs.length === degats.length) degats = valeurs;
+      }
+    }
+    return { mainsNues: true, nom, de: null, degats, degatsBruts: parametre.valeur, portee: "", qualite: { applicable: false, texte: "" } };
   }
   return { mainsNues: true, nom: "Mains nues", de: null, degats: null, degatsBruts: "", portee: "", qualite: { applicable: false, texte: "" } };
 }

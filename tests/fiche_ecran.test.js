@@ -151,3 +151,60 @@ test("écran de la fiche — introuvable sur l'appareil ; banque sans types : le
     retirer();
   }
 });
+
+test("relecture — la mesure du recto lit les rubriques elles-mêmes, et une rubrique sans hauteur ne dit rien", () => {
+  const { ajuster } = fichePersonnage;
+  // Un recto dont le navigateur donnerait les hauteurs.
+  const recto = (hauteurs) => ({
+    querySelector: (selecteur) => (Object.hasOwn(hauteurs, selecteur) ? { clientHeight: hauteurs[selecteur][0], scrollHeight: hauteurs[selecteur][1] } : null),
+  });
+  let rendus = [];
+  const conteneur = (suite) => ({
+    querySelector: () => suite.shift() ?? null,
+    replaceChildren: (noeud) => rendus.push(noeud),
+  });
+  const retirer = installerDom();
+  try {
+    const f = { groupes: { espece: [], archetype: [], style: [], constellation: [], acquises: [] }, constellation: null, equipement: [], liens: [], defense: { pieces: [] }, identite: { nom: "" }, caracteristiques: [], capacites: [], armes: [], attaque: {}, points: {}, ressources: {}, armure: { zones: {} }, avertissements: [], manques: [], banque: {} };
+    // Les corps débordent mais pas les rubriques : rien.
+    const sain = { ".rubrique-capacites": [319, 319], ".rubrique-equipement": [199, 199], ".rubrique-liens": [198, 198], ".rubrique-capacites .rubrique-corps": [300, 381] };
+    rendus = [];
+    assert.deepEqual(ajuster(conteneur([recto(sain)]), f, { capacites: 9, equipement: 8, pouvoirs: 3 }), { capacites: 9, equipement: 8, pouvoirs: 3 });
+    assert.equal(rendus.length, 0);
+    // La rubrique des capacités déborde : une place de moins, puis plus rien.
+    const deborde = { ...sain, ".rubrique-capacites": [319, 381] };
+    rendus = [];
+    const places = ajuster(conteneur([recto(deborde), recto(sain)]), f, { capacites: 9, equipement: 8, pouvoirs: 3 });
+    assert.deepEqual(places, { capacites: 8, equipement: 8, pouvoirs: 3 });
+    assert.equal(rendus.length, 1);
+    // Une fiche pas encore mise en page (hauteur nulle) : rien.
+    rendus = [];
+    ajuster(conteneur([recto({ ".rubrique-capacites": [0, 40] })]), f, { capacites: 9, equipement: 8, pouvoirs: 3 });
+    assert.equal(rendus.length, 0);
+  } finally {
+    retirer();
+  }
+});
+
+test("relecture — une fiche affichée remplace les écouteurs de la précédente", async () => {
+  const retirer = installerDom();
+  const poses = [];
+  const avant = { add: globalThis.addEventListener, remove: globalThis.removeEventListener, raf: globalThis.requestAnimationFrame, fonts: document.fonts };
+  globalThis.addEventListener = (type, f) => poses.push([type, f]);
+  globalThis.removeEventListener = (type, f) => poses.splice(poses.findIndex(([t, g]) => t === type && g === f), 1);
+  globalThis.requestAnimationFrame = () => 0;
+  document.fonts = { ready: new Promise(() => {}), load: async () => [] };
+  try {
+    const etagere = creerEtagere(magasinPersonnagesMemoire(), "demo");
+    await etagere.garder(personnageEssai());
+    for (let i = 0; i < 3; i += 1) {
+      const ecran = fichePersonnage.afficher(contexteDe(etagere), { ecran: "personnage", id: "demo-aubepine-0000000001" });
+      document.body.replaceChildren(ecran);
+      await laisserFiler(20);
+    }
+    assert.deepEqual(poses.map(([type]) => type).sort(), ["beforeprint", "resize"]);
+  } finally {
+    Object.assign(globalThis, { addEventListener: avant.add, removeEventListener: avant.remove, requestAnimationFrame: avant.raf });
+    retirer();
+  }
+});
