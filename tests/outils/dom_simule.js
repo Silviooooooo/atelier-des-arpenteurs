@@ -8,6 +8,44 @@
 // contrôle vaut ce que vaut ce simulacre, et les essais dans un vrai
 // navigateur (Firefox, Chromium) le complètent.
 
+// Ce que rend querySelectorAll dans un navigateur : une NodeList, qui se
+// parcourt (for…of, forEach, un indice, length, item) mais n'a ni filter, ni
+// map, ni find. Un tableau ici laissait passer un appel que le navigateur
+// refuse (« querySelectorAll(...).filter is not a function », vu en ligne
+// le 30/09/2026) : les contrôles en font un tableau explicitement, [...].
+class ListeDeNoeuds {
+  constructor(noeuds) {
+    noeuds.forEach((noeud, i) => {
+      this[i] = noeud;
+    });
+    Object.defineProperty(this, "length", { value: noeuds.length });
+  }
+
+  item(i) {
+    return this[i] ?? null;
+  }
+
+  forEach(faire, cela) {
+    for (let i = 0; i < this.length; i += 1) faire.call(cela, this[i], i, this);
+  }
+
+  *[Symbol.iterator]() {
+    for (let i = 0; i < this.length; i += 1) yield this[i];
+  }
+
+  *entries() {
+    for (let i = 0; i < this.length; i += 1) yield [i, this[i]];
+  }
+
+  *keys() {
+    for (let i = 0; i < this.length; i += 1) yield i;
+  }
+
+  *values() {
+    yield* this;
+  }
+}
+
 class Noeud {
   constructor() {
     this.parentNode = null;
@@ -169,7 +207,7 @@ class Element extends Noeud {
     };
     const suite = parties.map(conditionsDe);
     const convient = (e, conditions) => conditions.every((condition) => condition(e));
-    return [...this.descendants()].filter((e) => {
+    return new ListeDeNoeuds([...this.descendants()].filter((e) => {
       if (!convient(e, suite.at(-1))) return false;
       // Les parties précédentes, de droite à gauche, parmi les ancêtres
       // intérieurs à ce nœud.
@@ -180,7 +218,7 @@ class Element extends Noeud {
         ancetre = ancetre.parentNode;
       }
       return true;
-    });
+    }));
   }
 
   querySelector(selecteur) {
@@ -213,7 +251,7 @@ export function installerDom() {
 export const texteDe = (noeud) => noeud.textContent.replace(/\s+/g, " ").trim();
 
 /** Les boutons d'un nœud dont le texte commence par… */
-export const boutons = (noeud, debut) => noeud.querySelectorAll("button").filter((b) => texteDe(b).startsWith(debut));
+export const boutons = (noeud, debut) => [...noeud.querySelectorAll("button")].filter((b) => texteDe(b).startsWith(debut));
 
 /** Laisse passer les promesses en cours (lecture du coffre, dérivation…). */
 export const laisserFiler = (ms = 0) => new Promise((resoudre) => setTimeout(resoudre, ms));

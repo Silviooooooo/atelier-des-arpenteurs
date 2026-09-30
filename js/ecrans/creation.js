@@ -910,7 +910,7 @@ function parcours(contexte, n, lu, entete, contenu, { original = null, remplaceI
   // Refaire l'étape garde l'état, ouvert ou fermé, des descriptions ; le
   // focus va au premier élément actif de la liste donnée.
   const refaire = (focus = null) => {
-    const etats = new Map(corps.querySelectorAll("details").filter((d) => d.getAttribute("data-cle")).map((d) => [d.getAttribute("data-cle"), d.getAttribute("open") !== null]));
+    const etats = new Map([...corps.querySelectorAll("details")].filter((d) => d.getAttribute("data-cle")).map((d) => [d.getAttribute("data-cle"), d.getAttribute("open") !== null]));
     corps.replaceChildren(...[CONSTRUCTEURS[n](outils)].flat(Infinity).filter((partie) => partie !== null && partie !== undefined && partie !== false));
     for (const d of corps.querySelectorAll("details")) {
       const cleDetails = d.getAttribute("data-cle");

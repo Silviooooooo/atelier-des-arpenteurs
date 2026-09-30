@@ -64,13 +64,13 @@ const cocher = (champ, valeur = true) => {
   champ.checked = valeur;
   champ.declencher("change");
 };
-const carteDe = (ecran, nom) => ecran.querySelectorAll(".carte-personnage").find((carte) => texteDe(carte.querySelector("h2")) === nom);
+const carteDe = (ecran, nom) => [...ecran.querySelectorAll(".carte-personnage")].find((carte) => texteDe(carte.querySelector("h2")) === nom);
 const zoneManques = (ecran) => texteDe(ecran.querySelector(".manques"));
-const optionsDe = (select) => select.querySelectorAll("option").map((o) => o.getAttribute("value"));
+const optionsDe = (select) => [...select.querySelectorAll("option")].map((o) => o.getAttribute("value"));
 // Le premier message d'erreur : le document simulé ne lit pas [role=alert].
 // Un bouton par son nom accessible (aria-label).
-const parLibelle = (noeud, libelle) => noeud.querySelectorAll("button").find((b) => b.getAttribute("aria-label") === libelle);
-const alerte = (noeud) => noeud.querySelectorAll("[role]").find((e) => e.getAttribute("role") === "alert") ?? null;
+const parLibelle = (noeud, libelle) => [...noeud.querySelectorAll("button")].find((b) => b.getAttribute("aria-label") === libelle);
+const alerte = (noeud) => [...noeud.querySelectorAll("[role]")].find((e) => e.getAttribute("role") === "alert") ?? null;
 
 // Un fichier choisi dans le sélecteur du navigateur.
 const fichier = (texte) => ({ name: "personnage.arpenteur.json", size: Buffer.byteLength(texte), text: async () => texte });
@@ -101,7 +101,7 @@ test("personnages — « Créer un personnage » garde un brouillon et mène à 
     const carte = carteDe(relue, "Sans nom");
     assert.ok(carte, "un brouillon sans nom s'appelle « Sans nom »");
     assert.match(texteDe(carte), /brouillon, étape 1 sur 9/);
-    const liens = carte.querySelectorAll("a").map((a) => [texteDe(a), a.getAttribute("href")]);
+    const liens = [...carte.querySelectorAll("a")].map((a) => [texteDe(a), a.getAttribute("href")]);
     assert.deepEqual(liens, [
       ["Reprendre", `#/personnage/${gardes[0].id}/etape/1`],
       ["Aperçu", `#/personnage/${gardes[0].id}`],
@@ -121,7 +121,7 @@ test("personnages — un personnage enregistré s'ouvre ; « Ouvrir sur mon tél
     const carte = carteDe(ecran, "Aubépine Crèmebrûlée");
     assert.match(texteDe(carte), /enregistré le 29\/09\/2026/);
     assert.match(texteDe(carte), /Marmiton · Saucier/);
-    assert.deepEqual(carte.querySelectorAll("a").map((a) => [texteDe(a), a.getAttribute("href")]), [["Ouvrir", `#/personnage/${personnage.id}`]]);
+    assert.deepEqual([...carte.querySelectorAll("a")].map((a) => [texteDe(a), a.getAttribute("href")]), [["Ouvrir", `#/personnage/${personnage.id}`]]);
     const telephone = boutons(carte, "Ouvrir sur mon téléphone")[0];
     telephone.click();
     assert.equal(telephone.getAttribute("aria-expanded"), "true");
@@ -296,7 +296,7 @@ test("parcours — chaque étape s'affiche, marque l'étape en cours et dit ce q
         const ecran = await etape(contexte, personnage.id, n);
         assert.match(texteDe(ecran.querySelector("h1")), /^Création — /);
         assert.match(texteDe(ecran), new RegExp(`Étape ${n} sur 9 : `));
-        const liens = ecran.querySelector(".etapes").querySelectorAll("a");
+        const liens = [...ecran.querySelector(".etapes").querySelectorAll("a")];
         assert.equal(liens.length, 9);
         assert.deepEqual(liens.map((a) => a.getAttribute("aria-current")), liens.map((_, i) => (i + 1 === n ? "step" : null)));
         liens.forEach((a, i) => assert.match(texteDe(a), attendus[i + 1].length ? /à compléter$/ : /complète$/));
@@ -304,8 +304,8 @@ test("parcours — chaque étape s'affiche, marque l'étape en cours et dit ce q
         assert.equal(zone.getAttribute("role"), "status");
         if (attendus[n].length) for (const phrase of attendus[n]) assert.ok(zoneManques(ecran).includes(phrase), `étape ${n} : ${phrase}`);
         else assert.match(zoneManques(ecran), /Rien ne manque à cette étape\./);
-        assert.equal(ecran.querySelectorAll("a").filter((a) => texteDe(a) === "Précédent").length, n > 1 ? 1 : 0);
-        assert.equal(ecran.querySelectorAll("a").filter((a) => texteDe(a) === "Suivant").length, n < 9 ? 1 : 0);
+        assert.equal([...ecran.querySelectorAll("a")].filter((a) => texteDe(a) === "Précédent").length, n > 1 ? 1 : 0);
+        assert.equal([...ecran.querySelectorAll("a")].filter((a) => texteDe(a) === "Suivant").length, n < 9 ? 1 : 0);
         assert.equal(ecran.querySelector("[data-chargement]"), null, "la veille des 15 s ne guette pas cet écran");
       }
     }
@@ -360,9 +360,9 @@ test("parcours — étape 3 : archétype, groupes « Style de combat » et « Ma
     const contexte = contexteDe();
     const personnage = await garde(contexte, nouveauPersonnage("demo"));
     let ecran = await etape(contexte, personnage.id, 3);
-    const radio = (nom) => ecran.querySelectorAll("input").find((i) => i.getAttribute("type") === "radio" && texteDe(i.parentNode).startsWith(nom));
+    const radio = (nom) => [...ecran.querySelectorAll("input")].find((i) => i.getAttribute("type") === "radio" && texteDe(i.parentNode).startsWith(nom));
     cocher(radio("Saucier"));
-    const legendes = ecran.querySelectorAll("legend").map(texteDe);
+    const legendes = [...ecran.querySelectorAll("legend")].map(texteDe);
     assert.deepEqual(legendes, ["Archétype", "Style de combat", "Maîtrise"]);
     assert.match(zoneManques(ecran), /Choisir une option parmi : Solo du chef, Brigade\./);
     cocher(radio("Brigade"));
@@ -382,9 +382,9 @@ test("parcours — étape 3 : archétype, groupes « Style de combat » et « Ma
     const autre = contexteDe({ banque });
     const brouillon = await garde(autre, personnageEssai((p) => (p.archetype = { nom: "Pâtissier", choix: ["Brigade", "Maîtrise du précis"] })));
     ecran = await etape(autre, brouillon.id, 3);
-    const facultatif = ecran.querySelectorAll("fieldset").at(-1);
+    const facultatif = [...ecran.querySelectorAll("fieldset")].at(-1);
     assert.equal(texteDe(facultatif.querySelector("legend")), "Facultatif");
-    assert.deepEqual(facultatif.querySelectorAll("input").map((i) => i.getAttribute("type")), ["checkbox", "checkbox"]);
+    assert.deepEqual([...facultatif.querySelectorAll("input")].map((i) => i.getAttribute("type")), ["checkbox", "checkbox"]);
     assert.match(texteDe(facultatif), /Meringue fantôme — capacité à venir/);
     cocher(facultatif.querySelectorAll("input")[0]);
     await laisserFiler(10);
@@ -406,7 +406,7 @@ test("parcours — introuvable, enregistré, banque sans types : un message, pas
     const enregistre = await garde(contexte, personnageEssai((p) => Object.assign(p, { etat: "enregistre", enregistre_le: "2026-09-29T20:30:00.000Z" })));
     ecran = await etape(contexte, enregistre.id, 3);
     assert.match(texteDe(ecran), /Ce personnage est enregistré : « Modifier » en ouvre une copie de travail/);
-    assert.equal(ecran.querySelectorAll("a").find((a) => texteDe(a) === "Ouvrir sa fiche").getAttribute("href"), `#/personnage/${enregistre.id}`);
+    assert.equal([...ecran.querySelectorAll("a")].find((a) => texteDe(a) === "Ouvrir sa fiche").getAttribute("href"), `#/personnage/${enregistre.id}`);
     assert.equal(ecran.querySelectorAll("input").length, 0);
     assert.equal(boutons(ecran, "Modifier").length, 1);
 
@@ -447,16 +447,16 @@ test("parcours — étape 2 : toutes à 2 au départ, + et − de 2 à 6, la som
     for (let i = 0; i < 3; i += 1) plus("precision").click();
     assert.equal(somme(), "Somme : 25 / 36 · reste 11 à répartir");
     // Lourde : For + Pré = 11 → d10 ; agile : Agi + For = 8 → d8.
-    const ligne = (type) => ecran.querySelector(".apercu-des").querySelectorAll("tr").find((tr) => tr.querySelector("th") && texteDe(tr.querySelector("th")) === type);
-    assert.deepEqual(ligne("lourde").querySelectorAll("td").map(texteDe), ["d10 (For + Pré)", "d8 (For + Sen)"]);
-    assert.deepEqual(ligne("agile").querySelectorAll("td").map(texteDe), ["d8 (Agi + For)", "d4 (Agi + Cré)"]);
+    const ligne = (type) => [...ecran.querySelector(".apercu-des").querySelectorAll("tr")].find((tr) => tr.querySelector("th") && texteDe(tr.querySelector("th")) === type);
+    assert.deepEqual([...ligne("lourde").querySelectorAll("td")].map(texteDe), ["d10 (For + Pré)", "d8 (For + Sen)"]);
+    assert.deepEqual([...ligne("agile").querySelectorAll("td")].map(texteDe), ["d8 (Agi + For)", "d4 (Agi + Cré)"]);
     moins("precision").click();
     assert.equal(somme(), "Somme : 24 / 36 · reste 12 à répartir");
 
     // Jusqu'à 36 : « + » s'arrête partout.
     for (const code of ["agilite", "sens", "culture_neruvienne"]) for (let i = 0; i < 4; i += 1) plus(code).click();
     assert.equal(somme(), "Somme : 36 / 36");
-    assert.ok(ecran.querySelectorAll("button").filter((b) => b.id.endsWith("-plus")).every((b) => b.disabled), "« + » inactif à 36");
+    assert.ok([...ecran.querySelectorAll("button")].filter((b) => b.id.endsWith("-plus")).every((b) => b.disabled), "« + » inactif à 36");
     await laisserFiler(10);
     const relu = await contexte.etat.etagere.lire(personnage.id);
     assert.deepEqual(
@@ -478,17 +478,17 @@ test("parcours — étapes 3, 4 et 6 : chaque bloc montre ses capacités décrit
     const personnage = await garde(contexte, personnageEssai((p) => (p.caracteristiques.force = 5)));
     let ecran = await etape(contexte, personnage.id, 3);
     // Le Saucier est choisi : Réduction, décrite ; ses groupes, plus bas, chacun décrit.
-    const saucier = ecran.querySelectorAll(".choix-bloc").find((b) => texteDe(b).startsWith("Saucier"));
+    const saucier = [...ecran.querySelectorAll(".choix-bloc")].find((b) => texteDe(b).startsWith("Saucier"));
     assert.ok(saucier.querySelectorAll("details").length >= 3, "les capacités du Saucier");
-    const flambage = ecran.querySelectorAll("details").find((d) => texteDe(d.querySelector("summary")).startsWith("Flambage"));
+    const flambage = [...ecran.querySelectorAll("details")].find((d) => texteDe(d.querySelector("summary")).startsWith("Flambage"));
     assert.ok(flambage, "Flambage décrite");
     assert.match(texteDe(flambage.querySelector("summary")), /niveau 1 · /);
     assert.equal(flambage.getAttribute("open"), "", "grand écran : dépliée");
     // Un bloc non choisi montre aussi ses groupes, décrits.
-    const patissier = ecran.querySelectorAll(".choix-bloc").find((b) => texteDe(b).startsWith("Pâtissier"));
+    const patissier = [...ecran.querySelectorAll(".choix-bloc")].find((b) => texteDe(b).startsWith("Pâtissier"));
     assert.match(texteDe(patissier), /Au choix, une option :/);
     // Les options du groupe choisi, chacune avec sa description.
-    const style = ecran.querySelectorAll("fieldset").find((f) => texteDe(f.querySelector("legend")) === "Style de combat");
+    const style = [...ecran.querySelectorAll("fieldset")].find((f) => texteDe(f.querySelector("legend")) === "Style de combat");
     assert.equal(style.querySelectorAll(".option-decrite").length, 2);
     assert.ok(style.querySelectorAll("details").length >= 1);
     // Aucune expression ne reste entre crochets là où elle se calcule.
@@ -496,18 +496,18 @@ test("parcours — étapes 3, 4 et 6 : chaque bloc montre ses capacités décrit
 
     // Le bloc de base décrit à l'étape 8 ; ici, l'espèce et le primordial.
     ecran = await etape(contexte, personnage.id, 4);
-    assert.ok(ecran.querySelectorAll(".choix-bloc").every((b) => b.querySelectorAll("details").length + (/Capacités à venir/.test(texteDe(b)) ? 1 : 0) >= 1));
+    assert.ok([...ecran.querySelectorAll(".choix-bloc")].every((b) => b.querySelectorAll("details").length + (/Capacités à venir/.test(texteDe(b)) ? 1 : 0) >= 1));
     ecran = await etape(contexte, personnage.id, 6);
-    const four = ecran.querySelectorAll(".choix-bloc").find((b) => texteDe(b).startsWith("Grand Four"));
-    assert.ok(four.querySelectorAll("details").some((d) => texteDe(d).startsWith("Fournaise")));
-    const givre = ecran.querySelectorAll(".choix-bloc").find((b) => texteDe(b).startsWith("Givre éternel"));
+    const four = [...ecran.querySelectorAll(".choix-bloc")].find((b) => texteDe(b).startsWith("Grand Four"));
+    assert.ok([...four.querySelectorAll("details")].some((d) => texteDe(d).startsWith("Fournaise")));
+    const givre = [...ecran.querySelectorAll(".choix-bloc")].find((b) => texteDe(b).startsWith("Givre éternel"));
     assert.match(texteDe(givre), /Capacités à venir/);
 
     // Sur un téléphone, la description se déplie sous le nom.
     globalThis.matchMedia = (requete) => ({ matches: requete.includes("max-width") });
     ecran = await etape(contexte, personnage.id, 3);
     assert.ok(ecran.querySelectorAll("details").length > 0);
-    assert.ok(ecran.querySelectorAll("details").every((d) => d.getAttribute("open") === null), "téléphone : repliées");
+    assert.ok([...ecran.querySelectorAll("details")].every((d) => d.getAttribute("open") === null), "téléphone : repliées");
   } finally {
     globalThis.matchMedia = avant;
     retirer();
@@ -564,14 +564,14 @@ test("parcours — étape 7 : l'arme tenue d'office, le pack d'armure, tous les 
     saisir(ecran.querySelector("#arme"), "Couteau d'office", "change");
     await laisserFiler(10);
     assert.deepEqual((await relire()).equipement, [{ nom: "Couteau d'office", choix: [], qualite: "2", place: "arme" }]);
-    assert.ok(ecran.querySelectorAll("details").some((d) => texteDe(d).startsWith("Émincer")), "les capacités de l'arme, décrites");
+    assert.ok([...ecran.querySelectorAll("details")].some((d) => texteDe(d).startsWith("Émincer")), "les capacités de l'arme, décrites");
     // Changer d'arme la remplace.
     saisir(ecran.querySelector("#arme"), "Spatule souple", "change");
     await laisserFiler(10);
     assert.deepEqual((await relire()).equipement.map((o) => [o.nom, o.place]), [["Spatule souple", "arme"]]);
 
     // Les packs : agile (tablier, maniques, toque), lourd (plastron), précis (guêtres).
-    const packs = ecran.querySelectorAll("input[name=pack]");
+    const packs = [...ecran.querySelectorAll("input[name=pack]")];
     assert.deepEqual(packs.map((p) => p.id), ["pack-aucun", "pack-lourde", "pack-agile", "pack-precise"]);
     assert.ok(packs.every((p) => !p.disabled));
     cocher(ecran.querySelector("#pack-agile"));
@@ -618,10 +618,10 @@ test("parcours — étape 7 : l'arme tenue d'office, le pack d'armure, tous les 
       ["Couvercle de marmite", "equipe"],
       ["Rouleau de fonte", "arme"],
     ]);
-    assert.equal(texteDe(ecran.querySelector("#arme").querySelectorAll("option").find((o) => o.getAttribute("selected") !== null)), "Rouleau de fonte", "la liste « Arme » montre l'arme tenue");
+    assert.equal(texteDe([...ecran.querySelector("#arme").querySelectorAll("option")].find((o) => o.getAttribute("selected") !== null)), "Rouleau de fonte", "la liste « Arme » montre l'arme tenue");
     assert.match(zoneManques(ecran), /Rien ne manque/);
     // Aucun champ de qualité à la création.
-    assert.equal(ecran.querySelectorAll("input").filter((i) => /qualite/.test(i.id)).length, 0);
+    assert.equal([...ecran.querySelectorAll("input")].filter((i) => /qualite/.test(i.id)).length, 0);
     // Sans pack, la pièce se porte.
     cocher(ecran.querySelector("#pack-aucun"));
     parLibelle(ecran, "Porter Tablier de cuir").click();
@@ -664,7 +664,7 @@ test("parcours — étape 8 : seules les capacités qui peuvent évoluer, avec +
     const fiche = calculerFiche(BANQUE, personnage, { index: INDEX });
     assert.match(texteDe(ecran), new RegExp(`Points dépensés : ${fiche.points.depenses} / 10 · reliquat : ${fiche.points.reliquat}`));
     const evolutives = fiche.capacites.filter((c) => !c.aVenir && c.peutEvoluer && c.niveauCreation >= 1);
-    const lignes = ecran.querySelectorAll(".capacite-ligne");
+    const lignes = [...ecran.querySelectorAll(".capacite-ligne")];
     assert.deepEqual(lignes.map((l) => texteDe(l.querySelector("strong"))), evolutives.map((c) => c.nom));
     assert.ok(!lignes.some((l) => /niveau 0/.test(texteDe(l.querySelector(".valeur-pas")))), "aucune capacité de niveau 0");
     assert.ok(fiche.capacites.some((c) => c.niveau === 0), "le personnage en a pourtant");
@@ -673,21 +673,21 @@ test("parcours — étape 8 : seules les capacités qui peuvent évoluer, avec +
       assert.equal(lignes[i].querySelector(`#niveau-${i}-plus`).disabled, !permis.includes(capacite.niveau + 1), capacite.nom);
       assert.equal(lignes[i].querySelector(`#niveau-${i}-moins`).disabled, true, "au niveau de départ");
       // Avant et après l'évolution, décrites.
-      const resumes = lignes[i].querySelectorAll("summary").map(texteDe);
+      const resumes = [...lignes[i].querySelectorAll("summary")].map(texteDe);
       assert.match(resumes[0], /^Avant l'évolution niveau 1 · /);
       assert.match(resumes[1], /^Après l'évolution niveau 2 · /);
     });
 
-    const ligne = (nom) => ecran.querySelectorAll(".capacite-ligne").find((l) => texteDe(l.querySelector("strong")) === nom);
-    const plus = (nom) => ligne(nom).querySelectorAll("button").find((b) => b.id.endsWith("-plus"));
-    const moins = (nom) => ligne(nom).querySelectorAll("button").find((b) => b.id.endsWith("-moins"));
+    const ligne = (nom) => [...ecran.querySelectorAll(".capacite-ligne")].find((l) => texteDe(l.querySelector("strong")) === nom);
+    const plus = (nom) => [...ligne(nom).querySelectorAll("button")].find((b) => b.id.endsWith("-plus"));
+    const moins = (nom) => [...ligne(nom).querySelectorAll("button")].find((b) => b.id.endsWith("-moins"));
     plus("Flambage").click();
     await laisserFiler(10);
     assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).niveaux, [{ capacite: "Flambage", niveau: 2 }]);
     assert.match(texteDe(ecran), /Points dépensés : 10 \/ 10 · reliquat : 0/);
     assert.match(texteDe(ligne("Flambage").querySelectorAll("summary")[1]), /^Après l'évolution \(choisie\) niveau 2 · /);
     // Le reliquat épuisé : « + » inactif partout, avec la raison.
-    for (const l of ecran.querySelectorAll(".capacite-ligne")) assert.equal(l.querySelectorAll("button").find((b) => b.id.endsWith("-plus")).disabled, true, texteDe(l.querySelector("strong")));
+    for (const l of ecran.querySelectorAll(".capacite-ligne")) assert.equal([...l.querySelectorAll("button")].find((b) => b.id.endsWith("-plus")).disabled, true, texteDe(l.querySelector("strong")));
     assert.match(texteDe(ligne("Réduction")), /il manque 2 point\(s\)/);
     moins("Flambage").click();
     await laisserFiler(10);
@@ -704,7 +704,7 @@ test("parcours — étape 8 : seules les capacités qui peuvent évoluer, avec +
     ecran = await etape(riche, brouillon.id, 8);
     assert.match(texteDe(ecran), new RegExp(`Les capacités reçues valent déjà ${ficheRiche.points.recus} points : aucune montée n'est possible\\.`));
     assert.ok(ecran.querySelectorAll(".capacite-ligne").length > 0, "montrées même sans assez de points");
-    assert.ok(ecran.querySelectorAll("button").filter((b) => b.id.endsWith("-plus")).every((b) => b.disabled));
+    assert.ok([...ecran.querySelectorAll("button")].filter((b) => b.id.endsWith("-plus")).every((b) => b.disabled));
   } finally {
     retirer();
   }
@@ -886,7 +886,7 @@ test("relecture — changer d'archétype efface la montée d'une capacité perdu
     const contexte = contexteDe();
     const personnage = await garde(contexte, personnageEssai());
     const ecran = await etape(contexte, personnage.id, 3);
-    const patissier = ecran.querySelectorAll("input[type=radio][name=archetype]").find((r) => texteDe(r.parentNode).startsWith("Pâtissier"));
+    const patissier = [...ecran.querySelectorAll("input[type=radio][name=archetype]")].find((r) => texteDe(r.parentNode).startsWith("Pâtissier"));
     patissier.declencher("change");
     await laisserFiler(10);
     assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).niveaux, [], "Flambage n'est plus possédée");
@@ -1002,7 +1002,7 @@ test("personnages — en ligne : ceux du site, à part ceux de l'appareil ; « S
     });
     contexte.etat.depot = depot;
     const ecran = await liste(contexte);
-    const rubriques = ecran.querySelectorAll(".titre-rubrique").map(texteDe);
+    const rubriques = [...ecran.querySelectorAll(".titre-rubrique")].map(texteDe);
     assert.deepEqual(rubriques, ["En ligne", "Sur cet appareil : non envoyés", "Brouillons"]);
     assert.match(texteDe(carteDe(ecran, "Bourrache")), /visible par tous d'ici quelques minutes/);
     assert.match(texteDe(carteDe(ecran, "Aubépine Crèmebrûlée")), /en ligne · enregistré le 30\/09\/2026/);
@@ -1069,8 +1069,8 @@ test("relecture — étape 8 : après « + », le focus reste sur « + » tant q
     // Un personnage neuf : le seul bloc de base, 2 points dépensés, 8 de reliquat.
     const personnage = await garde(contexte, nouveauPersonnage("demo"));
     const ecran = await etape(contexte, personnage.id, 8);
-    const ligne = () => ecran.querySelectorAll(".capacite-ligne").find((l) => texteDe(l.querySelector("strong")) === "Taloche");
-    const plus = () => ligne().querySelectorAll("button").find((b) => b.id.endsWith("-plus"));
+    const ligne = () => [...ecran.querySelectorAll(".capacite-ligne")].find((l) => texteDe(l.querySelector("strong")) === "Taloche");
+    const plus = () => [...ligne().querySelectorAll("button")].find((b) => b.id.endsWith("-plus"));
     // Sur téléphone, repliées ; le joueur déplie « Après l'évolution ».
     const apres = () => ligne().querySelectorAll("details")[1];
     assert.equal(apres().getAttribute("open"), null);
@@ -1116,7 +1116,7 @@ test("relecture — étape 7 : les armes et l'objet choisi décrits avant d'êtr
     const ecran = await etape(contexte, personnage.id, 7);
     const catalogue = ecran.querySelector(".catalogue");
     assert.match(texteDe(catalogue.querySelector("summary")), /^Les \d+ armes et ce qu'elles donnent$/);
-    assert.ok(catalogue.querySelectorAll(".capacite-texte").some((p) => /inflige 3\/8\/20/.test(texteDe(p))), "le couteau d'office, décrit");
+    assert.ok([...catalogue.querySelectorAll(".capacite-texte")].some((p) => /inflige 3\/8\/20/.test(texteDe(p))), "le couteau d'office, décrit");
     // L'objet choisi se décrit avant « Ajouter ».
     saisir(ecran.querySelector("#objet-a-ajouter"), "Bouillon revigorant", "change");
     assert.match(texteDe(ecran.querySelector(".apercu-objet")), /Boire le bouillon/);
@@ -1132,7 +1132,7 @@ test("relecture — étape 7 : les armes et l'objet choisi décrits avant d'êtr
     boutons(ecran, "Ajouter")[0].click();
     await laisserFiler(10);
     parLibelle(ecran, "Porter Plastron de fonte").click();
-    const carte = ecran.querySelectorAll(".objet").find((c) => texteDe(c.querySelector("h4")).startsWith("Plastron de fonte"));
+    const carte = [...ecran.querySelectorAll(".objet")].find((c) => texteDe(c.querySelector("h4")).startsWith("Plastron de fonte"));
     assert.match(texteDe(alerte(carte)), /ne se porte pas : torse déjà couvert par « Tablier de cuir »/);
     assert.equal(document.activeElement, alerte(carte));
   } finally {

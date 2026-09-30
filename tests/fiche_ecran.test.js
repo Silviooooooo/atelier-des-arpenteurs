@@ -119,14 +119,14 @@ test("écran de la fiche — vues lecture et fiche, « Imprimer / PDF », le rec
     assert.equal(texteDe(ecran.querySelector("h1")), "Aubépine Crèmebrûlée");
     const racine = ecran.querySelector(".ecran-personnage");
     assert.ok(racine.className.includes("vue-lecture"));
-    const boutonsTextes = ecran.querySelectorAll("button").map(texteDe);
+    const boutonsTextes = [...ecran.querySelectorAll("button")].map(texteDe);
     for (const b of ["Vue lecture", "Vue fiche", "Imprimer / PDF", "Enregistrer le fichier", "Ouvrir sur mon téléphone"]) assert.ok(boutonsTextes.includes(b), b);
     assert.match(texteDe(ecran), /Reprendre la création/, "un brouillon se reprend");
     // En vue lecture, le recto et le verso sont là, pour l'impression.
     assert.ok(ecran.querySelector(".impression .recto"));
     assert.ok(ecran.querySelector(".impression .verso"));
     assert.ok(ecran.querySelector(".barre-personnage").className.includes("ne-pas-imprimer"));
-    const vueFiche = ecran.querySelectorAll("button").find((b) => texteDe(b) === "Vue fiche");
+    const vueFiche = [...ecran.querySelectorAll("button")].find((b) => texteDe(b) === "Vue fiche");
     vueFiche.click();
     assert.ok(racine.className.includes("vue-fiche"));
     assert.equal(vueFiche.getAttribute("aria-pressed"), "true");
@@ -231,11 +231,11 @@ test("écran de la fiche — la qualité des objets se change ici, objet par obj
     assert.equal(rouleau.value, "");
     assert.equal(ecran.querySelector("#qualite-0").value, "2");
     rouleau.value = "abc";
-    await Promise.all(ecran.querySelectorAll("button").find((b) => texteDe(b) === "Enregistrer les qualités").click());
+    await Promise.all([...ecran.querySelectorAll("button")].find((b) => texteDe(b) === "Enregistrer les qualités").click());
     assert.match(texteDe(ecran), /« Rouleau de fonte » : un nombre comme 2 ou 1,5, ou rien pour X\./);
     assert.equal((await etagere.lire(personnage.id)).equipement[1].qualite, null, "rien n'est gardé");
     ecran.querySelector("#qualite-1").value = "3";
-    await Promise.all(ecran.querySelectorAll("button").find((b) => texteDe(b) === "Enregistrer les qualités").click());
+    await Promise.all([...ecran.querySelectorAll("button")].find((b) => texteDe(b) === "Enregistrer les qualités").click());
     await laisserFiler(20);
     assert.equal((await etagere.lire(personnage.id)).equipement[1].qualite, "3");
     assert.deepEqual(envois.at(-1), ["envoyer", personnage.id, "remplacer", "3"]);
@@ -244,7 +244,7 @@ test("écran de la fiche — la qualité des objets se change ici, objet par obj
     assert.match(texteDe(panneau.querySelector(".qualites-resultat")), /Les qualités sont gardées\. Il part en ligne : visible par tous d'ici quelques minutes\./);
     assert.equal(document.activeElement, panneau.querySelector(".qualites-resultat").querySelector("p"), "le focus sur la confirmation");
     // « Modifier » : une copie de travail, puis le parcours.
-    await Promise.all(ecran.querySelectorAll("button").find((b) => texteDe(b) === "Modifier").click());
+    await Promise.all([...ecran.querySelectorAll("button")].find((b) => texteDe(b) === "Modifier").click());
     await laisserFiler(20);
     const [, adresse] = envois.find(([genre]) => genre === "naviguer");
     const idCopie = adresse.match(/^#\/personnage\/([A-Za-z0-9_-]+)\/etape\/1$/)[1];
@@ -278,7 +278,7 @@ test("écran de la fiche — un personnage qui n'est pas sur l'appareil s'ouvre 
     await laisserFiler(20);
     assert.match(texteDe(horsReseau), /Ce personnage ne se lit pas pour l'instant : Pas de réseau/);
     assert.doesNotMatch(texteDe(horsReseau), /introuvable|ni en ligne/);
-    assert.equal(horsReseau.querySelectorAll("button").filter((b) => texteDe(b) === "Réessayer").length, 1);
+    assert.equal([...horsReseau.querySelectorAll("button")].filter((b) => texteDe(b) === "Réessayer").length, 1);
   } finally {
     retirer();
   }
@@ -311,7 +311,7 @@ test("écran de la fiche — deux objets de même nom ont deux champs de qualit�
     const ecran = fichePersonnage.afficher(contexteDe(etagere), { ecran: "personnage", id: "demo-aubepine-0000000001" });
     document.body.replaceChildren(ecran);
     await laisserFiler(20);
-    const libelles = ecran.querySelector(".qualites").querySelectorAll("label").map(texteDe);
+    const libelles = [...ecran.querySelector(".qualites").querySelectorAll("label")].map(texteDe);
     assert.ok(libelles.includes("Rouleau de fonte (objet 2)") && libelles.includes("Rouleau de fonte (objet 10)"), libelles.join(" | "));
   } finally {
     retirer();

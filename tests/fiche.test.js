@@ -96,8 +96,8 @@ test("recto — le modèle rempli : en-tête, caractéristiques, attaque, défen
     const f = fiche();
     const noeud = feuilles(f);
     const recto = noeud.querySelector(".recto");
-    assert.deepEqual(recto.querySelectorAll(".valeur-entete").map(texteDe), ["Aubépine Crèmebrûlée", "Marmiton", "Saucier", "Solo du chef", "1"]);
-    assert.deepEqual(recto.querySelectorAll(".boite-valeur").map(texteDe), ["4", "5", "5", "3", "4", "3", "4", "4", "4"]);
+    assert.deepEqual([...recto.querySelectorAll(".valeur-entete")].map(texteDe), ["Aubépine Crèmebrûlée", "Marmiton", "Saucier", "Solo du chef", "1"]);
+    assert.deepEqual([...recto.querySelectorAll(".boite-valeur")].map(texteDe), ["4", "5", "5", "3", "4", "3", "4", "4", "4"]);
     const attaque = texteDe(recto.querySelector(".rubrique-attaque"));
     assert.match(attaque, /Couteau d'office/);
     assert.match(attaque, /d10/);
@@ -106,31 +106,31 @@ test("recto — le modèle rempli : en-tête, caractéristiques, attaque, défen
     assert.equal(recto.querySelectorAll(".ligne-capacite").length, 9);
     // Les cases de puissance cochées jusqu'au niveau ; grisées au-delà du maximum.
     const cases = (nom) => {
-      const ligne = recto.querySelectorAll(".ligne-capacite").find((l) => texteDe(l).startsWith(nom));
-      return ligne.querySelectorAll(".case").map((c) => (c.className.includes("cochee") ? "x" : c.className.includes("grisee") ? "-" : "o")).join("");
+      const ligne = [...recto.querySelectorAll(".ligne-capacite")].find((l) => texteDe(l).startsWith(nom));
+      return [...ligne.querySelectorAll(".case")].map((c) => (c.className.includes("cochee") ? "x" : c.className.includes("grisee") ? "-" : "o")).join("");
     };
     assert.equal(cases("Flambage"), "xxo");
     assert.equal(cases("Vif"), "xoo");
     assert.equal(cases("Nez fin"), "---", "niveau 0 : n'évolue pas");
     // La colonne coût : le souffle, et le lien s'il y en a.
-    assert.equal(texteDe(recto.querySelectorAll(".ligne-capacite").find((l) => texteDe(l).startsWith("Flambage")).querySelector(".cout")), "10");
+    assert.equal(texteDe([...recto.querySelectorAll(".ligne-capacite")].find((l) => texteDe(l).startsWith("Flambage")).querySelector(".cout")), "10");
     assert.equal(coutRecto({ souffle: "1", lien: "1" }), "1·1L");
     // Souffle : dix cases, dix grisées au-delà du maximum.
-    const souffle = recto.querySelectorAll(".case-souffle");
+    const souffle = [...recto.querySelectorAll(".case-souffle")];
     assert.equal(souffle.length, 20);
     assert.equal(souffle.filter((c) => c.className.includes("grisee")).length, 10);
     assert.match(texteDe(recto.querySelector(".rubrique-souffle")), /10 à la création · \+1 par point d'historique/);
     assert.doesNotMatch(texteDe(recto), /5 par niveau/);
     // Armure par zone, dans l'ordre du modèle ; cinq cases de résistance.
-    assert.deepEqual(recto.querySelectorAll(".trait.arm").map(texteDe), ["6", "30", "10", "10", "10", "10"]);
+    assert.deepEqual([...recto.querySelectorAll(".trait.arm")].map(texteDe), ["6", "30", "10", "10", "10", "10"]);
     assert.equal(recto.querySelectorAll(".case-resistance").length, 30);
     // Corps : dix cases, les cinq dernières teintées.
-    assert.equal(recto.querySelectorAll(".case-corps").filter((c) => c.className.includes("teintee")).length, 5);
+    assert.equal([...recto.querySelectorAll(".case-corps")].filter((c) => c.className.includes("teintee")).length, 5);
     assert.equal(recto.querySelectorAll(".ligne-objet").length, 8);
     // Liens : le primordial lié, un point de lien, le reste grisé ; la légende des huit.
     const lien = recto.querySelectorAll(".colonne-lien")[0];
     assert.match(texteDe(lien), /Grand Four/);
-    assert.equal(lien.querySelectorAll(".case-lien").filter((c) => !c.className.includes("grisee")).length, 1);
+    assert.equal([...lien.querySelectorAll(".case-lien")].filter((c) => !c.className.includes("grisee")).length, 1);
     assert.match(texteDe(recto.querySelector(".legende-primordiaux")), /Derkat vengeance · Enaël savoir · Ithilvion choix · Kalester endurance · Neru équilibre/);
     assert.match(texteDe(recto.querySelector(".legende-primordiaux")), /Makith noirceur · Kouvîmäar protection · Sillybir pardon/);
     assert.equal(texteDe(recto.querySelector(".fiche-pied")), "Banque du 29/09/2026 · constellation tirée 3 fois", "le pied dit le nombre de tirages (lot 2 bis)");
@@ -151,7 +151,7 @@ test("recto — la constellation saisie à la main se dit en pied de page ; sans
     const attaque = recto.querySelector(".rubrique-attaque");
     assert.equal(texteDe(attaque.querySelector(".trait.large")), "Taloche");
     assert.equal(texteDe(attaque.querySelector(".trait.de")), "");
-    assert.deepEqual(attaque.querySelectorAll(".trait.rang").map(texteDe), ["2", "4", "8"]);
+    assert.deepEqual([...attaque.querySelectorAll(".trait.rang")].map(texteDe), ["2", "4", "8"]);
   } finally {
     retirer();
   }
@@ -266,7 +266,7 @@ test("relecture — la feuille ne coupe pas les mots comme l'interface ; la vue 
   const retirer = installerDom();
   try {
     const noeud = lecture(fiche());
-    const vif = noeud.querySelectorAll("summary").find((s) => texteDe(s).startsWith("Vif"));
+    const vif = [...noeud.querySelectorAll("summary")].find((s) => texteDe(s).startsWith("Vif"));
     assert.equal(texteDe(vif), "Vif niveau 1 / 3 · sans coût");
   } finally {
     retirer();

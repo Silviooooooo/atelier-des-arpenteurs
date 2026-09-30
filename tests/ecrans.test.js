@@ -246,7 +246,7 @@ async function attendre(condition, message) {
 }
 
 const differencesAffichees = (ecran) => texteDe(ecran).includes("Différences avec la banque publiée");
-const formulaireDe = (ecran, id) => ecran.querySelectorAll("form").find((f) => f.querySelector(`#${id}`));
+const formulaireDe = (ecran, id) => [...ecran.querySelectorAll("form")].find((f) => f.querySelector(`#${id}`));
 
 async function soumettre(formulaire) {
   await Promise.allSettled(formulaire.declencher("submit"));
@@ -653,7 +653,7 @@ test("espace auteur — la clé de dépôt : l'aide, l'état, une saisie vérifi
     const ecrits = [];
     const magasin = { ...memoire, ecrire: async (cle, valeur) => (ecrits.push(valeur), memoire.ecrire(cle, valeur)) };
     const { ecran } = await espaceOuvert({ magasin });
-    assert.ok(ecran.querySelectorAll("h2").some((h) => texteDe(h) === "Clé de dépôt des personnages"));
+    assert.ok([...ecran.querySelectorAll("h2")].some((h) => texteDe(h) === "Clé de dépôt des personnages"));
     const texte = texteDe(ecran);
     assert.match(texte, /Repository access : Only select repositories, et le seul dépôt atelier-des-arpenteurs\./);
     assert.match(texte, /Permissions : Issues, en Read and write\. Rien d'autre\./);
@@ -998,7 +998,7 @@ test("espace auteur — vérifier les personnages en ligne, puis les reprendre a
         };
       },
     });
-    assert.ok(ecran.querySelectorAll("h2").some((h) => texteDe(h) === "Personnages en ligne"));
+    assert.ok([...ecran.querySelectorAll("h2")].some((h) => texteDe(h) === "Personnages en ligne"));
     assert.equal(ecran.querySelector("#ancien-mdp"), null);
     boutons(ecran, "Vérifier les personnages en ligne")[0].click();
     await attendre(() => texteDe(ecran).includes("sont en ligne"), "l'inventaire n'arrive pas");
