@@ -630,7 +630,7 @@ function bouclierDe(equipement, personnage, avertir) {
   }
   const lu = valeursParametre(parametre.nom, parametre.valeur, { caracteristiques: personnage.caracteristiques, qualite: objet.qualite });
   if (lu.erreur) avertir("expression", `« ${objet.nom} » : ${lu.erreur}`);
-  return { nom: objet.nom, defense: lu.valeurs ? lu.valeurs[0] : null, defenseBrute: parametre.valeur, qualite: objet.qualite };
+  return { rang: objet.rang, nom: objet.nom, defense: lu.valeurs ? lu.valeurs[0] : null, defenseBrute: parametre.valeur, qualite: objet.qualite };
 }
 
 /** Vrai si le bloc peut servir de bouclier : il transmet une défense. */

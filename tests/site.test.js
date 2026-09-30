@@ -82,7 +82,7 @@ test("site — la politique de sécurité du <meta>, avant tout script et tout s
     "script-src": ["'self'"],
     "style-src": ["'self'"],
     "img-src": ["'self'"],
-    "font-src": ["'none'"],
+    "font-src": ["'self'"],
     "connect-src": ["'self'", "https://api.github.com"],
     "manifest-src": ["'self'"],
     "worker-src": ["'none'"],
@@ -109,7 +109,7 @@ test("site — chaque fichier que la page appelle existe", () => {
   for (const appel of appels) assert.ok(existe(appel), appel);
 });
 
-test("site — le graphe des modules de la page se résout, et atteint les huit écrans (§ 3.2)", () => {
+test("site — le graphe des modules de la page se résout, et atteint les douze écrans (§ 3.2)", () => {
   const vus = new Set();
   const aVoir = ["js/application.js"];
   while (aVoir.length) {
@@ -122,9 +122,14 @@ test("site — le graphe des modules de la page se résout, et atteint les huit 
       aVoir.push(new URL(cible, new URL(chemin, "https://site/")).pathname.slice(1));
     }
   }
-  const ecrans = ["accueil", "mot_de_passe", "liste", "fiche_bloc", "fiche_capacite", "fiche_element", "anomalies", "espace_auteur"];
+  const ecrans = [
+    "accueil", "mot_de_passe", "liste", "fiche_bloc", "fiche_capacite", "fiche_element", "anomalies", "espace_auteur",
+    "personnages", "creation", "reception", "fiche_personnage",
+  ];
   for (const ecran of ecrans) assert.ok(vus.has(`js/ecrans/${ecran}.js`), ecran);
-  for (const module of ["js/banque/chargement.js", "js/securite/coffre.js", "js/publication/github.js", "js/lecture/zip.js"]) assert.ok(vus.has(module), module);
+  for (const module of ["js/banque/chargement.js", "js/securite/coffre.js", "js/publication/github.js", "js/lecture/zip.js", "js/personnage/calcul.js", "js/personnage/stockage.js", "js/fiche/feuilles.js"]) {
+    assert.ok(vus.has(module), module);
+  }
 });
 
 test("site — le manifeste : noms, affichage, couleurs des jetons, icônes aux tailles dites", () => {
@@ -204,8 +209,8 @@ test("jetons — le texte contraste d'au moins 4,5:1, les bordures de 3:1, dans 
   }
 });
 
-test("jetons — ecran.css tire toutes ses valeurs de jetons.css ; aucune police téléchargée", () => {
-  const ecran = lire("css/ecran.css").replace(/\/\*[\s\S]*?\*\//g, "");
+test("jetons — ecran.css et personnage.css tirent toutes leurs valeurs de jetons.css ; aucune police téléchargée", () => {
+  const ecran = ["css/ecran.css", "css/personnage.css"].map(lire).join("\n").replace(/\/\*[\s\S]*?\*\//g, "");
   const lignes = ecran.split("\n").filter((ligne) => !ligne.trim().startsWith("@media"));
   for (const ligne of lignes) {
     assert.doesNotMatch(ligne, /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|color-mix)\(/i, `couleur écrite en dur : ${ligne.trim()}`);
@@ -325,6 +330,7 @@ test("serveur local — la seule machine, les seuls fichiers du site (§ 3.2)", 
     "index.html": 200, "js/a.js": 200, "donnees/banque.chiffree.json": 200, "icones/i.svg": 200,
     ".git/config": 403, ".git/x.js": 403, ".cache/x.js": 403, "plans/p.js": 403, "ressources/r.png": 403, "Système/s.js": 403,
     "essais/c.xlsx": 403, "donnees/banque.json": 403, "SPECIFICATION.md": 403, "package.json": 403,
+    "polices/p.woff2": 200, "polices/OFL.txt": 403, "essais/personnage_demo.arpenteur.json": 200, "essais/autre.arpenteur.json": 403,
   };
   for (const chemin of Object.keys(fichiers)) {
     mkdirSync(join(racine, dirname(chemin)), { recursive: true });

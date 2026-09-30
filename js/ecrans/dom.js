@@ -35,6 +35,47 @@ export function el(balise, attributs = {}, ...enfants) {
   return noeud;
 }
 
+const SVG = "http://www.w3.org/2000/svg";
+const SVG_PERMIS = new Set(["svg", "g", "ellipse", "rect", "circle", "path", "title"]);
+
+/**
+ * Un élément SVG dessiné par le code (la silhouette de la fiche, § 15.4) :
+ * quelques formes, des attributs de géométrie, jamais d'adresse, de
+ * gestionnaire ni de style.
+ */
+export function svg(balise, attributs = {}, ...enfants) {
+  if (!SVG_PERMIS.has(balise)) throw new TypeError(`Élément SVG non permis : ${balise}`);
+  const noeud = document.createElementNS(SVG, balise);
+  for (const [nom, valeur] of Object.entries(attributs)) {
+    if (valeur === null || valeur === undefined || valeur === false) continue;
+    if (nom.startsWith("on") || nom === "style" || nom === "href" || nom.includes(":")) throw new TypeError(`L'attribut ${nom} n'est pas permis.`);
+    if (nom === "classe") noeud.setAttribute("class", valeur);
+    else noeud.setAttribute(nom, String(valeur));
+  }
+  for (const enfant of enfants.flat(Infinity)) {
+    if (enfant === null || enfant === undefined || enfant === false) continue;
+    noeud.append(enfant instanceof Node ? enfant : String(enfant));
+  }
+  return noeud;
+}
+
+/**
+ * Fait enregistrer un texte comme fichier par le navigateur (§ 15.1). Le
+ * lien vient d'un Blob fabriqué ici, jamais d'une donnée : c'est la seule
+ * adresse qu'el() refuserait, et elle ne quitte pas cette fonction.
+ */
+export function telecharger(nomFichier, texte, type = "application/json") {
+  const adresse = URL.createObjectURL(new Blob([texte], { type }));
+  const lien = document.createElement("a");
+  lien.href = adresse;
+  lien.download = nomFichier;
+  lien.hidden = true;
+  document.body.append(lien);
+  lien.click();
+  lien.remove();
+  setTimeout(() => URL.revokeObjectURL(adresse), 60_000);
+}
+
 /** Le titre de l'onglet du navigateur. */
 export function titrer(texte) {
   const nom = "L'Atelier des Arpenteurs";

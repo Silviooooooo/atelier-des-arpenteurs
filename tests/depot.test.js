@@ -77,7 +77,7 @@ function classeursInconnus(chemins, lireOctets) {
 // sous », un export PDF), et tout JSON hors de cette liste, restent hors du
 // dépôt : une banque en clair gardée pour déboguer ne passe pas.
 const FORMATS_INTERDITS = /\.(?:xls|xlsm|xlsb|ods|csv|doc|docm|odt|pdf)$/i;
-const JSON_PERMIS = ["package.json", "essais/banque_demo.chiffree.json", "essais/banque_format1.chiffree.json", "donnees/banque.chiffree.json"];
+const JSON_PERMIS = ["package.json", "essais/banque_demo.chiffree.json", "essais/banque_format1.chiffree.json", "donnees/banque.chiffree.json", "essais/personnage_demo.arpenteur.json"];
 
 function fichiersHorsListe(chemins) {
   return chemins.filter((chemin) => FORMATS_INTERDITS.test(chemin) || (/\.json$/i.test(chemin) && !JSON_PERMIS.includes(chemin)));
@@ -305,8 +305,12 @@ test(".gitignore — ignore les classeurs, documents et données en clair, pas l
     "Principe jdr abrasia.docx", "principe.doc", "principe.docm", "principe.odt", "principe.pdf",
     "donnees/banque.json", "donnees/sous/clair.json", "banque.json", "essais/banque_claire.json", "tests/banque.json",
     "plans/instruction.md", "ressources/notes.md", "desktop.ini", "Thumbs.db", "~$regles_jdr.xlsx", "essais/~$classeur_essai.xlsx",
+    "Aubépine.arpenteur.json", "essais/Mon personnage.arpenteur.json", "essais/personnage_demo.json",
   ];
-  const suivis = ["essais/classeur_essai.xlsx", "essais/banque_demo.chiffree.json", "essais/banque_format1.chiffree.json", "donnees/banque.chiffree.json", "package.json", "index.html", "js/application.js", "icones/icone.svg"];
+  const suivis = [
+    "essais/classeur_essai.xlsx", "essais/banque_demo.chiffree.json", "essais/banque_format1.chiffree.json", "donnees/banque.chiffree.json", "package.json", "index.html", "js/application.js", "icones/icone.svg",
+    "essais/personnage_demo.arpenteur.json", "polices/Marcellus-Regular.woff2", "polices/OFL-Marcellus.txt", "css/fiche.css",
+  ];
   let sortie = "";
   try {
     sortie = git("check-ignore", "--no-index", "--", ...ignores, ...suivis);

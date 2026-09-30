@@ -528,3 +528,203 @@ dl {
     display: none;
   }
 }
+
+/* Personnages (lot 2) : la liste, le parcours de création, un personnage
+   reçu par lien (SPECIFICATION.md, § 15.3). Chaque cible tactile garde ses
+   44 px ; l'état d'une étape se lit en toutes lettres, jamais à la seule
+   couleur. */
+
+.personnages-liste,
+.objets,
+.capacites-creation {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.carte-personnage,
+.objet {
+  margin-bottom: var(--espace-3);
+  padding: var(--espace-3);
+  border: var(--trait) solid var(--separateur);
+  border-radius: var(--rayon);
+}
+
+.carte-personnage h2,
+.objet h4 {
+  margin: 0 0 var(--espace-1);
+}
+
+.carte-personnage .boutons {
+  margin-bottom: 0;
+}
+
+.confirmation {
+  margin: var(--espace-3) 0;
+  padding: var(--espace-3);
+  border-left: var(--trait-epais) solid var(--accent);
+  background: var(--fond-2);
+}
+
+.confirmation .boutons {
+  margin-bottom: 0;
+}
+
+.creation .detail {
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+.etapes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--largeur-carte), 1fr));
+  gap: var(--espace-1);
+  margin: 0 0 var(--espace-4);
+  padding: 0;
+  list-style: none;
+}
+
+.etapes a {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: var(--cible-tactile);
+  padding: var(--espace-1) var(--espace-2);
+  border: var(--trait) solid var(--separateur);
+  border-radius: var(--rayon);
+  text-decoration: none;
+}
+
+.etapes a[aria-current="step"] {
+  border-color: var(--accent);
+  background: var(--accent-doux);
+  font-weight: var(--graisse-forte);
+}
+
+.manques {
+  margin: var(--espace-3) 0 var(--espace-4);
+  padding: var(--espace-3);
+  border-left: var(--trait-epais) solid var(--accent);
+  background: var(--fond-2);
+}
+
+.manques-titre,
+.somme,
+.compteur-points {
+  font-weight: var(--graisse-forte);
+}
+
+.manques ul {
+  margin-bottom: 0;
+}
+
+.manques p:last-child {
+  margin-bottom: 0;
+}
+
+.creation label {
+  display: block;
+  margin-bottom: var(--espace-1);
+  font-weight: var(--graisse-forte);
+}
+
+.zone-texte {
+  max-width: var(--largeur-lecture);
+  padding: var(--espace-2) var(--espace-3);
+  resize: vertical;
+}
+
+.champ-court {
+  max-width: var(--largeur-carte);
+}
+
+.erreur-champ {
+  margin: calc(-1 * var(--espace-2)) 0 var(--espace-3);
+  padding-left: var(--espace-2);
+  border-left: var(--trait-epais) solid var(--accent);
+  font-size: var(--taille-petite);
+}
+
+.caracteristiques {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--largeur-carte), 1fr));
+  gap: 0 var(--espace-3);
+}
+
+.apercu-des {
+  border-collapse: collapse;
+  margin-bottom: var(--espace-3);
+}
+
+.apercu-des th,
+.apercu-des td {
+  padding: var(--espace-1) var(--espace-3) var(--espace-1) 0;
+  border-bottom: var(--trait) solid var(--separateur);
+  text-align: left;
+}
+
+.groupe-choix {
+  margin: 0 0 var(--espace-4);
+  padding: var(--espace-2) var(--espace-3);
+  border: var(--trait) solid var(--separateur);
+  border-radius: var(--rayon);
+}
+
+.groupe-choix legend {
+  padding: 0 var(--espace-1);
+  font-weight: var(--graisse-forte);
+}
+
+.creation .choix-option {
+  display: flex;
+  align-items: center;
+  gap: var(--espace-3);
+  min-height: var(--cible-tactile);
+  margin: 0;
+  font-weight: normal;
+  cursor: pointer;
+}
+
+.choix-option input {
+  flex: none;
+  width: var(--taille-case);
+  height: var(--taille-case);
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.choix-option > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.choix-nom {
+  font-weight: var(--graisse-forte);
+}
+
+.capacite-ligne {
+  padding: var(--espace-2) 0;
+  border-bottom: var(--trait) solid var(--separateur);
+}
+
+.capacite-ligne p {
+  margin-bottom: var(--espace-1);
+}
+
+.capacite-niveau {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espace-1) var(--espace-3);
+}
+
+.capacite-niveau .champ {
+  margin-bottom: 0;
+}
+
+.suite-etapes {
+  justify-content: space-between;
+  margin-top: var(--espace-5);
+  padding-top: var(--espace-3);
+  border-top: var(--trait) solid var(--separateur);
+}

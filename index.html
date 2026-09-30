@@ -2,11 +2,12 @@
 <!-- La page unique de l'Atelier (SPECIFICATION.md, § 3.2, § 9 et § 10.1).
      Les écrans sont des routes après le « # ». La politique de sécurité ne
      laisse venir que ce qui vient du site, et ne permet de connexion que vers
-     le site et api.github.com. Le zoom n'est jamais interdit. -->
+     le site et api.github.com ; les polices de la fiche viennent du site.
+     Le zoom n'est jamais interdit. -->
 <html lang="fr">
   <head>
     <meta charset="utf-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'none'; connect-src 'self' https://api.github.com; manifest-src 'self'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self' https://api.github.com; manifest-src 'self'; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
     <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>L'Atelier des Arpenteurs</title>
@@ -22,6 +23,8 @@
     <link rel="apple-touch-icon" href="icones/icone-180.png">
     <link rel="stylesheet" href="css/jetons.css">
     <link rel="stylesheet" href="css/ecran.css">
+    <link rel="stylesheet" href="css/personnage.css">
+    <link rel="stylesheet" href="css/fiche.css">
     <script src="js/veille.js" defer></script>
     <script type="module" src="js/application.js"></script>
   </head>
@@ -34,6 +37,7 @@
           <li><a href="#/blocs" data-route="blocs">Blocs</a></li>
           <li><a href="#/capacites" data-route="capacites">Capacités</a></li>
           <li><a href="#/elements" data-route="elements">Éléments</a></li>
+          <li><a href="#/personnages" data-route="personnages">Personnages</a></li>
           <li><a href="#/anomalies" data-route="anomalies">Anomalies</a></li>
           <li><a href="#/auteur" data-route="auteur">Auteur</a></li>
         </ul>

@@ -1,9 +1,14 @@
-// Les adresses des écrans (SPECIFICATION.md, § 9).
+// Les adresses des écrans (SPECIFICATION.md, § 9 et § 15.3).
 //
 // Chaque écran est une route après le « # » : une fiche a ainsi une adresse
 // qu'on peut envoyer à un joueur (#/capacite/Attaque%20de%20base). Le nom y
 // est encodé par encodeURIComponent, et se décode sans jamais lever
 // d'exception : une adresse abîmée mène à l'écran « introuvable ».
+//
+// Les personnages : #/personnages (la liste), #/personnage/<id> (la fiche),
+// #/personnage/<id>/etape/<1 à 9> (le parcours), #/recevoir/<code> (un
+// personnage reçu par lien, § 15.1). L'identifiant et le code ne portent
+// que des signes base64url.
 
 export const CATEGORIES = {
   blocs: { fiche: "bloc", titre: "Blocs", un: "un bloc" },
@@ -12,6 +17,9 @@ export const CATEGORIES = {
 };
 const PAR_FICHE = Object.fromEntries(Object.entries(CATEGORIES).map(([categorie, { fiche }]) => [fiche, categorie]));
 const FEUILLES = ["lisez_moi", "Blocs", "Eléments", "Capacites"];
+const IDENTIFIANT = /^[A-Za-z0-9_-]{16,40}$/;
+// Un code de lien : 64 Ko compressés au plus, en base64url (§ 15.1).
+const CODE = /^[A-Za-z0-9_-]{1,87382}$/;
 
 function decoder(morceau) {
   try {
@@ -39,6 +47,12 @@ export function lireRoute(adresse) {
     if (FEUILLES.includes(feuille) && /^\d+$/.test(reste[1])) return { ecran: "anomalies", feuille, ligne: Number(reste[1]) };
   }
   if (tete === "auteur" && reste.length === 0) return { ecran: "auteur" };
+  if (tete === "personnages" && reste.length === 0) return { ecran: "personnages" };
+  if (tete === "personnage" && IDENTIFIANT.test(reste[0] ?? "")) {
+    if (reste.length === 1) return { ecran: "personnage", id: reste[0] };
+    if (reste.length === 3 && reste[1] === "etape" && /^[1-9]$/.test(reste[2])) return { ecran: "creation", id: reste[0], etape: Number(reste[2]) };
+  }
+  if (tete === "recevoir" && reste.length === 1 && CODE.test(reste[0])) return { ecran: "recevoir", code: reste[0] };
   return { ecran: "introuvable", adresse: chemin };
 }
 
@@ -49,6 +63,11 @@ export function adresseFiche(categorie, nom) {
 
 export function adresseListe(categorie) {
   return `#/${categorie}`;
+}
+
+/** L'adresse de la fiche d'un personnage, ou d'une étape de son parcours. */
+export function adressePersonnage(id, etape = null) {
+  return etape ? `#/personnage/${id}/etape/${etape}` : `#/personnage/${id}`;
 }
 
 /** L'adresse des anomalies, éventuellement celles d'une ligne d'une feuille. */

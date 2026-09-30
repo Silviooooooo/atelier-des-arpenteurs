@@ -21,7 +21,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const RACINE = fileURLToPath(new URL("../", import.meta.url));
 
-// Les seuls types servis : ceux du site. Un JSON n'est servi que chiffré.
+// Les seuls types servis : ceux du site. Un JSON n'est servi que chiffré,
+// sauf le personnage de démonstration, fictif (§ 15.7).
 const TYPES = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -30,7 +31,9 @@ const TYPES = {
   ".webmanifest": "application/manifest+json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png",
+  ".woff2": "font/woff2",
 };
+const PERSONNAGE_DEMO = "/essais/personnage_demo.arpenteur.json";
 const TRAVAIL = /^\/(?:plans|ressources|système|tests)\//i;
 
 function servi(chemin) {
@@ -38,7 +41,7 @@ function servi(chemin) {
   if (TRAVAIL.test(chemin.normalize("NFC"))) return false;
   const extension = extname(chemin);
   if (!Object.hasOwn(TYPES, extension)) return false;
-  return extension !== ".json" || chemin.endsWith(".chiffree.json");
+  return extension !== ".json" || chemin.endsWith(".chiffree.json") || chemin === PERSONNAGE_DEMO;
 }
 
 /** Le serveur, à lancer par listen(port, "127.0.0.1"). */

@@ -54,6 +54,35 @@
   --accent: #1d5c8f;
   --texte-sur-accent: #ffffff;
   --accent-doux: #e3edf6;
+
+  /* La fiche de personnage (§ 15.4) : les couleurs et les polices du modèle
+     de fiche. Elle est du papier : elle garde ces couleurs dans le thème
+     sombre, et à l'impression. Ses dimensions, celles d'un A4, vivent dans
+     fiche.css. */
+  --police-fiche: "Alegreya Sans", "Segoe UI", system-ui, sans-serif;
+  --police-fiche-titre: Marcellus, Georgia, "Times New Roman", serif;
+  --fiche-papier: #f5efe1;
+  --fiche-cadre: #cdbf9c;
+  --fiche-cadre-interieur: #e1d6b9;
+  --fiche-encre: #211e18;
+  --fiche-encre-2: #3a3428;
+  --fiche-accent: #9a4620;
+  --fiche-titre: #7e3617;
+  --fiche-etiquette: #7a6f58;
+  --fiche-note: #6e6350;
+  --fiche-rubrique: #fdfbf4;
+  --fiche-bord: #c6b893;
+  --fiche-bandeau: #ebe1c8;
+  --fiche-trait-fort: #a0906f;
+  --fiche-trait: #bcaf92;
+  --fiche-separateur: #e5dcc3;
+  --fiche-separateur-2: #dcd1b5;
+  --fiche-case: #ffffff;
+  --fiche-case-teinte: #f3ebd8;
+  --fiche-case-teinte-bord: #8c7b58;
+  --fiche-case-grisee: #d9d0bb;
+  --fiche-silhouette: #f2ead6;
+  --fiche-silhouette-trait: #b7a57e;
 }
 
 @media (prefers-color-scheme: dark) {

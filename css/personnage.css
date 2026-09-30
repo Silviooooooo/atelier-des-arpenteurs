@@ -1,0 +1,181 @@
+/* L'écran d'un personnage : la vue lecture et la vue fiche (SPECIFICATION.md,
+   § 15.5). Comme ecran.css, toutes ses valeurs viennent de jetons.css. La
+   fiche imprimable elle-même est dans fiche.css. */
+
+.ecran-personnage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espace-4);
+}
+
+.barre-personnage .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espace-2);
+  margin-top: var(--espace-3);
+}
+
+.barre-personnage .actions a:not(.bouton) {
+  min-height: var(--cible-tactile);
+  display: inline-flex;
+  align-items: center;
+}
+
+.bouton[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--texte-sur-accent);
+  border-color: var(--accent);
+}
+
+.ecran-personnage.vue-lecture .cadre-feuilles,
+.ecran-personnage.vue-fiche .vue-lecture-contenu {
+  display: none;
+}
+
+.cadre-feuilles {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* La vue fiche : le recto et le verso à l'échelle de l'écran ; le zoom du
+   navigateur, jamais interdit, les agrandit à deux doigts. */
+.vue-fiche .feuilles {
+  zoom: var(--echelle, 1);
+}
+
+.panneau-telephone {
+  margin-top: var(--espace-4);
+  padding: var(--espace-4);
+  border: var(--trait) solid var(--separateur);
+  border-radius: var(--rayon);
+  background: var(--fond-2);
+}
+
+.panneau-telephone .champ {
+  width: 100%;
+  max-width: none;
+}
+
+.panneau-telephone .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espace-2);
+  margin: var(--espace-2) 0;
+}
+
+/* ─── La vue lecture ─────────────────────────────────────────────────────── */
+
+.lecture {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espace-5);
+  max-width: var(--largeur-lecture);
+}
+
+.lecture-titre {
+  margin: 0;
+  font-size: var(--taille-titre);
+  font-weight: var(--graisse-forte);
+  line-height: var(--interligne-titre);
+}
+
+.lecture-entete p {
+  margin: 0;
+}
+
+.lecture-section h2 {
+  margin: 0 0 var(--espace-2);
+  font-size: var(--taille-sous-titre);
+}
+
+.lecture-section h3 {
+  margin: var(--espace-3) 0 var(--espace-1);
+  font-size: var(--taille-texte);
+}
+
+.lecture-paires {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--espace-1) var(--espace-3);
+  margin: 0;
+}
+
+.lecture-paires dt {
+  color: var(--texte-2);
+}
+
+.lecture-paires dd {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.lecture-caracteristiques {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--largeur-carte), 1fr));
+  gap: var(--espace-2) var(--espace-4);
+}
+
+.lecture-caracteristiques li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--espace-2);
+  border-bottom: var(--trait) solid var(--separateur);
+}
+
+.lecture-zones {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.lecture-zones th,
+.lecture-zones td {
+  text-align: left;
+  padding: var(--espace-1) var(--espace-2) var(--espace-1) 0;
+  border-bottom: var(--trait) solid var(--separateur);
+}
+
+.lecture-capacites {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lecture-capacites li {
+  border-bottom: var(--trait) solid var(--separateur);
+}
+
+.lecture-capacites summary {
+  min-height: var(--cible-tactile);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--espace-2);
+  cursor: pointer;
+}
+
+.lecture-capacites details p {
+  margin: 0 0 var(--espace-2);
+}
+
+.lecture-nom {
+  font-weight: var(--graisse-forte);
+}
+
+.lecture .detail {
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+.lecture-points {
+  margin: 0;
+  font-weight: var(--graisse-forte);
+}
+
+.lecture-avertissements {
+  margin: 0;
+  padding-left: var(--espace-5);
+}

@@ -1,0 +1,269 @@
+{
+  "format": 1,
+  "id": "demo-aubepine-0000000001",
+  "mode": "demo",
+  "etat": "enregistre",
+  "etape": 9,
+  "cree_le": "2026-09-29T20:00:00.000Z",
+  "modifie_le": "2026-09-29T20:00:00.000Z",
+  "enregistre_le": "2026-09-29T20:00:00.000Z",
+  "banque": {
+    "empreinte": "sha256:40e1eba6d08de5b42d0fbe4a2d79e7242cfcec203f4cbaf2adc5305648e225b3",
+    "publiee_le": "2026-09-29T22:34:07+02:00"
+  },
+  "identite": {
+    "nom": "Aubépine Crèmebrûlée",
+    "age": "31 ans",
+    "description": "Petite, vive, un tablier de cuir roussi et une toque qui a vu des feux.",
+    "histoire": "Commis d'une auberge du port, elle a quitté les fourneaux le jour où le Grand Four lui a parlé."
+  },
+  "caracteristiques": {
+    "force": 4,
+    "agilite": 5,
+    "precision": 5,
+    "sens": 3,
+    "culture_neruvienne": 4,
+    "savoir_sauvage": 3,
+    "parole": 4,
+    "empathie": 4,
+    "creativite": 4
+  },
+  "archetype": {
+    "nom": "Saucier",
+    "choix": [
+      "Solo du chef",
+      "Maîtrise de l'agile"
+    ]
+  },
+  "espece": {
+    "nom": "Marmiton",
+    "choix": []
+  },
+  "constellation": {
+    "nom": "Constellation du Sablier",
+    "choix": [],
+    "obtention": "tirage"
+  },
+  "primordial": {
+    "nom": "Grand Four",
+    "choix": [
+      "Cendre"
+    ]
+  },
+  "equipement": [
+    {
+      "nom": "Couteau d'office",
+      "choix": [],
+      "qualite": "2",
+      "porte": false
+    },
+    {
+      "nom": "Rouleau de fonte",
+      "choix": [],
+      "qualite": null,
+      "porte": false
+    },
+    {
+      "nom": "Tablier de cuir",
+      "choix": [],
+      "qualite": "2",
+      "porte": true
+    },
+    {
+      "nom": "Plastron de fonte",
+      "choix": [],
+      "qualite": null,
+      "porte": false
+    },
+    {
+      "nom": "Guêtres de toile",
+      "choix": [],
+      "qualite": null,
+      "porte": true
+    },
+    {
+      "nom": "Maniques",
+      "choix": [],
+      "qualite": "1",
+      "porte": true
+    },
+    {
+      "nom": "Toque renforcée",
+      "choix": [],
+      "qualite": "3",
+      "porte": true
+    },
+    {
+      "nom": "Couvercle de marmite",
+      "choix": [],
+      "qualite": "2",
+      "porte": false
+    },
+    {
+      "nom": "Bouillon revigorant",
+      "choix": [],
+      "qualite": null,
+      "porte": false
+    }
+  ],
+  "arme_principale": 0,
+  "bouclier": 7,
+  "niveaux": [
+    {
+      "capacite": "Flambage",
+      "niveau": 2
+    }
+  ],
+  "empreintes": [
+    {
+      "genre": "bloc",
+      "nom": "Marmiton",
+      "empreinte": "05fdd76d1192e1"
+    },
+    {
+      "genre": "bloc",
+      "nom": "Saucier",
+      "empreinte": "0d64812672c30f"
+    },
+    {
+      "genre": "bloc",
+      "nom": "Constellation du Sablier",
+      "empreinte": "1a77675ae96553"
+    },
+    {
+      "genre": "bloc",
+      "nom": "Grand Four",
+      "empreinte": "016402a2d4c356"
+    },
+    {
+      "genre": "bloc",
+      "nom": "Couteau d'office",
+      "empreinte": "118433737eaf68"
+    },
+    {
+      "genre": "bloc",
+      "nom": "Rouleau de fonte",
+      "empreinte": "0136cef155e5c4"
+    },
+    {
+      "genre": "bloc",
+      "nom": "Tablier de cuir",
+      "empreinte": "1cb694efa92578"
+    },
+    {
+      "genre": "bloc",
+      "nom": "Plastron de fonte",
+      "empreinte": "1dda8a45a5f5e8"
+    },
+    {
+      "genre": "bloc",
+      "nom": "Guêtres de toile",
+      "empreinte": "1d357816d75bb6"
+    },
+    {
+      "genre": "bloc",
+      "nom": "Maniques",
+      "empreinte": "101db71edc655d"
+    },
+    {
+      "genre": "bloc",
+      "nom": "Toque renforcée",
+      "empreinte": "18dec7900ed8c2"
+    },
+    {
+      "genre": "bloc",
+      "nom": "Couvercle de marmite",
+      "empreinte": "19bbe56c2a1157"
+    },
+    {
+      "genre": "bloc",
+      "nom": "Bouillon revigorant",
+      "empreinte": "0eda64bfb77627"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Vif",
+      "empreinte": "044870fd0d5bd5"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Nez fin",
+      "empreinte": "0b71359b1cd579"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Réduction",
+      "empreinte": "0985e560e84952"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Flambage",
+      "empreinte": "0c1b6037d5d96b"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Dressage minute",
+      "empreinte": "084674a02d37e9"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Solo du chef",
+      "empreinte": "130919532774e9"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Maîtrise de l'agile",
+      "empreinte": "0f215ff9c28ebc"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Fournaise",
+      "empreinte": "1fc0432e1fdd5c"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Cendre",
+      "empreinte": "080cd96f537a77"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Pas chassé",
+      "empreinte": "095bc1021aed37"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Goûter",
+      "empreinte": "048014a03420df"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Taloche",
+      "empreinte": "05179ed0a3fca9"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Frappe",
+      "empreinte": "0c1cb76550e84c"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Émincer",
+      "empreinte": "0fdb8b7b7514cc"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Choc sourd",
+      "empreinte": "0adcb500fd1bf4"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Se couvrir",
+      "empreinte": "0289473a77c87e"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Boire le bouillon",
+      "empreinte": "1f12942ee5d065"
+    }
+  ]
+}

@@ -1,21 +1,28 @@
-// Le démarrage et les routes de la page (SPECIFICATION.md, § 3.2, § 8.3 et
-// § 9).
+// Le démarrage et les routes de la page (SPECIFICATION.md, § 3.2, § 8.3,
+// § 9 et § 15).
 //
 // Lit le mode (démonstration avec ?demo=1), ouvre le coffre, télécharge la
 // banque et l'ouvre avec la clé gardée, sinon demande le mot de passe ; puis
 // affiche l'écran que désigne l'adresse après le « # ». L'espace auteur
 // s'ouvre sans la banque : la première publication se fait avant qu'elle
-// existe. Une erreur inattendue s'affiche, jamais une page blanche.
+// existe. Les écrans des personnages ont besoin de la banque : un lien reçu
+// (#/recevoir/…) attend donc le mot de passe, puis s'ouvre. Une erreur
+// inattendue s'affiche, jamais une page blanche.
 
 import { demanderStockageDurable, modeDe, ouvrirAvecCoffre, ouvrirParMotDePasse, telecharger } from "./banque/chargement.js";
 import { indexer } from "./banque/consultation.js";
 import { dateLisible } from "./banque/dates.js";
 import * as accueil from "./ecrans/accueil.js";
 import * as anomalies from "./ecrans/anomalies.js";
+import * as creation from "./ecrans/creation.js";
 import { el, titre } from "./ecrans/dom.js";
 import * as espaceAuteur from "./ecrans/espace_auteur.js";
+import * as fichePersonnage from "./ecrans/fiche_personnage.js";
 import * as liste from "./ecrans/liste.js";
 import * as motDePasse from "./ecrans/mot_de_passe.js";
+import * as personnages from "./ecrans/personnages.js";
+import * as reception from "./ecrans/reception.js";
+import { ouvrirEtagere } from "./personnage/stockage.js";
 import { lireRoute } from "./routes.js";
 import { ouvrirCoffre } from "./securite/coffre.js";
 
@@ -50,6 +57,7 @@ const etat = {
   derivation: null, // { duree, le } : la dernière dérivation de cette visite
   stockage: null, // { resultat, le } : la demande de stockage durable
   nouvelles: null, // un message après « Vérifier les mises à jour »
+  etagere: null, // les personnages de l'appareil, pour ce mode (§ 15.1)
 };
 
 function installer(banque, secret) {
@@ -72,6 +80,10 @@ async function charger(telecharge = null) {
 const contexte = {
   etat,
   afficher: () => afficher(),
+  naviguer(adresse) {
+    if (location.hash === adresse) afficher();
+    else location.hash = adresse;
+  },
 
   async deverrouiller(motDePasseSaisi, garder) {
     const resultat = await ouvrirParMotDePasse(etat.chargement.enveloppe, motDePasseSaisi, { coffre: etat.coffre, mode: etat.mode, garder });
@@ -132,8 +144,10 @@ const contexte = {
   dernierePublication: () => lireMemoire(`publication.${etat.mode}`),
 };
 
+const ECRANS_PERSONNAGE = ["personnages", "personnage", "creation", "recevoir"];
+
 function marquerNavigation(route) {
-  const active = route.categorie ?? route.ecran;
+  const active = ECRANS_PERSONNAGE.includes(route.ecran) ? "personnages" : (route.categorie ?? route.ecran);
   for (const lien of document.querySelectorAll(".navigation a[data-route]")) {
     if (lien.dataset.route === active) lien.setAttribute("aria-current", "page");
     else lien.removeAttribute("aria-current");
@@ -149,6 +163,10 @@ function ecran(route) {
   if (route.ecran === "accueil") return accueil.afficher(contexte);
   if (route.ecran === "liste" || route.ecran === "fiche") return liste.afficher(contexte, route);
   if (route.ecran === "anomalies") return anomalies.afficher(contexte, route);
+  if (route.ecran === "personnages") return personnages.afficher(contexte);
+  if (route.ecran === "personnage") return fichePersonnage.afficher(contexte, route);
+  if (route.ecran === "creation") return creation.afficher(contexte, route);
+  if (route.ecran === "recevoir") return reception.afficher(contexte, route);
   return el("section", {}, titre("Page introuvable"), el("p", {}, "Cette adresse ne mène à aucun écran de l'Atelier."), el("p", {}, el("a", { href: "#/" }, "Retour à l'accueil")));
 }
 
@@ -178,6 +196,7 @@ function afficher() {
 async function demarrer() {
   document.getElementById("bandeau-demo").hidden = etat.mode !== "demo";
   etat.coffre = await ouvrirCoffre();
+  etat.etagere = await ouvrirEtagere(etat.mode);
   addEventListener("hashchange", afficher);
   afficher();
   await charger();

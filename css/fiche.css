@@ -1,0 +1,1012 @@
+/* La fiche imprimable d'un personnage (SPECIFICATION.md, § 15.4).
+
+   Le recto reproduit le modèle de fiche : une page A4 de 794 × 1123 pixels
+   à 96 points par pouce, ses marges, ses rubriques et leurs hauteurs, ses
+   traits et ses cases. Ces dimensions sont celles du modèle, écrites ici ;
+   ses couleurs et ses polices viennent de jetons.css (--fiche-…). Les
+   polices Marcellus et Alegreya Sans sont hébergées dans polices/, avec
+   leur licence OFL.
+
+   Chaque rubrique garde la hauteur du modèle. Mesuré dans Chromium : le
+   modèle n'a aucune place libre (la rubrique des capacités garde 10 pixels,
+   celle de l'équipement 11, moins qu'une ligne de 18) ; une ligne de plus
+   passe donc au verso (repartition.js). À l'impression, le recto occupe
+   exactement la première page, sans marge ; le verso suit, sur des pages
+   à marges. */
+
+@font-face {
+  font-family: "Marcellus";
+  src: url("../polices/Marcellus-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Alegreya Sans";
+  src: url("../polices/AlegreyaSans-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Alegreya Sans";
+  src: url("../polices/AlegreyaSans-Italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Alegreya Sans";
+  src: url("../polices/AlegreyaSans-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Alegreya Sans";
+  src: url("../polices/AlegreyaSans-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ─── La feuille ─────────────────────────────────────────────────────────── */
+
+.feuilles {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.feuille {
+  width: 794px;
+  box-sizing: border-box;
+  padding: 44px;
+  background: var(--fiche-papier);
+  color: var(--fiche-encre);
+  font-family: var(--police-fiche);
+  line-height: normal;
+  text-wrap: pretty;
+  /* Alegreya Sans écrit ses chiffres en bas de casse : sur une fiche, des
+     chiffres alignés se lisent mieux. */
+  font-variant-numeric: lining-nums;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+/* Le modèle mesure ses traits sans leur bordure, comme le navigateur par
+   défaut ; l'interface, elle, compte les bordures dans les hauteurs. Et
+   aucune marge de l'interface n'entre dans la feuille : ses propres règles,
+   plus précises, posent les siennes. */
+.feuille * {
+  box-sizing: content-box;
+  margin: 0;
+  padding: 0;
+}
+
+.feuille p,
+.feuille h2,
+.feuille dl,
+.feuille dd,
+.feuille ul {
+  margin: 0;
+}
+
+.feuille.recto {
+  position: relative;
+  height: 1123px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.feuille .cadre {
+  position: absolute;
+  pointer-events: none;
+}
+
+.feuille .cadre-exterieur {
+  inset: 24px;
+  border: 1px solid var(--fiche-cadre);
+}
+
+.feuille .cadre-interieur {
+  inset: 29px;
+  border: 1px solid var(--fiche-cadre-interieur);
+}
+
+/* ─── L'en-tête ──────────────────────────────────────────────────────────── */
+
+.feuille .fiche-entete {
+  flex-shrink: 0;
+  height: 76px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.feuille .fiche-marque {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.feuille .fiche-nom-jeu {
+  font-family: var(--police-fiche-titre);
+  font-size: 14px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--fiche-accent);
+  white-space: nowrap;
+}
+
+.feuille .fiche-filet {
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.feuille .filet {
+  flex-grow: 1;
+  height: 3px;
+  border-top: 1px solid var(--fiche-bord);
+  border-bottom: 1px solid var(--fiche-bord);
+}
+
+.feuille .losange {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  background: var(--fiche-accent);
+  transform: rotate(45deg);
+}
+
+.feuille .fiche-genre {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fiche-etiquette);
+  white-space: nowrap;
+}
+
+.feuille .fiche-identite {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.feuille .champ-entete {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.feuille .champ-nom { width: 232px; }
+.feuille .champ-espece { width: 130px; }
+.feuille .champ-archetype { width: 140px; }
+.feuille .champ-style { flex: 1 1 0; }
+.feuille .champ-niveau { width: 44px; }
+
+.feuille .libelle {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fiche-etiquette);
+  white-space: nowrap;
+}
+
+.feuille .champ-style .libelle {
+  white-space: normal;
+}
+
+/* Un trait à remplir, et la valeur que l'Atelier y écrit. */
+.feuille .trait {
+  display: flex;
+  align-items: flex-end;
+  flex-shrink: 0;
+  min-width: 0;
+  box-sizing: content-box;
+  border-bottom: 1px solid var(--fiche-trait);
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 11.5px;
+  line-height: 1.1;
+  color: var(--fiche-encre);
+}
+
+.feuille .trait-texte {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feuille .valeur-entete {
+  height: 24px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.feuille .champ-nom .valeur-entete,
+.feuille .champ-niveau .valeur-entete {
+  border-bottom-color: var(--fiche-trait-fort);
+}
+
+.feuille .champ-niveau .valeur-entete {
+  justify-content: center;
+}
+
+/* ─── Le corps : deux colonnes ───────────────────────────────────────────── */
+
+.feuille .fiche-corps {
+  flex-shrink: 0;
+  height: 735px;
+  display: flex;
+  gap: 16px;
+}
+
+.feuille .colonne {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.feuille .colonne-gauche { width: 418px; }
+.feuille .colonne-droite { width: 272px; }
+
+.feuille .rubrique {
+  flex-shrink: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: var(--fiche-rubrique);
+  border: 1px solid var(--fiche-bord);
+  border-radius: 2px;
+  display: flex;
+  flex-direction: column;
+}
+
+.feuille .rubrique-tete {
+  flex-shrink: 0;
+  height: 24px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  background: var(--fiche-bandeau);
+  border-bottom: 1px solid var(--fiche-bord);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.feuille .rubrique-tete h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--police-fiche-titre);
+  font-weight: 400;
+  font-size: 11.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fiche-titre);
+  white-space: nowrap;
+}
+
+.feuille .rubrique-note {
+  font-size: 10.5px;
+  color: var(--fiche-note);
+  white-space: nowrap;
+}
+
+.feuille .rubrique-corps {
+  flex-grow: 1;
+  box-sizing: border-box;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.feuille .note {
+  font-size: 10.5px;
+  line-height: 1.25;
+  color: var(--fiche-note);
+}
+
+/* Les hauteurs du modèle. */
+.feuille .rubrique-caracteristiques { height: 200px; }
+.feuille .rubrique-attaque { height: 190px; }
+.feuille .rubrique-capacites { height: 321px; }
+.feuille .rubrique-souffle { height: 80px; }
+.feuille .rubrique-armure { height: 234px; }
+.feuille .rubrique-sante { height: 184px; }
+.feuille .rubrique-equipement { height: 201px; }
+
+/* ─── Les cases ──────────────────────────────────────────────────────────── */
+
+.feuille .case {
+  display: block;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--fiche-trait-fort);
+  border-radius: 1px;
+  background: var(--fiche-case);
+}
+
+.feuille .case-petite { width: 10px; height: 10px; }
+.feuille .case-souffle { width: 13px; height: 13px; }
+.feuille .case-resistance { width: 9px; height: 9px; }
+.feuille .case-corps { width: 14px; height: 14px; }
+.feuille .case-lien { width: 11px; height: 11px; }
+
+.feuille .case.teintee {
+  border-color: var(--fiche-case-teinte-bord);
+  background: var(--fiche-case-teinte);
+}
+
+.feuille .case.grisee {
+  border-color: var(--fiche-cadre);
+  background: var(--fiche-case-grisee);
+}
+
+.feuille .case.cochee {
+  border-color: var(--fiche-titre);
+  background: var(--fiche-titre);
+}
+
+/* ─── Caractéristiques ───────────────────────────────────────────────────── */
+
+.feuille .grille-caracteristiques {
+  flex-grow: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.feuille .caracteristique {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--fiche-separateur);
+}
+
+.feuille .nom-caracteristique {
+  flex-grow: 1;
+  font-size: 11.5px;
+  line-height: 1.15;
+  color: var(--fiche-encre-2);
+}
+
+.feuille .boite-valeur {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--fiche-trait-fort);
+  border-radius: 2px;
+  background: var(--fiche-case);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fiche-encre);
+}
+
+.feuille .pied-rubrique {
+  flex-shrink: 0;
+  border-top: 1px solid var(--fiche-separateur-2);
+  padding-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.feuille .table-des {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--fiche-titre);
+}
+
+/* ─── Attaque et défense ─────────────────────────────────────────────────── */
+
+.feuille .bloc-ad {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.feuille .bloc-defense {
+  border-top: 1px solid var(--fiche-separateur-2);
+  padding-top: 6px;
+}
+
+.feuille .ligne-ad {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 21px;
+}
+
+.feuille .titre-ad {
+  width: 56px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-family: var(--police-fiche-titre);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fiche-accent);
+}
+
+.feuille .ligne-ad .libelle {
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  padding-bottom: 3px;
+}
+
+.feuille .ligne-ad .trait { height: 19px; }
+.feuille .ligne-ad .trait.large { flex: 1 1 0; }
+.feuille .ligne-ad .trait.de { width: 44px; justify-content: center; border-bottom-color: var(--fiche-trait-fort); }
+.feuille .ligne-ad .trait.rang { width: 28px; justify-content: center; }
+.feuille .ligne-ad .trait.portee { width: 26px; justify-content: center; }
+.feuille .ligne-ad .trait.defense { width: 40px; justify-content: center; border-bottom-color: var(--fiche-trait-fort); }
+.feuille .ligne-ad .trait.qualite { width: 48px; justify-content: center; }
+
+.feuille .barre {
+  font-size: 11px;
+  color: var(--fiche-trait-fort);
+  padding-bottom: 3px;
+}
+
+/* ─── Capacités ──────────────────────────────────────────────────────────── */
+
+.feuille .rubrique-capacites .rubrique-corps { gap: 5px; }
+
+.feuille .reliquat {
+  font-family: var(--police-fiche);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--fiche-accent);
+}
+
+.feuille .entete-colonnes,
+.feuille .entete-pouvoirs {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 13px;
+}
+
+.feuille .vide-flexible { flex-grow: 1; }
+
+.feuille .col-pui,
+.feuille .col-cout {
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fiche-etiquette);
+}
+
+.feuille .col-pui { width: 36px; }
+.feuille .col-cout { width: 42px; }
+
+.feuille .groupe-capacites {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.feuille .titre-groupe {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 13px;
+}
+
+.feuille .titre-groupe > span:first-child {
+  font-family: var(--police-fiche-titre);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fiche-accent);
+  white-space: nowrap;
+}
+
+.feuille .precision-groupe {
+  font-size: 10px;
+  color: var(--fiche-note);
+  white-space: nowrap;
+}
+
+.feuille .regle {
+  flex-grow: 1;
+  height: 1px;
+  background: var(--fiche-separateur-2);
+}
+
+.feuille .ligne-capacite,
+.feuille .ligne-pouvoir,
+.feuille .ligne-objet {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 18px;
+}
+
+.feuille .nom-capacite,
+.feuille .nom-pouvoir,
+.feuille .nom-objet {
+  flex: 1 1 0;
+  height: 16px;
+  font-size: 11px;
+}
+
+.feuille .cases-puissance {
+  width: 36px;
+  flex-shrink: 0;
+  display: flex;
+  gap: 3px;
+  padding-bottom: 2px;
+}
+
+.feuille .trait.cout {
+  width: 42px;
+  height: 16px;
+  justify-content: center;
+  font-size: 10.5px;
+}
+
+.feuille .a-venir {
+  font-style: italic;
+  color: var(--fiche-note);
+}
+
+/* ─── Souffle ────────────────────────────────────────────────────────────── */
+
+.feuille .rubrique-souffle .rubrique-corps {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.feuille .souffle-max {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+}
+
+.feuille .souffle-max .libelle {
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  padding-bottom: 2px;
+}
+
+.feuille .trait.max {
+  width: 34px;
+  height: 18px;
+  justify-content: center;
+  border-bottom-color: var(--fiche-trait-fort);
+}
+
+.feuille .souffle-cases {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+}
+
+.feuille .rang-cases {
+  display: flex;
+  gap: 4px;
+}
+
+/* ─── Armure et résistance ───────────────────────────────────────────────── */
+
+.feuille .rubrique-armure .rubrique-corps {
+  flex-direction: row;
+  gap: 8px;
+}
+
+.feuille .silhouette {
+  width: 84px;
+  height: 188px;
+  flex-shrink: 0;
+}
+
+.feuille .silhouette-formes {
+  fill: var(--fiche-silhouette);
+  stroke: var(--fiche-silhouette-trait);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+
+.feuille .table-zones {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.feuille .zone {
+  display: flex;
+  align-items: center;
+  height: 26px;
+  border-top: 1px solid var(--fiche-separateur);
+}
+
+.feuille .zone-tete {
+  height: 14px;
+  border-top: 0;
+}
+
+.feuille .table-zones > .zone:nth-child(7) {
+  border-bottom: 1px solid var(--fiche-separateur);
+}
+
+.feuille .zone-tete span {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fiche-etiquette);
+}
+
+.feuille .col-zone { width: 46px; flex-shrink: 0; }
+.feuille .col-d20 { width: 24px; flex-shrink: 0; }
+.feuille .col-arm { width: 24px; flex-shrink: 0; display: flex; justify-content: center; }
+.feuille .zone-tete .col-arm { display: block; text-align: center; }
+.feuille .col-resist { flex-grow: 1; display: flex; gap: 3px; }
+
+.feuille .nom-zone {
+  font-size: 11.5px;
+  color: var(--fiche-encre-2);
+}
+
+.feuille .d20 {
+  font-size: 10.5px;
+  color: var(--fiche-etiquette);
+}
+
+.feuille .trait.arm {
+  width: 20px;
+  height: 17px;
+  justify-content: center;
+  font-size: 11px;
+  border-bottom-color: var(--fiche-trait-fort);
+}
+
+.feuille .zone-pied {
+  flex-grow: 1;
+  display: flex;
+  align-items: flex-end;
+}
+
+/* ─── Corps et blessures ─────────────────────────────────────────────────── */
+
+.feuille .rubrique-sante .rubrique-corps { gap: 6px; }
+
+.feuille .points-corps {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.feuille .points-corps .libelle,
+.feuille .blessures .libelle {
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+}
+
+.feuille .blessures {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-top: 1px solid var(--fiche-separateur-2);
+  padding-top: 6px;
+}
+
+.feuille .ligne-libre {
+  display: block;
+  flex-grow: 1;
+  border-bottom: 1px solid var(--fiche-trait);
+}
+
+/* ─── Équipement ─────────────────────────────────────────────────────────── */
+
+.feuille .rubrique-equipement .rubrique-corps { gap: 4px; }
+
+.feuille .lignes-equipement {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.feuille .trait.qualite-objet {
+  width: 44px;
+  height: 16px;
+  justify-content: center;
+  font-size: 11px;
+}
+
+/* ─── Liens primordiaux ──────────────────────────────────────────────────── */
+
+.feuille .rubrique-liens {
+  flex-shrink: 0;
+  height: 200px;
+}
+
+.feuille .rubrique-liens .rubrique-tete { padding: 0 12px; }
+.feuille .rubrique-liens .rubrique-corps { padding: 12px; gap: 8px; }
+
+.feuille .colonnes-liens {
+  flex-grow: 1;
+  display: flex;
+  gap: 14px;
+}
+
+.feuille .colonne-lien {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.feuille .separateur-liens {
+  width: 1px;
+  flex-shrink: 0;
+  background: var(--fiche-separateur-2);
+}
+
+.feuille .ligne-primordial {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 22px;
+}
+
+.feuille .titre-primordial {
+  font-family: var(--police-fiche-titre);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fiche-accent);
+  padding-bottom: 3px;
+}
+
+.feuille .trait.nom-primordial {
+  flex: 1 1 0;
+  height: 20px;
+  border-bottom-color: var(--fiche-trait-fort);
+}
+
+.feuille .libelle.petite {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  padding-bottom: 3px;
+}
+
+.feuille .entete-pouvoirs .libelle.petite {
+  padding-bottom: 0;
+}
+
+.feuille .cases-lien {
+  flex-shrink: 0;
+  display: flex;
+  gap: 3px;
+  padding-bottom: 4px;
+}
+
+.feuille .legende-primordiaux {
+  flex-shrink: 0;
+  border-top: 1px solid var(--fiche-separateur-2);
+  padding-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.feuille .domaine {
+  color: var(--fiche-etiquette);
+  font-style: italic;
+}
+
+/* ─── Le pied de page ────────────────────────────────────────────────────── */
+
+.feuille .fiche-pied {
+  font-size: 8.5px;
+  letter-spacing: 0.04em;
+  color: var(--fiche-note);
+  text-align: right;
+}
+
+.feuille.recto .fiche-pied {
+  position: absolute;
+  left: 44px;
+  right: 44px;
+  bottom: 31px;
+}
+
+/* ─── Le verso ───────────────────────────────────────────────────────────── */
+
+.feuille.verso {
+  min-height: 1123px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.feuille .verso-marque {
+  margin-bottom: 4px;
+}
+
+.feuille .verso-haut {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.feuille .rubrique-verso .rubrique-corps {
+  gap: 6px;
+  font-size: 10.5px;
+  line-height: 1.3;
+}
+
+.feuille .paires-verso {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 3px 10px;
+}
+
+.feuille .paires-verso dt {
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fiche-etiquette);
+  padding-top: 1px;
+}
+
+.feuille .paires-verso dd {
+  white-space: pre-wrap;
+}
+
+.feuille .rubrique-verso .ligne-libre {
+  flex: 0 0 18px;
+}
+
+.feuille .table-verso {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.feuille .table-verso th {
+  text-align: left;
+  font-weight: 400;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fiche-etiquette);
+  border-bottom: 1px solid var(--fiche-bord);
+  padding: 0 6px 2px 0;
+}
+
+.feuille .table-verso td {
+  padding: 3px 6px 3px 0;
+  border-bottom: 1px solid var(--fiche-separateur);
+}
+
+.feuille .points-verso {
+  color: var(--fiche-titre);
+}
+
+.feuille .details-capacites {
+  column-count: 2;
+  column-gap: 18px;
+}
+
+.feuille .detail-capacite {
+  break-inside: avoid;
+  margin-bottom: 6px;
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.feuille .detail-titre {
+  font-size: 10.5px;
+}
+
+.feuille .detail-niveau {
+  color: var(--fiche-note);
+}
+
+.feuille .detail-origine {
+  font-size: 9.5px;
+  font-style: italic;
+  color: var(--fiche-etiquette);
+}
+
+.feuille .liste-verso {
+  padding-left: 16px;
+}
+
+.feuille.verso .fiche-pied {
+  margin-top: auto;
+}
+
+/* ─── L'impression ───────────────────────────────────────────────────────── */
+
+@page {
+  size: A4;
+  margin: 0;
+}
+
+@page verso {
+  size: A4;
+  margin: 14mm 14mm 16mm;
+}
+
+@media print {
+  html,
+body {
+    margin: 0;
+    padding: 0;
+    background: var(--fiche-papier);
+  }
+
+  body > :not(main),
+.ne-pas-imprimer {
+    display: none !important;
+  }
+
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  .impression {
+    display: block !important;
+  }
+
+  .feuilles {
+    display: block;
+    zoom: 1 !important;
+  }
+
+  .feuille.recto {
+    width: 210mm;
+    height: 297mm;
+    break-after: page;
+    break-inside: avoid;
+  }
+
+  .feuille.verso {
+    page: verso;
+    width: auto;
+    min-height: 0;
+    padding: 0;
+    background: none;
+  }
+}

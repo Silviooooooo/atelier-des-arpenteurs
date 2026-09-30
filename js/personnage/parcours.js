@@ -5,7 +5,7 @@
 // manque à chaque étape, quelles montées sont possibles, et tire la
 // constellation.
 
-import { banqueSansTypes } from "../banque/types.js";
+import { TYPES, banqueSansTypes, typeDe } from "../banque/types.js";
 import { calculerFiche, capacitesDuBloc, estBouclier, indexerCreation } from "./calcul.js";
 import { CARACTERISTIQUES, COUT_NIVEAU, POINTS_CREATION, SOMME_CARACTERISTIQUES } from "./regles.js";
 
@@ -32,6 +32,8 @@ function manquesDuBloc(index, choix, type, intitule) {
   if (!choix?.nom) return [`Choisissez ${intitule}.`];
   const bloc = index.bloc(choix.nom);
   if (!bloc) return [`« ${choix.nom} » n'existe plus dans la banque : choisissez ${intitule}.`];
+  // Un fichier importé peut nommer un bloc d'un autre type.
+  if (typeDe(bloc) !== type) return [`« ${bloc.nom} » n'est pas du type ${TYPES[type].nom} : choisissez ${intitule}.`];
   return capacitesDuBloc(bloc, choix.choix).manques.map((m) => `${m[0].toUpperCase()}${m.slice(1)}.`);
 }
 
@@ -61,7 +63,7 @@ export function manques(banque, personnage, { index = indexerCreation(banque), f
     const bloc = index.bloc(objet.nom);
     if (!bloc) resultat[7].push(`« ${objet.nom} » n'existe plus dans la banque : retirez-le.`);
     else for (const m of capacitesDuBloc(bloc, objet.choix).manques) resultat[7].push(`« ${bloc.nom} » : ${m}.`);
-    if (rang === personnage.bouclier && !estBouclier(bloc)) resultat[7].push(`« ${objet.nom} » ne peut pas servir de bouclier.`);
+    if (bloc && rang === personnage.bouclier && !estBouclier(bloc)) resultat[7].push(`« ${objet.nom} » ne peut pas servir de bouclier.`);
   });
   const calculee = fiche ?? calculerFiche(banque, personnage, { index });
   for (const a of calculee.avertissements.filter((a) => a.genre === "regle" && /couvrent la même zone/.test(a.texte))) resultat[7].push(a.texte);

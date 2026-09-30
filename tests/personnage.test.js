@@ -315,6 +315,9 @@ test("parcours — ce qui manque, étape par étape ; le personnage d'essai est 
   assert.match(vide[5][0], /Tirez la constellation au sort/);
   assert.match(vide[6][0], /Choisir une option parmi : Braise, Cendre/);
   assert.equal(vide[9].length, 6);
+  // Un fichier importé peut nommer un bloc d'un autre type.
+  const autreType = manques(BANQUE, personnageEssai((p) => (p.archetype = { nom: "Marmiton", choix: [] })), { index: INDEX });
+  assert.deepEqual(autreType[3], ["« Marmiton » n'est pas du type Archétype : choisissez un archétype."]);
   const trop = manques(BANQUE, personnageEssai((p) => (p.caracteristiques.force = 6)), { index: INDEX });
   assert.deepEqual(trop[2], ["La somme vaut 38 : il faut 36 (2 de trop)."]);
 });

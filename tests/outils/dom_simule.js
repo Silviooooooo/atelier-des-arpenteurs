@@ -146,15 +146,37 @@ class Element extends Noeud {
     }
   }
 
-  // Sélecteurs simples, seuls ou en suite : balise, .classe, #id, [attribut].
+  // Sélecteurs simples, seuls ou en suite (balise, .classe, #id,
+  // [attribut], [attribut=valeur]), et leurs descendants séparés par une
+  // espace : « .carte button[aria-pressed=true] ». Un sélecteur que ce
+  // simulacre ne comprend pas lève une erreur, au lieu de ne rien trouver.
   querySelectorAll(selecteur) {
-    const conditions = [...selecteur.matchAll(/([a-z0-9]+)|\.([\w-]+)|#([\w-]+)|\[([\w-]+)\]/gi)].map(([, balise, classe, id, attribut]) => (e) => {
-      if (balise) return e.tagName === balise.toUpperCase();
-      if (classe) return e.className.split(/\s+/).includes(classe);
-      if (id) return e.id === id;
-      return e.hasAttribute(attribut);
+    const parties = selecteur.trim().match(/(?:[^\s[\]]+|\[[^\]]*\])+/g) ?? [];
+    const conditionsDe = (partie) => {
+      const jetons = [...partie.matchAll(/([a-z][a-z0-9]*)|\.([\w-]+)|#([\w-]+)|\[([\w-]+)(?:=(?:"([^"]*)"|'([^']*)'|([^\]]*)))?\]/giy)];
+      if (jetons.map(([t]) => t).join("") !== partie) throw new Error(`Sélecteur non pris en charge par le document simulé : ${selecteur}`);
+      return jetons.map(([, balise, classe, id, attribut, v1, v2, v3]) => (e) => {
+        if (balise) return e.tagName === balise.toUpperCase();
+        if (classe) return e.className.split(/\s+/).includes(classe);
+        if (id) return e.id === id;
+        const valeur = v1 ?? v2 ?? v3;
+        return valeur === undefined ? e.hasAttribute(attribut) : e.getAttribute(attribut) === valeur;
+      });
+    };
+    const suite = parties.map(conditionsDe);
+    const convient = (e, conditions) => conditions.every((condition) => condition(e));
+    return [...this.descendants()].filter((e) => {
+      if (!convient(e, suite.at(-1))) return false;
+      // Les parties précédentes, de droite à gauche, parmi les ancêtres
+      // intérieurs à ce nœud.
+      let ancetre = e.parentNode;
+      for (let i = suite.length - 2; i >= 0; i -= 1) {
+        while (ancetre && ancetre !== this && !convient(ancetre, suite[i])) ancetre = ancetre.parentNode;
+        if (!ancetre || ancetre === this) return false;
+        ancetre = ancetre.parentNode;
+      }
+      return true;
     });
-    return [...this.descendants()].filter((e) => conditions.every((condition) => condition(e)));
   }
 
   querySelector(selecteur) {
@@ -170,6 +192,7 @@ export function installerDom() {
     title: "",
     body: new Element("body"),
     createElement: (balise) => new Element(balise),
+    createElementNS: (_espace, balise) => new Element(balise),
     getElementById: (id) => document.body.querySelector(`#${id}`),
   };
   const avant = { document: globalThis.document, Node: globalThis.Node };
