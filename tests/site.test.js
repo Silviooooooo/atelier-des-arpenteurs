@@ -6,7 +6,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -109,7 +109,7 @@ test("site — chaque fichier que la page appelle existe", () => {
   for (const appel of appels) assert.ok(existe(appel), appel);
 });
 
-test("site — le graphe des modules de la page se résout, et atteint les douze écrans (§ 3.2)", () => {
+test("site — le graphe des modules de la page se résout, et atteint les quinze écrans (§ 3.2)", () => {
   const vus = new Set();
   const aVoir = ["js/application.js"];
   while (aVoir.length) {
@@ -125,11 +125,17 @@ test("site — le graphe des modules de la page se résout, et atteint les douze
   const ecrans = [
     "accueil", "mot_de_passe", "liste", "fiche_bloc", "fiche_capacite", "fiche_element", "anomalies", "espace_auteur",
     "personnages", "creation", "reception", "fiche_personnage",
+    "fiche_adversaire", "fiche_type", "rencontre",
   ];
   for (const ecran of ecrans) assert.ok(vus.has(`js/ecrans/${ecran}.js`), ecran);
-  for (const module of ["js/banque/chargement.js", "js/securite/coffre.js", "js/publication/github.js", "js/lecture/zip.js", "js/personnage/calcul.js", "js/personnage/stockage.js", "js/fiche/feuilles.js"]) {
-    assert.ok(vus.has(module), module);
-  }
+  const modules = [
+    "js/banque/chargement.js", "js/securite/coffre.js", "js/publication/github.js", "js/lecture/zip.js", "js/personnage/calcul.js", "js/personnage/stockage.js", "js/fiche/feuilles.js",
+    "js/adversaire/resolution.js", "js/adversaire/carte.js", "js/adversaire/lecture.js", "js/ecrans/echelle.js",
+  ];
+  for (const module of modules) assert.ok(vus.has(module), module);
+  // Tout module de js/ est dans le graphe : aucun fichier que la page n'appelle.
+  const tous = readdirSync(new URL("js/", RACINE), { recursive: true }).map((chemin) => `js/${chemin.replaceAll("\\", "/")}`).filter((chemin) => chemin.endsWith(".js"));
+  assert.deepEqual(tous.filter((chemin) => !vus.has(chemin)), ["js/veille.js"], "seule la veille vit hors du graphe (§ 9)");
 });
 
 test("site — le manifeste : noms, affichage, couleurs des jetons, icônes aux tailles dites", () => {

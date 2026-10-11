@@ -25,8 +25,11 @@ import { ETAPES, banqueUtilisable } from "../personnage/parcours.js";
 import { copieDeTravail } from "./creation.js";
 import { adressePersonnage } from "../routes.js";
 import { el, titre, titrer } from "./dom.js";
+import { poserEchelle } from "./echelle.js";
 import { boutonFichier, panneauTelephone } from "./partage.js";
 
+// La largeur de la feuille, celle de css/fiche.css : l'échelle de la vue
+// fiche s'en tire (echelle.js).
 const LARGEUR_FEUILLE = 794;
 // Le motif d'une qualité saisie : celui que format.js vérifie.
 const QUALITE = /^\d{1,3}(?:,\d{1,2})?$/;
@@ -86,12 +89,6 @@ function ecouter(type, fonction) {
 function retirerEcouteurs() {
   for (const [type, fonction] of ecouteurs) globalThis.removeEventListener?.(type, fonction);
   ecouteurs = [];
-}
-
-function echelle(conteneur) {
-  const largeur = conteneur.parentNode?.clientWidth ?? 0;
-  const facteur = largeur > 0 ? Math.min(1, largeur / LARGEUR_FEUILLE) : 1;
-  conteneur.style?.setProperty("--echelle", String(facteur));
 }
 
 async function imprimer(mesurer) {
@@ -271,7 +268,7 @@ function afficherPersonnage(contexte, personnage, zone, { enLigne = false } = {}
       return;
     }
     ajuster(impression, fiche, places);
-    if (vue === "fiche") echelle(impression);
+    if (vue === "fiche") poserEchelle(impression, LARGEUR_FEUILLE);
   }
   retirerEcouteurs();
   if (globalThis.requestAnimationFrame && document.fonts?.ready) {

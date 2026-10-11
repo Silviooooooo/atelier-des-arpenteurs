@@ -83,6 +83,25 @@
   --fiche-case-grisee: #d9d0bb;
   --fiche-silhouette: #f2ead6;
   --fiche-silhouette-trait: #b7a57e;
+
+  /* La carte d'adversaire (§ 16.5) : les couleurs et la police de la
+     maquette. Du papier, elle aussi : mêmes couleurs dans le thème sombre et
+     à l'impression. Ses dimensions, en millimètres, vivent dans
+     adversaire.css. */
+  --police-carte: "EB Garamond", Georgia, "Times New Roman", serif;
+  --carte-papier: #fffdf8;
+  --carte-trait: #3a3126;
+  --carte-accent: #6d4a1f;
+  --carte-encre: #2b2318;
+  --carte-encre-2: #4a3f30;
+  --carte-repere: #8a7a5e;
+  --carte-teinte: #f6f0e2;
+  --carte-alerte: #9a4620;
+  --carte-pointille: #a39070;
+  --carte-cadre-interieur: rgba(163, 144, 112, 0.55);
+  --carte-reglure: rgba(163, 144, 112, 0.5);
+  --carte-filet-debut: rgba(163, 144, 112, 0.67);
+  --carte-filet-fin: rgba(163, 144, 112, 0.13);
 }
 
 @media (prefers-color-scheme: dark) {

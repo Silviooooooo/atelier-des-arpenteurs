@@ -17,11 +17,18 @@ export function pourRecherche(texte) {
     .trim();
 }
 
-/** Les textes où chercher, pour chaque catégorie de la banque. */
+/**
+ * Les textes où chercher, pour chaque catégorie de la consultation. Un
+ * adversaire se cherche aussi par ses types, son équipement et ses
+ * capacités, tels qu'il les écrit dans sa ligne : ce qu'il hérite d'un type
+ * se trouve par le nom du type.
+ */
 export const TEXTES = {
   blocs: (bloc) => [bloc.nom],
   capacites: (capacite) => [capacite.nom, ...capacite.variantes.map((variante) => variante.description)],
   elements: (element) => [element.nom, element.description],
+  adversaires: (adversaire) => [adversaire.nom, adversaire.types, adversaire.equipement, adversaire.capacites],
+  types: (type) => [type.nom],
 };
 
 /** Les entrées dont les textes contiennent chaque mot de la recherche. */

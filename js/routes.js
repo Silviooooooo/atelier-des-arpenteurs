@@ -1,4 +1,4 @@
-// Les adresses des écrans (SPECIFICATION.md, § 9 et § 15.3).
+// Les adresses des écrans (SPECIFICATION.md, § 9, § 15.3 et § 16.6).
 //
 // Chaque écran est une route après le « # » : une fiche a ainsi une adresse
 // qu'on peut envoyer à un joueur (#/capacite/Attaque%20de%20base). Le nom y
@@ -9,14 +9,23 @@
 // #/personnage/<id>/etape/<1 à 9> (le parcours), #/recevoir/<code> (un
 // personnage reçu par lien, § 15.1). L'identifiant et le code ne portent
 // que des signes base64url.
+//
+// Les adversaires (lot 3) : #/adversaires et #/adversaire/<nom>, #/types et
+// #/type/<nom> pour leurs types, #/rencontre pour les cartes à imprimer.
 
+// Une catégorie de la consultation : une liste, et une fiche par nom. Sa clé
+// est son adresse ; la liste de la banque qu'elle montre se lit dans
+// js/banque/consultation.js, car ce n'est pas toujours la même clé.
 export const CATEGORIES = {
   blocs: { fiche: "bloc", titre: "Blocs", un: "un bloc" },
   capacites: { fiche: "capacite", titre: "Capacités", un: "une capacité" },
   elements: { fiche: "element", titre: "Éléments", un: "un élément" },
+  adversaires: { fiche: "adversaire", titre: "Adversaires", un: "un adversaire" },
+  types: { fiche: "type", titre: "Types", un: "un type d'adversaire" },
 };
 const PAR_FICHE = Object.fromEntries(Object.entries(CATEGORIES).map(([categorie, { fiche }]) => [fiche, categorie]));
-const FEUILLES = ["lisez_moi", "Blocs", "Eléments", "Capacites"];
+const FEUILLES = ["lisez_moi", "Blocs", "Eléments", "Capacites", "Adversaires"];
+const ECRANS_PERSONNAGE = ["personnages", "personnage", "creation", "recevoir"];
 const IDENTIFIANT = /^[A-Za-z0-9_-]{16,40}$/;
 // Un code de lien : 64 Ko compressés au plus, en base64url (§ 15.1).
 const CODE = /^[A-Za-z0-9_-]{1,87382}$/;
@@ -53,12 +62,27 @@ export function lireRoute(adresse) {
     if (reste.length === 3 && reste[1] === "etape" && /^[1-9]$/.test(reste[2])) return { ecran: "creation", id: reste[0], etape: Number(reste[2]) };
   }
   if (tete === "recevoir" && reste.length === 1 && CODE.test(reste[0])) return { ecran: "recevoir", code: reste[0] };
+  if (tete === "rencontre" && reste.length === 0) return { ecran: "rencontre" };
   return { ecran: "introuvable", adresse: chemin };
 }
 
-/** L'adresse d'une fiche : categorie est blocs, capacites ou elements. */
+/**
+ * Le lien de la navigation principale que marque une route : la valeur de
+ * son data-route (index.html). Les écrans d'un personnage marquent
+ * « Personnages » ; la liste et la fiche des types d'adversaires, qui n'ont
+ * pas de lien à eux, marquent « Adversaires ».
+ */
+export function rubriqueDe(route) {
+  if (ECRANS_PERSONNAGE.includes(route.ecran)) return "personnages";
+  if (route.categorie === "types") return "adversaires";
+  return route.categorie ?? route.ecran;
+}
+
+/** L'adresse d'une fiche : categorie est une clé de CATEGORIES. */
 export function adresseFiche(categorie, nom) {
-  return `#/${CATEGORIES[categorie].fiche}/${encodeURIComponent(nom)}`;
+  // Un demi-codet seul, qu'un classeur forgé peut porter, ferait lever
+  // encodeURIComponent, et avec lui toute la liste : il devient U+FFFD.
+  return `#/${CATEGORIES[categorie].fiche}/${encodeURIComponent(String(nom).replace(/\p{Cs}/gu, String.fromCodePoint(0xfffd)))}`;
 }
 
 export function adresseListe(categorie) {

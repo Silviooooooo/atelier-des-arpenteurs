@@ -493,7 +493,9 @@ dl {
 }
 
 /* La barre de publication reste au bas de l'écran : le rapport d'un
-   classeur réel est long, et « Publier » ne doit jamais se perdre dessous. */
+   classeur réel est long, et « Publier » ne doit jamais se perdre dessous.
+   Celle de la rencontre fait de même sous la liste des adversaires (§ 16.6). */
+.barre-rencontre,
 .barre-publication {
   position: sticky;
   bottom: 0;
@@ -538,7 +540,9 @@ dl {
 
 .personnages-liste,
 .objets,
-.capacites-creation {
+.capacites-creation,
+.liste-rencontre,
+.lecture-liste {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -728,7 +732,8 @@ dl {
    capacités décrites (des <details>, ouverts sur un grand écran, fermés sur
    un téléphone), l'avant et l'après d'une évolution. */
 
-.caracteristique {
+.caracteristique,
+.ligne-rencontre {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -844,4 +849,106 @@ dl {
   margin-top: var(--espace-5);
   padding-top: var(--espace-3);
   border-top: var(--trait) solid var(--separateur);
+}
+
+/* Adversaires (lot 3) : la vue lecture et la vue carte d'un adversaire, la
+   rencontre (SPECIFICATION.md, § 16.6). La vue lecture reprend les classes
+   .lecture-… de personnage.css. La carte, elle, est du papier, dans
+   adversaire.css : aucune de ses classes n'est nommée ici. Elle vit dans un
+   cadre, .cadre-cartes, seul à sortir à l'impression. */
+
+/* D'où vient une valeur : à l'écran seulement, jamais sur la carte. */
+.provenance {
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+.lecture-liste li {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: var(--cible-tactile);
+  padding: var(--espace-2) 0;
+  border-bottom: var(--trait) solid var(--separateur);
+}
+
+.lecture-liste p {
+  margin: 0;
+}
+
+.lecture-zones .provenance {
+  display: block;
+}
+
+.nom-rencontre {
+  flex: 1;
+  min-width: 0;
+}
+
+.nom-rencontre a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--cible-tactile);
+  margin-right: var(--espace-2);
+}
+
+.nom-rencontre .detail {
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+/* Le compte des cartes et « Imprimer / PDF », sur une ligne. */
+.barre-rencontre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espace-2);
+}
+
+.bilan-rencontre {
+  margin: 0;
+  font-weight: var(--graisse-forte);
+}
+
+.bilan-rencontre:focus {
+  outline: none;
+}
+
+/* Tant que l'échelle n'est pas posée, la carte a sa largeur de papier :
+   c'est le cadre qui défile, jamais la page. */
+.cadre-cartes {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* À l'écran seulement : « Imprimer / PDF » sort la carte quelle que soit la
+   vue. En vue lecture elle reste donc dans la page, invisible et sans
+   hauteur ; masquée hors de l'écran, elle sortirait une page vide (lot 2). */
+@media screen {
+  .ecran-adversaire.vue-lecture .cadre-cartes {
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+  }
+
+  .ecran-adversaire.vue-carte .lectures-adversaire {
+    display: none;
+  }
+}
+
+/* À l'impression, la liste ne sort pas (ne-pas-imprimer) : la fiche prend
+   toute la page, et le cadre des cartes n'en retient rien. */
+@media print {
+  .consultation {
+    display: block;
+  }
+
+  .cadre-cartes {
+    display: block !important;
+    height: auto !important;
+    max-width: none !important;
+    overflow: visible !important;
+    visibility: visible !important;
+  }
 }

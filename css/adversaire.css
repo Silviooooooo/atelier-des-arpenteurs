@@ -1,0 +1,497 @@
+/* La carte d'un adversaire (SPECIFICATION.md, § 16.5).
+
+   Elle reproduit la maquette du lot 3 (plans/maquette_adversaires.html, hors
+   dépôt) : une carte large de 190 mm, haute de ce qu'il lui faut, avec ses
+   traits, ses cases et ses espacements. Ces dimensions sont celles de la
+   maquette, écrites ici ; ses couleurs et sa police viennent de jetons.css
+   (--carte-…, --police-carte). EB Garamond est hébergée dans polices/, avec
+   sa licence OFL ; le navigateur ne la télécharge que lorsqu'une carte
+   s'affiche.
+
+   Chaque règle commence par .carte-adversaire, la carte, ou par
+   .cartes-adversaires, le conteneur des cartes d'une rencontre : rien de
+   l'interface n'y entre, et aucune de ses classes n'existe ailleurs. Une
+   seule règle en sort, à l'impression, pour le fond de la page.
+
+   Une zone se place sur la bande du d20 par deux classes, sa première face
+   (debut-2 à debut-20) et son étendue (etendue-1 à etendue-19) : le code ne
+   pose aucun style (§ 10.1). */
+
+@font-face {
+  font-family: "EB Garamond";
+  src: url("../polices/EBGaramond-Variable.woff2") format("woff2");
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "EB Garamond";
+  src: url("../polices/EBGaramond-Italic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* ─── Les cartes d'une rencontre ─────────────────────────────────────────── */
+
+/* En bloc, et l'écart par une marge : un conteneur flexible se coupe mal
+   d'une page à l'autre. L'échelle est un nombre que l'écran pose (§ 16.6) ;
+   sans elle, la carte garde sa taille. */
+.cartes-adversaires {
+  width: 190mm;
+  zoom: var(--echelle, 1);
+}
+
+.cartes-adversaires .carte-adversaire + .carte-adversaire {
+  margin-top: 4mm;
+}
+
+/* ─── La carte ───────────────────────────────────────────────────────────── */
+
+/* Ce que body transmet à l'interface ne vaut pas pour le papier : la carte
+   pose sa couleur, sa police, sa taille et son interligne, et ne coupe pas
+   les mots. */
+.carte-adversaire {
+  position: relative;
+  box-sizing: border-box;
+  width: 190mm;
+  margin: 0;
+  border: 1.2px solid var(--carte-trait);
+  padding: 4mm 5mm 3.5mm;
+  display: flex;
+  flex-direction: column;
+  gap: 2mm;
+  background: var(--carte-papier);
+  color: var(--carte-encre);
+  font-family: var(--police-carte);
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 400;
+  letter-spacing: normal;
+  line-height: normal;
+  text-align: left;
+  text-transform: none;
+  overflow-wrap: normal;
+  break-inside: avoid;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.carte-adversaire * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.carte-adversaire::after {
+  content: "";
+  position: absolute;
+  inset: 1.1mm;
+  border: 0.6px solid var(--carte-cadre-interieur);
+  pointer-events: none;
+}
+
+/* ─── L'en-tête ──────────────────────────────────────────────────────────── */
+
+.carte-adversaire .carte-tete {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.carte-adversaire .carte-losange {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  background: var(--carte-accent);
+  transform: rotate(45deg);
+}
+
+.carte-adversaire .carte-genre {
+  font-size: 9.5px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--carte-accent);
+}
+
+/* Un nom démesuré passe à la ligne, et se coupe s'il le faut, plutôt que de
+   sortir de la carte. */
+.carte-adversaire .carte-nom {
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--carte-encre);
+  overflow-wrap: break-word;
+}
+
+.carte-adversaire .carte-numero {
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: var(--carte-repere);
+}
+
+.carte-adversaire .carte-filet {
+  flex: 1;
+  align-self: flex-end;
+  height: 1px;
+  margin-bottom: 4px;
+  background: linear-gradient(to right, var(--carte-filet-debut), var(--carte-filet-fin));
+}
+
+/* ─── La bande du d20 ────────────────────────────────────────────────────── */
+
+/* Vingt et une colonnes : l'étiquette de la rangée, puis les vingt faces.
+   Quatre rangées : les faces, l'armure, la résistance, le corps ; elles
+   gardent leur hauteur quand l'adversaire n'a aucune zone. */
+.carte-adversaire .carte-bande {
+  display: grid;
+  grid-template-columns: 20mm repeat(20, minmax(0, 1fr));
+  grid-template-rows: auto 6.2mm 6.2mm 7mm;
+  gap: 3px;
+  align-items: stretch;
+}
+
+.carte-adversaire .carte-coin {
+  grid-row: 1;
+}
+
+.carte-adversaire .carte-face {
+  grid-row: 1;
+  font-size: 8px;
+  text-align: center;
+  color: var(--carte-repere);
+}
+
+/* La contre-attaque : la face 1, sur les trois rangées. */
+.carte-adversaire .carte-contre {
+  grid-area: 2 / 2 / span 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0.9px solid var(--carte-trait);
+  background: var(--carte-teinte);
+}
+
+.carte-adversaire .carte-contre span {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 7px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--carte-accent);
+}
+
+.carte-adversaire .carte-etiquette {
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--carte-accent);
+}
+
+.carte-adversaire .rangee-armure {
+  grid-row: 2;
+}
+
+.carte-adversaire .rangee-resistance {
+  grid-row: 3;
+}
+
+.carte-adversaire .rangee-corps {
+  grid-row: 4;
+}
+
+.carte-adversaire .carte-zone {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 6.2mm;
+  border: 0.9px solid var(--carte-trait);
+  padding: 1px 2px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.carte-adversaire .carte-nom-zone {
+  font-size: 6px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--carte-repere);
+}
+
+.carte-adversaire .carte-zone .carte-valeur {
+  align-self: flex-end;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--carte-encre);
+}
+
+/* Une zone d'une seule face : son nom et sa valeur, centrés, plus petits. */
+.carte-adversaire .carte-zone.etroite {
+  align-items: center;
+  padding: 1px 0;
+}
+
+.carte-adversaire .carte-zone.etroite .carte-nom-zone {
+  font-size: 5px;
+  letter-spacing: 0;
+}
+
+.carte-adversaire .carte-zone.etroite .carte-valeur {
+  align-self: center;
+}
+
+.carte-adversaire .carte-corps {
+  display: flex;
+  align-items: center;
+  gap: 2.2mm;
+  height: 7mm;
+  border: 0.9px solid var(--carte-trait);
+  padding: 0 2.5mm;
+}
+
+.carte-adversaire .carte-case {
+  display: block;
+  width: 3.6mm;
+  height: 3.6mm;
+  border: 0.7px solid var(--carte-trait);
+}
+
+.carte-adversaire .carte-corps .carte-valeur {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* La première face d'une case : la colonne qui suit celle de l'étiquette. */
+.carte-adversaire .debut-2 { grid-column-start: 3; }
+.carte-adversaire .debut-3 { grid-column-start: 4; }
+.carte-adversaire .debut-4 { grid-column-start: 5; }
+.carte-adversaire .debut-5 { grid-column-start: 6; }
+.carte-adversaire .debut-6 { grid-column-start: 7; }
+.carte-adversaire .debut-7 { grid-column-start: 8; }
+.carte-adversaire .debut-8 { grid-column-start: 9; }
+.carte-adversaire .debut-9 { grid-column-start: 10; }
+.carte-adversaire .debut-10 { grid-column-start: 11; }
+.carte-adversaire .debut-11 { grid-column-start: 12; }
+.carte-adversaire .debut-12 { grid-column-start: 13; }
+.carte-adversaire .debut-13 { grid-column-start: 14; }
+.carte-adversaire .debut-14 { grid-column-start: 15; }
+.carte-adversaire .debut-15 { grid-column-start: 16; }
+.carte-adversaire .debut-16 { grid-column-start: 17; }
+.carte-adversaire .debut-17 { grid-column-start: 18; }
+.carte-adversaire .debut-18 { grid-column-start: 19; }
+.carte-adversaire .debut-19 { grid-column-start: 20; }
+.carte-adversaire .debut-20 { grid-column-start: 21; }
+
+/* Son étendue, en faces. */
+.carte-adversaire .etendue-1 { grid-column-end: span 1; }
+.carte-adversaire .etendue-2 { grid-column-end: span 2; }
+.carte-adversaire .etendue-3 { grid-column-end: span 3; }
+.carte-adversaire .etendue-4 { grid-column-end: span 4; }
+.carte-adversaire .etendue-5 { grid-column-end: span 5; }
+.carte-adversaire .etendue-6 { grid-column-end: span 6; }
+.carte-adversaire .etendue-7 { grid-column-end: span 7; }
+.carte-adversaire .etendue-8 { grid-column-end: span 8; }
+.carte-adversaire .etendue-9 { grid-column-end: span 9; }
+.carte-adversaire .etendue-10 { grid-column-end: span 10; }
+.carte-adversaire .etendue-11 { grid-column-end: span 11; }
+.carte-adversaire .etendue-12 { grid-column-end: span 12; }
+.carte-adversaire .etendue-13 { grid-column-end: span 13; }
+.carte-adversaire .etendue-14 { grid-column-end: span 14; }
+.carte-adversaire .etendue-15 { grid-column-end: span 15; }
+.carte-adversaire .etendue-16 { grid-column-end: span 16; }
+.carte-adversaire .etendue-17 { grid-column-end: span 17; }
+.carte-adversaire .etendue-18 { grid-column-end: span 18; }
+.carte-adversaire .etendue-19 { grid-column-end: span 19; }
+
+/* ─── Les capacités et les nombres ───────────────────────────────────────── */
+
+.carte-adversaire .carte-bas {
+  display: flex;
+  align-items: flex-start;
+  gap: 4mm;
+}
+
+.carte-adversaire .carte-capacites {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.carte-adversaire .carte-titre {
+  margin-bottom: 0.8mm;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--carte-accent);
+}
+
+.carte-adversaire .carte-ligne {
+  min-height: 4.9mm;
+  border-bottom: 0.6px solid var(--carte-reglure);
+  padding: 0.9mm 0 0.6mm;
+  font-size: 9px;
+  line-height: 1.3;
+  overflow-wrap: break-word;
+}
+
+.carte-adversaire .carte-resume {
+  font-size: 8.5px;
+  color: var(--carte-encre-2);
+}
+
+.carte-adversaire .carte-ligne .carte-libelle {
+  font-size: 7px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--carte-accent);
+}
+
+.carte-adversaire .carte-separateur,
+.carte-adversaire .carte-precision {
+  color: var(--carte-repere);
+}
+
+.carte-adversaire .carte-rang {
+  color: var(--carte-accent);
+}
+
+.carte-adversaire .carte-nom-capacite {
+  font-weight: 600;
+}
+
+.carte-adversaire .carte-degats {
+  font-weight: 600;
+  color: var(--carte-encre);
+}
+
+.carte-adversaire .carte-cout {
+  border-bottom: 0.6px dotted var(--carte-pointille);
+  font-size: 7.5px;
+  color: var(--carte-accent);
+}
+
+.carte-adversaire .carte-desavantage {
+  border: 0.6px solid var(--carte-alerte);
+  border-radius: 2px;
+  padding: 0 2px;
+  font-size: 7px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+  color: var(--carte-alerte);
+}
+
+.carte-adversaire .carte-description {
+  font-style: italic;
+  color: var(--carte-encre-2);
+}
+
+.carte-adversaire .carte-absente {
+  font-style: italic;
+  color: var(--carte-alerte);
+}
+
+.carte-adversaire .carte-droite {
+  flex: none;
+  width: 35mm;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.carte-adversaire .carte-nombre {
+  display: flex;
+  align-items: center;
+  height: 4.8mm;
+  border: 0.9px solid var(--carte-trait);
+  padding: 0 1.5mm;
+  font-size: 7.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--carte-accent);
+}
+
+.carte-adversaire .carte-nombre .carte-valeur {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--carte-encre);
+}
+
+.carte-adversaire .carte-carres {
+  display: flex;
+  justify-content: space-between;
+}
+
+.carte-adversaire .carte-carre {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 15.9mm;
+  height: 15.9mm;
+  border: 0.9px solid var(--carte-trait);
+  padding-top: 1mm;
+}
+
+.carte-adversaire .carte-carre .carte-libelle {
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--carte-accent);
+}
+
+.carte-adversaire .carte-carre .carte-valeur {
+  margin-top: 1.2mm;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* ─── L'impression ───────────────────────────────────────────────────────── */
+
+/* Les marges de la maquette. La page par défaut du site, sans marge, est
+   celle du recto de la fiche de personnage (fiche.css) : les cartes ont la
+   leur. */
+@page cartes-adversaires {
+  size: A4;
+  margin: 11mm 10mm;
+}
+
+@media print {
+  /* fiche.css peint toute page imprimée de la couleur de la fiche de
+     personnage. Quand la page porte des cartes, c'est leur papier : sinon
+     la fin de la dernière page changerait de teinte sous la dernière
+     carte. */
+  html:has(.cartes-adversaires),
+  body:has(.cartes-adversaires) {
+    background: var(--carte-papier);
+  }
+
+  /* Firefox met tout le document en page à la largeur de la première page
+     (fiche.css, le verso) : les cartes ont donc leur largeur propre,
+     210 − 2 × 10 mm. Le papier se voit entre elles. */
+  .cartes-adversaires {
+    page: cartes-adversaires;
+    width: 190mm;
+    zoom: 1 !important;
+    background: var(--carte-papier);
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Une carte n'est jamais coupée d'une page à l'autre. */
+  .cartes-adversaires .carte-adversaire {
+    break-inside: avoid;
+  }
+}

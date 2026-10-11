@@ -1,13 +1,14 @@
 // L'écran d'accueil (SPECIFICATION.md, § 9).
 //
-// La date de la banque publiée, ses comptes, un lien vers les anomalies
-// s'il y en a ; l'aide pour ajouter l'Atelier à l'écran d'accueil d'un
-// téléphone ; et, repliable en bas, le diagnostic : date et empreinte de la
-// banque, durée de la dernière dérivation de clé, stockage durable, mode.
-// Il sert à mesurer la dérivation sur un téléphone, et à aider un joueur à
-// distance : un bouton le copie.
+// La date de la banque publiée, ses comptes, adversaires compris (§ 16.6),
+// un lien vers les anomalies s'il y en a ; l'aide pour ajouter l'Atelier à
+// l'écran d'accueil d'un téléphone ; et, repliable en bas, le diagnostic :
+// date et empreinte de la banque, durée de la dernière dérivation de clé,
+// stockage durable, mode. Il sert à mesurer la dérivation sur un téléphone,
+// et à aider un joueur à distance : un bouton le copie.
 
 import { empreinteCourte } from "../banque/chargement.js";
+import { entreesDe, manqueDe } from "../banque/consultation.js";
 import { dateLisible } from "../banque/dates.js";
 import { adresseAnomalies, adresseListe } from "../routes.js";
 import { compte, el, titre } from "./dom.js";
@@ -108,19 +109,28 @@ export function afficher(contexte) {
   const { etat } = contexte;
   const { banque } = etat;
   const erreurs = banque.anomalies.filter((a) => a.gravite === "erreur" || a.gravite === "bloquante").length;
-  const carte = (categorie, singulier, pluriel) =>
-    el(
-      "li",
-      {},
-      el("a", { classe: "carte", href: adresseListe(categorie) }, el("span", { classe: "nombre" }, banque[categorie].length), banque[categorie].length > 1 ? pluriel : singulier),
-    );
+  const carte = (categorie, singulier, pluriel) => {
+    const nombre = entreesDe(banque, categorie).length;
+    return el("li", {}, el("a", { classe: "carte", href: adresseListe(categorie) }, el("span", { classe: "nombre" }, nombre), nombre > 1 ? pluriel : singulier));
+  };
+  // Une banque publiée avant le lot 3 n'a pas d'adversaires : une phrase le
+  // dit, à la place de leurs deux comptes.
+  const manque = manqueDe(banque, "adversaires");
   return el(
     "section",
     {},
     titre("L'Atelier des Arpenteurs"),
     el("p", {}, `Banque publiée le ${dateLisible(banque.publiee_le)}.`),
     enAttente(contexte, banque.publiee_le),
-    el("ul", { classe: "comptes" }, carte("blocs", "bloc", "blocs"), carte("capacites", "capacité", "capacités"), carte("elements", "élément", "éléments")),
+    el(
+      "ul",
+      { classe: "comptes" },
+      carte("blocs", "bloc", "blocs"),
+      carte("capacites", "capacité", "capacités"),
+      carte("elements", "élément", "éléments"),
+      manque ? null : [carte("adversaires", "adversaire", "adversaires"), carte("types", "type d'adversaire", "types d'adversaires")],
+    ),
+    manque ? el("p", { classe: "secondaire-texte" }, manque) : null,
     banque.anomalies.length
       ? el(
           "p",

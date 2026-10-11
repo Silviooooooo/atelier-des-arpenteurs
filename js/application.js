@@ -1,13 +1,15 @@
 // Le démarrage et les routes de la page (SPECIFICATION.md, § 3.2, § 8.3,
-// § 9 et § 15).
+// § 9, § 15 et § 16.6).
 //
 // Lit le mode (démonstration avec ?demo=1), ouvre le coffre, télécharge la
 // banque et l'ouvre avec la clé gardée, sinon demande le mot de passe ; puis
 // affiche l'écran que désigne l'adresse après le « # ». L'espace auteur
 // s'ouvre sans la banque : la première publication se fait avant qu'elle
 // existe. Les écrans des personnages ont besoin de la banque : un lien reçu
-// (#/recevoir/…) attend donc le mot de passe, puis s'ouvre. Une erreur
-// inattendue s'affiche, jamais une page blanche.
+// (#/recevoir/…) attend donc le mot de passe, puis s'ouvre. Les adversaires
+// et la rencontre se lisent avec ce même mot de passe de table : il n'y a
+// pas de mot de passe du meneur (§ 16). Une erreur inattendue s'affiche,
+// jamais une page blanche.
 
 import { demanderStockageDurable, modeDe, ouvrirAvecCoffre, ouvrirParMotDePasse, telecharger } from "./banque/chargement.js";
 import { indexer } from "./banque/consultation.js";
@@ -22,9 +24,10 @@ import * as liste from "./ecrans/liste.js";
 import * as motDePasse from "./ecrans/mot_de_passe.js";
 import * as personnages from "./ecrans/personnages.js";
 import * as reception from "./ecrans/reception.js";
+import * as rencontre from "./ecrans/rencontre.js";
 import { creerDepot } from "./personnage/depot.js";
 import { ouvrirEtagere } from "./personnage/stockage.js";
-import { lireRoute } from "./routes.js";
+import { lireRoute, rubriqueDe } from "./routes.js";
 import { ouvrirCoffre } from "./securite/coffre.js";
 
 // Petits souvenirs de l'appareil, qui ne sont pas des secrets : la réponse
@@ -148,10 +151,8 @@ const contexte = {
   dernierePublication: () => lireMemoire(`publication.${etat.mode}`),
 };
 
-const ECRANS_PERSONNAGE = ["personnages", "personnage", "creation", "recevoir"];
-
 function marquerNavigation(route) {
-  const active = ECRANS_PERSONNAGE.includes(route.ecran) ? "personnages" : (route.categorie ?? route.ecran);
+  const active = rubriqueDe(route);
   for (const lien of document.querySelectorAll(".navigation a[data-route]")) {
     if (lien.dataset.route === active) lien.setAttribute("aria-current", "page");
     else lien.removeAttribute("aria-current");
@@ -171,6 +172,7 @@ function ecran(route) {
   if (route.ecran === "personnage") return fichePersonnage.afficher(contexte, route);
   if (route.ecran === "creation") return creation.afficher(contexte, route);
   if (route.ecran === "recevoir") return reception.afficher(contexte, route);
+  if (route.ecran === "rencontre") return rencontre.afficher(contexte);
   return el("section", {}, titre("Page introuvable"), el("p", {}, "Cette adresse ne mène à aucun écran de l'Atelier."), el("p", { classe: "lien-retour" }, el("a", { href: "#/" }, "Retour à l'accueil")));
 }
 

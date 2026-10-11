@@ -215,18 +215,28 @@ test("impression — A4 sans marge, couleurs gardées, le recto seul sur la prem
   }
 });
 
-test("polices — Marcellus et Alegreya Sans hébergées dans le dépôt, avec leur licence OFL ; rien d'autre", () => {
-  const css = lire("css/fiche.css");
-  const appels = [...css.matchAll(/url\("\.\.\/polices\/([^"]+)"\)/g)].map(([, f]) => f);
-  assert.deepEqual(appels.sort(), ["AlegreyaSans-Bold.woff2", "AlegreyaSans-Italic.woff2", "AlegreyaSans-Medium.woff2", "AlegreyaSans-Regular.woff2", "Marcellus-Regular.woff2"]);
-  assert.equal([...css.matchAll(/url\(/g)].length, appels.length, "aucune autre adresse");
+test("polices — Marcellus, Alegreya Sans et EB Garamond hébergées dans le dépôt, avec leur licence OFL ; rien d'autre", () => {
+  // Chaque papier appelle ses polices depuis sa feuille : la fiche de
+  // personnage (§ 15.4), la carte d'adversaire (§ 16.5).
+  const attendues = {
+    "css/fiche.css": ["AlegreyaSans-Bold.woff2", "AlegreyaSans-Italic.woff2", "AlegreyaSans-Medium.woff2", "AlegreyaSans-Regular.woff2", "Marcellus-Regular.woff2"],
+    "css/adversaire.css": ["EBGaramond-Italic.woff2", "EBGaramond-Variable.woff2"],
+  };
+  const licences = ["OFL-AlegreyaSans.txt", "OFL-EBGaramond.txt", "OFL-Marcellus.txt"];
+  for (const [feuille, polices] of Object.entries(attendues)) {
+    const css = lire(feuille);
+    const appels = [...css.matchAll(/url\("\.\.\/polices\/([^"]+)"\)/g)].map(([, f]) => f);
+    assert.deepEqual(appels.sort(), polices, feuille);
+    assert.equal([...css.matchAll(/url\(/g)].length, appels.length, `${feuille} : aucune autre adresse`);
+  }
+  const appels = Object.values(attendues).flat();
   const fichiers = readdirSync(new URL("polices/", racine)).sort();
-  assert.deepEqual(fichiers, [...appels.sort(), "OFL-AlegreyaSans.txt", "OFL-Marcellus.txt"].sort());
+  assert.deepEqual(fichiers, [...appels, ...licences].sort());
   for (const police of appels) assert.equal(readFileSync(new URL(`polices/${police}`, racine)).subarray(0, 4).toString("latin1"), "wOF2", police);
-  for (const licence of ["OFL-AlegreyaSans.txt", "OFL-Marcellus.txt"]) assert.match(lire(`polices/${licence}`), /SIL Open Font License, Version 1\.1/);
-  // La page les permet par sa politique de sécurité, et ne charge que la feuille de la fiche.
+  for (const licence of licences) assert.match(lire(`polices/${licence}`), /SIL Open Font License, Version 1\.1/);
+  // La page les permet par sa politique de sécurité, et lie les deux feuilles qui les appellent.
   assert.match(lire("index.html"), /font-src 'self';/);
-  assert.match(lire("index.html"), /<link rel="stylesheet" href="css\/fiche\.css">/);
+  for (const feuille of Object.keys(attendues)) assert.ok(lire("index.html").includes(`<link rel="stylesheet" href="${feuille}">`), feuille);
 });
 
 test("démonstration — le personnage fourni vient de l'outil, est complet, et sans changement contre la banque de démonstration", async () => {

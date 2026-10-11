@@ -1,4 +1,4 @@
-// Ce que les fiches affichent (SPECIFICATION.md, § 5.2 et § 9).
+// Ce que les fiches affichent (SPECIFICATION.md, § 5.2, § 9 et § 16.6).
 //
 // Un index de la banque, calculé une fois : les renvois résolus comme le
 // contrôle les résout (exactement, puis sans casse, accents ni espaces,
@@ -8,8 +8,44 @@
 // capacité est octroyée par les blocs qui la citent dans leur colonne des
 // capacités (A3) ; un élément est porté par les blocs et les capacités qui le
 // citent, et par les blocs qui transmettent un paramètre qu'il reçoit (A4).
+//
+// Depuis le lot 3, il range aussi les adversaires et leurs types, et garde
+// leur index de résolution (js/adversaire/resolution.js) : les écrans
+// affichent un adversaire résolu, sans le résoudre à chaque affichage.
 
+import { banqueSansAdversaires, entreesLisibles, indexerAdversaires } from "../adversaire/resolution.js";
 import { cle, repertoire } from "./noms.js";
+
+// La liste de la banque que montre chaque catégorie de la consultation
+// (js/routes.js). Les types d'adversaires vivent sous « types_adversaires » :
+// « types » tout court désigne déjà les types de bloc (§ 4.1).
+const LISTES = { blocs: "blocs", capacites: "capacites", elements: "elements", adversaires: "adversaires", types: "types_adversaires" };
+
+// Une banque publiée avant le lot 3 n'a ni adversaires ni types : la
+// consultation du reste continue, et les écrans des adversaires le disent.
+export const MESSAGE_BANQUE_SANS_ADVERSAIRES = "Les adversaires ont besoin d'une banque republiée depuis le classeur à jour.";
+
+/** Ce qui manque à la banque pour montrer une catégorie, en une phrase, ou null. */
+export function manqueDe(banque, categorie) {
+  return (categorie === "adversaires" || categorie === "types") && banqueSansAdversaires(banque) ? MESSAGE_BANQUE_SANS_ADVERSAIRES : null;
+}
+
+/** Les entrées d'une catégorie ; aucune quand la banque n'a pas cette liste. */
+export function entreesDe(banque, categorie) {
+  const liste = banque[LISTES[categorie]];
+  // Les adversaires et leurs types se lisent comme la résolution les lit :
+  // ce qui n'est pas une entrée (banque abîmée) n'entre pas dans la liste.
+  if (categorie === "adversaires" || categorie === "types") return entreesLisibles(liste);
+  return Array.isArray(liste) ? liste : [];
+}
+
+/** Ce que montre la liste d'une catégorie : une entrée par nom, dans l'ordre alphabétique français. */
+export function listeDe(banque, categorie) {
+  const vus = new Set();
+  return entreesDe(banque, categorie)
+    .filter((entree) => !vus.has(entree.nom) && vus.add(entree.nom))
+    .sort((a, b) => a.nom.localeCompare(b.nom, "fr", { sensitivity: "base" }));
+}
 
 function ajouter(table, cleTable, valeur) {
   if (!table.has(cleTable)) table.set(cleTable, []);
@@ -23,8 +59,9 @@ function parNom(liste) {
 }
 
 export function indexer(banque) {
-  const tables = { blocs: parNom(banque.blocs), capacites: parNom(banque.capacites), elements: parNom(banque.elements) };
+  const tables = Object.fromEntries(Object.keys(LISTES).map((categorie) => [categorie, parNom(entreesDe(banque, categorie))]));
   const repertoires = Object.fromEntries(Object.entries(tables).map(([categorie, table]) => [categorie, repertoire(table.keys())]));
+  let resolution = null;
 
   /** Le nom qu'un renvoi désigne dans la catégorie, ou null : renvoi cassé ou ambigu. */
   const resoudre = (categorie, nom) => repertoires[categorie].resoudre(nom).nom ?? null;
@@ -75,11 +112,17 @@ export function indexer(banque) {
   for (const capacite of banque.capacites) {
     for (const variante of capacite.variantes) lignes.set(lieu("Capacites", variante.brut.ligne), { categorie: "capacites", nom: capacite.nom });
   }
+  // La feuille Adversaires porte deux sortes de lignes : un type, un adversaire.
+  for (const categorie of ["types", "adversaires"]) {
+    for (const entree of entreesDe(banque, categorie)) lignes.set(lieu("Adversaires", entree.brut?.ligne), { categorie, nom: entree.nom });
+  }
 
   return {
     resoudre,
-    /** Les entrées de ce nom exact (plusieurs en cas de doublon, E3). */
+    /** Les entrées de ce nom exact (plusieurs en cas de doublon, E3 ou E16). */
     entrees: (categorie, nom) => tables[categorie].get(nom) ?? [],
+    /** L'index de résolution des adversaires (§ 16.2), fait à la première demande, gardé ensuite. */
+    adversaires: () => (resolution ??= indexerAdversaires(banque)),
     /** Les blocs qui citent la capacité, avec la forme de la citation. */
     octroyeePar: (capacite) => octroi.get(capacite) ?? [],
     /** Les blocs et les capacités qui portent l'élément. */

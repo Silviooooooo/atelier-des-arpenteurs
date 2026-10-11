@@ -93,21 +93,25 @@ export function compte(nombre, singulier, pluriel) {
   return `${nombre} ${nombre > 1 ? pluriel : singulier}`;
 }
 
-/**
- * Un renvoi vers une fiche : un lien si le nom se résout, sinon le texte
- * barré, suivi d'un lien vers l'anomalie de la ligne qui le porte (§ 9).
- */
-export function renvoi(index, categorie, nom, lieu, texte = null) {
-  const trouve = index.resoudre(categorie, nom);
-  if (trouve) return el("a", { href: adresseFiche(categorie, trouve) }, texte ?? trouve);
+/** Un renvoi cassé : le texte barré, suivi d'un lien vers l'anomalie de la ligne qui le porte (§ 9). */
+export function renvoiCasse(texte, lieu) {
   return el(
     "span",
     {},
-    el("s", { classe: "renvoi-casse" }, texte ?? nom),
+    el("s", { classe: "renvoi-casse" }, texte),
     " (",
     el("a", { href: adresseAnomalies(lieu.feuille, lieu.ligne) }, "introuvable, voir l'anomalie"),
     ")",
   );
+}
+
+/**
+ * Un renvoi vers une fiche : un lien si le nom se résout, sinon un renvoi
+ * cassé (§ 9).
+ */
+export function renvoi(index, categorie, nom, lieu, texte = null) {
+  const trouve = index.resoudre(categorie, nom);
+  return trouve ? el("a", { href: adresseFiche(categorie, trouve) }, texte ?? trouve) : renvoiCasse(texte ?? nom, lieu);
 }
 
 /** Une liste de nœuds séparés par des virgules. */
