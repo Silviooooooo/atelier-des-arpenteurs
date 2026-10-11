@@ -101,6 +101,11 @@ test("qualité — 1/3 + q/3, en fractions exactes, arrondi inférieur une fois 
   assert.deepEqual(valeursParametre("degats", "5/10/15", { qualite: qualiteDe(bloc, "4") }).valeurs, [8, 16, 25]);
   // La qualité ne touche que dégâts, défense et armure.
   assert.deepEqual(valeursParametre("portee", "3", { qualite: qualiteDe(bloc, "3") }).valeurs, [3]);
+  // Un paramètre nommé comme une propriété du prototype n'a pas de rangs : il se lit comme un autre
+  // (relecture du lot 3 : la table des rangs rendait la fonction « Object » pour « constructor »).
+  assert.deepEqual(valeursParametre("constructor", "4"), { valeurs: [4] });
+  assert.deepEqual(valeursParametre("__proto__", "5"), { valeurs: [5] });
+  assert.deepEqual(valeursParametre("toString", "6/2"), { valeurs: [3] });
   // Sans paramètre qualite, pas de qualité.
   assert.equal(qualiteDe(INDEX.bloc("Bouillon revigorant"), "2").applicable, false);
   const f = fiche();

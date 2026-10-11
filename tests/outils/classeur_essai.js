@@ -14,6 +14,14 @@
 // feuille, que l'import ignore, porte les formes de cellule qu'un classeur
 // peut contenir même quand Excel ne les écrit pas.
 //
+// La sixième feuille, « Adversaires » (lot 3, § 16), sert aussi à la
+// démonstration : deux types et leurs adversaires, un multiplicateur
+// décimal, « // » et « aucun », un pack d'armure, une armure naturelle
+// globale plus une pièce, deux armes, un rang qui en remplace un autre, une
+// zone mal orthographiée. Elle ne porte que trois anomalies, qu'elle
+// annonce ; les autres codes de la feuille se déclenchent sur des variantes
+// fabriquées au moment de l'essai, pour que la démonstration reste jouable.
+//
 // Après une modification, réécrire essais/classeur_essai.xlsx :
 //   node tests/outils/classeur_essai.js
 
@@ -87,6 +95,11 @@ export const CLASSEUR_ESSAI = {
         ["Toque renforcée", "Armure, Agile", _, "{armure:0/0/0/0/0/5}, {qualite:X}", "Armure de la tête ; I3", "Armure"],
         ["Couvercle de marmite", "Qualité", "Se couvrir", "{defense:8}, {qualite:X}", "Bouclier", "Équipement"],
         ["Bouillon revigorant", _, "Boire le bouillon", _, "Consommable", "Consommable"],
+        // Les adversaires (lot 3) : une arme et une armure naturelles, que le
+        // créateur de personnage ignore. La carapace n'a qu'une valeur : elle
+        // couvre toutes les zones.
+        ["Pinces de homard", "Arme", "Frappe, Choc sourd", "{degats:4/8/12}, {portee:0}", "Arme naturelle : hors du créateur de personnage", "Arme naturelle"],
+        ["Carapace épaisse", "Armure", _, "{armure:30}", "Armure naturelle globale : une seule valeur ; I3", "armure naturelle"],
       ],
     },
     {
@@ -195,6 +208,30 @@ export const CLASSEUR_ESSAI = {
         ["colonne lointaine", ...Array(26).fill(_), "colonne AB"],
       ],
     },
+    {
+      nom: "Adversaires",
+      lignes: [
+        ["Nom", "TYPE", "Localisation", "Nombre  d'actions", "souffle", "Attaque", "Defense", "Équipement", "Capacites", "Infos"],
+        ["Type", "Commis", "Torse(2),\nJambe gauche(12),\nJambre droite(14),\nBras gauche(16),\nBras droit(18),\nTête(20)", 1, 2, 3, 4, _, "Pas chassé", "Type ; A11 : « Jambre droite » se lit « jambe droite »"],
+        ["Type", "Rôtisseur", _, _, 5, 4, 5, "Spatule souple, Armure agile", "//, Maitrise de l'agile[1]", "Type ; « // » reprend la liste héritée ; un pack d'armure ; A1 : Maitrise"],
+        ["Marmiton de corvée", "Commis/Rôtisseur", _, _, _, _, _, _, _, "Deux types, rien en propre"],
+        ["Chef de partie", "Commis/Rôtisseur[1,4]", _, _, _, _, _, _, "//, Maîtrise de l'agile[3], Pas chassé[2]", "Multiplicateur décimal ; deux rangs en remplacent d'autres"],
+        ["Plongeur", "Commis / Rôtisseur", _, _, "aucun", _, _, "aucun", _, "« aucun » : ni souffle, ni équipement"],
+        [
+          "Homard furieux",
+          _,
+          "Corps(2), Pince gauche(12), Pince droite(15), Tête(18)",
+          2,
+          4,
+          6,
+          7,
+          "Carapace épaisse, Toque renforcée[3], Pinces de homard, Couteau d'office",
+          _,
+          "Sans type ; armure naturelle globale plus une pièce ; deux armes",
+        ],
+        ["Mouette chapardeuse", _, "Corps(2), Aile gauche(14), Aile  droite(17), Tête(20)", 2, _, 2, 3, _, "Frappe, Nez fin", "A15 : Frappe, sans arme pour ses dégâts"],
+      ],
+    },
   ],
 };
 
@@ -235,6 +272,14 @@ export const CLASSEUR_PROPRE = {
         [_, "Brûlure", 2, _, _, "Brûlant", "[N] brûlures."],
         [_, "Pincement", 0, _, _, _, "Pince."],
         [_, "Rempart", 0, _, 1, "Épais[2]", "Protège de {epaisseur}."],
+      ],
+    },
+    {
+      nom: "Adversaires",
+      lignes: [
+        ["Nom", "Type", "Localisation", "Nombre d'actions", "Souffle", "Attaque", "Défense", "Equipement", "Capacités"],
+        ["Type", "Marmiton", "Corps(2), Tête(18)", 1, 2, 3, 4, "Louche", "Coup"],
+        ["Apprenti", "Marmiton[1,5]", _, _, _, _, _, _, "//, Jet[2]"],
       ],
     },
   ],

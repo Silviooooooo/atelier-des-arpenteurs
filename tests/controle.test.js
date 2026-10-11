@@ -1,6 +1,8 @@
 // Contrôles du contrôle de cohérence (SPECIFICATION.md, § 6.3 et § 11,
-// domaine « Contrôle ») : le classeur d'essai déclenche chaque code, E1, A8
-// et A9 sur ses variantes, et un classeur propre n'en déclenche aucun.
+// domaine « Contrôle ») : le classeur d'essai déclenche chaque code, E1, A8,
+// A9, A10 et ceux de la feuille Adversaires sur ses variantes, et un classeur
+// propre n'en déclenche aucun. Les codes de la feuille Adversaires se
+// vérifient un à un dans tests/adversaires.test.js.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -8,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { GRAVITES } from "../js/banque/controle.js";
 import { importerFichier } from "../js/banque/importation.js";
 import { cle, repertoire } from "../js/banque/noms.js";
+import { FAUTES } from "./outils/adversaires_essai.js";
 import { fabriquerClasseur } from "./outils/fabrique_classeur.js";
 import { CLASSEUR_ESSAI, CLASSEUR_PROPRE } from "./outils/classeur_essai.js";
 
@@ -23,8 +26,10 @@ const ANNONCEES = [
   ["A1", "Blocs", 6], ["A1", "Blocs", 6], ["A2", "Blocs", 12], ["A7", "Blocs", 14],
   ["A4", "Eléments", 9],
   ["A5", "Capacites", 16], ["A3", "Capacites", 19],
+  ["A11", "Adversaires", 2], ["A1", "Adversaires", 3], ["A15", "Adversaires", 8],
   ["I3", "Blocs", 13], ["I3", "Blocs", 14], ["I1", "Blocs", 15],
   ["I3", "Blocs", 25], ["I3", "Blocs", 27], ["I3", "Blocs", 31], ["I3", "Blocs", 32], ["I3", "Blocs", 33], ["I3", "Blocs", 34], ["I3", "Blocs", 35],
+  ["I3", "Blocs", 39],
   ["I1", "Eléments", 7], ["I2", "Eléments", 8], ["I1", "Capacites", 13], ["I2", "Capacites", 17],
 ];
 
@@ -68,13 +73,19 @@ const ARMURES_SUPERPOSEES = variante((feuilles) => {
   feuilles[1].lignes.push(["Brassière de cuir", "Armure, Agile", null, "{armure:10/0/0/15/0/0}, {qualite:X}", "A10 : torse et bras gauche déjà couverts par le pack agile", "Armure"]);
 });
 
-test("contrôle — les dix-neuf codes du § 6.3 : quinze sur le classeur d'essai, E1, A8, A9 et A10 sur ses variantes", async () => {
+test("contrôle — les trente-six codes du § 6.3 : dix-sept sur le classeur d'essai, les autres sur ses variantes", async () => {
   const essai = await importer();
+  // Quinze codes d'avant le lot 3, plus A11 et A15 sur la feuille Adversaires.
+  assert.equal(new Set(essai.anomalies.map((a) => a.code)).size, 17);
   const sansFeuille = await importer(variante((feuilles) => feuilles.splice(2, 1)));
   const types = await importer(TYPES_FAUTIFS);
   const armures = await importer(ARMURES_SUPERPOSEES);
-  const codes = new Set([...essai.anomalies, ...sansFeuille.anomalies, ...types.anomalies, ...armures.anomalies].map((a) => a.code));
+  // La feuille Adversaires : un cas par code (tests/outils/adversaires_essai.js).
+  const adversaires = [];
+  for (const faute of FAUTES) adversaires.push(...(await importer(faute.description)).anomalies);
+  const codes = new Set([...essai.anomalies, ...sansFeuille.anomalies, ...types.anomalies, ...armures.anomalies, ...adversaires].map((a) => a.code));
   assert.deepEqual([...codes].sort(), Object.keys(GRAVITES).sort());
+  assert.equal(Object.keys(GRAVITES).length, 36);
 });
 
 test("A8, A9 — un bloc sans type, un bloc d'un type inconnu ; les types se comparent sans casse, accents ni espaces", async () => {
@@ -88,7 +99,7 @@ test("A8, A9 — un bloc sans type, un bloc d'un type inconnu ; les types se com
       feuille: "Blocs",
       ligne: 3,
       message:
-        "Le bloc « Carnet de recettes » a le type « Ustensile », inconnu (types reconnus : Base, Espèce, Archétype, Style de combat, Constellation, Primordial, Arme, Armure, Équipement, Consommable, Blessure, État) : le créateur de personnage ne le voit pas.",
+        "Le bloc « Carnet de recettes » a le type « Ustensile », inconnu (types reconnus : Base, Espèce, Archétype, Style de combat, Constellation, Primordial, Arme, Armure, Arme naturelle, Armure naturelle, Équipement, Consommable, Blessure, État) : le créateur de personnage ne le voit pas.",
     },
   ]);
   // Le type se garde tel qu'écrit, espaces de bord retirés.
@@ -107,7 +118,7 @@ test("A10 — deux pièces d'armure d'un même type sur une même zone : le pack
       gravite: "avertissement",
       code: "A10",
       feuille: "Blocs",
-      ligne: 38,
+      ligne: 40,
       message:
         "Des pièces d'armure de type agile couvrent une même zone (torse : « Tablier de cuir » et « Brassière de cuir » ; bras gauche : « Maniques » et « Brassière de cuir ») : le pack agile n'est pas proposé au créateur de personnage.",
     },
@@ -152,16 +163,19 @@ test("contrôle — un classeur propre ne déclenche aucune anomalie", async () 
   const { banque, anomalies } = await importer(CLASSEUR_PROPRE);
   assert.deepEqual(anomalies, []);
   assert.equal(banque.blocs.length, 2);
+  // Il a sa feuille Adversaires, sans défaut : sans elle, I4 le dirait.
+  assert.deepEqual([banque.types_adversaires.length, banque.adversaires.length], [1, 1]);
 });
 
 test("contrôle — gravité de chaque code, tri par gravité puis feuille puis ligne", async () => {
   const gravites = gravitesDeLaSpecification();
-  assert.equal(Object.keys(gravites).length, 19);
+  assert.equal(Object.keys(gravites).length, 36);
   assert.equal(gravites.A10, "avertissement");
+  assert.deepEqual([gravites.E8, gravites.E16, gravites.A11, gravites.A16, gravites.I4, gravites.I5], ["erreur", "erreur", "avertissement", "avertissement", "information", "information"]);
   assert.deepEqual({ ...GRAVITES }, gravites);
   const { anomalies } = await importer();
   for (const a of anomalies) assert.equal(a.gravite, gravites[a.code], a.code);
-  const rang = (a) => [["bloquante", "erreur", "avertissement", "information"].indexOf(a.gravite), ["lisez_moi", "Blocs", "Eléments", "Capacites"].indexOf(a.feuille), a.ligne];
+  const rang = (a) => [["bloquante", "erreur", "avertissement", "information"].indexOf(a.gravite), ["lisez_moi", "Blocs", "Eléments", "Capacites", "Adversaires"].indexOf(a.feuille), a.ligne];
   for (let i = 1; i < anomalies.length; i += 1) {
     const [precedent, courant] = [rang(anomalies[i - 1]), rang(anomalies[i])];
     const ordre = precedent[0] - courant[0] || precedent[1] - courant[1] || precedent[2] - courant[2];

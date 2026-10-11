@@ -8,6 +8,11 @@
 // « Constellation », comme dans le classeur (§ 12). Un bloc sans type (A8)
 // ou d'un type inconnu (A9) reste dans la banque, mais le créateur de
 // personnage ne le voit pas.
+//
+// « Arme naturelle » et « Armure naturelle » (lot 3, décision de l'auteur du
+// 11/10/2026) sont les griffes et les carapaces des adversaires (§ 16.3).
+// Elles ont leur propre code : le créateur de personnage, qui ne demande que
+// les armes et les armures, les ignore, et un pack d'armure n'en contient pas.
 
 import { cle } from "./noms.js";
 
@@ -21,6 +26,8 @@ export const TYPES = {
   primordial: { nom: "Primordial", ecritures: ["Primordial"] },
   arme: { nom: "Arme", ecritures: ["Arme"] },
   armure: { nom: "Armure", ecritures: ["Armure"] },
+  arme_naturelle: { nom: "Arme naturelle", ecritures: ["Arme naturelle"] },
+  armure_naturelle: { nom: "Armure naturelle", ecritures: ["Armure naturelle"] },
   equipement: { nom: "Équipement", ecritures: ["Équipement"] },
   consommable: { nom: "Consommable", ecritures: ["Consommable"] },
   blessure: { nom: "Blessure", ecritures: ["Blessure"] },

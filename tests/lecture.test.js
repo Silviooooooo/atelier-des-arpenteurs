@@ -73,11 +73,14 @@ test("XML — un XML mal formé ou un DOCTYPE lèvent ErreurXml", () => {
 
 test("classeur — feuilles dans leur ordre, en-têtes tels qu'écrits, y compris en XML préfixé", async () => {
   const classeur = await lireEssai();
-  assert.deepEqual(classeur.feuilles.map((f) => f.nom), ["lisez_moi", "Blocs", "Eléments", "Capacites", "Formes de cellules"]);
+  assert.deepEqual(classeur.feuilles.map((f) => f.nom), ["lisez_moi", "Blocs", "Eléments", "Capacites", "Formes de cellules", "Adversaires"]);
   const entetes = (nom) => classeur.feuilles.find((f) => f.nom === nom).lignes.find((l) => l.numero === 1).cellules;
   assert.deepEqual(entetes("Blocs"), ["Nom", "Eléments transmis aux capacités", "Capacités", "Paramètres transmis aux capacités", "Infos", "TYPE"]);
   assert.deepEqual(entetes("Eléments"), ["Nom", "Paramètres reçus", "Description"]);
   assert.deepEqual(entetes("Capacites"), ["Nom", "puissance", "Coût en souffle", "Coût en lien", "Éléments propres", "description", "origine"]);
+  assert.deepEqual(entetes("Adversaires"), ["Nom", "TYPE", "Localisation", "Nombre  d'actions", "souffle", "Attaque", "Defense", "Équipement", "Capacites", "Infos"]);
+  // Une localisation s'écrit sur plusieurs lignes dans sa cellule, comme dans le classeur de l'auteur.
+  assert.equal(cellule(classeur, "Adversaires", 2, 2), "Torse(2),\nJambe gauche(12),\nJambre droite(14),\nBras gauche(16),\nBras droit(18),\nTête(20)");
 });
 
 test("classeur — numéros de ligne d'Excel gardés, lignes vides absentes, cellules vides en chaîne vide", async () => {
@@ -143,7 +146,8 @@ test("illisible — une archive tronquée", async () => {
 });
 
 test("illisible — un CRC faux", async () => {
-  const octets = abime((o) => o.writeUInt32LE(o.readUInt32LE(entreeCentrale(o, "xl/workbook.xml") + 16) ^ 1, entreeCentrale(o, "xl/workbook.xml") + 16));
+  // « >>> 0 » : le ou exclusif rend un entier signé, négatif dès que le CRC a son bit de poids fort.
+  const octets = abime((o) => o.writeUInt32LE((o.readUInt32LE(entreeCentrale(o, "xl/workbook.xml") + 16) ^ 1) >>> 0, entreeCentrale(o, "xl/workbook.xml") + 16));
   assert.match(await message(octets), /« xl\/workbook\.xml » a un CRC faux/);
 });
 

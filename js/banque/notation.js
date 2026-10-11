@@ -17,9 +17,12 @@ const JAMAIS_FERME = {
 };
 const DELIMITEURS = /[()[\]{}|]/;
 
-// Découpe un texte sur un séparateur de premier niveau. Chaque morceau garde
-// son défaut éventuel : délimiteur fermant sans ouvrant, ou jamais fermé.
-function decouper(texte, separateur) {
+/**
+ * Découpe un texte sur un séparateur de premier niveau. Chaque morceau garde
+ * son défaut éventuel : délimiteur fermant sans ouvrant, ou jamais fermé. La
+ * feuille Adversaires se découpe de la même façon (js/adversaire/notation.js).
+ */
+export function decouper(texte, separateur) {
   const morceaux = [];
   let courant = "";
   let defaut = null;

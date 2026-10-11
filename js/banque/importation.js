@@ -7,11 +7,18 @@
 // Les colonnes se retrouvent par leur en-tête, jamais par leur position, et
 // sans casse, accents ni espaces : l'auteur réordonne ses feuilles.
 //
-// L'import relève E1, E2, E6, A7 et I1 en lisant les lignes ; controle.js
+// L'import relève E1, E2, E6, A7, I1 et I4 en lisant les lignes ; controle.js
 // relève le reste sur la banque. Rien n'est corrigé : les anomalies voyagent
 // avec la banque (§ 5.1). Le type d'un bloc (colonne « Type ») se garde tel
 // qu'écrit, espaces de bord retirés ; types.js le compare.
+//
+// La feuille « Adversaires » (lot 3, § 16.1) est facultative : absente, la
+// banque n'a pas d'adversaires (I4). Ses cellules se gardent telles
+// qu'écrites, espaces de bord retirés : c'est la résolution des adversaires
+// (js/adversaire/) qui les lit, à l'import pour le contrôle comme dans la
+// page pour l'affichage.
 
+import { FEUILLE as FEUILLE_ADVERSAIRES } from "../adversaire/resolution.js";
 import { lireClasseur } from "../lecture/xlsx.js";
 import { empreinte } from "../securite/chiffrement.js";
 import { anomalie, controler, trier } from "./controle.js";
@@ -38,8 +45,23 @@ export const COLONNES = {
     elements: "Eléments propres",
     description: "description",
   },
+  Adversaires: {
+    nom: "Nom",
+    types: "Type",
+    localisation: "Localisation",
+    actions: "Nombre d'actions",
+    souffle: "Souffle",
+    attaque: "Attaque",
+    defense: "Défense",
+    equipement: "Equipement",
+    capacites: "Capacités",
+  },
 };
 const FEUILLES = ["lisez_moi", "Blocs", "Eléments", "Capacites"];
+// Une ligne de la feuille Adversaires qui porte ce mot dans la colonne Nom
+// définit un type, dont le nom est dans la colonne Type (§ 16.1).
+const LIGNE_DE_TYPE = "type";
+const CHAMPS_ADVERSAIRE = ["localisation", "actions", "souffle", "attaque", "defense", "equipement", "capacites"];
 
 function lettres(indice) {
   let resultat = "";
@@ -104,6 +126,10 @@ export function importerClasseur(classeur, source = null) {
     if (feuille) feuilles[nom] = feuille;
     else anomalies.push(anomalie("E1", nom, null, `La feuille « ${nom} » est introuvable : l'import s'arrête.`));
   }
+  // La feuille Adversaires est facultative ; présente, ses en-têtes sont
+  // attendus comme ceux des autres.
+  const feuilleAdversaires = classeur.feuilles.find((f) => cle(f.nom) === cle(FEUILLE_ADVERSAIRES));
+  if (feuilleAdversaires) feuilles[FEUILLE_ADVERSAIRES] = feuilleAdversaires;
   const colonnes = {};
   const entetes = {};
   for (const [nom, attendus] of Object.entries(COLONNES)) {
@@ -163,6 +189,32 @@ export function importerClasseur(classeur, source = null) {
     });
   }
 
+  // Les adversaires et leurs types : une ligne chacun, ses cellules telles
+  // qu'écrites, espaces de bord retirés.
+  const typesAdversaires = [];
+  const adversaires = [];
+  if (!feuilleAdversaires) {
+    anomalies.push(anomalie("I4", FEUILLE_ADVERSAIRES, null, `La feuille « ${FEUILLE_ADVERSAIRES} » est absente : la banque n'a pas d'adversaires.`));
+  } else {
+    for (const { nom, valeur, ligne, brut } of lignes(FEUILLE_ADVERSAIRES)) {
+      const cellules = Object.fromEntries(CHAMPS_ADVERSAIRE.map((champ) => [champ, valeur(champ).trim()]));
+      if (cle(nom) !== LIGNE_DE_TYPE) {
+        adversaires.push({ nom, types: valeur("types").trim(), ...cellules, brut });
+        continue;
+      }
+      const ecrit = valeur("types");
+      const nomType = ecrit.trim();
+      if (nomType === "") {
+        anomalies.push(anomalie("E2", FEUILLE_ADVERSAIRES, ligne, `La ligne ${ligne} définit un type sans nom (colonne Type vide) : elle n'entre pas dans la banque.`));
+        continue;
+      }
+      if (nomType !== ecrit) {
+        anomalies.push(anomalie("I1", FEUILLE_ADVERSAIRES, ligne, `Le nom « ${nomType} » portait des espaces ${ouSontLesEspaces(ecrit)} ; ils sont retirés.`));
+      }
+      typesAdversaires.push({ nom: nomType, ...cellules, brut });
+    }
+  }
+
   // lisez_moi : colonne A = rubrique, B = texte, tels qu'écrits (§ 4.1).
   const lisezMoi = feuilles.lisez_moi.lignes
     .filter((ligne) => (ligne.cellules[0] ?? "").trim() !== "" || (ligne.cellules[1] ?? "").trim() !== "")
@@ -174,6 +226,8 @@ export function importerClasseur(classeur, source = null) {
     blocs,
     capacites: [...capacitesParNom.values()],
     elements,
+    types_adversaires: typesAdversaires,
+    adversaires,
     lisez_moi: lisezMoi,
     anomalies: [],
   };

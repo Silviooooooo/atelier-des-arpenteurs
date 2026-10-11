@@ -7,15 +7,38 @@
 // s'affichent tels que l'auteur les a écrits dans sa cellule (brut), sous le
 // nom de sa colonne. Une capacité à plusieurs puissances se compare variante
 // par variante.
+//
+// Les types d'adversaires et les adversaires (lot 3, § 16) se comparent de
+// même : leurs cellules, gardées telles qu'écrites, se comparent sur ce que
+// la notation des adversaires y lit. Une banque publiée avant la feuille
+// « Adversaires » n'en a aucun : tout y est ajouté.
 
+import { lireListe, lireLocalisation, lireNombreCellule, lireTypes, texteDe } from "../adversaire/notation.js";
+import { entreesLisibles } from "../adversaire/resolution.js";
 import { dateLisible } from "./dates.js";
 import { COLONNES } from "./importation.js";
 import { cle } from "./noms.js";
 
+const CHAMPS_ADVERSAIRE = ["localisation", "actions", "souffle", "attaque", "defense", "equipement", "capacites"];
 const CATEGORIES = {
   blocs: { feuille: "Blocs", champs: ["type", "elements", "capacites", "parametres", "notes"] },
   capacites: { feuille: "Capacites", champs: ["puissance", "cout_souffle", "cout_lien", "elements", "description", "notes"] },
   elements: { feuille: "Eléments", champs: ["parametres_recus", "description"] },
+  types_adversaires: { feuille: "Adversaires", champs: CHAMPS_ADVERSAIRE },
+  adversaires: { feuille: "Adversaires", champs: ["types", ...CHAMPS_ADVERSAIRE] },
+};
+
+// Ce que la notation des adversaires lit dans une cellule (§ 16.1) : deux
+// écritures de la même liste, ou « 1 » et « 1,0 », ne diffèrent pas.
+const LECTEURS_ADVERSAIRE = {
+  types: lireTypes,
+  localisation: lireLocalisation,
+  actions: lireNombreCellule,
+  souffle: lireNombreCellule,
+  attaque: lireNombreCellule,
+  defense: lireNombreCellule,
+  equipement: lireListe,
+  capacites: lireListe,
 };
 
 // Une écriture qui ne dépend pas de l'ordre des clés : une banque publiée par
@@ -44,11 +67,21 @@ function texteEcrit(ligne, feuille, champ) {
 
 // Un bloc publié avant la colonne « Type » n'a pas de type : il vaut un
 // type vide, et un bloc resté sans type n'a pas changé.
-const lue = (ligne, champ) => (champ === "type" ? (ligne[champ] ?? "") : ligne[champ]);
+const lue = (ligne, champ, feuille) => {
+  if (feuille === "Adversaires") {
+    // Une cellule fautive ne se lit pas : deux cellules différentes, fautives
+    // toutes deux, se liraient pareil. Elle se compare donc aussi sur son
+    // texte, blancs réduits.
+    const ecrit = texteDe(ligne[champ]);
+    const lu = LECTEURS_ADVERSAIRE[champ](ecrit);
+    return lu.defaut || lu.defauts?.length ? { lu, ecrit: ecrit.replace(/\s+/gu, " ").trim() } : lu;
+  }
+  return champ === "type" ? (ligne[champ] ?? "") : ligne[champ];
+};
 
 function champsModifies(ancien, nouveau, feuille, champs, variante = null) {
   return champs
-    .filter((champ) => canonique(lue(ancien, champ)) !== canonique(lue(nouveau, champ)))
+    .filter((champ) => canonique(lue(ancien, champ, feuille)) !== canonique(lue(nouveau, champ, feuille)))
     .map((champ) => ({
       champ,
       colonne: COLONNES[feuille][champ],
@@ -111,17 +144,22 @@ function comparerCategorie(categorie, anciens, nouveaux) {
 
 /**
  * Compare la banque publiée (null à la première publication) à la banque
- * importée. Rend, pour les blocs, les capacités et les éléments, les noms
- * ajoutés et retirés, et les modifications champ par champ ; plus le
- * changement éventuel de lisez_moi, et les totaux de la banque importée.
+ * importée. Rend, pour les blocs, les capacités, les éléments, les types
+ * d'adversaires et les adversaires, les noms ajoutés et retirés, et les
+ * modifications champ par champ ; plus le changement éventuel de lisez_moi,
+ * et les totaux de la banque importée. Une banque sans adversaires (publiée
+ * avant le lot 3, ou réduite) vaut une banque qui n'en a aucun.
  */
 export function comparer(ancienne, nouvelle) {
   const differences = { premiere: ancienne === null };
+  // Une liste absente (banque d'avant le lot 3) ou abîmée vaut une liste
+  // vide, et une entrée sans nom n'y compte pas : la comparaison reste debout.
+  const entrees = (banque, categorie) => entreesLisibles(banque?.[categorie]);
   for (const categorie of Object.keys(CATEGORIES)) {
-    differences[categorie] = comparerCategorie(categorie, ancienne?.[categorie] ?? [], nouvelle[categorie]);
+    differences[categorie] = comparerCategorie(categorie, entrees(ancienne, categorie), entrees(nouvelle, categorie));
   }
   differences.lisez_moi_modifie = ancienne !== null && canonique(ancienne.lisez_moi) !== canonique(nouvelle.lisez_moi);
-  differences.totaux = Object.fromEntries(Object.keys(CATEGORIES).map((categorie) => [categorie, nouvelle[categorie].length]));
+  differences.totaux = Object.fromEntries(Object.keys(CATEGORIES).map((categorie) => [categorie, entrees(nouvelle, categorie).length]));
   return differences;
 }
 
@@ -130,7 +168,12 @@ const NOMS = {
   blocs: ["bloc", "blocs", ""],
   capacites: ["capacité", "capacités", "e"],
   elements: ["élément", "éléments", ""],
+  types_adversaires: ["type d'adversaire", "types d'adversaires", ""],
+  adversaires: ["adversaire", "adversaires", ""],
 };
+// À la première publication, les totaux des adversaires ne se disent que
+// s'il y en a : un classeur sans feuille Adversaires garde sa phrase.
+const TOUJOURS_DITS = ["blocs", "capacites", "elements"];
 const compte = (n, [singulier, pluriel]) => `${n} ${n > 1 ? pluriel : singulier}`;
 const participe = (n, racine, feminin) => `${racine}${feminin}${n > 1 ? "s" : ""}`;
 
@@ -144,12 +187,13 @@ export function resumer(differences, { date, erreurs = 0 }) {
   let contenu;
   if (differences.premiere) {
     contenu = `première publication : ${Object.keys(NOMS)
-      .map((categorie) => compte(differences.totaux[categorie], NOMS[categorie]))
+      .filter((categorie) => TOUJOURS_DITS.includes(categorie) || differences.totaux[categorie] > 0)
+      .map((categorie) => compte(differences.totaux[categorie] ?? 0, NOMS[categorie]))
       .join(", ")}`;
   } else {
     const parties = [];
     for (const [categorie, nom] of Object.entries(NOMS)) {
-      const { ajoutes, modifies, retires } = differences[categorie];
+      const { ajoutes, modifies, retires } = differences[categorie] ?? { ajoutes: [], modifies: [], retires: [] };
       if (ajoutes.length + modifies.length + retires.length === 0) continue;
       parties.push(
         `${compte(ajoutes.length, nom)} ${participe(ajoutes.length, "ajouté", nom[2])}, ` +

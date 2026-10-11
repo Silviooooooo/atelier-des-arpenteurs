@@ -6,9 +6,15 @@
 // Il affiche des comptes et des en-têtes, à côté de l'état relevé au § 4.1.
 // node --test ne le lance pas : il demande le classeur réel, qui n'entre
 // jamais dans le dépôt.
+//
+// Depuis le lot 3, il résout aussi chaque adversaire de la feuille
+// Adversaires (§ 16) et affiche ses valeurs : elles se comparent, à la main,
+// aux mesures de référence de l'instruction du lot (hors dépôt). Le banc
+// n'en garde aucune : rien de réel n'entre ici.
 
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
+import { banqueSansAdversaires, indexerAdversaires } from "../js/adversaire/resolution.js";
 import { GRAVITES } from "../js/banque/controle.js";
 import { importerFichier } from "../js/banque/importation.js";
 import { lireClasseur } from "../js/lecture/xlsx.js";
@@ -45,6 +51,13 @@ const RELEVE = [
     lignes: 71,
     noms: 69,
   },
+  // La feuille Adversaires, facultative, relevée le 11/10/2026 (§ 16.1).
+  {
+    feuille: "Adversaires",
+    entetes: ["Nom", "Type", "Localisation", "Nombre  d'actions", "Souffle", "Attaque", "Défense", "Equipement", "Capacités"],
+    lignes: 5,
+    facultative: true,
+  },
 ];
 
 function tableau(lignes) {
@@ -63,7 +76,7 @@ function bancDeLecture(classeur) {
   for (const releve of RELEVE) {
     const feuille = classeur.feuilles.find((f) => f.nom === releve.feuille);
     if (!feuille) {
-      lignes.push([releve.feuille, "absente", releve.lignes, "?"]);
+      lignes.push([releve.feuille, releve.facultative ? "absente (facultative)" : "absente", releve.lignes, "?"]);
       continue;
     }
     // Les feuilles à en-têtes les portent en ligne 1, qui ne compte pas.
@@ -89,6 +102,7 @@ function bancDeLecture(classeur) {
   console.log("\nEn-têtes (ligne 1), comparés au § 4.1 :");
   for (const releve of RELEVE.filter((r) => r.entetes)) {
     const feuille = classeur.feuilles.find((f) => f.nom === releve.feuille);
+    if (!feuille && releve.facultative) continue;
     const entetes = feuille?.lignes.find((ligne) => ligne.numero === 1)?.cellules ?? [];
     const manquants = releve.entetes.filter((entete) => !entetes.includes(entete));
     const enPlus = entetes.filter((entete) => entete !== "" && !releve.entetes.includes(entete));
@@ -122,12 +136,12 @@ async function bancComplet(octets, fichier) {
   console.log("\nBanc complet — import et contrôle");
   if (erreur) {
     console.log(`  Import impossible : ${erreur}`);
-    return;
+    return null;
   }
   if (!banque) {
     console.log("  Import arrêté (E1) :");
     for (const a of anomalies) console.log(`    ${a.message}`);
-    return;
+    return null;
   }
   const variantes = banque.capacites.reduce((total, capacite) => total + capacite.variantes.length, 0);
   console.log(
@@ -170,6 +184,49 @@ async function bancComplet(octets, fichier) {
   comparer("A3, capacités orphelines", noms(anomalies, "A3", /La capacité « (.+?) » n'est rattachée/), REFERENCE.A3);
   console.log(`  A1, renvois de capacités : ${a1("la capacité")} trouvés, ${REFERENCE.A1} attendus au moins.`);
   console.log(`  I1, noms à espaces de bord : ${anomalies.filter((a) => a.code === "I1").length} trouvés, ${REFERENCE.I1} attendus au moins.`);
+  return { banque, anomalies };
+}
+
+// Les adversaires résolus, tels que la page les montrera : les quatre
+// nombres, les armes et leurs dégâts, l'armure de chaque zone dans l'ordre
+// du d20, les maîtrises, et les capacités jouées avec un désavantage.
+function bancAdversaires(banque, anomalies) {
+  console.log("\nBanc des adversaires — résolution (§ 16)");
+  if (banqueSansAdversaires(banque) || (!banque.types_adversaires.length && !banque.adversaires.length)) {
+    console.log("  Aucun adversaire : la feuille Adversaires est absente ou vide.");
+    return;
+  }
+  const surLaFeuille = anomalies.filter((a) => a.feuille === "Adversaires");
+  console.log(`  ${banque.types_adversaires.length} type(s), ${banque.adversaires.length} adversaire(s) ; ${surLaFeuille.length} anomalie(s) sur la feuille.`);
+  for (const a of surLaFeuille) console.log(`    ${a.code}, ligne ${a.ligne ?? "—"} : ${a.message}`);
+  const index = indexerAdversaires(banque);
+  const nombre = (n) => (n.valeur === null ? "—" : n.valeur);
+  const lignes = [["adversaire", "types", "actions", "souffle", "attaque", "défense", "armes", "armure par zone", "maîtrises", "désavantage"]];
+  for (const adversaire of banque.adversaires) {
+    const r = index.resoudre(adversaire);
+    const armes = new Map();
+    for (const capacite of r.capacites) for (const arme of capacite.armes) armes.set(arme.nom, `${arme.nom} ${arme.degats}${arme.portee ? `, portée ${arme.portee}` : ""}`);
+    lignes.push([
+      r.nom + (r.complet ? "" : " (incomplet)"),
+      r.types.map((type) => type.nom).join(", ") + (r.multiplicateur ? ` ×${r.multiplicateur}` : "") || "—",
+      nombre(r.actions),
+      nombre(r.souffle),
+      nombre(r.attaque),
+      nombre(r.defense),
+      [...armes.values()].join(" · ") || "—",
+      r.zones.map((zone) => zone.armure).join(", ") || "—",
+      r.maitrises.map((m) => `${m.nom} [${m.rang}]`).join(", ") || "—",
+      r.capacites.filter((c) => c.desavantage.length).map((c) => c.nom).join(", ") || "aucun",
+    ]);
+  }
+  console.log("");
+  tableau(lignes);
+  console.log("\n  Capacités, avec leur rang et leur coût en souffle :");
+  for (const adversaire of banque.adversaires) {
+    const r = index.resoudre(adversaire);
+    const capacites = r.capacites.map((c) => `${c.nom}${c.evolue ? ` [${c.rang}]` : ""}${c.cout && c.cout.souffle !== "0" ? ` (${c.cout.souffle})` : ""}`);
+    console.log(`    ${r.nom} : ${capacites.join(", ") || "aucune"}`);
+  }
 }
 
 const chemin = process.argv[2];
@@ -185,4 +242,5 @@ if (classeur.erreur) {
   process.exit(1);
 }
 bancDeLecture(classeur);
-await bancComplet(octets, basename(chemin));
+const importe = await bancComplet(octets, basename(chemin));
+if (importe) bancAdversaires(importe.banque, importe.anomalies);

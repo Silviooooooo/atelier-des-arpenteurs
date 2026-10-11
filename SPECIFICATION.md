@@ -21,8 +21,8 @@ personnages, des adversaires et des objets, avec une sortie PDF.
 | Source | Rôle | Lue par le programme ? |
 |---|---|---|
 | `Principe jdr abrasia.docx` (le Word) | **les règles du jeu**, lisibles par un humain qui part de zéro | non |
-| `regles_jdr.xlsx` (classeur des règles) | les données : blocs, capacités, éléments | oui, à l'import |
-| second classeur (lot 3, nom à fixer) | adversaires et prétirés | oui, à l'import |
+| `regles_jdr.xlsx` (classeur des règles) | les données : blocs, capacités, éléments, et, depuis le lot 3, les adversaires (§ 16) | oui, à l'import |
+| second classeur (à venir, nom à fixer) | prétirés | oui, à l'import |
 
 **Le programme n'invente aucune règle.** Quand un lot a besoin d'une règle que
 le Word ne dit pas, on ne la devine pas : on l'inscrit au § 12 comme « à
@@ -74,7 +74,9 @@ et ses MJ. Sur ordinateur et sur téléphone.
    prétirés, avec leurs renvois dans les deux sens.
 2. Un **créateur de personnage** (lot 2, § 15), dont les personnages se
    partagent en ligne, chiffrés (lot 2 bis, § 15.8).
-3. Un **créateur d'adversaire** (lot 3).
+3. Les **adversaires** (lot 3, § 16) : leurs types, chaque adversaire
+   résolu, et la carte imprimable d'une rencontre. L'éditeur d'adversaire
+   dans la page et l'assistant de calibrage viendront dans un lot ultérieur.
 4. Un **créateur d'objets, de sorts et d'équipement** (lot 4).
 5. L'**export PDF** de chaque création, depuis un ordinateur ; la vue d'un
    personnage sur téléphone, adaptée à l'écran et zoomable.
@@ -98,7 +100,7 @@ avec Book of Abrasia ou World Anvil : ce projet en est indépendant.
 | **Bouton « Importer un classeur »** dans la page | idée de l'auteur : il choisit le fichier (depuis OneDrive sur ordinateur ou téléphone), voit le rapport, publie ; aucune pièce mobile en dehors de la page |
 | **Seul le JSON chiffré entre dans le dépôt**, jamais le classeur | le dépôt est public ; un JSON montre ses changements ligne par ligne dans l'historique |
 | **Le texte d'origine de chaque cellule est conservé** dans la banque | un lot futur pourra réinterpréter les données sans nouvel import ; rien ne se perd |
-| **Deux classeurs** : règles d'un côté, adversaires et prétirés de l'autre | choix de l'auteur, pour ne pas mélanger ; le contrôle vérifie les renvois entre les deux |
+| **Deux classeurs** : règles d'un côté, prétirés de l'autre (à venir) | choix de l'auteur, pour ne pas mélanger. Les **adversaires**, d'abord prévus dans le second, vivent depuis le 11/10/2026 dans une feuille du classeur des règles, facultative : ils citent ses blocs et ses capacités, que le contrôle vérifie dans le même classeur (§ 16.1) |
 | **Le Word fait foi** pour les règles | l'auteur veut que n'importe qui puisse comprendre le jeu en relisant le Word depuis zéro |
 | **PDF par l'impression du navigateur**, sur ordinateur | aucune dépendance ; le PDF sur téléphone n'est pas une priorité |
 | Le dossier du dépôt reste dans **OneDrive** | choix de l'auteur ; précautions au § 10.3 |
@@ -114,6 +116,10 @@ avec Book of Abrasia ou World Anvil : ce projet en est indépendant.
 | Les **personnages en ligne passent par une file d'attente** : un ticket GitHub ouvert avec une clé de dépôt (permission Issues seule), qu'un automate de GitHub range dans le dépôt | le site ne détient aucun droit d'écriture sur le code ni sur la banque ; pas de serveur à entretenir (décision de l'auteur, lot 2 bis, option B ; § 15.8) |
 | Les personnages en ligne sont **chiffrés avec la clé de table**, visibles par tous les joueurs qui ont le mot de passe, et **modifiables par tous** | rien en clair sur GitHub ; une table de confiance ; l'historique de GitHub garde chaque version, et l'auteur peut en restaurer une (décision de l'auteur, lot 2 bis) |
 | Le **mot de passe de table** : 8 signes au moins, **insensible aux majuscules** | plus simple à transmettre et à saisir sur un téléphone ; risque accepté par l'auteur (§ 7.3) |
+| Les **règles des adversaires** sont des décisions de l'auteur du 11/10/2026, que le livret ne dit pas encore | sa section « Caractéristiques d'un adversaire » tient en une phrase ; chacune est inscrite au § 12, et vaut pour les seuls adversaires (§ 16) |
+| **Un seul module** résout un adversaire, pour le contrôle de l'import comme pour l'affichage ; la banque garde les lignes brutes | ce que le rapport annonce est ce que l'écran montre ; un lot futur réinterprète sans nouvel import (§ 16.2) |
+| **Pas de mot de passe du MJ** : les adversaires se lisent avec le mot de passe de table | une table de confiance, comme pour les personnages ; décision de l'auteur, lot 3 |
+| La **carte d'adversaire** a l'identité de sa maquette, et sa police, EB Garamond, est **hébergée dans le dépôt** | elle est du papier, comme la fiche de personnage ; aucune connexion à un tiers (§ 16.5) ; licence OFL |
 
 ---
 
@@ -147,10 +153,11 @@ package.json                { "type": "module" } et rien d'autre : Node lit les 
 icones/                     monogramme « AA » : icone.svg, icone-180.png, icone-192.png, icone-512.png
 css/
   jetons.css                toutes les valeurs de mise en page en variables
-  ecran.css                 l'interface, pensée pour le téléphone d'abord
+  ecran.css                 l'interface, pensée pour le téléphone d'abord ; les deux vues d'un adversaire et la rencontre (§ 16.6)
   personnage.css            l'écran d'un personnage : vue lecture, vue fiche
   fiche.css                 la fiche imprimable, reproduction du modèle (§ 15.4)
-polices/                    Marcellus et Alegreya Sans (woff2), et leurs licences OFL
+  adversaire.css            la carte d'un adversaire, reproduction de la maquette, et son impression (§ 16.5)
+polices/                    Marcellus, Alegreya Sans et EB Garamond (woff2), et leurs licences OFL
 js/
   application.js            démarrage, routes, chargement de la banque
   veille.js                 script classique : 15 s sur « Chargement », il propose de recharger (§ 9)
@@ -167,7 +174,7 @@ js/
     differences.js          banque publiée ↔ banque importée, résumé d'une ligne
     dates.js                date de publication (§ 5.1) et date lisible
     chargement.js           téléchargement et déchiffrement de la banque, démonstration
-    consultation.js         renvois, « octroyée par », « porté par », nom affiché
+    consultation.js         renvois, « octroyée par », « porté par », nom affiché ; la liste de chaque catégorie, l'index de résolution des adversaires
     recherche.js            recherche sans casse ni accents
   securite/
     chiffrement.js          PBKDF2 + AES-GCM (WebCrypto)
@@ -183,6 +190,12 @@ js/
     packs.js                les packs d'armure, partagés par le créateur et le contrôle (A10)
     en_ligne.js             les personnages en ligne : ticket, fichier rangé, index, chiffrement (§ 15.8)
     depot.js                côté page : déposer, lire l'index et les fichiers, l'état de chaque dépôt
+  adversaire/               les adversaires (§ 16)
+    notation.js             les cellules de la feuille Adversaires : types, localisation, nombres, listes (§ 16.1)
+    resolution.js           le seul module qui résout un adversaire, pour le contrôle comme pour la page (§ 16.2)
+    controle.js             les constats de la feuille Adversaires (§ 6.3)
+    carte.js                la carte d'un adversaire résolu (§ 16.5)
+    lecture.js              la vue lecture d'un adversaire : chaque valeur et sa provenance (§ 16.6)
   fiche/
     feuilles.js             le recto (le modèle) et le verso imprimables
     repartition.js          ce qui tient au recto, ce qui passe au verso
@@ -195,7 +208,9 @@ js/
     accueil.js  mot_de_passe.js  liste.js  fiche_bloc.js
     fiche_capacite.js  fiche_element.js  anomalies.js  espace_auteur.js
     personnages.js  creation.js  reception.js  fiche_personnage.js
+    fiche_adversaire.js  fiche_type.js  rencontre.js
     partage.js              fichier et lien d'un personnage
+    echelle.js              l'échelle d'un papier à l'écran : la seule écriture de style du code (§ 10.1)
     dom.js                  fabrique des éléments, sans jamais insérer de HTML
 donnees/
   banque.chiffree.json      la banque réelle, chiffrée
@@ -233,8 +248,10 @@ SPECIFICATION.md            ce document
 
 ### 4.1 Le classeur des règles — état relevé le 28/09/2026
 
-Quatre feuilles. **Les colonnes se retrouvent par leur en-tête, jamais par
-leur position** : l'auteur réordonne ses feuilles.
+Quatre feuilles, et une cinquième, facultative, depuis le lot 3 :
+`Adversaires` (§ 16.1 ; relevée le 11/10/2026 : neuf en-têtes, 5 lignes).
+**Les colonnes se retrouvent par leur en-tête, jamais par leur position** :
+l'auteur réordonne ses feuilles.
 
 | Feuille | En-têtes (ligne 1) | Lignes |
 |---|---|---|
@@ -264,7 +281,12 @@ accents ni espaces (`js/banque/types.js`). Les types reconnus sont ceux que
 le livret énumère (« Système », « Blocs ») : Base, Espèce, Archétype,
 Style de combat, Constellation, Primordial, Arme, Armure, Équipement,
 Consommable, Blessure, État. Le livret écrit « Constellation de
-naissance » : les deux écritures sont admises (§ 12). Un bloc sans type
+naissance » : les deux écritures sont admises (§ 12). Depuis le lot 3,
+**« Arme naturelle » et « Armure naturelle »** sont reconnus aussi
+(décision de l'auteur, 11/10/2026) : les griffes et les carapaces des
+adversaires (§ 16.4). Ils ont leur propre code, si bien que le créateur de
+personnage, qui ne demande que les armes et les armures, les ignore, et
+qu'un pack d'armure n'en contient pas. Un bloc sans type
 (A8) ou d'un type inconnu (A9) reste dans la banque et dans la
 consultation, mais le créateur de personnage ne le voit pas. La fiche
 d'un bloc et la liste des blocs montrent le type. Banc du 29/09/2026 sur
@@ -272,9 +294,9 @@ le classeur réel : chaque bloc a un type reconnu, aucun A8 ni A9.
 
 ### 4.2 Le second classeur
 
-Adversaires et prétirés. Sa structure est définie au lot 3, à partir du
-gabarit de fiche d'adversaire et de la section « Caractéristiques d'un
-adversaire » du Word (§ 12).
+Les prétirés, dans un lot à venir. Les adversaires, d'abord prévus ici,
+vivent dans la feuille `Adversaires` du classeur des règles (décision de
+l'auteur, 11/10/2026 ; § 16.1).
 
 ### 4.3 Le Word
 
@@ -324,6 +346,16 @@ Il n'est pas lu par le programme. La spécification le cite par section.
   "elements": [
     { "nom": "Portée", "parametres_recus": ["portee"], "description": "…", "brut": { "…": "…" } }
   ],
+  "types_adversaires": [
+    { "nom": "Commis", "localisation": "Torse(2), Tête(20)", "actions": "1", "souffle": "2", "attaque": "3",
+      "defense": "4", "equipement": "", "capacites": "Pas chassé",
+      "brut": { "feuille": "Adversaires", "ligne": 2, "cellules": { "…": "…" } } }
+  ],
+  "adversaires": [
+    { "nom": "Chef de partie", "types": "Commis/Rôtisseur[1,4]", "localisation": "", "actions": "", "souffle": "",
+      "attaque": "", "defense": "", "equipement": "", "capacites": "//, Pas chassé[2]",
+      "brut": { "feuille": "Adversaires", "ligne": 5, "cellules": { "…": "…" } } }
+  ],
   "lisez_moi": [ { "rubrique": "Syntaxe", "texte": "…" } ],
   "anomalies": [
     { "gravite": "erreur", "code": "E4", "feuille": "Blocs", "ligne": 14,
@@ -362,6 +394,17 @@ Il n'est pas lu par le programme. La spécification le cite par section.
   comparent le type comme un champ ; un bloc sans type vaut un type vide,
   si bien que la première republication de l'auteur montre chaque bloc
   modifié par son type, et rien d'autre.
+- `types_adversaires` et `adversaires` (lot 3, § 16.1) : une entrée par
+  ligne de la feuille Adversaires. Leurs cellules restent des **chaînes,
+  telles qu'écrites**, espaces de bord retirés, vides comprises : une
+  cellule vide hérite, et c'est la résolution (§ 16.2) qui lit le reste, à
+  l'import pour le contrôle comme dans la page. Un type n'a pas de champ
+  `types` : sa colonne Type porte son nom. Les deux listes existent même
+  vides (feuille absente, I4). Une banque publiée avant le lot 3 n'a aucun
+  des deux champs : la consultation la lit comme avant, les écrans des
+  adversaires disent « Les adversaires ont besoin d'une banque republiée
+  depuis le classeur à jour. », et les différences (§ 6.4) y voient une
+  banque sans adversaires.
 - `cle_depot` (lot 2 bis), en dernier champ : le jeton qui permet de
   déposer les personnages en ligne (§ 8.4, § 15.8). Le champ n'existe que
   s'il a une valeur. Il ne vient jamais de la banque importée : seule la
@@ -490,6 +533,37 @@ résolu, mais signalé (A1).
 | I1 | information | espaces de bord retirés d'un nom |
 | I2 | information | description vide |
 | I3 | information | bloc sans capacité (décision de l'auteur, 28/09/2026 : ce fut A6, avertissement, jusqu'à la 0.6 ; le code A6 ne sera pas réutilisé) |
+| E8 | erreur | feuille Adversaires (§ 16) : type cité par un adversaire, introuvable parmi les types de la feuille |
+| E9 | erreur | notation de type illisible : multiplicateur ailleurs qu'après le dernier type, crochet non fermé, multiplicateur nul, négatif ou qui n'est pas un nombre, nom de type manquant ; ou un type dont le nom porte « / » ou un crochet, que la colonne Type d'un adversaire ne pourrait pas citer |
+| E10 | erreur | localisation invalide : face hors de 2 à 20 (la face 1 est la contre-attaque), deux zones sur une même face, faces non couvertes (aucune zone ne commence à 2), forme autre que `Nom(face)` |
+| E11 | erreur | objet d'équipement introuvable : ni un bloc, ni un pack d'armure ; ou un pack dont aucune pièce n'existe |
+| E12 | erreur | armure dont le nombre de valeurs n'est ni 1, ni 6, ni celui des zones de l'adversaire |
+| E13 | erreur | capacité citée par un type ou un adversaire, introuvable dans Capacites |
+| E14 | erreur | valeur numérique illisible : nombre d'actions, souffle, attaque, défense, qualité (elle vaut alors la qualité par défaut), rang (un entier de 1 au maximum de la capacité ; il vaut alors le rang par défaut), rang sans variante de puissance écrite dans Capacites, armure ou dégâts d'un bloc porté qui ne se calculent pas, produit par le multiplicateur ou somme d'armures hors des nombres calculables |
+| E15 | erreur | adversaire incomplet une fois l'héritage appliqué : sans localisation, sans attaque ou sans défense (une cellule illisible ou un type introuvable, déjà signalés, ne le sont pas deux fois) |
+| E16 | erreur | deux types, ou deux adversaires, de même nom (noms comparés exactement, comme E3) |
+| A11 | avertissement | zone reconnue par approximation : à deux lettres d'écart au plus d'une des six zones des personnages |
+| A12 | avertissement | armure à six valeurs dont une valeur non nulle vise une zone que l'adversaire n'a pas (aucune de ses zones n'en porte le nom) : cette valeur ne couvre rien, ou, s'il a justement six zones, les six valeurs se posent dans l'ordre du d20 |
+| A13 | avertissement | rang supérieur au maximum de la capacité (3, ou sa plus haute variante) : ramené au maximum |
+| A14 | avertissement | rang donné à une capacité qui n'évolue pas : ignoré |
+| A15 | avertissement | capacité d'arme sans arme : sa description invoque `{degats}`, et rien de ce que porte l'adversaire ne les lui donne |
+| A16 | avertissement | un type et un adversaire de même nom |
+| I4 | information | feuille Adversaires absente : la banque n'a pas d'adversaires |
+| I5 | information | type qu'aucun adversaire n'utilise |
+
+**Les codes de la feuille Adversaires** (lot 3 : E8 à E16, A11 à A16, I4,
+I5, à la suite des autres et dans l'ordre de l'instruction) viennent de la
+résolution des adversaires, la même que celle de la page (§ 16.2) ; l'import
+relève la feuille absente (I4). Les codes communs y valent aussi : E1 (un
+en-tête absent d'une feuille présente), E2 (une ligne sans nom, un type
+sans nom), E6 (une liste illisible), A1 (un type, un bloc ou une capacité
+cités à la casse ou aux accents près), I1. Une anomalie se range **à la
+ligne où elle se corrige** : celle d'une cellule d'un type à la ligne du
+type, une seule fois, même quand dix adversaires en héritent ; ce qui ne se
+voit qu'une fois l'héritage appliqué (E12, E15, A12, A15), à la ligne de
+l'adversaire. Les anomalies de la feuille se trient après celles des autres
+feuilles ; sur une même ligne, les codes se rangent dans l'ordre des
+nombres (E9 avant E11).
 
 **Publier malgré des erreurs** (validé par l'auteur le 28/09/2026). Une erreur
 bloque la publication par défaut.
@@ -544,6 +618,12 @@ copié ; le banc affiche des comptes et n'écrit rien.
   mesure de référence ci-dessus. L'auteur modifie son classeur : un écart
   n'est pas un échec. Il s'explique par les éléments qui le causent, sans que
   rien ne soit « corrigé » dans les données.
+- **Banc des adversaires** (lot 3) : chaque adversaire de la feuille,
+  résolu, avec ses quatre nombres, ses armes et leurs dégâts, l'armure de
+  chaque zone, ses maîtrises et ses capacités jouées avec un désavantage,
+  et les anomalies de la feuille. Ces valeurs se comparent, à la main, aux
+  mesures de référence de l'instruction du lot, qui restent hors dépôt
+  (§ 16.8).
 
 ### 6.4 Le rapport et les différences
 
@@ -564,15 +644,22 @@ ils s'affichent **tels que l'auteur les a écrits** (`brut`), sous le nom de
 leur colonne. Une capacité à une seule variante de part et d'autre compare
 sa puissance comme un champ ; à plusieurs variantes, elle se compare
 puissance par puissance, et une variante ajoutée ou retirée est une
-modification. Un `lisez_moi` modifié est signalé.
+modification. Un `lisez_moi` modifié est signalé. **Les types d'adversaires
+et les adversaires** (lot 3) se comparent de même, par leur nom, cellule par
+cellule, sur ce que la notation de la feuille y lit (§ 16.1) : deux
+écritures de la même liste, ou « 2 » et « 2,0 », ne diffèrent pas. Une
+banque publiée avant la feuille Adversaires n'en a aucun : tout y est
+ajouté.
 
 **Le résumé d'une ligne** : `Publication du classeur des règles — 28/09/2026
 14:32 — 3 capacités ajoutées, 2 modifiées, 0 retirée`. Les catégories
-viennent dans l'ordre blocs, capacités, éléments, séparées par « ; » ; une
-catégorie sans changement est tue ; zéro et un s'accordent au singulier.
-Sans changement : « aucune différence ». La première publication donne les
-totaux (« première publication : 67 blocs, 69 capacités, 19 éléments ») ; une
-publication malgré des erreurs finit par « — publiée malgré 12 erreurs ».
+viennent dans l'ordre blocs, capacités, éléments, types d'adversaires,
+adversaires, séparées par « ; » ; une catégorie sans changement est tue ;
+zéro et un s'accordent au singulier. Sans changement : « aucune
+différence ». La première publication donne les totaux (« première
+publication : 67 blocs, 69 capacités, 19 éléments », suivis de « 2 types
+d'adversaires, 3 adversaires » quand la feuille en a) ; une publication
+malgré des erreurs finit par « — publiée malgré 12 erreurs ».
 
 ---
 
@@ -899,28 +986,37 @@ vivent dans `css/jetons.css` : une identité visuelle s'y posera plus tard,
 sans toucher au reste ; seule la largeur de la condition `@media` s'écrit
 dans `ecran.css`, car CSS n'y lit pas de variable. La gravité d'une anomalie
 se lit en toutes lettres, jamais à la seule couleur. Aucune identité
-visuelle propre à Abrasia dans l'interface. Seule exception : la fiche de
-personnage imprimable, qui est du papier, a l'identité du modèle de fiche,
-ses couleurs (`--fiche-…`, claires dans les deux thèmes) et ses polices,
-hébergées dans le dépôt (§ 15.4).
+visuelle propre à Abrasia dans l'interface. Seules exceptions : la fiche de
+personnage imprimable et la carte d'adversaire, qui sont du papier. La
+première a l'identité du modèle de fiche, ses couleurs (`--fiche-…`, claires
+dans les deux thèmes) et ses polices, hébergées dans le dépôt (§ 15.4) ; la
+seconde, celle de la maquette des adversaires (`--carte-…`, EB Garamond,
+§ 16.5).
 
 | Écran | Contenu |
 |---|---|
 | Mot de passe | un champ, « se souvenir sur cet appareil » coché par défaut, une attente pendant la dérivation, qui ne dépend pas de la peinture de la fenêtre (une fenêtre masquée ne peint pas) ; après chaque saisie réussie, la page demande un stockage durable (`navigator.storage.persist()`), sans attendre la réponse : Firefox la demande à la personne, qui peut ne jamais répondre (relevé du groupe 3) ; sans IndexedDB, une phrase remplace la case (§ 7.2) |
-| Accueil | date de la banque publiée, comptes (blocs, capacités, éléments), lien vers les anomalies s'il y en a ; « Vérifier les mises à jour » (§ 8.3) ; « Oublier le mot de passe sur cet appareil » (§ 7.2) ; l'aide pour l'écran d'accueil ; le diagnostic |
-| Listes | Blocs, Capacités, Éléments, dans l'ordre alphabétique ; recherche instantanée sur les noms et les descriptions, sans casse ni accents (`œ` vaut `oe`), chaque mot de la recherche devant se trouver |
+| Accueil | date de la banque publiée, comptes (blocs, capacités, éléments, adversaires, types d'adversaires ; une phrase à la place des deux derniers quand la banque a été publiée avant le lot 3, § 16.6), lien vers les anomalies s'il y en a ; « Vérifier les mises à jour » (§ 8.3) ; « Oublier le mot de passe sur cet appareil » (§ 7.2) ; l'aide pour l'écran d'accueil ; le diagnostic |
+| Listes | Blocs, Capacités, Éléments, Adversaires, Types, dans l'ordre alphabétique ; recherche instantanée sur les noms et les descriptions, sans casse ni accents (`œ` vaut `oe`), chaque mot de la recherche devant se trouver ; un adversaire se cherche aussi par ses types, son équipement et ses capacités, tels qu'il les écrit |
 | Fiche d'un bloc | éléments (liens), capacités (liens ; « au choix : … », « facultatif : … »), paramètres sous leur nom affiché (§ 5.2), par exemple `Brûlant[5/10/15]`, suivis de leur écriture transmise, notes de conception en retrait |
 | Fiche d'une capacité | variantes par puissance, coûts, éléments propres, description ; **« octroyée par »** : les blocs qui la citent dans leur colonne des capacités (A3) |
 | Fiche d'un élément | paramètres reçus, description ; **« porté par »** : blocs et capacités qui le citent, et blocs qui transmettent un paramètre qu'il reçoit (A4) |
-| Anomalies | le rapport publié avec la banque ; `#/anomalies/Blocs/14` met en avant les anomalies d'une ligne |
+| Fiche d'un adversaire | l'adversaire **résolu** ; vue lecture, où chaque valeur dit d'où elle vient, ou vue carte ; « Ajouter à la rencontre », « Imprimer / PDF » (§ 16.6) |
+| Fiche d'un type | sa ligne telle que la résolution la lit, et les adversaires qui l'utilisent (§ 16.6) |
+| Rencontre | des adversaires, un nombre d'exemplaires par + et −, « Imprimer / PDF », l'aperçu des cartes ; rien n'est enregistré (§ 16.6) |
+| Anomalies | le rapport publié avec la banque ; `#/anomalies/Blocs/14` met en avant les anomalies d'une ligne, `#/anomalies/Adversaires/3` de même |
 | Espace auteur | clé GitHub ; import ; rapport ; différences ; publication ; changement de mot de passe, avec les personnages en ligne ; clé de dépôt des personnages ; vérification et reprise des personnages en ligne (§ 8.4) |
 | Personnages | en ligne, tous les personnages du site et ceux que l'appareil vient d'envoyer ; à part, les non-envoyés (« Réessayer ») et les brouillons ; créer, reprendre, ouvrir, modifier, enregistrer le fichier, importer, ouvrir sur mon téléphone, supprimer après confirmation (pour tous, en ligne) ; en démonstration, le personnage de démonstration, et rien en ligne (§ 15.3, § 15.8) |
 | Création | le parcours en neuf étapes, chaque capacité décrite, des boutons + et −, trois entrées d'objets, un brouillon gardé à chaque changement, « Ce qui manque » toujours présent ; la copie de travail d'un « Modifier », qui s'enregistre à la place de l'original ou sous un autre nom (§ 15.3) |
 | Fiche d'un personnage | vue lecture ou vue fiche, « Imprimer / PDF » (recto puis verso), fichier, lien vers le téléphone, « Modifier », qualité des objets ; un personnage en ligne s'y ouvre aussi (§ 15.3, § 15.4, § 15.5) |
 | Personnage reçu | un lien #/recevoir/… : aperçu, puis « Enregistrer sur cet appareil » (§ 15.1) |
 
-La navigation porte un lien « Personnages ». Chaque fiche a une adresse (`#/capacite/Attaque%20de%20base`) qu'on peut
-envoyer à un joueur. Un renvoi cassé s'affiche comme tel (texte barré, lien
+La navigation porte les liens « Personnages », « Adversaires » et
+« Rencontre ». Les types d'adversaires s'atteignent par les onglets des
+listes et depuis chaque fiche d'adversaire ; leurs écrans marquent
+« Adversaires ». À l'impression d'une fiche de la consultation, ni la liste
+ni le lien de retour ne sortent. Chaque fiche a une adresse
+(`#/capacite/Attaque%20de%20base`) qu'on peut envoyer à un joueur. Un renvoi cassé s'affiche comme tel (texte barré, lien
 vers l'anomalie), jamais comme un lien mort ; un morceau que la notation n'a
 pas compris s'affiche tel qu'écrit, avec le même lien. Une adresse abîmée
 mène à « page introuvable », comme les noms d'`Object.prototype`
@@ -1025,7 +1121,7 @@ se chargent pas depuis un fichier ouvert directement.
   (`Content-Security-Policy`), placée avant tout script et tout style : tout
   vient du site lui-même (`default-src`, `script-src`, `style-src`,
   `img-src`, et depuis le lot 2 `font-src` : `'self'`, pour les polices de
-  la fiche), seules les connexions vers le site et vers `api.github.com`
+  la fiche et de la carte), seules les connexions vers le site et vers `api.github.com`
   sont permises, et ni objet, ni `<base>`, ni travailleur, ni envoi de
   formulaire. Aucun script, style ni gestionnaire
   d'événement n'est écrit dans la page. **Aucune donnée n'est insérée comme
@@ -1040,8 +1136,11 @@ se chargent pas depuis un fichier ouvert directement.
   (la silhouette de la fiche), sans adresse, gestionnaire ni style ;
   `telecharger()` fait enregistrer un fichier par un lien vers un Blob
   qu'elle fabrique elle-même, seule adresse que `el()` refuserait. La seule
-  écriture de style du code est l'échelle de la vue fiche, un nombre, posé
-  en propriété CSS (§ 15.5). Raison : la clé et le jeton vivent dans
+  écriture de style du code est l'échelle d'un papier à l'écran, un nombre,
+  posé en propriété CSS (`--echelle`) par `js/ecrans/echelle.js`, pour la
+  vue fiche d'un personnage (§ 15.5) et pour la carte d'un adversaire
+  (§ 16.6) ; un contrôle vérifie qu'aucun autre module de `js/` n'écrit de
+  style (§ 11). Raison : la clé et le jeton vivent dans
   IndexedDB, et une cellule de classeur contenant du HTML ne doit jamais
   s'exécuter.
 - GitHub Pages sert chaque fichier du dépôt dans l'origine de l'Atelier, sans
@@ -1100,6 +1199,14 @@ chiffré d'un personnage en ligne (§ 15.8). Le serveur local sert en plus les
 `.woff2`, le personnage de démonstration, et `personnages/` sous ses deux
 seules formes, à la casse près.
 
+**La police de la carte d'adversaire** (lot 3) : EB Garamond, au format
+woff2, sous-ensemble « latin » (qui couvre le français) : une police
+variable, de 400 à 800 de graisse, et son italique, 70 Ko à elles deux, et
+leur licence SIL OFL 1.1 (`polices/OFL-EBGaramond.txt`, « Copyright 2017 The
+EB Garamond Project Authors »), décision de l'auteur du 11/10/2026. Ce sont
+les deux fichiers de la maquette du lot. La page les charge de son propre
+site, seulement quand une carte s'affiche (`css/adversaire.css`).
+
 Toute dépendance future est justifiée ici, avant son arrivée.
 
 ### 10.3 Le dépôt et Git
@@ -1142,7 +1249,15 @@ Toute dépendance future est justifiée ici, avant son arrivée.
   armes lourde, agile et précise, des armures sur les six zones dont deux
   sur le torse, un bouclier (paramètre `defense`), un consommable, et les
   éléments Arme, Lourde, Agile, Précise, Armure, Dégâts, Qualité, Portée,
-  Défense. A8 et A9 se déclenchent sur des variantes, comme E1.
+  Défense. A8 et A9 se déclenchent sur des variantes, comme E1. Depuis le
+  lot 3, une sixième feuille, `Adversaires`, sert aussi à la démonstration
+  (§ 16.7), avec une arme et une armure naturelles en fin de `Blocs`. Elle
+  ne porte que trois anomalies, qu'elle annonce (A11, A1, A15) : les autres
+  codes de la feuille se déclenchent sur des variantes fabriquées au moment
+  de l'essai (`tests/outils/adversaires_essai.js` : un socle sans défaut,
+  plus la ligne fautive), pour que la démonstration reste jouable. Le
+  classeur propre des contrôles a lui aussi sa feuille Adversaires, sans
+  défaut : sans elle, I4 le dirait.
 - Messages de commit en prose française : un titre, puis ce qui a changé, ce
   qui a été mesuré, ce qui a été laissé.
 - **Le dépôt est public, l'historique aussi** : chaque commit porte le nom et
@@ -1185,18 +1300,19 @@ Chaque contrôle nouveau se vérifie **armé puis désarmé**.
 |---|---|
 | Lecture | le lecteur XML : entités, CDATA, noms locaux, fins de ligne, XML mal formé et DOCTYPE refusés ; le classeur d'essai donne les feuilles, en-têtes et cellules attendus, dont le texte enrichi, les retours à la ligne et les nombres ; un fichier qui n'est pas un ZIP, une archive tronquée, chiffrée, ZIP64 ou d'une méthode inconnue, un CRC faux, un classeur protégé par mot de passe, un XML abîmé donnent un message, pas une exception ; le classeur suivi correspond à sa description (`tests/outils/`) |
 | Notation | chaque ligne du tableau du § 6.2, dont les accolades imbriquées et la virgule décimale ; une notation cassée donne E6 et garde le brut |
-| Import | la banque du classeur d'essai a le format du § 5.1 ; colonnes retrouvées malgré la casse, les accents et l'ordre des en-têtes ; valeurs en chaînes, telles qu'écrites ; brut et `lisez_moi`, où une colonne nommée `__proto__` ou `constructor` reste ; ligne sans nom exclue ; fichier illisible : un message |
-| Contrôle | le classeur d'essai déclenche **chaque** code du § 6.3 (E1, A8, A9 et A10 sur ses variantes, § 10.3), et exactement les anomalies qu'il annonce, ligne par ligne ; un classeur propre n'en déclenche aucun ; gravités du § 6.3 (le tableau lu dans la spécification, codes à deux chiffres compris) et tri du § 6.4 ; la colonne « Type » attendue, les types comparés sans casse, accents ni espaces ; E7 : un paramètre ciblé à côté du même sans cible admis, dans les deux ordres ; deux sans cible, ou la même cible deux fois (casse comprise), une erreur ; E4 toujours sur la cible ; A10 : deux pièces d'un même type sur une zone, pas deux types différents, pas une valeur écrite « 0 » ou « 0,0 » |
+| Import | la banque du classeur d'essai a le format du § 5.1 ; colonnes retrouvées malgré la casse, les accents et l'ordre des en-têtes ; valeurs en chaînes, telles qu'écrites ; brut et `lisez_moi`, où une colonne nommée `__proto__` ou `constructor` reste ; ligne sans nom exclue ; fichier illisible : un message ; la feuille Adversaires : une entrée par ligne, type ou adversaire, ses cellules telles qu'écrites, vides comprises, et son brut ; ses en-têtes retrouvés malgré la casse et les espaces (« Nombre  d'actions ») |
+| Contrôle | le classeur d'essai déclenche **chaque** code du § 6.3 (trente-six ; E1, A8, A9, A10 et quinze des codes de la feuille Adversaires sur ses variantes, § 10.3), et exactement les anomalies qu'il annonce, ligne par ligne ; un classeur propre n'en déclenche aucun ; gravités du § 6.3 (le tableau lu dans la spécification, codes à deux chiffres compris) et tri du § 6.4 ; la colonne « Type » attendue, les types comparés sans casse, accents ni espaces ; E7 : un paramètre ciblé à côté du même sans cible admis, dans les deux ordres ; deux sans cible, ou la même cible deux fois (casse comprise), une erreur ; E4 toujours sur la cible ; A10 : deux pièces d'un même type sur une zone, pas deux types différents, pas une valeur écrite « 0 » ou « 0,0 » |
 | Chiffrement | aller-retour, au format 2 du § 7.1 : l'empreinte est celle des octets chiffrés, vérifiée avant le déchiffrement, et change à chaque publication ; le format 1 ne se lit plus : il se dit abîmé, avant toute dérivation ; mauvais mot de passe refusé proprement ; fichier abîmé ou inconnu, ou en-tête hors des bornes du § 7.1 (itérations, sel, IV, données), ou dérivation refusée : un message ; une clé sous le plancher ne chiffre pas ; IV différent à chaque chiffrement ; sel inchangé tant que le mot de passe ne change pas ; la clé gardée déchiffre la publication suivante (§ 7.1), et un sel renouvelé la rend inutilisable ; normalisation du mot de passe : NFC, espaces de bord, **minuscules** (« İ » compris), la même clé quelle que soit la casse ; une banque chiffrée sous la forme exacte reste lisible avec le mot de passe tel qu'il se saisissait, et la clé rendue republie sous la même forme ; 8 signes au moins, sans autre exigence ; coffre : seule une clé AES-GCM non extractible, clés réelle et de démonstration séparées, jeton à part (§ 7.2) |
 | Publication | `fetch` simulé, **aucun appel réel à GitHub** : adresses, en-têtes et corps de la requête ; auteur et committer explicites, en adresse privée (§ 8.2) ; **première publication** : fichier absent, réponse 404, écriture sans `sha` ; mise à jour avec le `sha` lu ; refus pour `sha` périmé (409, ou 422 sans `sha`) : rechargement, nouvelles différences, nouvelle confirmation ; clé refusée (401), droits, réseau, JSON illisible, réponse qui n'est pas du JSON : un message ; écriture acceptée au corps perdu : un succès ; trois refus 422 : le motif du dernier ; contenu de plus d'un mégaoctet relu en brut. Lot 2 bis : la clé de dépôt ajoutée, gardée, remplacée, retirée, en fin de banque et seulement avec une valeur ; une forme invalide refusée sans recopier la saisie ; jamais dans le message de commit ni en clair dans une requête ; la clé GitHub de l'auteur refusée comme clé de dépôt, saisie comme publiée ; le changement de mot de passe en un seul commit Git Data (banque, personnages rechiffrés, déchiffrables avec la nouvelle clé et plus avec l'ancienne, autres champs gardés, index aux versions nouvelles ; branche lue sans cache, avance sans forcer, auteur et committer explicites) ; un refus d'avance relance tout et rechiffre le personnage rangé entre-temps ; une avance sans réponse : succès si la branche relue est sur le commit écrit, panne sur le commit lu, `incertain` sur un autre commit ou si la relecture tombe aussi ; autre clé, fichier reçu entier mais abîmé, ou trop gros : laissés et comptés, index abîmé régénéré ; réponse illisible, coupée ou inattendue sur un personnage ou l'index, arbre tronqué, clé refusée, droits, réseau, 409 : un message, rien d'écrit ; la reprise avec l'ancien mot de passe (minuscules puis forme exacte), en un seul commit sans la banque |
 | Dépôt | aucun `.xlsx` hors `essais/`, et chaque `.xlsx` d'`essais/` fabriqué, octet pour octet, par l'outil des essais ; le `.gitignore` ignore les classeurs, leurs formats voisins, les documents et tout JSON hors liste ; aucun autre format de classeur ou de document, aucun JSON hors liste (le personnage de démonstration y entre) ; une seule page (`index.html`), une seule image SVG (l'icône) ; dans tout l'historique, aucun fichier interdit et aucun jeton, chaque contenu lu une seule fois (un historique de 900 révisions se lit, là où la ligne de commande de Windows n'en passerait que quelque 790) ; un jeton écrit en UTF-16 se voit, dans l'arbre comme dans l'historique ; deux workflows et eux seuls : « Contrôles » (actions fixées sur un commit avec leur version, `contents: read`, aucune écriture, `persist-credentials: false`, ni `pull_request_target` ni `workflow_run`, ni texte d'un événement) et « Personnages » (les mêmes règles, et son texte exact, ligne utile par ligne utile : l'ouverture d'un ticket et le lancement à la main pour seuls déclencheurs, `contents: read` au workflow, le groupe `personnages` sans annulation, un seul job sur `ubuntu-latest`, `contents`, `issues` et `pages` en écriture à ce seul job, les actions de « Contrôles » sur les mêmes commits, une seule commande, l'automate, le jeton pour seule expression ; la faute donne le numéro de ligne, jamais la ligne trouvée), chacun vu refusé sur des variantes fautives (dont un interpréteur, `NODE_OPTIONS`, un conteneur, une autre machine, un second checkout) ; `personnages/` ne contient que `<identifiant>.chiffre.json` et `index.json`, dans l'arbre comme dans l'historique ; chaque fichier se lit par le vérificateur de la page, sous l'identifiant de son chemin, et son contenu ne se lit pas comme du texte ; l'index se lit, **sans aucun nom en clair**, et dit exactement les fichiers présents, avec leur date et leur version ; le `.gitignore` ignore tout autre fichier de `personnages/` ; **aucun `.docx`** ; `donnees/` (quelle que soit la casse) ne contient que `banque.chiffree.json`, sans autre champ que ceux du § 7.1, aux valeurs du § 7.1 (600 000 itérations, sel de 16 octets, IV de 12), au format 2 seulement (l'empreinte est vérifiée sur les octets chiffrés ; le format 1 n'est plus permis nulle part, pas même au fichier du 29/09/2026), et des données qui ne se lisent pas comme du texte ; la banque d'`essais/` a la même forme, au format 2 ; le fichier figé du format 1, retiré, n'est permis que dans l'historique ; le crochet `pre-push` existe, en `sh`, exécutable, extrait en LF, et `core.hooksPath` le désigne sur le poste (pas sur GitHub Actions, qui n'envoie rien) ; un envoi vers un dépôt d'essai est refusé quand un contrôle échoue (même avec `NODE_TEST_CONTEXT` hérité), quand tout n'est pas commité, ou sans `node`, et accepté sinon ; aucun **jeton GitHub entier** : un préfixe (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`) suivi d'au moins 36 caractères alphanumériques ou soulignés, le contrôle fabriquant son faux jeton au moment de l'essai ; dans l'historique, des **auteurs** en `…@users.noreply.github.com`, des **committers** aussi ou en `noreply@github.com` (commits faits sur le site de GitHub), la ligne `Co-Authored-By` d'un message n'étant pas une adresse d'auteur ; ni `innerHTML`, ni `outerHTML`, ni `insertAdjacentHTML`, ni `document.write` dans les fichiers du site et dans `outils/` (§ 10.1) |
-| Différences | ajout, modification champ par champ, retrait ; variantes de puissance ; ordre des lignes et écriture d'une même notation sans effet ; doublons ; résumé d'une ligne et ses accords ; dates ; le type d'un bloc, et une banque publiée avant la colonne « Type » |
+| Différences | ajout, modification champ par champ, retrait ; variantes de puissance ; ordre des lignes et écriture d'une même notation sans effet ; doublons ; résumé d'une ligne et ses accords ; dates ; le type d'un bloc, et une banque publiée avant la colonne « Type » ; les types d'adversaires et les adversaires : ajout, modification cellule par cellule, retrait, deux écritures de la même cellule sans effet ; une banque publiée avant la feuille Adversaires, dans les deux sens, sans exception ; la phrase de la première publication, avec et sans adversaires |
+| Adversaires | la notation de la feuille (§ 16.1) : nombre, « aucune », colonne Type et ses formes illisibles, localisation et ses défauts, zones reconnues exactement et à deux lettres près (et pas à trois), listes, « // », virgule entre crochets ; une cellule faite d'un très long blanc lue sans délai. La résolution (§ 16.2 à § 16.4), sur la feuille de démonstration et sur des variantes : deux types et leur ordre ; le multiplicateur (les quatre nombres, la qualité héritée, 2 par défaut comprise ; ni les faces, ni les rangs, ni la ligne de l'adversaire) ; l'arrondi une seule fois, à la fin, dont deux pièces d'armure dont la somme n'est pas la somme des arrondis, et 15 × (1/3 + 4/3) = 25 ; « aucun », « // », une liste qui remplace ; la grille propre ; l'armure : globale et pièces qui s'ajoutent, deux globales, six valeurs par nom quel que soit l'ordre des zones, autant de valeurs que de zones, la dernière pièce non globale, la valeur nulle, les trois packs sans armure naturelle ; plusieurs armes, la capacité donnée par deux ; la qualité (0, 1, 3, celle que fixe le bloc, héritée sous multiplicateur) ; l'ordre des capacités, les rangs par défaut, le rang qui remplace, le rang ramené au maximum, les groupes au choix non donnés ; le coût au rang, X, le lien ; les descriptions évaluées, le bouclier ; les maîtrises, par l'élément et par le nom ; le désavantage selon la position, entier ou partiel. Chaque code de la feuille sur son cas, mot pour mot, avec sa ligne et sa gravité (`tests/outils/adversaires_essai.js`) ; un constat de type dit une fois ; le tri, les codes à deux chiffres ; E1 sur un en-tête absent ; un adversaire en erreur qui se résout quand même ; des noms hostiles (`__proto__`, du HTML) et des nombres démesurés, sans exception. Les types naturels reconnus, absents du créateur de personnage et des packs ; une banque d'avant le lot 3. **La carte**, dans un document simulé (§ 16.5) : en-tête et numéro d'exemplaire, bande du d20 et place de chaque zone, abréviations, première ligne, une ligne par capacité, capacité à deux armes, désavantage entier et partiel, quatre lignes au moins, valeurs absentes, aucune provenance, un nom qui contient du HTML reste du texte ; sa feuille lue comme un texte : aucune couleur en dur, jetons définis et sans valeur sombre, règles préfixées, aucune classe commune avec l'interface ni la fiche, les deux familles de classes de position, les deux `@font-face`, l'impression, le lien dans `index.html`. **Les écrans**, dans un document simulé (§ 16.6) : les listes, leurs cinq onglets et leur recherche ; les comptes de l'accueil ; une banque d'avant le lot 3, sans feuille, ou abîmée : aucune exception, et la phrase ; la fiche d'un adversaire : deux vues et leur clé propre, la carte toujours dans la page et seule à l'impression, la provenance de chaque valeur sur le Chef de partie et le Homard furieux, les introuvables barrés avec la ligne qui les cite, un nombre illisible, le doublon, l'introuvable, un nom en HTML ; la fiche d'un type ; la rencontre : + et −, le focus, la numérotation, l'ordre, les deux plafonds, « Vider », rien d'enregistré, la remise à zéro au changement de banque, l'adversaire incomplet signalé, l'impression après les polices ; l'adresse d'une anomalie de la feuille ; l'unique écriture de style et l'échelle tenue ; les règles d'`ecran.css` (cadre masqué à l'écran seulement, rétabli à l'impression, cibles de 44 px). La mise en page et l'impression se mesurent dans un vrai navigateur (§ 16.8) |
 | Préparation | première publication, mise à jour sous le même secret ; mot de passe à choisir, à saisir ou changé ; E1 refusé ; changement de mot de passe ; la clé de dépôt suivie d'une publication à l'autre ; circuit complet, de l'import à la lecture par un joueur |
 | En ligne | les trois formats du § 15.8 dans les deux sens : personnage chiffré, ticket, fichier rangé, déchiffré, le même personnage ; aucun nom en clair dans le ticket, le fichier ni l'index ; seul un personnage enregistré, de la banque réelle, part ; « supprimer » sans personnage ; un ticket hostile (JSON, tableau, champ en plus, `__proto__`, format, action, identifiant hostile, date locale ou impossible, sel, IV, contenu, base64 sans remplissage ou url, signe non ASCII, trop gros) refusé avec une raison ; un personnage trop gros pour un ticket ne part pas ; un chiffré recopié sous un autre identifiant, ou d'une autre clé, ne se lit pas ; le contenu déchiffré hostile (bombe, format, UTF-8, autre identifiant, brouillon, démonstration) refusé ; l'index trié, trois champs, un doublon de casse refusé ; le rechiffrement sans lecture. La page : la démonstration ne dépose ni ne lit rien ; sans clé de dépôt, « non envoyé » et sa raison ; le ticket ouvert avec la clé, le sel de la banque en place vérifié d'abord ; les refus de GitHub (401, 403, 404, 410, 422, réseau) laissent « non envoyé », « Réessayer » le refait ; l'index lu sans cache, chaque fichier par sa version, une seconde lecture sans nouvelle requête ; une ancienne clé et un fichier hostile comptés à part, un mot de passe changé pendant la visite distingué d'une ancienne clé ; GitHub Pages en retard juste après un changement fait d'ici ne bloque pas le dépôt, une page en retard, si ; une version en ligne plus récente arrête l'envoi, sauf confirmation ; une lecture échouée n'est pas un personnage absent ; le rapprochement (rattrapé, attente, retard, suppression gardée tant que l'index ne se lit pas, copie plus ancienne qui ne cache pas la version en ligne) |
 | Automate | lancé hors de GitHub, sur une simulation de l'API et de vrais dépôts git jetables : un ticket « creer » conforme rangé (fichier qui se déchiffre, index, commit du robot aux deux seuls chemins, message sans nom, ticket fermé et verrouillé, Pages demandée) ; « remplacer », ticket repassé sans effet (même deux tickets rejoués, déjà rangés : aucun commit), « supprimer », suppression d'un absent, passage sans ticket ; tickets non conformes (JSON illisible, autre titre, identifiant hostile ou en forme de jeton, trop gros, base64 faux, contenu en clair, sel périmé, corps vide, champ en plus, commandes de shell et chemins) fermés avec leur raison, sans rien recopier, écrire ni exécuter ; collision de casse ; inconnu (autre login, ou même login d'un autre compte) fermé et verrouillé sans commentaire, même quand la partie git s'arrête ; avalanche d'inconnus au-delà de la limite de pages : les plus anciens fermés, les autres au passage suivant, les tickets du propriétaire lus à part et rangés ; demande de fusion ignorée ; envoi refusé puis réussi, tickets rejugés sur la banque republiée ; cinq refus : aucun ticket du propriétaire fermé ; fichier illisible, intrus, ou `.gitignore` qui cache les fichiers rangés : arrêt sans commit ni fermeture ; chemin hors de `personnages/` : arrêt avant l'envoi ; la variable du jeton ôtée de toute commande git, le jeton à la seule commande d'envoi, jamais sur le disque ; Pages refusée ; lancé à la main, l'automate redemande Pages ; l'API et l'environnement de GitHub Actions. Aucun nom en clair nulle part |
-| Routes et fiches | décodage des adresses de fiche (`#/capacite/Attaque%20de%20base`) et aller-retour des noms difficiles ; la fiche et la liste des blocs montrent leur type ; adresses abîmées, dont les noms d'`Object.prototype` ; un nom introuvable n'est jamais le titre ; recherche sans casse ni accents, sur les noms et les descriptions ; renvois résolus comme au contrôle ; « octroyée par », « porté par », nom affiché ; anomalies d'une ligne |
-| Site | politique de sécurité du `<meta>`, avant scripts et styles, toute la table des directives et rien d'autre ; zoom permis ; ni script, ni style, ni gestionnaire en ligne ; chaque fichier appelé existe ; le graphe des modules se résout et atteint les douze écrans ; manifeste, couleurs des jetons, icônes aux tailles dites, telles que les dessine leur outil ; contrastes ; valeurs de `ecran.css` et de `personnage.css` tirées des jetons, aucune police téléchargée par l'interface ; la banque de démonstration, au format 2, se déchiffre et vient du classeur d'essai ; le mot de passe de démonstration, déjà en minuscules, saisi en majuscules, ouvre la banque, et la clé gardée la rouvre ; le format 1 ne s'ouvre plus ; au téléchargement, une empreinte de format 2 fausse et un format plus récent donnent leur message ; le diagnostic dit le format ; chargement : absente, présente, abîmée, `?v=`, clé gardée, mot de passe requis ou changé, stockage durable ; l'attente du mot de passe ne dépend pas de la peinture de la fenêtre ; le déverrouillage n'attend pas la réponse sur le stockage durable ; sans IndexedDB, la phrase au lieu de la case ; une erreur inattendue : un message. Dans un document simulé : le bouton « Publier » existe dans chaque état de l'espace auteur, et sa raison s'affiche ; la barre de publication reste collée au bas de l'écran ; « Oublier le mot de passe » ne laisse ni clé ni différences, même pendant une comparaison ; « Oublier la clé GitHub » annule la publication en attente ; « Se souvenir » décide de garder la clé ; la veille de 15 secondes, et rien sur une page chargée ; l'aide dit d'ajouter l'Atelier depuis son accueil ; `dom.js` refuse gestionnaires en texte, `style`, `srcdoc` et adresses étrangères ; le document simulé refuse d'ajouter null ou undefined, que le navigateur afficherait, et son `querySelectorAll` rend, comme le navigateur, une liste qui se parcourt mais n'a ni `filter` ni `map`. L'espace auteur (lot 2 bis) : la section de la clé de dépôt (aide, état, saisie vérifiée ; la clé jamais à l'écran, dans un attribut ou un champ, ni gardée ; retirer, garder ; oubliée avec le mot de passe, et après une publication réussie ; la clé GitHub de l'auteur refusée ; une phrase en démonstration) ; le mot de passe : 7 signes refusés, 8 acceptés, deux saisies qui ne diffèrent que par la casse acceptées ; le changement compte les personnages avant l'envoi, puis écrit un seul commit ; s'il en laisse sous une autre clé, la section « Personnages en ligne » les montre aussitôt, avec la reprise ; une avance sans réponse : « Publiée » si la branche a avancé, sinon l'incertitude dite, et l'ancienne clé reste ; la vérification n'écrit rien, la reprise rechiffre. Le serveur local : la seule machine, les seuls fichiers du site, dont les polices, le personnage de démonstration et `personnages/` sous ses deux seules formes, casse comprise |
-| Personnage | chaque règle du § 15.2 : la table des dés, bornes comprises ; les paires d'attaque et de défense ; les types mêlés et le cas sans armure ; l'ordre des zones, la grille et le maximum par zone, et l'interdiction du livret ; la qualité (X, 1, 2, 3, 1,5) et l'arrondi une fois l'opération faite, dont un cas où la virgule flottante se tromperait ; les expressions et leurs refus ; l'expression de mains nues et son dé vide ; le coût à la puissance ; les coûts 1, 3 et 6, le plafond de 10, le reliquat, les capacités reçues au-delà de 10 ; la capacité reçue deux fois ; le niveau 0 et les capacités à venir hors décompte ; les groupes ( ) et [ ], un choix disparu ; le style de combat ; le tirage (chaque constellation atteignable, rejet des valeurs biaisées) ; les points de lien ; la banque sans types ; les choix modifiés ou disparus ; ce qui manque à chaque étape, un bloc d'un autre type. Le format : aller-retour du fichier, champ inconnu ou manquant, `__proto__`, chaque champ et ses bornes, 64 Ko, JSON illisible, mode inversé, nom de fichier sûr ; le lien : aller-retour dans le fragment, lien abîmé, forgé, bombe de décompression, UTF-8 invalide, mode inversé. L'étagère : modes séparés, ordre, illisibles comptés, un personnage du format 1 converti, les notes ; une base bloquée par un autre onglet : l'étagère en mémoire et la raison, sans attendre. Le format 2 (lot 2 bis) : les places d'un objet, une seule arme tenue, les tirages ; le format 1 converti (arme principale, bouclier, armures portées, tirage) ou refusé s'il est abîmé ; un personnage neuf à 2 partout. Les places dans le calcul : pièces du pack portées, bouclier équipé (un seul), rangés sans effet ; le parcours signale une place fautive. Les adresses des écrans du personnage. La répartition du recto et son débordement ; le recto et le verso dans un document simulé (en-tête, cases cochées et grisées, reliquat, souffle, zones, corps, équipement, liens, légende, pied de page, suite du recto, toutes les capacités et les armes, un nom en HTML qui reste du texte) ; l'impression (A4 sans marge, couleurs, saut de page, barre non imprimée) ; les polices hébergées et leurs licences ; le personnage de démonstration, fabriqué par son outil et complet. Les écrans : liste, parcours, réception, fiche (vues, impression, banque sans types). Le parcours du lot 2 bis : les descriptions, dépliées sur grand écran et repliées sur téléphone ; les boutons + et − des caractéristiques (de 2 à 6, « + » arrêté à 36, le focus qui passe au voisin) ; le tirage refait et compté, la saisie ; l'arme tenue remplacée, les packs (un seul à la fois, la pièce portée seule renvoyée au sac), un pack non proposé (A10) avec sa raison, tous les objets au sac, qualité 2, la pièce refusée sur une zone couverte, un seul bouclier, l'arme prise en main ; l'étape 8 : seules les capacités qui peuvent évoluer, + et − dans les bornes, la raison d'un « + » inactif, avant et après, le focus gardé sur le bouton actionné ; les descriptions gardent leur état quand l'étape se redessine ; « — choisir — » ne défait pas la constellation ; le catalogue des armes, l'objet décrit avant d'être ajouté, un refus dit près de l'objet et le focus sur lui ; « Modifier » : la copie de travail, reprise, « Enregistrer » à la place de l'original, « Enregistrer sous un autre nom » (un autre nom exigé) ; l'enregistrement dépose (« creer », « remplacer »). La liste en ligne : les rubriques, l'attente, « Réessayer », « Supprimer » pour tous, « Modifier » d'un personnage en ligne, la phrase de la démonstration ; le mot de passe changé pendant la visite, une suppression dont le personnage ne se lit plus, une copie plus ancienne (« Envoyer quand même », « Retirer de l'appareil »), une base bloquée. La fiche : la qualité des objets (saisie fautive refusée, redépôt, panneau resté ouvert, focus sur la confirmation, deux objets de même nom distingués), « Modifier », un personnage ouvert depuis le site, ou dont la lecture échoue (« Réessayer »), « tirée N fois ». La mise en page se mesure dans un vrai navigateur (§ 15.4) |
+| Routes et fiches | décodage des adresses de fiche (`#/capacite/Attaque%20de%20base`) et aller-retour des noms difficiles ; la fiche et la liste des blocs montrent leur type ; adresses abîmées, dont les noms d'`Object.prototype` ; un nom introuvable n'est jamais le titre ; recherche sans casse ni accents, sur les noms et les descriptions ; renvois résolus comme au contrôle ; « octroyée par », « porté par », nom affiché ; anomalies d'une ligne ; les adresses des adversaires, des types et de la rencontre, dont un nom forgé qui porte un demi-codet seul ; le lien de la navigation que marque chaque écran ; la recherche d'un adversaire par ce qu'il écrit ; l'index des adversaires et de leurs types, les lignes de la feuille Adversaires ; une banque d'avant le lot 3 indexée sans exception |
+| Site | politique de sécurité du `<meta>`, avant scripts et styles, toute la table des directives et rien d'autre ; zoom permis ; ni script, ni style, ni gestionnaire en ligne ; chaque fichier appelé existe ; le graphe des modules se résout et atteint les quinze écrans, et tout module de `js/` y est, hors la veille ; manifeste, couleurs des jetons, icônes aux tailles dites, telles que les dessine leur outil ; contrastes ; valeurs de `ecran.css` et de `personnage.css` tirées des jetons, aucune police téléchargée par l'interface ; la banque de démonstration, au format 2, se déchiffre et vient du classeur d'essai ; le mot de passe de démonstration, déjà en minuscules, saisi en majuscules, ouvre la banque, et la clé gardée la rouvre ; le format 1 ne s'ouvre plus ; au téléchargement, une empreinte de format 2 fausse et un format plus récent donnent leur message ; le diagnostic dit le format ; chargement : absente, présente, abîmée, `?v=`, clé gardée, mot de passe requis ou changé, stockage durable ; l'attente du mot de passe ne dépend pas de la peinture de la fenêtre ; le déverrouillage n'attend pas la réponse sur le stockage durable ; sans IndexedDB, la phrase au lieu de la case ; une erreur inattendue : un message. Dans un document simulé : le bouton « Publier » existe dans chaque état de l'espace auteur, et sa raison s'affiche ; la barre de publication reste collée au bas de l'écran ; « Oublier le mot de passe » ne laisse ni clé ni différences, même pendant une comparaison ; « Oublier la clé GitHub » annule la publication en attente ; « Se souvenir » décide de garder la clé ; la veille de 15 secondes, et rien sur une page chargée ; l'aide dit d'ajouter l'Atelier depuis son accueil ; `dom.js` refuse gestionnaires en texte, `style`, `srcdoc` et adresses étrangères ; le document simulé refuse d'ajouter null ou undefined, que le navigateur afficherait, et son `querySelectorAll` rend, comme le navigateur, une liste qui se parcourt mais n'a ni `filter` ni `map`. L'espace auteur (lot 2 bis) : la section de la clé de dépôt (aide, état, saisie vérifiée ; la clé jamais à l'écran, dans un attribut ou un champ, ni gardée ; retirer, garder ; oubliée avec le mot de passe, et après une publication réussie ; la clé GitHub de l'auteur refusée ; une phrase en démonstration) ; le mot de passe : 7 signes refusés, 8 acceptés, deux saisies qui ne diffèrent que par la casse acceptées ; le changement compte les personnages avant l'envoi, puis écrit un seul commit ; s'il en laisse sous une autre clé, la section « Personnages en ligne » les montre aussitôt, avec la reprise ; une avance sans réponse : « Publiée » si la branche a avancé, sinon l'incertitude dite, et l'ancienne clé reste ; la vérification n'écrit rien, la reprise rechiffre. Le serveur local : la seule machine, les seuls fichiers du site, dont les polices, le personnage de démonstration et `personnages/` sous ses deux seules formes, casse comprise |
+| Personnage | chaque règle du § 15.2 : la table des dés, bornes comprises ; les paires d'attaque et de défense ; les types mêlés et le cas sans armure ; l'ordre des zones, la grille et le maximum par zone, et l'interdiction du livret ; la qualité (X, 1, 2, 3, 1,5) et l'arrondi une fois l'opération faite, dont un cas où la virgule flottante se tromperait ; les expressions et leurs refus ; l'expression de mains nues et son dé vide ; le coût à la puissance ; les coûts 1, 3 et 6, le plafond de 10, le reliquat, les capacités reçues au-delà de 10 ; la capacité reçue deux fois ; le niveau 0 et les capacités à venir hors décompte ; les groupes ( ) et [ ], un choix disparu ; le style de combat ; le tirage (chaque constellation atteignable, rejet des valeurs biaisées) ; les points de lien ; la banque sans types ; les choix modifiés ou disparus ; ce qui manque à chaque étape, un bloc d'un autre type. Le format : aller-retour du fichier, champ inconnu ou manquant, `__proto__`, chaque champ et ses bornes, 64 Ko, JSON illisible, mode inversé, nom de fichier sûr ; le lien : aller-retour dans le fragment, lien abîmé, forgé, bombe de décompression, UTF-8 invalide, mode inversé. L'étagère : modes séparés, ordre, illisibles comptés, un personnage du format 1 converti, les notes ; une base bloquée par un autre onglet : l'étagère en mémoire et la raison, sans attendre. Le format 2 (lot 2 bis) : les places d'un objet, une seule arme tenue, les tirages ; le format 1 converti (arme principale, bouclier, armures portées, tirage) ou refusé s'il est abîmé ; un personnage neuf à 2 partout. Les places dans le calcul : pièces du pack portées, bouclier équipé (un seul), rangés sans effet ; le parcours signale une place fautive. Les adresses des écrans du personnage. La répartition du recto et son débordement ; le recto et le verso dans un document simulé (en-tête, cases cochées et grisées, reliquat, souffle, zones, corps, équipement, liens, légende, pied de page, suite du recto, toutes les capacités et les armes, un nom en HTML qui reste du texte) ; l'impression (A4 sans marge, couleurs, saut de page, barre non imprimée) ; les polices hébergées (Marcellus, Alegreya Sans, EB Garamond), appelées par `fiche.css` et `adversaire.css` seulement, et leurs trois licences ; le personnage de démonstration, fabriqué par son outil et complet. Les écrans : liste, parcours, réception, fiche (vues, impression, banque sans types). Le parcours du lot 2 bis : les descriptions, dépliées sur grand écran et repliées sur téléphone ; les boutons + et − des caractéristiques (de 2 à 6, « + » arrêté à 36, le focus qui passe au voisin) ; le tirage refait et compté, la saisie ; l'arme tenue remplacée, les packs (un seul à la fois, la pièce portée seule renvoyée au sac), un pack non proposé (A10) avec sa raison, tous les objets au sac, qualité 2, la pièce refusée sur une zone couverte, un seul bouclier, l'arme prise en main ; l'étape 8 : seules les capacités qui peuvent évoluer, + et − dans les bornes, la raison d'un « + » inactif, avant et après, le focus gardé sur le bouton actionné ; les descriptions gardent leur état quand l'étape se redessine ; « — choisir — » ne défait pas la constellation ; le catalogue des armes, l'objet décrit avant d'être ajouté, un refus dit près de l'objet et le focus sur lui ; « Modifier » : la copie de travail, reprise, « Enregistrer » à la place de l'original, « Enregistrer sous un autre nom » (un autre nom exigé) ; l'enregistrement dépose (« creer », « remplacer »). La liste en ligne : les rubriques, l'attente, « Réessayer », « Supprimer » pour tous, « Modifier » d'un personnage en ligne, la phrase de la démonstration ; le mot de passe changé pendant la visite, une suppression dont le personnage ne se lit plus, une copie plus ancienne (« Envoyer quand même », « Retirer de l'appareil »), une base bloquée. La fiche : la qualité des objets (saisie fautive refusée, redépôt, panneau resté ouvert, focus sur la confirmation, deux objets de même nom distingués), « Modifier », un personnage ouvert depuis le site, ou dont la lecture échoue (« Réessayer »), « tirée N fois ». La mise en page se mesure dans un vrai navigateur (§ 15.4) |
 
 Les contrôles du dépôt portent sur les fichiers suivis et sur ceux que Git
 suivrait, c'est-à-dire non ignorés : une faute se voit avant d'être commitée.
@@ -1331,11 +1447,85 @@ livret, et laisse vide ce qu'aucune source ne dit) :
   pas dans le livret, qui ne connaît que des pièces. À écrire dans le
   livret, section « Objet », si le pack doit valoir hors du créateur.
 
-**Pour le lot 3 — créateur d'adversaire**, section « Caractéristiques d'un
-adversaire » du Word : ce que sont son attaque et sa défense ; son nombre
-d'actions ; ses dégâts ; son armure, sa résistance et son corps par zone ; la
-règle de construction d'une grille de localisation propre ; le sort de ses
-blessures.
+**Pour le lot 3 — adversaires** (décisions de l'auteur du 11/10/2026,
+appliquées par le § 16, que le livret ne dit pas encore). **À écrire dans
+le livret, section « Caractéristiques d'un adversaire »**, qui tient
+aujourd'hui en une phrase :
+
+- **La feuille et l'héritage** : un adversaire hérite d'un ou de plusieurs
+  types, appliqués dans l'ordre, le suivant l'emportant cellule par
+  cellule ; une cellule vide hérite ; « aucune » veut dire rien, ou 0 ;
+  « // » reprend la liste héritée (§ 16.1, § 16.2).
+- **Le multiplicateur** : global, après le dernier type ; il multiplie le
+  nombre d'actions, le souffle, l'attaque, la défense et la qualité de
+  l'équipement hérités, la qualité 2 par défaut comprise ; il ne touche ni
+  les faces du d20, ni le rang des capacités, ni les valeurs propres des
+  blocs, ni la ligne de l'adversaire (§ 16.2).
+- **L'arrondi** : une seule fois, à la fin, à l'entier inférieur. Le livret
+  (« Valeurs décimales ») dit « suite à une opération » : préciser que les
+  opérations intermédiaires restent exactes.
+- **La grille de localisation** : la première face de chaque zone, la face
+  1 pour la contre-attaque, un nombre de zones libre ; les six zones des
+  personnages reconnues par leur nom, à deux lettres près (§ 16.3).
+- **Les ressources** : résistance 5 par zone et corps 10, comme un
+  personnage ; attaque et défense, les difficultés des jets du joueur ; le
+  souffle, la réserve qui paie ses capacités ; le nombre d'actions. Le
+  livret (« Actions de jeu ») dit seulement « habituellement une seule ».
+- **L'équipement** : la qualité entre crochets, 2 par défaut ; les trois
+  packs d'armure ; **plusieurs armes permises**, quand le livret (« Objet »)
+  n'en permet qu'une au personnage ; **l'armure zone par zone** : une pièce
+  à une valeur, globale, à laquelle les autres s'ajoutent, la dernière
+  pièce non globale l'emportant sur une zone, quand le livret interdit au
+  personnage deux pièces sur une même zone ; une pièce à autant de valeurs
+  que de zones, dans l'ordre du d20 (§ 16.4).
+- **Les types de bloc « Arme naturelle » et « Armure naturelle »** : à
+  ajouter à la liste des blocs du livret (« Système », « Blocs »).
+- **Les capacités** : celles de l'équipement héritées, le rang entre
+  crochets, le rang propre qui remplace le rang hérité ; les maîtrises et
+  le désavantage, selon la position de la capacité dans la liste du bloc,
+  ce que disent déjà les éléments Lourde, Agile et Précise du classeur
+  (§ 12, lot 2, « La maîtrise des armes ») ; un bouclier donne ses
+  capacités sans changer la Défense.
+- **Pas de mot de passe du MJ** : tout joueur qui a le mot de passe de
+  table lit les adversaires.
+
+Ce que l'instruction ne tranchait pas, et que le § 16 applique en le
+disant, **à confirmer ou à corriger dans le livret ou le classeur** :
+
+- **L'association d'une maîtrise à son poids** : par le mot que porte son
+  nom (« lourd », « agile », « précis »). Un élément porté par la capacité
+  le dirait mieux (§ 16.4).
+- **La qualité par défaut d'un bloc dont le classeur fixe la qualité** (un
+  nombre au lieu de X) : celle du bloc, plutôt que 2 ; le multiplicateur
+  s'y applique comme aux autres. Aucun bloc du classeur réel n'est dans ce
+  cas.
+- **Deux armures globales** : elles s'additionnent, comme une globale et
+  une pièce.
+- **Une armure à six valeurs sur un adversaire à qui manque une des six
+  zones** (l'instruction dit : « alors qu'aucune zone ne porte les six
+  noms ») : une valeur non nulle dont la zone manque ne couvre rien, et
+  c'est dit (A12), même si d'autres zones sont reconnues ; une valeur nulle
+  ne dit rien. Si l'adversaire a justement six zones, la pièce a « autant
+  de valeurs que de zones » : les six se posent dans l'ordre du d20, avec
+  le même avertissement.
+- **« aucun » dans la colonne Type** : aucun type, comme une cellule vide.
+- **Un groupe au choix d'un bloc qui n'a qu'une option** (`( a )`) : la
+  capacité est donnée, il n'y a rien à choisir. Les autres groupes ne sont
+  pas donnés, et l'écran le dit, sans code d'anomalie.
+- **Un rang écrit pour une capacité à variantes qui n'a pas cette
+  variante** : une erreur (E14), le coût et la description ne se lisant
+  pas. **Un type dont le nom porte « / » ou un crochet** : une erreur (E9),
+  aucun adversaire ne pouvant le citer.
+- **Un nombre que rien ne donne** (le souffle de l'Aigle du classeur
+  réel) : la case reste vide ; seules la localisation, l'attaque et la
+  défense sont exigées (E15).
+- **Une qualité non entière** s'écrit arrondie au plus proche (« 2,67 ») ;
+  le calcul garde la fraction.
+- **Les renvois de la feuille à la casse ou aux accents près** sont
+  résolus et signalés (A1), comme partout (§ 6.3) : « Maitrise du combat
+  agile » pour « Maîtrise du combat agile », deux fois dans le classeur
+  réel.
+- **Le sort des blessures d'un adversaire**, que le lot ne traite pas.
 
 **Pour le lot 4 — objets, sorts, équipement** : ce qu'est un sort (le mot
 n'apparaît pas dans le Word) ; la grammaire des expressions : le créateur de
@@ -1357,7 +1547,8 @@ maîtrise d'un objet.
 | **1 — Socle** | lecture, notation, contrôle, chiffrement, publication, consultation, contrôles, GitHub Actions | rien |
 | **2 — Personnage** | créateur au niveau 1, fiche imprimable (recto : le modèle ; verso), vue lecture et vue fiche zoomable sur téléphone, fichier et lien vers le téléphone (§ 15) | rien ; § 12, lot 2, pour ce qu'il laisse vide |
 | **2 bis — Améliorations du créateur** | descriptions, boutons + et −, packs d'armure, qualité 2, tirage refait, modifier un personnage enregistré ; personnages en ligne (ticket, automate, chiffrés) ; mot de passe à 8 signes, sans casse ; E7 assoupli, A10 ; format 1 retiré (§ 15.8) | l'auteur : le jeton de dépôt, puis le changement du mot de passe |
-| 3 — Adversaire | second classeur, créateur, assistant de calibrage, PDF quatre par feuille | § 12, lot 3 |
+| **3 — Adversaires** | la feuille Adversaires du classeur des règles, son import et ses dix-sept codes de contrôle ; la résolution (types, multiplicateur, armure par zone, capacités, désavantage) ; la consultation des types et des adversaires, résolus ; la carte et l'impression d'une rencontre (§ 16) | l'auteur : republier la banque depuis le classeur à jour ; § 12, lot 3 |
+| — Éditeur d'adversaire (lot à fixer) | l'éditeur dans la page, l'assistant de calibrage, les prétirés, l'enregistrement d'une rencontre, le suivi des dégâts à l'écran | — |
 | 4 — Objets, sorts, équipement | créateur, « Copier comme lignes Excel » | § 12, lot 4 |
 | 5 — Finitions | fiche de jeu à compteurs, PDF sur téléphone, annulation d'une publication, code QR vers le téléphone | — |
 
@@ -1962,8 +2153,9 @@ sans fenêtre (WebDriver BiDi) imprime le personnage de démonstration en
 l'interface, lisibles sans zoom ; le détail de chaque capacité se déplie,
 et un triangle le dit ; un coût nul s'écrit « sans coût »
 (`js/fiche/lecture.js`, `css/personnage.css`). **La vue fiche** : le recto
-et le verso réduits à la largeur de l'écran (`zoom`, l'échelle posée par le
-code en propriété CSS : la seule écriture de style du code, un nombre), et
+et le verso réduits à la largeur de l'écran (`zoom`, l'échelle posée par
+`js/ecrans/echelle.js` en propriété CSS : la seule écriture de style du
+code, un nombre, partagée avec la carte d'un adversaire, § 16.6), et
 le zoom à deux doigts du navigateur, jamais interdit, les agrandit. La vue
 se choisit par deux boutons ; par défaut, la vue fiche sur un grand écran,
 la vue lecture sur un téléphone ; le choix se garde sur l'appareil.
@@ -2162,3 +2354,419 @@ personnages en ligne, et, avec la clé de dépôt de la banque, peut en créer,
 modifier ou supprimer ; il peut aussi choisir un identifiant qui épelle un
 mot, ce que rien ne détecte. Qui n'a pas le mot de passe ne voit que des
 identifiants, des dates et des tailles.
+
+---
+
+## 16. Les adversaires (lot 3)
+
+Ce paragraphe suit le § 15 pour ne rien renuméroter. Le lot 3 (instruction
+du 11/10/2026, validée par l'auteur, `plans/instruction_lot3.md`) : l'import
+de la feuille « Adversaires » et ses contrôles ; la consultation des types
+et des adversaires, **résolus** ; l'impression d'une rencontre. Hors lot :
+l'éditeur d'adversaire dans la page, l'assistant de calibrage, les
+prétirés, l'enregistrement d'une rencontre, le suivi des dégâts à l'écran.
+
+**Préséance.** Le livret fait foi, mais il ne dit presque rien des
+adversaires : sa section « Caractéristiques d'un adversaire » tient en une
+phrase. Les règles de ce paragraphe sont des **décisions de l'auteur du
+11/10/2026**, inscrites au § 12, « à écrire dans le livret ». Quand le livret
+ne parle que des personnages (une seule arme équipée, deux pièces d'armure
+interdites sur une même zone), sa règle reste celle des personnages (§ 15),
+et celle d'ici vaut **pour les seuls adversaires**. Ce que le livret dit des
+adversaires est appliqué tel quel : une grille de localisation propre à
+chacun (« Jets de localisation »), un 1 qui provoque toujours une
+contre-attaque, l'attaque et la défense qui sont les difficultés des jets du
+joueur (« Asymétrie des rôles lors des combats »).
+
+**Pas de mot de passe du MJ** : les adversaires se lisent avec le mot de
+passe de table, comme le reste de la banque (décision de l'auteur).
+
+### 16.1 La feuille « Adversaires »
+
+Elle vit dans le classeur des règles, au même titre que `Blocs` (le « second
+classeur » des versions précédentes n'existe pas). Elle est **facultative** :
+absente, la banque n'a pas d'adversaires, et l'import le dit (I4). Présente,
+ses en-têtes se retrouvent par leur nom, comme ailleurs (§ 4.1), et un
+en-tête absent arrête l'import (E1) : Nom, Type, Localisation, Nombre
+d'actions, Souffle, Attaque, Défense, Equipement, Capacités. Une autre
+colonne (des notes) se garde dans `brut`, sans être lue.
+
+**Une ligne par type ou par adversaire.** Une ligne qui porte « Type » dans
+la colonne Nom (sans casse ni accents) définit un **type**, dont le nom est
+dans la colonne Type ; un type n'hérite de rien. **Toute autre ligne est un
+adversaire**, et sa colonne Type cite les types dont il hérite.
+
+**Les cellules** se gardent dans la banque telles qu'écrites, espaces de
+bord retirés (§ 5.1) ; rien n'y est lu à l'import. C'est la résolution
+(§ 16.2) qui les lit, avec `js/adversaire/notation.js` :
+
+| Cellule | Forme | Exemple | Lecture |
+|---|---|---|---|
+| toute | vide | | **hérite** : la valeur vient des types |
+| toute | `aucune`, `aucun`, seul dans la cellule | `aucun` | rien pour une liste, 0 pour un nombre |
+| Type | types séparés par `/`, multiplicateur entre crochets après le dernier | `Humain/Brigand[2]`, `Humain[1,4]` | les types, dans l'ordre, et le multiplicateur |
+| Localisation | `Nom(face)`, séparés par des virgules, sur une ou plusieurs lignes | `Torse(2), Jambe gauche(12)` | la **première face** de chaque zone |
+| Nombre d'actions, Souffle, Attaque, Défense | un nombre, à virgule décimale | `1,5` | une fraction exacte |
+| Equipement | noms de blocs ou de packs, qualité entre crochets | `Spatule souple, Armure agile[3]` | les objets ; qualité 2 sans crochets |
+| Capacités | noms de capacités, rang entre crochets | `Déplacement[2]` | les capacités ; rang 1, ou 0 pour celle qui n'évolue pas |
+| Equipement, Capacités | `//` en tête | `//, Parade` | reprend la liste héritée, et lui ajoute ce qui suit |
+
+Une liste ne se découpe pas sur une virgule entre crochets (`Dague[2,5]`).
+Sans « // », une liste **remplace** la liste héritée. Ce qui ne se lit pas
+est signalé, jamais avalé : E9 pour la colonne Type, E10 pour la
+localisation, E14 pour un nombre, E6 pour une liste (crochet jamais fermé,
+« // » ailleurs qu'en tête).
+
+### 16.2 L'héritage et la résolution
+
+**Un seul module** résout un adversaire, `js/adversaire/resolution.js` :
+l'import s'en sert pour le contrôle (`js/adversaire/controle.js`, § 6.3), la
+page pour l'affichage. La banque garde les lignes brutes, comme pour les
+blocs, et la page résout à l'affichage : ce que le rapport annonce est ce
+que l'écran montre. La résolution est une fonction pure, ne lève pas
+d'exception sur une donnée inattendue, et rend ses **constats**, chacun avec
+son code (§ 6.3) et la ligne de la feuille où il se corrige.
+
+1. **Les types**, dans l'ordre de la colonne Type : pour chaque cellule non
+   vide, le suivant l'emporte sur le précédent. Une liste écrite avec « // »
+   s'ajoute à ce qui précède ; sans, elle le remplace. La colonne peut être
+   vide : l'adversaire n'hérite alors de rien.
+2. **Le multiplicateur**, global, permis après le dernier type seulement
+   (`Humain/Brigand[2]`, `Humain[1,4]`), strictement positif. **Il multiplie
+   tout ce qui est hérité des types** : le nombre d'actions, le souffle,
+   l'attaque, la défense, et la **qualité de l'équipement hérité**, la
+   qualité 2 par défaut comprise (une arme héritée sous `[2]` est de qualité
+   4). **Il ne touche pas** les faces du d20, le rang des capacités, les
+   valeurs propres des blocs, ni ce que l'adversaire écrit dans sa ligne.
+3. **La ligne de l'adversaire**, ensuite, sans multiplicateur.
+4. **L'arrondi.** Les calculs sont exacts, en fractions
+   (`js/personnage/expressions.js`), et **arrondis à l'entier inférieur une
+   seule fois, à la fin** (livret, « Valeurs décimales »), pour les actions,
+   le souffle, l'attaque, la défense, les dégâts et l'armure : deux pièces
+   d'armure de 26,67 et 6,67 font 33, et non 32. Une qualité qui n'est pas
+   entière s'écrit avec deux décimales au plus, à la virgule (« 2,8 »,
+   « 2,67 », au plus proche) ; le calcul garde la fraction.
+
+Un type introuvable (E8) ou une colonne Type illisible (E9) rend la suite
+incertaine : l'adversaire se résout avec ce qui se lit, l'écran le dit, et
+le contrôle ne lui ajoute aucun autre constat (pas d'« incomplet » en
+plus). Un produit qui sort des entiers sûrs ne se calcule pas : la valeur
+héritée reste, et c'est dit (E14).
+
+### 16.3 Les valeurs
+
+**Localisation.** `Torse(2), Jambe gauche(12), …` donne la première face de
+chaque zone. Les zones se rangent par leur première face, et chacune couvre
+jusqu'à la face avant la suivante ; la dernière va jusqu'à 20. **La face 1
+est la contre-attaque**, posée d'office (livret, « Jets de localisation »).
+Le nombre de zones est libre, et chaque adversaire a sa grille. Une grille
+fautive (E10 : face hors de 2 à 20, deux zones sur une face, aucune zone
+sur la face 2) n'est pas rendue.
+
+**Les six zones des personnages** (torse, jambe gauche, jambe droite, bras
+gauche, bras droit, tête) se reconnaissent par leur nom, sans casse,
+accents ni espaces superflus. Un nom proche d'une seule d'entre elles, à
+**deux lettres d'écart au plus** (ajoutées, retirées ou remplacées), est
+reconnu avec un avertissement (A11) : « Jambre droite », dans le classeur
+réel, se lit « jambe droite ». La zone garde son nom tel qu'écrit ; la
+reconnaissance ne sert qu'à poser les armures à six valeurs. Limite connue :
+un nom court et voisin (« Tige », à deux lettres de « tête ») est reconnu
+aussi ; l'avertissement le dit, et l'auteur renomme la zone s'il le faut.
+
+**Résistance et corps** : 5 par zone, et 10 (livret, « Ressources »). Ce
+sont des valeurs fixes, qui ne se saisissent pas.
+
+**Attaque et défense** : des nombres, les difficultés des jets du joueur
+(livret, « Asymétrie des rôles lors des combats »). **Souffle** : un nombre,
+la réserve qui paie les capacités de l'adversaire. **Nombre d'actions** : un
+nombre (livret, « Actions de jeu »). Un nombre que rien ne donne reste
+vide, sur la carte comme à l'écran ; seuls la localisation, l'attaque et la
+défense sont exigées (E15).
+
+### 16.4 L'équipement et les capacités
+
+**L'équipement** liste des blocs, de n'importe quel type, chacun avec sa
+qualité entre crochets. Sans crochets : la qualité que le classeur fixe au
+bloc (un nombre au lieu de X dans son paramètre `qualite`), sinon **2**
+(facteur 1). La qualité vaut pour tout objet d'un adversaire, que son bloc
+transmette ou non un paramètre `qualite`.
+
+- **Les packs.** « Armure lourde », « Armure agile » et « Armure précise »
+  (sans casse ni accents) désignent toutes les pièces de **type Armure** qui
+  portent l'élément, dans l'ordre de la feuille Blocs, à la qualité du
+  pack. Un bloc du même nom l'emporterait sur le pack. Une armure naturelle
+  n'entre dans aucun pack.
+- **Plusieurs armes sont permises.** Chacune a ses dégâts :
+  `{degats} × (1/3 + qualité/3)`.
+- **L'armure** se calcule zone par zone, qualité comprise, à partir du
+  paramètre `armure` de chaque objet porté :
+  - une pièce à **six valeurs** les pose sur les zones nommées comme celles
+    des personnages, où qu'elles soient sur le d20 ; une valeur nulle ne
+    couvre rien ;
+  - une pièce à **une seule valeur** est **globale** : elle couvre toutes
+    les zones, et les autres pièces s'y ajoutent (une carapace de 30, plus
+    un casque de 10 : la tête a 40) ; deux pièces globales s'additionnent ;
+  - une pièce qui a **autant de valeurs que de zones** les pose dans
+    l'ordre du d20 ;
+  - sur une zone, **la dernière pièce non globale l'emporte** (et non la
+    plus élevée, comme pour un personnage) ;
+  - un autre nombre de valeurs est une erreur (E12) ; une pièce à six
+    valeurs dont une valeur non nulle vise une zone que l'adversaire n'a
+    pas (un oiseau sans bras) ne la pose nulle part, ou, s'il a justement
+    six zones, pose ses six valeurs dans l'ordre du d20, avec un
+    avertissement dans les deux cas (A12).
+- **Les types de bloc « Arme naturelle » et « Armure naturelle »** sont
+  reconnus (§ 4.1) : les griffes et les carapaces. Ils se comportent comme
+  Arme et Armure, et **le créateur de personnage les ignore**.
+- **Un bouclier** (un objet qui transmet `defense`, § 15.2) donne ses
+  capacités. Sa défense ne change pas le nombre Défense.
+
+**Les capacités** sont des noms de la feuille Capacites, avec leur rang
+entre crochets : 1 par défaut, 0 pour une capacité qui n'évolue pas ; un
+rang au-delà du maximum y est ramené (A13), un rang donné à une capacité
+qui n'évolue pas est ignoré (A14).
+
+- **Les capacités de l'équipement sont héritées**, dans l'ordre des objets
+  puis de chaque bloc ; celles que citent les types et la ligne viennent
+  ensuite. Seules les capacités simples d'un bloc sont données : un groupe
+  au choix ne l'est pas, rien n'étant choisi.
+- **Une même capacité héritée au rang X et propre au rang Y** : seul le
+  rang Y compte (le dernier écrit). Une capacité citée et aussi donnée par
+  l'équipement ne figure qu'une fois.
+- **Les maîtrises** sont les capacités qui portent l'élément « Maîtrise »
+  (convention du § 15.2), ou, à défaut, les trois « Maîtrise du combat
+  lourd, agile, précis ». Chacune s'associe à l'élément Lourde, Agile ou
+  Précise dont son nom porte le mot (« lourd », « agile », « précis »).
+- **Le désavantage** (éléments Lourde, Agile, Précise du classeur). Une
+  capacité issue d'un bloc qui porte l'un d'eux est marquée
+  « désavantage », sauf si l'adversaire a la maîtrise correspondante à un
+  rang supérieur ou égal à la **position de la capacité dans la liste du
+  bloc** (première, deuxième…). Avec une maîtrise de l'agile au rang 1,
+  seule la première capacité d'une arme agile y échappe ; au rang 3, les
+  trois. Une capacité que deux armes donnent peut n'avoir le désavantage
+  qu'avec l'une : la carte dit laquelle.
+- **Le coût** (souffle, et lien s'il y en a) s'évalue au rang, comme pour
+  le personnage (§ 15.2). Une valeur X reste X.
+- **Les descriptions** s'évaluent comme pour le personnage (§ 15.2), par le
+  même code : `[N]`, les expressions, et `{degats}` ou `{portee}` de l'arme
+  dont vient la capacité, à sa qualité. Un adversaire n'a pas de
+  caractéristiques : une expression qui en invoque une reste telle
+  qu'écrite, et l'écran le dit.
+- **Une capacité d'arme sans arme** : sa description invoque `{degats}`, et
+  rien de ce que porte l'adversaire ne les lui donne (A15).
+
+### 16.5 La carte
+
+**Elle suit la maquette** du lot (`plans/maquette_adversaires.html` et son
+rendu, hors dépôt ; le modèle d'origine est une carte Claude Design de
+l'auteur), dans `js/adversaire/carte.js` et `css/adversaire.css` : ses
+dimensions, ses traits, ses cases et ses espacements ; sa police, **EB
+Garamond, hébergée dans `polices/`** avec sa licence OFL (§ 10.2) ; son
+papier `#fffdf8`, ses traits `#3a3126`, son accent `#6d4a1f`, dans
+`jetons.css` (`--carte-…`), les mêmes dans le thème sombre : la carte est du
+papier. Elle affiche l'adversaire résolu sans rien recalculer, et ne dit
+pas d'où vient une valeur : la provenance est l'affaire de l'écran (§ 16.6).
+
+- **En-tête** : « Adversaire », le nom, et le numéro d'exemplaire dans une
+  rencontre (« n° 2 »).
+- **Bande du d20**, de 1 à 20. Une case « Contre-attaque », verticale,
+  occupe la face 1 sur les trois rangées. **Armure** : chaque zone avec sa
+  valeur. **Résistance** : chaque zone avec 5. **Corps** : dix cases, et 10.
+  Une zone de deux faces au plus s'abrège en initiales (« J. g. ») si son
+  nom a plusieurs mots ; une zone d'une seule face s'écrit plus petit.
+- **Capacités, au moins quatre lignes, et autant qu'il en faut.** Une
+  première ligne donne les types (avec « ×2 » ou « ×1,4 » s'il y a un
+  multiplicateur), puis les maîtrises avec leur rang, puis l'équipement
+  avec sa qualité (« Armure agile [4] (6 pièces) ») ; un segment sans rien
+  s'omet. Les maîtrises ne figurent pas dans les lignes suivantes. Ensuite,
+  une ligne par capacité : le nom ; le rang entre crochets, pour une
+  capacité qui évolue ; les dégâts entre parenthèses pour une capacité
+  d'arme, avec la portée si elle dépasse 0, et le nom de l'arme devant
+  chaque valeur si plusieurs armes la donnent ; le coût (« 5 souffle »,
+  « 1 souffle · 1 lien » ; rien quand elle ne coûte rien) ; la mention
+  « désavantage », suivie du nom des blocs quand elle ne vaut que pour
+  certains ; la description en italique. Des lignes vides complètent
+  jusqu'à quatre.
+- **Colonne de droite** : « Nombre d'actions : X » ; « Souffle : X » (il n'y
+  a pas de case « Dégâts ») ; les carrés Attaque et Défense. Une valeur que
+  rien ne donne laisse sa place vide.
+- **La hauteur est variable.** Il n'y a pas de rappel en bas de carte.
+
+**Aucun style n'est posé par le code** (§ 10.1) : une zone se place sur la
+grille de vingt et une colonnes (l'étiquette, puis les vingt faces) par deux
+classes d'un ensemble fini, sa première face (`debut-2` à `debut-20`) et son
+étendue (`etendue-1` à `etendue-19`), écrites dans le CSS. Chaque règle
+commence par `.carte-adversaire`, la carte, ou `.cartes-adversaires`, le
+conteneur des cartes : aucune de ses classes n'existe ailleurs, et la carte
+remet à zéro ce que l'interface lui transmettrait.
+
+**L'impression.** Une page nommée, A4, aux marges de la maquette (11 mm en
+haut et en bas, 10 mm sur les côtés) ; les cartes larges de 190 mm, l'une
+sous l'autre à 4 mm ; **une carte n'est jamais coupée d'une page à l'autre**
+(`break-inside: avoid`) ; les couleurs se gardent ; l'échelle de l'écran
+est remise à 1 ; le papier des cartes remplace, sur la page qui en porte, le
+fond de la fiche de personnage.
+
+### 16.6 Les écrans
+
+**Deux catégories de plus dans la consultation** (§ 9) : « Adversaires »
+(`#/adversaires`, `#/adversaire/<nom>`) et « Types » (`#/types`,
+`#/type/<nom>`), chacune avec sa liste, sa recherche instantanée et ses
+fiches, dans les onglets des listes. La catégorie « types » lit la liste
+`types_adversaires` de la banque : le nom d'une catégorie n'est plus
+forcément celui de sa liste (`js/banque/consultation.js`). Un adversaire se
+cherche par son nom, et par ses types, son équipement et ses capacités tels
+qu'il les écrit dans sa ligne ; ce qu'il hérite se trouve par le nom du
+type. Dans la liste, un adversaire montre ses types tels qu'écrits
+(« Commis/Rôtisseur[1,4] », ou « sans type »), un type le nombre
+d'adversaires qui l'utilisent. L'accueil compte les adversaires et leurs
+types. `#/anomalies/Adversaires/3` met en avant les anomalies d'une ligne de
+la feuille, et mène à la fiche du type ou de l'adversaire qui l'occupe.
+
+**Une banque publiée avant le lot 3** n'a ni adversaires ni types : rien ne
+tombe. L'accueil, les deux listes, une fiche demandée par son adresse et la
+rencontre disent « Les adversaires ont besoin d'une banque republiée depuis
+le classeur à jour. », et le reste se consulte comme avant. Un classeur sans
+feuille Adversaires (I4) donne deux listes vides, sans cette phrase.
+
+**La fiche d'un adversaire** (`js/ecrans/fiche_adversaire.js`). Il s'ouvre
+**résolu** (§ 16.2) ; l'index de résolution se fait une fois par banque, à
+la première demande, et se garde avec l'index de la consultation. Deux vues,
+comme pour un personnage (§ 15.5), choisies par deux boutons ; par défaut la
+vue carte sur un grand écran (56rem), la vue lecture sur un téléphone ; le
+choix se garde sur l'appareil, sous sa propre clé (`atelier.vue-adversaire`).
+
+- **La vue lecture** (`js/adversaire/lecture.js`) : les rubriques empilées,
+  dans les styles de l'interface. **Chaque valeur dit d'où elle vient** :
+  « de Rôtisseur ×1,4 » (un type, sous le multiplicateur de l'adversaire),
+  « de Commis » (un type, pour ce que le multiplicateur ne touche pas : la
+  grille, le rang d'une capacité), « de sa ligne », « de Spatule souple »
+  (un objet, pour une capacité et ses dégâts). L'armure d'une zone nomme les
+  pièces qui la donnent, avec leur qualité (« Carapace épaisse [2] + Toque
+  renforcée [3] ») ; le corps et la résistance sont dits « valeur fixe » ;
+  un nombre que rien ne donne, « rien ne le donne » ; une cellule illisible,
+  « illisible », avec son origine. « de » s'élide devant une voyelle. Une
+  capacité dit son rang (ou « n'évolue pas »), son coût (ou « sans coût »),
+  les dégâts de chaque arme qui la donne et leur portée, le désavantage et
+  le bloc dont il vient (« seulement » quand il ne vaut que pour certains),
+  sa description, son origine.
+- Les types, les objets, les pièces d'un pack et les capacités sont des
+  liens vers leurs fiches. Un type, un objet ou une capacité introuvable
+  s'affiche barré, avec un lien vers l'anomalie de la ligne qui le cite :
+  celle de l'adversaire, celle du type dont il l'hérite, ou, dans la feuille
+  Blocs, celle du bloc qui donne une capacité absente.
+- **« À vérifier »** : les constats de la résolution, ceux de sa ligne et
+  ceux de ses types, chacun avec son code et sa gravité en toutes lettres
+  quand il en a un, suivis d'un lien vers les anomalies de leur ligne quand
+  le rapport publié en porte. Un adversaire incomplet ou en erreur le dit en
+  tête, dans les deux vues, et s'affiche tel qu'il se résout.
+- **La vue carte** : la carte (§ 16.5) à l'échelle de l'écran (`zoom`,
+  l'échelle posée par `js/ecrans/echelle.js`, § 10.1 : le plus petit de 1 et
+  de la largeur disponible divisée par celle de la carte), que le zoom à
+  deux doigts agrandit. L'écran place toujours les cartes dans leur
+  conteneur, même pour une seule. En vue lecture la carte reste dans la
+  page, invisible et sans hauteur, à l'écran seulement : « Imprimer / PDF »
+  sort la seule carte, sans numéro, quelle que soit la vue, après avoir
+  chargé les trois faces de sa police.
+- « Ajouter à la rencontre » ajoute un exemplaire, et dit combien la
+  rencontre en porte déjà ; un lien mène à la rencontre, un autre aux types.
+- Deux adversaires de même nom (E16) s'affichent l'un sous l'autre, chacun
+  résolu pour lui-même, avec la phrase du doublon ; une rencontre prend le
+  premier. Un nom introuvable donne « Fiche introuvable » et le nom approché
+  (§ 9).
+
+**La fiche d'un type** (`js/ecrans/fiche_type.js`) : sa ligne telle que la
+résolution la lit, cellule par cellule — la localisation et ses zones, les
+quatre nombres, l'équipement avec sa qualité (« qualité par défaut » quand
+elle n'est pas écrite) et les pièces d'un pack, les capacités avec leur rang
+(« rang par défaut » sinon). Une cellule vide est dite « hérite » ; « aucun »
+se dit ; « // » se dit en clair : « Reprend la liste héritée, et ajoute : ».
+Rien n'y est multiplié ni arrondi. Une cellule que la notation ne lit pas
+s'affiche telle qu'écrite, avec son anomalie. Puis **les adversaires qui
+l'utilisent**, en liens, et les anomalies de sa ligne.
+
+**La rencontre** (`js/ecrans/rencontre.js`, `#/rencontre`). La liste des
+adversaires, avec la même recherche ; pour chacun, des boutons + et − :
+cibles de 44 px, le nombre entre les deux, « − » inactif à zéro, le focus
+gardé sur le bouton actionné, et passé à son voisin quand il devient
+inactif. **Douze exemplaires au plus d'un adversaire, soixante cartes au
+plus** : trois cartes tiennent sur une page A4, et l'aperçu fabrique chaque
+carte dans la page. Sous la liste, une barre qui reste au bas de l'écran
+porte le nombre de cartes et « Imprimer / PDF » ; puis la composition,
+« Vider la rencontre », et **l'aperçu des cartes à l'échelle de l'écran**.
+L'Atelier imprime une carte par exemplaire, **numérotée dès qu'il y en a
+plus d'une du même adversaire** (« n° 1 », « n° 2 » ; un seul exemplaire :
+pas de numéro), dans l'ordre de la liste, sur des pages A4 (§ 16.5) ; seules
+les cartes sortent. Un adversaire incomplet ou en erreur s'imprime tel qu'il
+se résout, et l'écran le signale, avec un lien vers sa fiche. **La
+composition vit le temps de la visite** : dans la mémoire du module, jamais
+enregistrée (ni `localStorage`, ni IndexedDB, ni l'adresse), remise à zéro
+quand la banque change.
+
+**Le téléphone.** Une colonne. Tant que l'échelle n'est pas posée, c'est le
+cadre des cartes qui défile, jamais la page.
+
+### 16.7 La démonstration
+
+Le classeur d'essai a une feuille `Adversaires` fictive, dans l'esprit de sa
+batterie de cuisine (§ 10.3), et la banque de démonstration en est tirée.
+Elle couvre chaque règle :
+
+| Ligne | Ce qu'elle montre |
+|---|---|
+| type **Commis** | une grille de six zones, dont « Jambre droite », mal orthographiée (A11) ; quatre nombres ; une capacité |
+| type **Rôtisseur** | une arme, **un pack d'armure** (« Armure agile » : trois pièces), et « // » qui ajoute une maîtrise à la liste héritée (citée à l'accent près : A1) |
+| **Marmiton de corvée** | **deux types**, rien en propre : 1 action, 5 de souffle, 4 d'attaque, 5 de défense ; désavantage sur la seconde capacité de sa spatule |
+| **Chef de partie** | un **multiplicateur décimal**, `[1,4]` : 1, 7, 5, 7 ; qualité 2,8 ; dégâts 6/12/19 ; armure 38, 19, 6 ; **deux rangs qui en remplacent d'autres** (maîtrise au rang 3, déplacement au rang 2), aucun désavantage |
+| **Plongeur** | **« aucun »** : ni souffle (0), ni équipement |
+| **Homard furieux** | sans type, sa propre grille de quatre zones ; **une armure naturelle globale plus une pièce** (30 partout, 36 à la tête) ; **deux armes**, dont une naturelle : une capacité donnée par les deux, avec le désavantage par l'une seulement |
+| **Mouette chapardeuse** | un souffle que rien ne donne ; une capacité d'arme sans arme (A15) |
+
+Deux blocs s'ajoutent à la feuille `Blocs` : « Pinces de homard », une arme
+naturelle, et « Carapace épaisse », une armure naturelle à une seule valeur.
+Les codes d'erreur de la feuille ne sont pas dans la démonstration, qui
+doit se lire : ils se déclenchent sur des variantes
+(`tests/outils/adversaires_essai.js`, § 11). La démonstration ne porte que
+trois avertissements de la feuille : A11, A1 et A15.
+
+### 16.8 Les mesures
+
+**Le banc sur le classeur réel** (§ 6.3), lancé hors dépôt le 11/10/2026 sur
+le classeur de l'auteur : la feuille Adversaires compte cinq lignes, deux
+types et trois adversaires. **Les mesures de référence de l'instruction du
+lot sont retrouvées exactement**, pour les deux adversaires qu'elle mesure :
+les quatre nombres, les dégâts de l'arme aux trois rangs, l'armure des six
+zones, les capacités jouées avec un désavantage, et, pour celui qui porte un
+multiplicateur, aucun désavantage, sa maîtrise au rang 3 et son déplacement
+au rang 2. Ces valeurs sont des données de jeu de l'auteur : elles restent
+dans l'instruction, hors dépôt, et le banc les affiche sans que rien n'en
+soit gardé. La feuille donne quatre anomalies, toutes des avertissements :
+A11 (la zone mal orthographiée, ligne 2), A15 (la capacité d'arme sans
+arme, ligne 4) — les deux que l'instruction attendait —, et deux A1 (une
+maîtrise citée à l'accent près, lignes 3 et 6), que le § 12 explique. Le
+classeur entier : 67 blocs, 69 capacités, 19 éléments, 134 anomalies.
+
+**Les contrôles armés puis désarmés** : sur une copie du dépôt hors de
+OneDrive, un processus à la fois (`CLAUDE.md`), 109 mutations du cœur
+(notation, résolution, contrôle, import, différences, types) et 51 de la
+carte et des écrans, toutes vues échouer.
+
+**Une cellule démesurée.** Une cellule faite de 32 000 blancs demandait
+973 ms à la lecture d'une liste (un motif au coût quadratique) ; les blancs
+sont désormais réduits avant tout motif, et la même cellule se lit en moins
+d'une milliseconde (§ 11).
+
+**Dans un vrai navigateur**, le 11/10/2026, sur la démonstration servie par
+le serveur local. Chrome sans fenêtre, par son protocole de débogage : à
+l'impression, seules les cartes sortent, larges de 190 mm, sur leur page
+nommée ; une rencontre de trois cartes tient sur une page A4 ; neuf cartes
+font trois pages, aucune carte coupée ; les marges de la page restent
+blanches autour du papier de la carte. Firefox 143 sans fenêtre n'a été
+mesuré, à ce stade, que sur une page d'essai statique des mêmes cartes, où
+il donne le même résultat : le site lui-même reste à mesurer dans Firefox
+(relecture finale). À 375 px de large, aucun écran du lot ne déborde. Les trois cartes de la maquette, refaites
+par le code, coïncident à l'œil avec son image.
+
+**Ce qui reste à mesurer par l'auteur** : l'impression depuis Firefox avec
+sa fenêtre, d'une rencontre réelle, comparée à la maquette ; les écrans sur
+son téléphone.

@@ -135,7 +135,7 @@ export function qualiteDe(bloc, saisie) {
  * décimales »).
  */
 export function valeursParametre(nom, texte, { caracteristiques = null, qualite = null } = {}) {
-  const attendus = RANGS[cle(nom)] ?? 1;
+  const attendus = Object.hasOwn(RANGS, cle(nom)) ? RANGS[cle(nom)] : 1;
   const morceaux = rangs(texte, attendus);
   if (!morceaux) return { erreur: `${nom} : ${attendus} valeurs attendues dans « ${texte} »`, brut: texte };
   const facteur = qualite?.q && PARAMETRES_QUALIFIES.includes(cle(nom)) ? fraction(qualite.q.n + qualite.q.d, 3 * qualite.q.d) : null;
@@ -191,10 +191,13 @@ export function coutA(capacite, niveau) {
   return { souffle: souffle.texte, lien: lien.texte, ...(erreur ? { erreur: `coût de « ${capacite.nom} » : ${erreur}` } : {}) };
 }
 
-// Les valeurs qu'une capacité voit : N, les caractéristiques, les
-// paramètres de son bloc (qualité appliquée), et ceux de ses éléments
-// propres, qui priment (livret, « Paramètre »).
-function contexte(index, personnage, bloc, qualite, capacite, niveau, avertir = () => {}) {
+/**
+ * Les valeurs qu'une capacité voit : N, les caractéristiques, les
+ * paramètres de son bloc (qualité appliquée), et ceux de ses éléments
+ * propres, qui priment (livret, « Paramètre »). La résolution d'un
+ * adversaire s'en sert aussi (§ 16.4), sans caractéristiques.
+ */
+export function contexte(index, personnage, bloc, qualite, capacite, niveau, avertir = () => {}) {
   const variables = new Map();
   if (bloc) {
     for (const [k, p] of parametresPour(index, bloc, capacite.nom)) {

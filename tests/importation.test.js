@@ -20,11 +20,57 @@ async function banque() {
 
 test("import — la banque a le format du § 5.1, avec la source et son empreinte", async () => {
   const b = await banque();
-  assert.deepEqual(Object.keys(b), ["format", "sources", "blocs", "capacites", "elements", "lisez_moi", "anomalies"]);
+  assert.deepEqual(Object.keys(b), ["format", "sources", "blocs", "capacites", "elements", "types_adversaires", "adversaires", "lisez_moi", "anomalies"]);
   assert.equal(b.format, 1);
   const empreinte = `sha256:${createHash("sha256").update(ESSAI).digest("hex")}`;
   assert.deepEqual(b.sources, [{ classeur: "regles", fichier: "classeur_essai.xlsx", empreinte }]);
-  assert.deepEqual([b.blocs.length, b.capacites.length, b.elements.length, b.lisez_moi.length], [35, 44, 20, 5]);
+  assert.deepEqual([b.blocs.length, b.capacites.length, b.elements.length, b.lisez_moi.length], [37, 44, 20, 5]);
+  assert.deepEqual([b.types_adversaires.length, b.adversaires.length], [2, 5]);
+});
+
+// La feuille Adversaires (§ 16.1) : une ligne par type ou par adversaire, ses
+// cellules gardées en texte, telles qu'écrites, espaces de bord retirés ;
+// rien n'y est lu ni calculé à l'import.
+test("import — un type d'adversaire et un adversaire : cellules telles qu'écrites, et brut", async () => {
+  const b = await banque();
+  assert.deepEqual(b.types_adversaires.map((t) => t.nom), ["Commis", "Rôtisseur"]);
+  assert.deepEqual(b.adversaires.map((a) => a.nom), ["Marmiton de corvée", "Chef de partie", "Plongeur", "Homard furieux", "Mouette chapardeuse"]);
+  // Une ligne de type porte « Type » dans la colonne Nom, et son nom dans la colonne Type.
+  assert.deepEqual(b.types_adversaires[1], {
+    nom: "Rôtisseur",
+    localisation: "",
+    actions: "",
+    souffle: "5",
+    attaque: "4",
+    defense: "5",
+    equipement: "Spatule souple, Armure agile",
+    capacites: "//, Maitrise de l'agile[1]",
+    brut: {
+      feuille: "Adversaires",
+      ligne: 3,
+      cellules: {
+        Nom: "Type",
+        TYPE: "Rôtisseur",
+        Localisation: "",
+        "Nombre  d'actions": "",
+        souffle: "5",
+        Attaque: "4",
+        Defense: "5",
+        Équipement: "Spatule souple, Armure agile",
+        Capacites: "//, Maitrise de l'agile[1]",
+        Infos: "Type ; « // » reprend la liste héritée ; un pack d'armure ; A1 : Maitrise",
+      },
+    },
+  });
+  const chef = b.adversaires[1];
+  assert.deepEqual(
+    [chef.nom, chef.types, chef.localisation, chef.actions, chef.equipement, chef.capacites, chef.brut.ligne],
+    ["Chef de partie", "Commis/Rôtisseur[1,4]", "", "", "", "//, Maîtrise de l'agile[3], Pas chassé[2]", 5],
+  );
+  // Un type n'a pas de colonne Type à lui : elle porte son nom.
+  assert.equal("types" in b.types_adversaires[0], false);
+  // Les en-têtes se retrouvent sans casse, accents ni espaces : « Nombre  d'actions », « Defense ».
+  assert.deepEqual([b.types_adversaires[0].actions, b.types_adversaires[0].defense], ["1", "4"]);
 });
 
 test("import — un bloc : éléments, capacités, paramètres, notes et brut", async () => {

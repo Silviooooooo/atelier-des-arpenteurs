@@ -1,12 +1,15 @@
 // Contrôle de cohérence de la banque (SPECIFICATION.md, § 6.3).
 //
-// Les dix-neuf codes du § 6.3 sont définis ici, avec leur gravité (A6, retiré,
-// ne revient pas : le bloc sans capacité est devenu I3). L'import en
-// relève cinq en lisant les lignes (E1, E2, E6, A7, I1) ; ce module relève
+// Les trente-six codes du § 6.3 sont définis ici, avec leur gravité (A6,
+// retiré, ne revient pas : le bloc sans capacité est devenu I3). L'import en
+// relève six en lisant les lignes (E1, E2, E6, A7, I1, I4) ; ce module relève
 // les autres sur la banque : doublons, renvois, paramètres, rattachements,
-// descriptions. Il ne corrige rien et n'ajoute aucune règle du jeu : là où
-// le classeur laisse une ambiguïté, il la signale.
+// descriptions. Ceux de la feuille Adversaires (E8 à E16, A11 à A16, I5)
+// viennent de la résolution des adversaires, la même que celle de la page
+// (js/adversaire/). Il ne corrige rien et n'ajoute aucune règle du jeu : là
+// où le classeur laisse une ambiguïté, il la signale.
 
+import { FEUILLE as FEUILLE_ADVERSAIRES, constatsDesAdversaires } from "../adversaire/controle.js";
 import { cle, repertoire } from "./noms.js";
 import { parametresInvoques } from "./notation.js";
 import { TYPES, typeInconnu } from "./types.js";
@@ -21,6 +24,15 @@ export const GRAVITES = {
   E5: "erreur",
   E6: "erreur",
   E7: "erreur",
+  E8: "erreur",
+  E9: "erreur",
+  E10: "erreur",
+  E11: "erreur",
+  E12: "erreur",
+  E13: "erreur",
+  E14: "erreur",
+  E15: "erreur",
+  E16: "erreur",
   A1: "avertissement",
   A2: "avertissement",
   A3: "avertissement",
@@ -30,9 +42,17 @@ export const GRAVITES = {
   A8: "avertissement",
   A9: "avertissement",
   A10: "avertissement",
+  A11: "avertissement",
+  A12: "avertissement",
+  A13: "avertissement",
+  A14: "avertissement",
+  A15: "avertissement",
+  A16: "avertissement",
   I1: "information",
   I2: "information",
   I3: "information",
+  I4: "information",
+  I5: "information",
 };
 
 /** Une anomalie, au format du § 5.1. */
@@ -41,7 +61,7 @@ export function anomalie(code, feuille, ligne, message) {
 }
 
 const ORDRE_GRAVITES = ["bloquante", "erreur", "avertissement", "information"];
-const ORDRE_FEUILLES = ["lisez_moi", "Blocs", "Eléments", "Capacites"];
+export const ORDRE_FEUILLES = ["lisez_moi", "Blocs", "Eléments", "Capacites", FEUILLE_ADVERSAIRES];
 
 /** Trie les anomalies par gravité, puis par feuille et par ligne (§ 6.4). */
 export function trier(anomalies) {
@@ -50,7 +70,7 @@ export function trier(anomalies) {
       ORDRE_GRAVITES.indexOf(a.gravite) - ORDRE_GRAVITES.indexOf(b.gravite) ||
       ORDRE_FEUILLES.indexOf(a.feuille) - ORDRE_FEUILLES.indexOf(b.feuille) ||
       (a.ligne ?? 0) - (b.ligne ?? 0) ||
-      a.code.localeCompare(b.code),
+      a.code.localeCompare(b.code, "fr", { numeric: true }),
   );
 }
 
@@ -227,6 +247,9 @@ export function controler(banque) {
     if (!portes.has(element.nom)) signaler("A4", lieu, `L'élément « ${element.nom} » n'est porté par rien : ni bloc, ni capacité, ni paramètre transmis.`);
     if (element.description.trim() === "") signaler("I2", lieu, `L'élément « ${element.nom} » a une description vide.`);
   }
+
+  // La feuille Adversaires : ce que trouve la résolution de chaque adversaire.
+  for (const constat of constatsDesAdversaires(banque)) signaler(constat.code, { feuille: FEUILLE_ADVERSAIRES, ligne: constat.ligne }, constat.message);
 
   return anomalies;
 }
