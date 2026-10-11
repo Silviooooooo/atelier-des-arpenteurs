@@ -60,22 +60,22 @@ test("notation — un nombre : cellule vide, « aucune », virgule décimale ; t
 
 test("notation — la colonne Type : des types séparés par « / », le multiplicateur après le dernier seulement", () => {
   assert.deepEqual(lireTypes(""), { types: [], multiplicateur: null });
-  assert.deepEqual(lireTypes("Humain"), { types: ["Humain"], multiplicateur: null });
-  assert.deepEqual(lireTypes("Humain/Brigand[2]"), { types: ["Humain", "Brigand"], multiplicateur: { ecrit: "2", valeur: fraction(2) } });
+  assert.deepEqual(lireTypes("Hachoir"), { types: ["Hachoir"], multiplicateur: null });
+  assert.deepEqual(lireTypes("Hachoir/Saucier[2]"), { types: ["Hachoir", "Saucier"], multiplicateur: { ecrit: "2", valeur: fraction(2) } });
   assert.deepEqual(lireTypes("  Commis /  Rôtisseur  des  bois [ 1,4 ] "), { types: ["Commis", "Rôtisseur des bois"], multiplicateur: { ecrit: "1,4", valeur: fraction(7, 5) } });
   const defauts = {
-    "Humain[2]/Brigand": /qu'une fois, après le dernier type/,
-    "Humain[2]/Brigand[3]": /qu'une fois, après le dernier type/,
-    "Humain[2": /« \[ » jamais fermé/,
-    "Humain2]": /« \] » sans « \[ »/,
-    "Humain]2[": /qu'une fois, après le dernier type/,
-    "Humain[0]": /le multiplicateur est nul/,
-    "Humain[0,0]": /le multiplicateur est nul/,
-    "Humain[-1]": /« -1 » n'est pas un nombre positif/,
-    "Humain[deux]": /« deux » n'est pas un nombre positif/,
-    "Humain[]": /le multiplicateur est vide/,
-    "Humain//Brigand": /un nom de type manque/,
-    "/Humain": /un nom de type manque/,
+    "Hachoir[2]/Saucier": /qu'une fois, après le dernier type/,
+    "Hachoir[2]/Saucier[3]": /qu'une fois, après le dernier type/,
+    "Hachoir[2": /« \[ » jamais fermé/,
+    "Hachoir2]": /« \] » sans « \[ »/,
+    "Hachoir]2[": /qu'une fois, après le dernier type/,
+    "Hachoir[0]": /le multiplicateur est nul/,
+    "Hachoir[0,0]": /le multiplicateur est nul/,
+    "Hachoir[-1]": /« -1 » n'est pas un nombre positif/,
+    "Hachoir[deux]": /« deux » n'est pas un nombre positif/,
+    "Hachoir[]": /le multiplicateur est vide/,
+    "Hachoir//Saucier": /un nom de type manque/,
+    "/Hachoir": /un nom de type manque/,
     "[2]": /un nom de type manque/,
   };
   for (const [ecrit, motif] of Object.entries(defauts)) {
@@ -288,6 +288,29 @@ test("cellules — « aucun » veut dire rien pour une liste et 0 pour un nombre
   assert.deepEqual([noms(de("Remplaçant").capacites), noms(de("Remplaçant").maitrises)], [["Frappe", "Émincer", "Goûter"], []]);
   assert.deepEqual(noms(de("Renfort").equipement), ["Spatule souple", "Armure agile", "Couteau d'office"]);
   assert.deepEqual(noms(de("Renfort").capacites), ["Frappe", "Moulinet farineux", "Émincer", "Pas chassé", "Goûter"]);
+});
+
+test("cellules — chaque liste dit d'où vient la dernière cellule écrite sans « // », celle qui remplace ce qui précède : une liste vide dit ainsi qui la vide", async () => {
+  const SA_LIGNE = { type: null, multiplie: false };
+  const de_ = (type) => ({ type, multiplie: false });
+  // Le Plongeur écrit « aucun » dans son équipement ; ses capacités viennent du Commis, le Rôtisseur n'y ajoutant qu'avec « // ».
+  assert.deepEqual(demo("Plongeur").listes, { equipement: SA_LIGNE, capacites: de_("Commis") });
+  // Le multiplicateur ne touche pas l'origine d'une liste : il n'y a rien à multiplier dans une liste vide.
+  assert.deepEqual(demo("Chef de partie").listes.equipement, de_("Rôtisseur"));
+  // Sans type, tout vient de sa ligne ; une cellule que personne n'écrit n'a pas d'origine.
+  assert.deepEqual(demo("Homard furieux").listes.equipement, SA_LIGNE);
+  assert.equal(demo("Mouette chapardeuse").listes.equipement, null);
+  const { de } = await feuille([
+    ["Type", "Dépouillé", _, _, _, _, _, "aucun", "aucune"],
+    ["Nu", "Commis/Rôtisseur/Dépouillé"],
+    ["Rhabillé", "Commis/Rôtisseur/Dépouillé", _, _, _, _, _, "//, Couteau d'office"],
+    ["Muet", "Commis/Rôtisseur", _, _, _, _, _, _, "aucune"],
+  ]);
+  // Un type qui écrit « aucun » vide la liste des types qui le précèdent, et c'est lui qui est nommé.
+  assert.deepEqual([de("Nu").equipement, de("Nu").listes], [[], { equipement: de_("Dépouillé"), capacites: de_("Dépouillé") }]);
+  // « // » ajoute sans remplacer : l'origine de la liste reste celle qui l'a vidée.
+  assert.deepEqual([noms(de("Rhabillé").equipement), de("Rhabillé").listes.equipement], [["Couteau d'office"], de_("Dépouillé")]);
+  assert.deepEqual(de("Muet").listes, { equipement: de_("Rôtisseur"), capacites: SA_LIGNE });
 });
 
 // ─── Les valeurs (§ 16.3) ───────────────────────────────────────────────────

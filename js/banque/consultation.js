@@ -15,6 +15,7 @@
 
 import { banqueSansAdversaires, entreesLisibles, indexerAdversaires } from "../adversaire/resolution.js";
 import { cle, repertoire } from "./noms.js";
+import { TEXTES } from "./recherche.js";
 
 // La liste de la banque que montre chaque catégorie de la consultation
 // (js/routes.js). Les types d'adversaires vivent sous « types_adversaires » :
@@ -62,6 +63,19 @@ export function indexer(banque) {
   const tables = Object.fromEntries(Object.keys(LISTES).map((categorie) => [categorie, parNom(entreesDe(banque, categorie))]));
   const repertoires = Object.fromEntries(Object.entries(tables).map(([categorie, table]) => [categorie, repertoire(table.keys())]));
   let resolution = null;
+  const adversaires = () => (resolution ??= indexerAdversaires(banque));
+  // Ce qu'un adversaire porte une fois résolu, pour la recherche : résolu
+  // une seule fois, à la première recherche qui le demande.
+  const textesResolus = new Map();
+  const textesAdversaire = (adversaire) => {
+    if (!textesResolus.has(adversaire)) {
+      const resolu = adversaires().resoudre(adversaire);
+      const portes = [...resolu.types, ...resolu.equipement, ...resolu.maitrises, ...resolu.capacites].map((entree) => entree.nom);
+      const pieces = resolu.equipement.flatMap((objet) => (objet.genre === "pack" ? objet.pieces : []));
+      textesResolus.set(adversaire, [...TEXTES.adversaires(adversaire), ...portes, ...pieces]);
+    }
+    return textesResolus.get(adversaire);
+  };
 
   /** Le nom qu'un renvoi désigne dans la catégorie, ou null : renvoi cassé ou ambigu. */
   const resoudre = (categorie, nom) => repertoires[categorie].resoudre(nom).nom ?? null;
@@ -122,7 +136,13 @@ export function indexer(banque) {
     /** Les entrées de ce nom exact (plusieurs en cas de doublon, E3 ou E16). */
     entrees: (categorie, nom) => tables[categorie].get(nom) ?? [],
     /** L'index de résolution des adversaires (§ 16.2), fait à la première demande, gardé ensuite. */
-    adversaires: () => (resolution ??= indexerAdversaires(banque)),
+    adversaires,
+    /**
+     * Les textes où chercher un adversaire (js/banque/recherche.js) : ce
+     * qu'il écrit dans sa ligne, et ce qu'il porte une fois résolu, hérité
+     * de ses types ou donné par son équipement (§ 16.6).
+     */
+    textesAdversaire,
     /** Les blocs qui citent la capacité, avec la forme de la citation. */
     octroyeePar: (capacite) => octroi.get(capacite) ?? [],
     /** Les blocs et les capacités qui portent l'élément. */

@@ -74,7 +74,7 @@ export function lireNombreCellule(texte) {
 }
 
 /**
- * La colonne Type d'un adversaire : « Humain/Brigand[2] ». Rend { types:
+ * La colonne Type d'un adversaire : « Hachoir/Saucier[2] ». Rend { types:
  * [noms], multiplicateur: { ecrit, valeur } ou null }, et { defaut } quand
  * la notation ne se lit pas : le multiplicateur n'est permis qu'après le
  * dernier type, entre crochets fermés, et il est strictement positif.

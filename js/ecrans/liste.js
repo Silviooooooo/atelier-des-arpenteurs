@@ -8,6 +8,7 @@
 // change pas. Une banque publiée avant le lot 3 n'a pas d'adversaires : leurs
 // deux listes le disent, et les autres se consultent comme avant.
 
+import { texteDe } from "../adversaire/notation.js";
 import { listeDe, manqueDe } from "../banque/consultation.js";
 import { TEXTES, filtrer } from "../banque/recherche.js";
 import { CATEGORIES, adresseFiche, adresseListe } from "../routes.js";
@@ -45,8 +46,9 @@ function detail(contexte, categorie, entree) {
     const puissances = entree.variantes.map((v) => v.puissance).filter(Boolean);
     return puissances.length > 1 ? `puissances ${puissances.join(", ")}` : puissances.length ? `puissance ${puissances[0]}` : "";
   }
-  // Ses types tels qu'il les écrit, multiplicateur compris : « Humain/Brigand[2] ».
-  if (categorie === "adversaires") return entree.types || "sans type";
+  // Ses types tels qu'il les écrit, multiplicateur compris : « Commis/Rôtisseur[1,4] ».
+  // texteDe : une cellule forgée qui n'est pas un texte vaut une cellule vide.
+  if (categorie === "adversaires") return texteDe(entree.types) || "sans type";
   if (categorie === "types") return compte(contexte.etat.index.adversaires().utilisateurs(entree.nom).length, "adversaire", "adversaires");
   return entree.description;
 }
@@ -66,8 +68,10 @@ function creerPanneau(contexte, categorie) {
   });
   const panneau = { noeud: null, courant: null, liens: new Map() };
 
+  // Un adversaire se cherche aussi par ce qu'il porte une fois résolu.
+  const textes = categorie === "adversaires" ? contexte.etat.index.textesAdversaire : TEXTES[categorie];
   const remplir = () => {
-    const trouvees = filtrer(entrees, recherche.value, TEXTES[categorie]);
+    const trouvees = filtrer(entrees, recherche.value, textes);
     panneau.liens.clear();
     liste.replaceChildren(
       ...trouvees.map((entree) => {

@@ -512,6 +512,28 @@ test("dom — aucun gestionnaire en texte, ni style, ni srcdoc ; une adresse est
   }
 });
 
+test("dom — un signe qui commande le sens de l'écriture ne s'affiche pas ; les attributs gardent le nom tel qu'écrit (§ 10.1)", async () => {
+  const retirer = installerDom();
+  try {
+    const { el, sansSensForce } = await import("../js/ecrans/dom.js");
+    const renverse = String.fromCodePoint(0x202e);
+    const nom = `Chef${renverse}`;
+    // Le texte, à tout niveau d'imbrication des enfants, perd le signe ; un nombre passe tel quel.
+    const noeud = el("p", { "aria-label": nom, title: nom }, nom, [" n° ", [12]], el("span", {}, `${renverse}x`));
+    assert.equal(texteDe(noeud), "Chef n° 12x");
+    assert.equal(noeud.getAttribute("aria-label"), nom);
+    assert.equal(noeud.getAttribute("title"), nom);
+    // Toute la propriété Bidi_Control, et elle seule.
+    for (const code of [0x061c, 0x200e, 0x200f, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x2069]) {
+      assert.equal(sansSensForce(`a${String.fromCodePoint(code)}b`), "ab", code.toString(16));
+    }
+    for (const garde of ["Épée d'été", "a b", `a${String.fromCodePoint(0x200b)}b`, `a${String.fromCodePoint(0xa0)}b`, "😀", "שלום"]) assert.equal(sansSensForce(garde), garde, garde);
+    assert.equal(sansSensForce(12), "12");
+  } finally {
+    retirer();
+  }
+});
+
 test("fiches — un nom introuvable n'est jamais le titre de la page (§ 9)", async () => {
   const retirer = installerDom();
   try {

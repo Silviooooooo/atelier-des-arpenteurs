@@ -462,19 +462,27 @@
 
 /* Les marges de la maquette. La page par défaut du site, sans marge, est
    celle du recto de la fiche de personnage (fiche.css) : les cartes ont la
-   leur. */
+   leur. Son fond est le papier de la carte, jusqu'au bord de la feuille :
+   Chrome le peint, Firefox l'ignore et laisse les marges blanches. */
 @page cartes-adversaires {
   size: A4;
   margin: 11mm 10mm;
+  background: var(--carte-papier);
 }
 
 @media print {
-  /* fiche.css peint toute page imprimée de la couleur de la fiche de
-     personnage. Quand la page porte des cartes, c'est leur papier : sinon
-     la fin de la dernière page changerait de teinte sous la dernière
-     carte. */
+  /* La page nommée se pose trois fois. Sur le conteneur des cartes : c'est
+     la règle. Sur la racine et le corps : dans Firefox, un blanc de
+     index.html, resté seul devant le contenu une fois le reste masqué,
+     donnait à la première page la page par défaut, sans marge, et les
+     cartes sortaient collées au coin de la feuille. Sur chaque carte : les
+     pages après la deuxième perdaient la page nommée à leur tour (mesuré
+     dans Firefox 143 et 157, relecture du lot 3).
+     fiche.css peint toute page imprimée de la couleur de la fiche de
+     personnage : quand la page porte des cartes, c'est leur papier. */
   html:has(.cartes-adversaires),
   body:has(.cartes-adversaires) {
+    page: cartes-adversaires;
     background: var(--carte-papier);
   }
 
@@ -492,6 +500,7 @@
 
   /* Une carte n'est jamais coupée d'une page à l'autre. */
   .cartes-adversaires .carte-adversaire {
+    page: cartes-adversaires;
     break-inside: avoid;
   }
 }

@@ -28,7 +28,7 @@ test("routes — l'adresse d'une fiche se décode (§ 9)", () => {
 
 test("routes — aller-retour des noms difficiles", () => {
   assert.deepEqual(Object.keys(CATEGORIES), ["blocs", "capacites", "elements", "adversaires", "types"]);
-  for (const nom of ["Attaque de base", "Constellation d'Enaël", "Maîtrise du combat précis", "50 % / 100 %", "a#b?c&d", "Œil (de) [lynx]", "trouvé !", "Humain/Brigand[2]", "<b>Marmiton</b>", "__proto__"]) {
+  for (const nom of ["Attaque de base", "Constellation d'Enaël", "Maîtrise du combat précis", "50 % / 100 %", "a#b?c&d", "Œil (de) [lynx]", "trouvé !", "Hachoir/Saucier[2]", "<b>Marmiton</b>", "__proto__"]) {
     for (const categorie of Object.keys(CATEGORIES)) {
       const adresse = adresseFiche(categorie, nom);
       assert.match(adresse, /^#\/(bloc|capacite|element|adversaire|type)\/[^ #?<>]+$/);
@@ -37,7 +37,7 @@ test("routes — aller-retour des noms difficiles", () => {
   }
   assert.equal(adresseFiche("capacites", "Attaque de base"), "#/capacite/Attaque%20de%20base");
   assert.equal(adresseFiche("adversaires", "Marmiton de corvée"), "#/adversaire/Marmiton%20de%20corv%C3%A9e");
-  assert.equal(adresseFiche("types", "Brigand"), "#/type/Brigand");
+  assert.equal(adresseFiche("types", "Saucier"), "#/type/Saucier");
   // Un demi-codet seul ne fait pas lever la fabrication de l'adresse (relecture du lot 3) ; une paire reste entière.
   const [haut, bas] = [String.fromCharCode(0xd800), String.fromCharCode(0xdc00)];
   assert.throws(() => encodeURIComponent(haut), URIError, "le défaut que l'adresse évite");
@@ -124,6 +124,24 @@ test("recherche — un adversaire se trouve par son nom, ses types, son équipem
   // Ce qu'un adversaire hérite n'est pas écrit dans sa ligne : la spatule est celle du type.
   assert.deepEqual(adversaires("spatule"), []);
   assert.equal(adversaires("").length, banque.adversaires.length);
+  // Les écrans cherchent aussi dans ce qu'il porte une fois résolu (l'index de la consultation) : ce qu'il hérite de
+  // ses types, les capacités que donne son équipement, les pièces d'un pack. Le champ dit « équipement ou capacité ».
+  const index = indexer(banque);
+  const porteurs = (requete) => filtrer(banque.adversaires, requete, index.textesAdversaire).map((a) => a.nom);
+  assert.deepEqual(porteurs("spatule"), ["Marmiton de corvée", "Chef de partie"]);
+  assert.deepEqual(porteurs("frappe"), ["Marmiton de corvée", "Chef de partie", "Homard furieux", "Mouette chapardeuse"]);
+  assert.deepEqual(porteurs("emincer"), ["Homard furieux"]);
+  assert.deepEqual(porteurs("tablier"), ["Marmiton de corvée", "Chef de partie"]);
+  assert.deepEqual(porteurs("maitrise agile"), ["Marmiton de corvée", "Chef de partie", "Plongeur"]);
+  // Ce qu'il écrit lui-même se trouve toujours, et rien d'autre.
+  assert.deepEqual(porteurs("rotisseur"), adversaires("rotisseur"));
+  assert.deepEqual(porteurs("1,4"), ["Chef de partie"]);
+  assert.deepEqual(porteurs("introuvable"), []);
+  // Chaque adversaire n'est résolu qu'une fois : la seconde recherche relit les mêmes textes.
+  assert.equal(index.textesAdversaire(banque.adversaires[0]), index.textesAdversaire(banque.adversaires[0]));
+  // Une cellule qui n'est pas un texte (banque forgée) ne se cherche pas, et ne lève rien.
+  assert.deepEqual(filtrer([{ nom: "Forgé", types: { toString: 1 }, equipement: true }], "forge", TEXTES.adversaires).length, 1);
+  assert.deepEqual(filtrer([{ nom: "Forgé", types: { toString: 1 }, equipement: true }], "true", TEXTES.adversaires), []);
   assert.deepEqual(types("rot"), ["Rôtisseur"]);
   assert.deepEqual(types("spatule"), []);
   // Une ligne sans ces cellules (banque abîmée) ne lève rien.

@@ -167,6 +167,13 @@ test("listes — cinq onglets ; les adversaires et leurs types dans l'ordre, ave
     assert.equal(texteDe(ecran.querySelector("[role=status]")), "1 adversaire sur 5");
     saisir(recherche, "nez fin");
     assert.deepEqual(entrees(ecran).map(([nom]) => nom), ["Mouette chapardeuse"]);
+    // Ce qu'il porte une fois résolu se trouve aussi : la spatule est celle du Rôtisseur, la frappe vient des armes.
+    assert.equal(recherche.getAttribute("placeholder"), "Nom, type, équipement ou capacité");
+    saisir(recherche, "spatule");
+    assert.deepEqual(entrees(ecran).map(([nom]) => nom), ["Chef de partie", "Marmiton de corvée"]);
+    assert.equal(texteDe(ecran.querySelector("[role=status]")), "2 adversaires sur 5");
+    saisir(recherche, "frappe");
+    assert.deepEqual(entrees(ecran).map(([nom]) => nom), ["Chef de partie", "Homard furieux", "Marmiton de corvée", "Mouette chapardeuse"]);
     // La fiche ouverte, la liste garde sa recherche, et marque l'entrée.
     saisir(recherche, "o");
     ecran = ouvrir(contexte, "#/adversaire/Homard%20furieux");
@@ -260,10 +267,35 @@ test("banque sans feuille Adversaires (I4) — deux listes vides, sans la phrase
 
 test("banque abîmée — ce qui n'est pas une entrée n'entre dans aucune liste ; une ligne sans cellules, ou aux cellules d'un autre genre, s'ouvre quand même", () =>
   dansLeDocument(() => {
-    const adversaires = [null, 3, "x", { nom: 7 }, { nom: "Sans rien" }, { nom: "Drôle", types: 12, localisation: null, actions: {}, equipement: ["x"], capacites: {}, brut: null }, ...BANQUE.adversaires];
+    const adversaires = [
+      null,
+      3,
+      "x",
+      { nom: 7 },
+      { nom: "Sans rien" },
+      { nom: "Drôle", types: 12, localisation: null, actions: {}, equipement: ["x"], capacites: {}, brut: null },
+      // Des cellules et un numéro de ligne qui ne sont pas des textes : rien de technique ne s'affiche.
+      { nom: "Forgé", types: { toString: 1 }, equipement: true, capacites: { a: 1 }, brut: { ligne: {} } },
+      { nom: "Forgé bis", types: ["Commis"], brut: { ligne: 1e400 } },
+      ...BANQUE.adversaires,
+    ];
     const types = [undefined, { nom: "Vide" }, { nom: "Tordu", localisation: 5, actions: [], equipement: 3, capacites: true, brut: "x" }, ...BANQUE.types_adversaires];
     const contexte = contexteDe({ ...BANQUE, adversaires, types_adversaires: types });
-    assert.deepEqual(entrees(ouvrir(contexte, "#/adversaires")).map(([nom]) => nom), ["Chef de partie", "Drôle", "Homard furieux", "Marmiton de corvée", "Mouette chapardeuse", "Plongeur", "Sans rien"]);
+    const liste = ouvrir(contexte, "#/adversaires");
+    assert.deepEqual(entrees(liste).map(([nom]) => nom), ["Chef de partie", "Drôle", "Forgé", "Forgé bis", "Homard furieux", "Marmiton de corvée", "Mouette chapardeuse", "Plongeur", "Sans rien"]);
+    // Une cellule Type qui n'est pas un texte vaut une cellule vide, dans la liste comme sur la fiche.
+    assert.deepEqual(Object.fromEntries(entrees(liste).filter(([nom]) => /^(?:Forgé|Drôle)/.test(nom))), { "Drôle": "12", "Forgé": "sans type", "Forgé bis": "sans type" });
+    // La recherche ne lève rien sur ces cellules, et n'y trouve pas de texte technique.
+    saisir(liste.querySelector("#recherche-adversaires"), "object");
+    assert.deepEqual(entrees(liste), []);
+    saisir(liste.querySelector("#recherche-adversaires"), "forge");
+    assert.deepEqual(entrees(liste).map(([nom]) => nom), ["Forgé", "Forgé bis"]);
+    saisir(liste.querySelector("#recherche-adversaires"), "");
+    for (const nom of ["Forgé", "Forgé bis"]) {
+      const lu = ouvrir(contexte, `#/adversaire/${encodeURIComponent(nom)}`).querySelector(".lecture");
+      assert.equal(texteDe(lu.children.at(-1)), "Feuille Adversaires.", "un numéro de ligne qui n'en est pas un ne s'écrit pas");
+      assert.doesNotMatch(texteDe(lu), /object|Infinity|true|undefined|NaN/);
+    }
     assert.deepEqual(entrees(ouvrir(contexte, "#/types")).map(([nom]) => nom), ["Commis", "Rôtisseur", "Tordu", "Vide"]);
     for (const nom of ["Sans rien", "Drôle"]) {
       const racine = ouvrir(contexte, `#/adversaire/${encodeURIComponent(nom)}`).querySelector(".ecran-adversaire");
@@ -275,6 +307,10 @@ test("banque abîmée — ce qui n'est pas une entrée n'entre dans aucune liste
     assert.deepEqual(liens(ouvrir(contexte, "#/adversaire/Dr%C3%B4le"), ".lecture section a"), [["introuvable, voir l'anomalie", "#/anomalies"]]);
     for (const nom of ["Vide", "Tordu"]) assert.equal(texteDe(ouvrir(contexte, `#/type/${nom}`).querySelector(".panneau-fiche h1")), nom);
     const choix = ouvrir(contexte, "#/rencontre");
+    assert.deepEqual(textes(choix, ".nom-rencontre .detail").slice(1, 4), ["12", "sans type", "sans type"]);
+    saisir(choix.querySelector("#recherche-rencontre"), "object");
+    assert.deepEqual(textes(choix, ".nom-rencontre a"), []);
+    saisir(choix.querySelector("#recherche-rencontre"), "");
     ligneDe(choix, "Drôle").plus.click();
     assert.deepEqual(textes(choix, ".cadre-cartes .carte-nom"), ["Drôle"]);
     assert.match(textes(choix, ".message")[0], /^À vérifier avant d'imprimer : Drôle \(incomplet, 1 erreur\)\./);
@@ -300,6 +336,8 @@ test("fiche d'un adversaire — deux vues, le choix gardé sur l'appareil sous s
         ["Ajouter à la rencontre", null],
         ["Imprimer / PDF", null],
       ]);
+      // Les deux boutons de vue ont leur rangée : un grand écran, qui montre tout, la masque.
+      assert.deepEqual(textes(racine.querySelector(".choix-vue"), "button"), ["Vue lecture", "Vue carte"]);
       assert.deepEqual(liens(racine, ".lien-retour a"), [["Voir la rencontre", "#/rencontre"], ["Types d'adversaires", "#/types"]]);
       // En vue lecture aussi, la carte est là : c'est elle qui s'imprime, sans numéro.
       const carteDe = (noeud) => noeud.querySelectorAll(".cadre-cartes .cartes-adversaires .carte-adversaire");
@@ -329,19 +367,28 @@ test("fiche d'un adversaire — deux vues, le choix gardé sur l'appareil sous s
     } finally {
       stockage.retirer();
     }
-    // Sans souvenir : la vue carte sur un grand écran, la vue lecture sinon ; un stockage refusé ne casse rien.
-    const avant = { matchMedia: globalThis.matchMedia, localStorage: globalThis.localStorage };
+    // Sans souvenir : la vue lecture, même sur un grand écran, qui montre de toute façon la carte et la lecture
+    // (ecran.css) ; la largeur de l'écran ne se demande plus. Un stockage refusé ne casse rien.
+    const avant = { matchMedia: globalThis.matchMedia, localStorage: globalThis.localStorage, requestAnimationFrame: globalThis.requestAnimationFrame };
     try {
       const demandes = [];
       globalThis.matchMedia = (condition) => (demandes.push(condition), { matches: true });
-      assert.equal(ouvrir(contexteDe(), "#/adversaire/Plongeur").querySelector(".ecran-adversaire").className, "ecran-adversaire vue-carte");
-      assert.deepEqual(demandes, ["(min-width: 56rem)"]);
-      globalThis.matchMedia = () => ({ matches: false });
+      assert.equal(ouvrir(contexteDe(), "#/adversaire/Plongeur").querySelector(".ecran-adversaire").className, "ecran-adversaire vue-lecture");
+      assert.deepEqual(demandes, []);
       globalThis.localStorage = { getItem: () => { throw new Error("refusé"); }, setItem: () => { throw new Error("refusé"); } };
       const racine = ouvrir(contexteDe(), "#/adversaire/Plongeur").querySelector(".ecran-adversaire");
       assert.equal(racine.className, "ecran-adversaire vue-lecture");
+      // « Vue carte » amène la carte à l'écran, sans défiler si elle y est déjà : sur un téléphone elle est sous le pli.
+      // « Vue lecture » ne déplace rien.
+      globalThis.requestAnimationFrame = (f) => f();
+      const amenees = [];
+      racine.querySelector(".cadre-cartes").scrollIntoView = (options) => amenees.push(options);
       bouton(racine, "Vue carte").click();
       assert.equal(racine.className, "ecran-adversaire vue-carte");
+      assert.deepEqual(amenees, [{ block: "nearest" }]);
+      bouton(racine, "Vue lecture").click();
+      assert.deepEqual(amenees.length, 1);
+      bouton(racine, "Vue carte").click();
       // Une valeur gardée qui n'est pas une vue ne passe pas dans la classe.
       globalThis.localStorage = { getItem: () => "carte vue-pirate", setItem() {} };
       assert.equal(ouvrir(contexteDe(), "#/adversaire/Plongeur").querySelector(".ecran-adversaire").className, "ecran-adversaire vue-lecture");
@@ -353,8 +400,8 @@ test("fiche d'un adversaire — deux vues, le choix gardé sur l'appareil sous s
     }
   }));
 
-test("provenance — « de Brigand ×2 », « de Commis », « de sa ligne », « de Spatule souple » ; l'élision devant une voyelle", () => {
-  assert.equal(ecrireOrigine({ type: "Brigand", multiplie: true }, "2"), "de Brigand ×2");
+test("provenance — « de Saucier ×2 », « de Commis », « de sa ligne », « de Spatule souple » ; l'élision devant une voyelle", () => {
+  assert.equal(ecrireOrigine({ type: "Saucier", multiplie: true }, "2"), "de Saucier ×2");
   assert.equal(ecrireOrigine({ type: "Rôtisseur", multiplie: true }, "1,4"), "de Rôtisseur ×1,4");
   // Ce que le multiplicateur ne touche pas ne le porte pas.
   assert.equal(ecrireOrigine({ type: "Commis", multiplie: false }, "1,4"), "de Commis");
@@ -363,7 +410,7 @@ test("provenance — « de Brigand ×2 », « de Commis », « de sa ligne », �
   assert.equal(ecrireOrigine({ objet: "Spatule souple" }, "2"), "de Spatule souple");
   assert.equal(ecrireOrigine({ objet: "Écaille" }), "d'Écaille");
   assert.equal(ecrireOrigine({ type: "Écumeur", multiplie: true }, "2"), "d'Écumeur ×2");
-  assert.equal(ecrireOrigine({ type: "Humain", multiplie: false }), "de Humain", "un h reste entier");
+  assert.equal(ecrireOrigine({ type: "Hachoir", multiplie: false }), "de Hachoir", "un h reste entier");
   assert.equal(ecrireOrigine(null, "2"), "");
   // Ce qui rend un adversaire incertain : incomplet, ou des erreurs ; un avertissement n'en est pas une.
   const resolu = (complet, codes) => ({ complet, constats: codes.map((code) => ({ code, ligne: 2, message: "x" })) });
@@ -404,8 +451,10 @@ test("fiche d'un adversaire — chaque valeur dit d'où elle vient : le Chef de 
       ["Bras droit", "18-19", "19 Maniques [2,8]", "5"],
       ["Tête", "20", "6 Toque renforcée [2,8]", "5"],
     ]);
-    // La maîtrise : citée par un type, puis par sa ligne, dont le rang compte.
-    assert.deepEqual(paragraphes(rubrique(lu, "Maîtrises")), [["Maîtrise de l'agile rang 3", "de Rôtisseur, de sa ligne"]]);
+    // Les faces d'une zone ont leur classe : « 12-13 » ne se coupe pas en deux lignes sur un téléphone (ecran.css).
+    assert.deepEqual(textes(localisation, ".lecture-faces"), ["2-11", "12-13", "14-15", "16-17", "18-19", "20"]);
+    // La maîtrise : citée par un type, puis par sa ligne, dont le rang compte, et c'est dit.
+    assert.deepEqual(paragraphes(rubrique(lu, "Maîtrises")), [["Maîtrise de l'agile rang 3, de sa ligne", "de Rôtisseur, de sa ligne"]]);
     assert.deepEqual(liens(rubrique(lu, "Maîtrises")), [["Maîtrise de l'agile", "#/capacite/Ma%C3%AEtrise%20de%20l'agile"]]);
     // L'équipement hérité : sa qualité est multipliée, 2 par défaut comprise.
     const equipement = rubrique(lu, "Équipement");
@@ -424,7 +473,8 @@ test("fiche d'un adversaire — chaque valeur dit d'où elle vient : le Chef de 
     assert.deepEqual(paragraphes(capacites), [
       ["Frappe n'évolue pas · sans coût", "Dégâts 6/12/19 de Spatule souple", "Une attaque qui inflige 6/12/19.", "de Spatule souple"],
       ["Moulinet farineux rang 1 · 5 souffle", "Dégâts 6/12/19 de Spatule souple", "Tourbillonne 1 fois.", "de Spatule souple"],
-      ["Pas chassé rang 2 · 1 souffle", "Se déplace de 2 cases.", "de Commis, de sa ligne"],
+      // Une seule origine : le rang ne la répète pas. Deux : il dit de laquelle il vient.
+      ["Pas chassé rang 2, de sa ligne · 1 souffle", "Se déplace de 2 cases.", "de Commis, de sa ligne"],
     ]);
     assert.deepEqual(liens(capacites), [["Frappe", "#/capacite/Frappe"], ["Moulinet farineux", "#/capacite/Moulinet%20farineux"], ["Pas chassé", "#/capacite/Pas%20chass%C3%A9"]]);
     assert.doesNotMatch(texteDe(capacites), /Désavantage|Maîtrise/, "ni désavantage, ni maîtrise parmi les capacités");
@@ -488,14 +538,19 @@ test("fiche d'un adversaire — le Homard furieux : sa ligne, sa grille, l'armur
     // Le Marmiton, sans la maîtrise au rang voulu : le désavantage, de sa spatule.
     const marmiton = ouvrir(contexte, "#/adversaire/Marmiton%20de%20corv%C3%A9e").querySelector(".lecture");
     assert.deepEqual(paires(rubrique(marmiton, "Valeurs"))["Nombre d'actions"], "1 de Commis");
+    // Une seule origine : elle se lit sous la capacité, et le rang ne la répète pas.
+    assert.deepEqual(paragraphes(rubrique(marmiton, "Capacités"))[2], ["Pas chassé rang 1 · sans coût", "Se déplace de 1 cases.", "de Commis"]);
+    assert.deepEqual(paragraphes(rubrique(marmiton, "Maîtrises")), [["Maîtrise de l'agile rang 1", "de Rôtisseur"]]);
     assert.deepEqual(paragraphes(rubrique(marmiton, "Capacités"))[1], ["Moulinet farineux rang 1 · 5 souffle", "Dégâts 5/10/15 de Spatule souple", "Désavantage de Spatule souple", "Tourbillonne 1 fois.", "de Spatule souple"]);
-    // « aucun » : un souffle nul, écrit dans sa ligne ; aucun objet.
+    // « aucun » : un souffle nul, écrit dans sa ligne ; aucun objet, et c'est sa ligne qui retire ceux du Rôtisseur.
     const plongeur = ouvrir(contexte, "#/adversaire/Plongeur").querySelector(".lecture");
     assert.equal(paires(rubrique(plongeur, "Valeurs")).Souffle, "0 de sa ligne");
-    assert.deepEqual(textes(rubrique(plongeur, "Équipement"), "p"), ["Aucun objet."]);
-    // Un souffle que rien ne donne ; un constat de sa propre ligne, et le lien vers ses anomalies.
+    assert.deepEqual(textes(rubrique(plongeur, "Équipement"), "p"), ["Aucun objet de sa ligne, qui n'en garde aucun"]);
+    assert.deepEqual(textes(rubrique(plongeur, "Équipement"), ".provenance"), ["de sa ligne, qui n'en garde aucun"]);
+    // Un souffle que rien ne donne ; aucun objet, que personne ne retire ; un constat de sa propre ligne, et le lien vers ses anomalies.
     const mouette = ouvrir(contexte, "#/adversaire/Mouette%20chapardeuse").querySelector(".lecture");
     assert.equal(paires(rubrique(mouette, "Valeurs")).Souffle, "— rien ne le donne");
+    assert.deepEqual(textes(rubrique(mouette, "Équipement"), "p"), ["Aucun objet."]);
     assert.deepEqual(liens(rubrique(mouette, "À vérifier")), [["Adversaires, ligne 8", "#/anomalies/Adversaires/8"]]);
     assert.deepEqual(liens(mouette.children.at(-1)), [["1 anomalie sur cette ligne (Adversaires, ligne 8)", "#/anomalies/Adversaires/8"]]);
   }));
@@ -704,6 +759,12 @@ test("rencontre — les boutons + et −, une carte par exemplaire, numérotée 
       ["Mouette chapardeuse", "#/adversaire/Mouette%20chapardeuse"],
       ["Plongeur", "#/adversaire/Plongeur"],
     ]);
+    // Le mode d'emploi vient après la liste et sa barre : placé en tête, sur un téléphone, il poussait les boutons + sous le pli.
+    const haut = ecran.querySelector(".ne-pas-imprimer").children;
+    const rang = (condition) => haut.findIndex(condition);
+    const emploi = rang((n) => /imprime une carte par exemplaire.*n'est pas enregistrée/.test(texteDe(n)));
+    assert.ok(emploi > rang((n) => n.className === "barre-rencontre") && rang((n) => n.className === "barre-rencontre") > rang((n) => n.tagName === "UL"), "le mode d'emploi après la liste et la barre");
+    assert.deepEqual([haut[0].tagName, haut[1].tagName, haut[2].tagName], ["H1", "LABEL", "INPUT"]);
     // Au départ : rien, « − » et les deux boutons du bas inactifs.
     const marmiton = ligneDe(ecran, "Marmiton de corvée");
     const chef = ligneDe(ecran, "Chef de partie");
@@ -801,6 +862,9 @@ test("rencontre — un plafond par adversaire et un plafond de cartes ; la reche
     assert.equal(ligneDe(ecran, "Plongeur").plus.disabled, false, "les autres adversaires restent ouverts");
     // La recherche ne montre que certaines lignes, sans rien changer aux nombres ni aux cartes.
     const recherche = ecran.querySelector("#recherche-rencontre");
+    // Comme dans la liste, ce qu'un adversaire porte une fois résolu se trouve aussi.
+    saisir(recherche, "spatule");
+    assert.deepEqual(textes(ecran, ".nom-rencontre a"), ["Chef de partie", "Marmiton de corvée"]);
     saisir(recherche, "rotisseur");
     assert.deepEqual(textes(ecran, ".nom-rencontre a"), ["Chef de partie", "Marmiton de corvée", "Plongeur"]);
     assert.equal(texteDe(ecran.querySelector("[role=status]")), "3 adversaires sur 5");
@@ -975,13 +1039,42 @@ test("fiche d'un adversaire — « Ajouter à la rencontre » dit ce qui s'y tro
     const rouverte = ouvrir(contexte, "#/adversaire/Chef%20de%20partie").querySelector(".ecran-adversaire");
     assert.equal(texteDe(rouverte.querySelector("[role=status]")), "2 exemplaires dans la rencontre.");
     const encore = bouton(rouverte, "Ajouter à la rencontre");
-    for (let i = 0; i < 10; i += 1) encore.click();
+    document.activeElement = encore;
+    for (let i = 0; i < 9; i += 1) encore.click();
+    assert.equal(document.activeElement, encore, "le focus reste sur le bouton tant qu'il sert");
+    encore.click();
     assert.equal(encore.disabled, true);
+    // Devenu inactif, le bouton perdrait le focus : il passe au lien de la rencontre.
+    assert.equal(texteDe(document.activeElement), "Voir la rencontre");
     assert.equal(texteDe(rouverte.querySelector("[role=status]")), "12 exemplaires dans la rencontre : le plafond est atteint (12 exemplaires d'un adversaire, 60 cartes en tout).");
     assert.equal(rencontre.exemplaires(contexte.etat.banque, "Chef de partie"), 12);
     // Un autre adversaire n'en a aucun.
     assert.equal(texteDe(ouvrir(contexte, "#/adversaire/Plongeur").querySelector(".ecran-adversaire [role=status]")), "Pas encore dans la rencontre.");
   }));
+
+test("sens de l'écriture — un nom qui porte U+202E s'affiche sans lui dans la liste, la rencontre, sa composition et ses cartes ; son adresse et le nom des boutons le gardent", async () => {
+  const renverse = String.fromCodePoint(0x202e);
+  const nom = `Chef${renverse} tournant`;
+  const banque = await banqueAvec([[nom, "Commis"]]);
+  await dansLeDocument(() => {
+    const contexte = contexteDe(banque);
+    const adresse = `#/adversaire/Chef%E2%80%AE%20tournant`;
+    assert.deepEqual(liens(ouvrir(contexte, "#/adversaires"), ".liste-entrees a").map(([texte, href]) => [texte.startsWith("Chef tournant"), href]).filter(([, href]) => href === adresse), [[true, adresse]]);
+    const choix = ouvrir(contexte, "#/rencontre");
+    const ligne = ligneDe(choix, "Chef tournant");
+    assert.equal(ligne.plus.getAttribute("aria-label"), `Ajouter un exemplaire de ${nom}`);
+    ligne.plus.click();
+    ligne.plus.click();
+    // « 2 × Chef tournant » : sans le signe, le nombre et ce qui suit ne se lisent pas à l'envers.
+    assert.equal(textes(choix, "p").some((texte) => texte === "2 × Chef tournant."), true, "la composition");
+    assert.deepEqual(cartesDe(choix), ["Chef tournant n° 1", "Chef tournant n° 2"]);
+    assert.equal(texteDe(choix).includes(renverse), false);
+    // La fiche s'ouvre par son adresse exacte, et son titre n'a pas le signe non plus.
+    const fiche = ouvrir(contexte, adresse);
+    assert.equal(texteDe(fiche.querySelector(".panneau-fiche h1")), "Chef tournant");
+    assert.equal(texteDe(fiche).includes(renverse), false);
+  });
+});
 
 // ─── Les anomalies de la feuille ────────────────────────────────────────────
 
@@ -1125,8 +1218,15 @@ test("ecran.css — le cadre des cartes n'est masqué qu'à l'écran, l'impressi
   // En vue lecture, la carte reste mise en page : invisible et sans hauteur, jamais retirée.
   assert.match(ecran, /\.ecran-adversaire\.vue-lecture \.cadre-cartes \{\s*height: 0;\s*overflow: hidden;\s*visibility: hidden;\s*\}/);
   assert.match(ecran, /\.ecran-adversaire\.vue-carte \.lectures-adversaire \{\s*display: none;\s*\}/);
+  // Sur un grand écran, la carte puis la lecture se montrent ensemble, quelle que soit la vue, et le choix d'une vue disparaît :
+  // chaque valeur dit d'où elle vient dès l'ouverture (mission, § 8).
+  const grand = bloc("@media screen and (min-width: 56rem)");
+  assert.match(grand, /\.ecran-adversaire \.choix-vue \{\s*display: none;\s*\}/);
+  assert.match(grand, /\.ecran-adversaire\.vue-lecture \.cadre-cartes,\s*\.ecran-adversaire\.vue-carte \.cadre-cartes \{\s*order: 1;\s*height: auto;\s*margin-bottom: var\(--espace-4\);\s*overflow: auto;\s*visibility: visible;\s*\}/);
+  assert.match(grand, /\.ecran-adversaire\.vue-lecture \.lectures-adversaire,\s*\.ecran-adversaire\.vue-carte \.lectures-adversaire \{\s*display: block;\s*order: 2;\s*\}/);
+  assert.match(grand, /\.ecran-adversaire \{\s*display: flex;\s*flex-direction: column;\s*\}/);
   // Hors de @media screen, rien ne masque le cadre : masqué à l'impression, il sortirait une page vide.
-  const horsEcran = css.replace(ecran, "");
+  const horsEcran = css.replace(ecran, "").replace(grand, "");
   assert.doesNotMatch(horsEcran, /cadre-cartes[^{]*\{[^}]*(?:display:\s*none|visibility:\s*hidden|height:\s*0)/);
   assert.match(impression, /\.cadre-cartes \{\s*display: block !important;\s*height: auto !important;\s*max-width: none !important;\s*overflow: visible !important;\s*visibility: visible !important;\s*\}/);
   // La liste ne s'imprime pas : la fiche prend la page.
@@ -1138,6 +1238,13 @@ test("ecran.css — le cadre des cartes n'est masqué qu'à l'écran, l'impressi
   assert.match(css, /\.bouton-pas \{\s*min-width: var\(--cible-tactile\);\s*min-height: var\(--cible-tactile\);/);
   assert.match(css, /\.lecture-liste li \{[^}]*min-height: var\(--cible-tactile\);/);
   assert.match(css, /\.nom-rencontre a \{[^}]*min-height: var\(--cible-tactile\);/);
+  // Le lien seul dans sa ligne (un type) se touche sur toute la hauteur de la ligne.
+  assert.match(css, /\.lecture-liste li > a \{[^}]*min-height: var\(--cible-tactile\);/);
+  // Rien ne fait défiler la page de côté : un nom d'un seul mot très long se replie, la rubrique d'une grille trop large
+  // défile seule, et les faces d'une zone ne se coupent pas en deux lignes.
+  assert.match(css, /\.nom-rencontre a \{[^}]*overflow-wrap: anywhere;/);
+  assert.match(css, /\.lecture-section:has\(> \.lecture-zones\) \{\s*overflow-x: auto;\s*\}/);
+  assert.match(css, /\.lecture-zones \.lecture-faces \{\s*white-space: nowrap;\s*\}/);
   assert.match(css, /\.barre-rencontre,\s*\.barre-publication \{\s*position: sticky;\s*bottom: 0;/);
   // Aucune classe de la carte n'est nommée ici : la carte est du papier, dans sa feuille.
   assert.doesNotMatch(css, /\.cartes?-adversaires?\b|\.carte-(?!personnage\b)[a-z]/);

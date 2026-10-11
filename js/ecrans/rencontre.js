@@ -13,10 +13,11 @@
 
 import { LARGEUR_CARTE, cartes } from "../adversaire/carte.js";
 import { defautDe } from "../adversaire/lecture.js";
+import { texteDe } from "../adversaire/notation.js";
 import { listeDe, manqueDe } from "../banque/consultation.js";
-import { TEXTES, filtrer } from "../banque/recherche.js";
+import { filtrer } from "../banque/recherche.js";
 import { adresseFiche, adresseListe } from "../routes.js";
-import { compte, el, enumerer, titre } from "./dom.js";
+import { compte, el, enumerer, sansSensForce, titre } from "./dom.js";
 import { tenirALEchelle } from "./echelle.js";
 
 // Trois cartes tiennent sur une page A4 : douze exemplaires d'un adversaire
@@ -164,7 +165,7 @@ export function afficher(contexte) {
     }
     const retenus = adversaires.filter((adversaire) => choisis.has(adversaire.nom));
     bilan.textContent = somme >= PLAFOND_CARTES ? `${somme} cartes : le plafond d'une rencontre.` : compte(somme, "carte", "cartes");
-    detail.textContent = somme ? `${retenus.map(({ nom }) => `${choisis.get(nom)} × ${nom}`).join(", ")}.` : "Ajoutez un adversaire avec « + » : sa carte paraît ci-dessous.";
+    detail.textContent = somme ? sansSensForce(`${retenus.map(({ nom }) => `${choisis.get(nom)} × ${nom}`).join(", ")}.`) : "Ajoutez un adversaire avec « + » : sa carte paraît ci-dessous.";
     imprimer.disabled = somme === 0;
     vider.disabled = somme === 0;
     const incertains = retenus.map(({ nom }) => [nom, defautDe(resoudre(contexte, nom))]).filter(([, defaut]) => defaut);
@@ -208,7 +209,7 @@ export function afficher(contexte) {
     const noeud = el(
       "li",
       { classe: "ligne-rencontre" },
-      el("span", { classe: "nom-rencontre" }, el("a", { href: adresseFiche("adversaires", nom) }, nom), " ", el("span", { classe: "detail" }, types || "sans type")),
+      el("span", { classe: "nom-rencontre" }, el("a", { href: adresseFiche("adversaires", nom) }, nom), " ", el("span", { classe: "detail" }, texteDe(types) || "sans type")),
       el("div", { classe: "pas-a-pas" }, moins, valeur, plus),
     );
     lignes.set(nom, { noeud, valeur, moins, plus });
@@ -226,7 +227,7 @@ export function afficher(contexte) {
   // Les lignes se gardent, avec leurs boutons : la recherche ne fait que
   // choisir celles qu'elle montre.
   const filtrerLignes = () => {
-    const montres = filtrer(adversaires, recherche.value, TEXTES.adversaires);
+    const montres = filtrer(adversaires, recherche.value, contexte.etat.index.textesAdversaire);
     liste.replaceChildren(...montres.map(({ nom }) => lignes.get(nom).noeud));
     trouves.textContent = recherche.value.trim() ? `${compte(montres.length, "adversaire", "adversaires")} sur ${adversaires.length}` : compte(adversaires.length, "adversaire", "adversaires");
   };
@@ -243,11 +244,6 @@ export function afficher(contexte) {
       "div",
       { classe: "ne-pas-imprimer" },
       titre("Rencontre"),
-      el(
-        "p",
-        {},
-        `Choisissez des adversaires et le nombre d'exemplaires de chacun : l'Atelier imprime une carte par exemplaire, numérotée dès qu'il y en a plus d'une. Jusqu'à ${PLAFOND_EXEMPLAIRES} exemplaires d'un adversaire, et ${PLAFOND_CARTES} cartes en tout. La composition n'est pas enregistrée : elle se perd à la fermeture de la page.`,
-      ),
       el("label", { for: "recherche-rencontre" }, "Rechercher parmi les adversaires"),
       recherche,
       trouves,
@@ -257,6 +253,13 @@ export function afficher(contexte) {
       el("div", { classe: "barre-rencontre" }, bilan, imprimer),
       detail,
       signalement,
+      // Le mode d'emploi vient après la liste : sur un téléphone, placé en
+      // tête, il poussait les boutons + sous le pli (relecture du lot 3).
+      el(
+        "p",
+        { classe: "secondaire-texte" },
+        `L'Atelier imprime une carte par exemplaire, numérotée dès qu'il y en a plus d'une du même adversaire. Jusqu'à ${PLAFOND_EXEMPLAIRES} exemplaires d'un adversaire, et ${PLAFOND_CARTES} cartes en tout. La composition n'est pas enregistrée : elle se perd à la fermeture de la page.`,
+      ),
       el("div", { classe: "boutons" }, vider),
       el("p", { classe: "lien-retour" }, el("a", { href: adresseListe("adversaires") }, "Tous les adversaires")),
       el("h2", {}, "Aperçu"),

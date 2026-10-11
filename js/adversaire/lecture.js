@@ -2,7 +2,7 @@
 //
 // L'adversaire résolu (resolution.js), ses rubriques empilées dans les
 // styles de l'interface, lisibles sans zoom sur un téléphone. C'est ici, et
-// ici seulement, que chaque valeur dit d'où elle vient : « de Brigand ×2 »
+// ici seulement, que chaque valeur dit d'où elle vient : « de Saucier ×2 »
 // pour ce qu'un type donne sous le multiplicateur, « de sa ligne » pour ce
 // que l'adversaire écrit lui-même, « de Spatule souple » pour ce que donne un
 // objet. La carte (carte.js), qui s'imprime, n'en dit rien.
@@ -25,7 +25,7 @@ const VOYELLE = /^[aeiouàâäéèêëîïôöùûüœæ]/iu;
 const de = (nom) => (VOYELLE.test(nom) ? `d'${nom}` : `de ${nom}`);
 
 /**
- * D'où vient une valeur : « de Brigand ×2 » (un type, sous le
+ * D'où vient une valeur : « de Saucier ×2 » (un type, sous le
  * multiplicateur de l'adversaire), « de Commis », « de sa ligne », « de
  * Spatule souple » (un objet). Rien pour une valeur que rien ne donne.
  */
@@ -60,9 +60,23 @@ const vide = (texte) => el("p", { classe: "secondaire-texte" }, texte);
 /** La vue lecture d'un adversaire résolu. index : celui de la consultation (js/banque/consultation.js). */
 export function lecture(resolu, index) {
   const { multiplicateur } = resolu;
-  const propre = { feuille: FEUILLE, ligne: resolu.ligne };
+  // Une banque forgée peut porter autre chose qu'un numéro de ligne : il ne
+  // s'écrit ni ne se suit que s'il en est un.
+  const ligne = Number.isInteger(resolu.ligne) ? resolu.ligne : null;
+  const propre = { feuille: FEUILLE, ligne };
   const origineDe = (origine) => ecrireOrigine(origine, multiplicateur);
   const originesDe = (origines) => [...new Set(origines.map(origineDe).filter(Boolean))].join(", ");
+  // Le rang est celui de la dernière citation (§ 16.4). Quand plusieurs
+  // origines donnent la capacité, il dit laquelle : « rang 2, de sa ligne ».
+  const rangDe = (rang, origines) => {
+    const citation = origines.findLast((origine) => origine.objet === undefined);
+    const plusieurs = new Set(origines.map(origineDe).filter(Boolean)).size > 1;
+    return `rang ${rang}${plusieurs && citation ? `, ${origineDe(citation)}` : ""}`;
+  };
+  // Une liste que ses types donnaient, et qu'une cellule écrite sans « // »
+  // laisse vide (« aucun ») : c'est dit, avec la ligne qui la vide.
+  const listeVide = (texte, origine, accord) =>
+    el("p", { classe: "secondaire-texte" }, origine ? [`${texte} `, provenance(`${origineDe(origine)}, qui n'en garde ${accord}`)] : `${texte}.`);
 
   // La ligne où se corrige ce qu'une origine cite : celle du bloc, celle du
   // type, sinon celle de l'adversaire.
@@ -116,7 +130,7 @@ export function lecture(resolu, index) {
               "tr",
               {},
               el("th", { scope: "row" }, zone.nom, " ", reconnue(zone)),
-              el("td", {}, zone.debut === zone.fin ? zone.debut : `${zone.debut}-${zone.fin}`),
+              el("td", { classe: "lecture-faces" }, zone.debut === zone.fin ? zone.debut : `${zone.debut}-${zone.fin}`),
               el("td", {}, el("strong", {}, zone.armure), " ", provenance(zone.pieces.length ? zone.pieces.join(" + ") : "aucune pièce")),
               el("td", {}, zone.resistance),
             ),
@@ -140,7 +154,7 @@ export function lecture(resolu, index) {
   };
 
   const maitrise = (m) =>
-    el("li", {}, el("p", {}, el("a", { href: adresseFiche("capacites", m.nom) }, m.nom), " ", detail(`rang ${m.rang}`)), el("p", {}, provenance(originesDe(m.origines))));
+    el("li", {}, el("p", {}, el("a", { href: adresseFiche("capacites", m.nom) }, m.nom), " ", detail(rangDe(m.rang, m.origines))), el("p", {}, provenance(originesDe(m.origines))));
 
   const capacite = (c) => {
     const origine = el("p", {}, provenance(originesDe(c.origines)));
@@ -149,7 +163,7 @@ export function lecture(resolu, index) {
     return el(
       "li",
       {},
-      el("p", {}, el("a", { href: adresseFiche("capacites", c.nom) }, c.nom), " ", detail(c.evolue ? `rang ${c.rang}` : "n'évolue pas", ecrireCout(c.cout) || "sans coût")),
+      el("p", {}, el("a", { href: adresseFiche("capacites", c.nom) }, c.nom), " ", detail(c.evolue ? rangDe(c.rang, c.origines) : "n'évolue pas", ecrireCout(c.cout) || "sans coût")),
       c.armes.map((arme) => el("p", {}, "Dégâts ", el("strong", {}, arme.degats), arme.portee ? `, portée ${arme.portee}` : null, " ", provenance(de(arme.nom)))),
       c.desavantage.length ? el("p", {}, "Désavantage ", provenance(`${c.desavantage.map(de).join(", ")}${c.desavantageEntier ? "" : " seulement"}`)) : null,
       descriptions.map((d) => el("p", {}, descriptions.length > 1 && d.source ? `${d.source} : ${d.texte}` : d.texte)),
@@ -158,7 +172,7 @@ export function lecture(resolu, index) {
   };
 
   const constat = (c) => {
-    const publiee = c.ligne && index.anomaliesDe(FEUILLE, c.ligne).length > 0;
+    const publiee = Number.isInteger(c.ligne) && index.anomaliesDe(FEUILLE, c.ligne).length > 0;
     return el(
       "li",
       {},
@@ -168,7 +182,7 @@ export function lecture(resolu, index) {
     );
   };
 
-  const anomalies = resolu.ligne ? index.anomaliesDe(FEUILLE, resolu.ligne) : [];
+  const anomalies = ligne ? index.anomaliesDe(FEUILLE, ligne) : [];
 
   return el(
     "div",
@@ -189,15 +203,15 @@ export function lecture(resolu, index) {
     ),
     section("Localisation", localisation()),
     resolu.maitrises.length ? section("Maîtrises", el("ul", { classe: "lecture-liste" }, resolu.maitrises.map(maitrise))) : null,
-    section("Équipement", resolu.equipement.length ? el("ul", { classe: "lecture-liste" }, resolu.equipement.map(objet)) : vide("Aucun objet.")),
-    section("Capacités", resolu.capacites.length ? el("ul", { classe: "lecture-liste" }, resolu.capacites.map(capacite)) : vide("Aucune capacité.")),
+    section("Équipement", resolu.equipement.length ? el("ul", { classe: "lecture-liste" }, resolu.equipement.map(objet)) : listeVide("Aucun objet", resolu.listes?.equipement, "aucun")),
+    section("Capacités", resolu.capacites.length ? el("ul", { classe: "lecture-liste" }, resolu.capacites.map(capacite)) : listeVide("Aucune capacité", resolu.listes?.capacites, "aucune")),
     resolu.constats.length ? section("À vérifier", el("ul", { classe: "lecture-avertissements" }, resolu.constats.map(constat))) : null,
     el(
       "p",
       { classe: "secondaire-texte petit" },
       anomalies.length
-        ? versAnomalie(propre, `${compte(anomalies.length, "anomalie", "anomalies")} sur cette ligne (${FEUILLE}, ligne ${resolu.ligne})`)
-        : `Feuille ${FEUILLE}${resolu.ligne ? `, ligne ${resolu.ligne}` : ""}.`,
+        ? versAnomalie(propre, `${compte(anomalies.length, "anomalie", "anomalies")} sur cette ligne (${FEUILLE}, ligne ${ligne})`)
+        : `Feuille ${FEUILLE}${ligne ? `, ligne ${ligne}` : ""}.`,
     ),
   );
 }

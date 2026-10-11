@@ -278,7 +278,10 @@ export function indexerAdversaires(banque, index = indexerCreation(banque)) {
   // suivant l'emporte), puis le multiplicateur sur tout ce qui en vient,
   // puis la ligne de l'adversaire, sans multiplicateur.
   function heriter(propre) {
-    const etat = { localisation: null, actions: null, souffle: null, attaque: null, defense: null, equipement: [], capacites: [] };
+    // listes : pour chaque liste, d'où vient la dernière cellule écrite sans
+    // « // », celle qui remplace tout ce qui précède. Une liste vide dit
+    // ainsi qui la vide (« aucun »).
+    const etat = { localisation: null, actions: null, souffle: null, attaque: null, defense: null, equipement: [], capacites: [], listes: { equipement: null, capacites: null } };
     const appliquer = (lue, type) => {
       const origine = () => ({ type, multiplie: false });
       if (lue.localisation.genre === "zones") etat.localisation = { zones: lue.localisation.zones, invalide: lue.localisation.defauts.length > 0, origine: origine() };
@@ -290,11 +293,17 @@ export function indexerAdversaires(banque, index = indexerCreation(banque)) {
       // Une boucle, et non un étalement en arguments : une liste forgée de
       // plus de cent mille entrées ferait déborder la pile d'appels.
       if (lue.equipement.genre === "liste") {
-        if (!lue.equipement.reprise) etat.equipement = [];
+        if (!lue.equipement.reprise) {
+          etat.equipement = [];
+          etat.listes.equipement = origine();
+        }
         for (const objet of lue.equipement.objets) etat.equipement.push({ ...objet, origine: origine() });
       }
       if (lue.capacites.genre === "liste") {
-        if (!lue.capacites.reprise) etat.capacites = [];
+        if (!lue.capacites.reprise) {
+          etat.capacites = [];
+          etat.listes.capacites = origine();
+        }
         for (const citee of lue.capacites.citees) etat.capacites.push({ ...citee, origine: origine() });
       }
     };
@@ -599,6 +608,9 @@ export function indexerAdversaires(banque, index = indexerCreation(banque)) {
       equipement,
       maitrises,
       capacites,
+      // D'où vient la dernière liste écrite sans « // », ou null : ce qui
+      // permet de dire qui vide une liste.
+      listes: etat.listes,
       complet,
       // Les constats de la résolution elle-même se rangent à la ligne de
       // l'adversaire ; ceux de ses cellules et de celles de ses types, à

@@ -20,8 +20,9 @@ export function pourRecherche(texte) {
 /**
  * Les textes où chercher, pour chaque catégorie de la consultation. Un
  * adversaire se cherche aussi par ses types, son équipement et ses
- * capacités, tels qu'il les écrit dans sa ligne : ce qu'il hérite d'un type
- * se trouve par le nom du type.
+ * capacités, tels qu'il les écrit dans sa ligne ; les écrans y ajoutent ce
+ * qu'il porte une fois résolu, hérité de ses types ou donné par son
+ * équipement (textesAdversaire, js/banque/consultation.js).
  */
 export const TEXTES = {
   blocs: (bloc) => [bloc.nom],
@@ -36,7 +37,9 @@ export function filtrer(entrees, recherche, textes) {
   const mots = pourRecherche(recherche).split(" ").filter(Boolean);
   if (mots.length === 0) return entrees;
   return entrees.filter((entree) => {
-    const texte = pourRecherche(textes(entree).join(" "));
+    // Une banque forgée peut porter autre chose qu'un texte dans une
+    // cellule : il ne se cherche pas, et ne fait rien lever.
+    const texte = pourRecherche(textes(entree).filter((morceau) => typeof morceau === "string").join(" "));
     return mots.every((mot) => texte.includes(mot));
   });
 }

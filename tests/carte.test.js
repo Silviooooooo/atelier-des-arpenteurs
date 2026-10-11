@@ -147,6 +147,11 @@ test("carte — une zone de deux faces au plus s'abrège en initiales si son nom
   assert.equal(abregerZone("Queue de scorpion", 2), "Q. d. s.");
   assert.equal(abregerZone("  Œil   droit ", 2), "Œ. d.");
   assert.equal(abregerZone("Aile 😀 droite", 2), "A. 😀. d.");
+  // Un nombre reste entier : dix-neuf pattes numérotées gardent dix-neuf étiquettes distinctes.
+  assert.equal(abregerZone("Patte 1", 2), "P. 1");
+  assert.equal(abregerZone("Patte 12", 1), "P. 12");
+  assert.equal(new Set(Array.from({ length: 19 }, (_, i) => abregerZone(`Patte ${i + 1}`, 1))).size, 19);
+  assert.equal(abregerZone("Patte 2e", 1), "P. 2.", "un mot qui commence par un chiffre n'est pas un nombre");
   const noeud = carteDe(resoluEssai((r) => (r.zones = [zone("Corps", 2, 16), zone("Queue fourchue", 17, 18), zone("Bec", 19, 19), zone("Œil gauche", 20, 20)])));
   assert.deepEqual(
     [...noeud.querySelectorAll(".carte-zone.rangee-armure")].map((z) => [texteDe(z.querySelector(".carte-nom-zone")), z.className.split(" ").includes("etroite")]),
@@ -316,6 +321,30 @@ test("carte — un nom qui contient du HTML reste du texte ; une zone hors de la
   assert.deepEqual([...deplacee.querySelectorAll(".carte-zone")].map((z) => z.className), ["carte-zone rangee-armure debut-2 etendue-10", "carte-zone rangee-resistance debut-2 etendue-10"]);
 });
 
+test("carte — un signe qui commande le sens de l'écriture, laissé dans un nom, ne s'affiche pas : les nombres qui le suivent ne se lisent pas à l'envers", () => {
+  // U+202E renverse tout ce qui le suit dans la ligne : « 13/26/41 » se lirait « 14/62/31 ». Les signes voisins de même.
+  const signes = [0x202a, 0x202b, 0x202d, 0x202e, 0x2066, 0x2067, 0x2068, 0x200f].map((code) => String.fromCodePoint(code));
+  const [, , , renverse] = signes;
+  const noeud = carteDe(
+    resoluEssai((r) => {
+      r.nom = `Chef${renverse}`;
+      r.types = [{ nom: `Saucier${renverse}`, absent: false }];
+      r.zones = [zone(`Corps${renverse}`, 2, 20)];
+      r.equipement = [{ nom: `Rapière${renverse} fine`, ecrit: "x", genre: "bloc", qualite: "4", pieces: null, origine: PROPRE }];
+      r.capacites = [capacite(`Estoc${signes.join("")} vif`, { descriptions: [{ source: null, texte: `Inflige 13/26/41${renverse}.` }] })];
+    }),
+    { numero: 12 },
+  );
+  assert.equal(texteDe(noeud.querySelector(".carte-nom")), "Chef n° 12");
+  assert.equal(texteDe(noeud.querySelector(".carte-nom-zone")), "Corps");
+  assert.equal(texteDe(noeud.querySelector(".carte-resume")), "Types Saucier — Équipement Rapière fine [4]");
+  assert.equal(lignes(noeud)[1], "Estoc vif [1] — Inflige 13/26/41.");
+  for (const signe of signes) assert.equal(texteDe(noeud).includes(signe), false, `U+${signe.codePointAt(0).toString(16)}`);
+  // Les accents, les ligatures et les émojis ne sont pas des signes de sens : ils restent.
+  const intact = "Œil d'été 😀 !";
+  assert.equal(texteDe(carteDe(resoluEssai((r) => (r.nom = intact))).querySelector(".carte-nom")), intact);
+});
+
 test("cartes — les cartes d'une rencontre, dans l'ordre, numérotées ; la largeur de la carte, pour l'échelle", () => {
   const chef = demo("Chef de partie");
   const marmiton = demo("Marmiton de corvée");
@@ -439,6 +468,14 @@ test("adversaire.css — les deux familles de classes de position, complètes : 
   // Les rangées et la contre-attaque, elles, sont fixes.
   assert.deepEqual([regle(".carte-adversaire .rangee-armure"), regle(".carte-adversaire .rangee-resistance"), regle(".carte-adversaire .rangee-corps")], [{ "grid-row": "2" }, { "grid-row": "3" }, { "grid-row": "4" }]);
   assert.equal(regle(".carte-adversaire .carte-contre")["grid-area"], "2 / 2 / span 3");
+  // Trois phrases de la mission (§ 7) que seule la feuille tient : la case
+  // « Contre-attaque » verticale, la description en italique, la hauteur
+  // variable (aucune hauteur ni rognage sur la carte, impression comprise).
+  assert.equal(regle(".carte-adversaire .carte-contre span")["writing-mode"], "vertical-rl");
+  assert.equal(regle(".carte-adversaire .carte-description")["font-style"], "italic");
+  for (const r of REGLES.filter((r) => r.selecteur.split(/\s*,\s*/).some((s) => /\.carte-adversaire$/.test(s)))) {
+    assert.deepEqual(Object.keys(declarations(r.corps)).filter((p) => /^(?:max-)?height$|^overflow/.test(p) && p !== "overflow-wrap"), [], `${r.cadre} ${r.selecteur}`);
+  }
   assert.equal(regle(".carte-adversaire .carte-etiquette")["grid-column"], "1");
   assert.deepEqual([regle(".carte-adversaire .carte-coin")["grid-row"], regle(".carte-adversaire .carte-face")["grid-row"]], ["1", "1"]);
 });
@@ -461,8 +498,13 @@ test("adversaire.css — EB Garamond : deux @font-face, la police variable et so
 });
 
 test("adversaire.css — l'impression : une page nommée A4 à marges, 190 mm, 4 mm entre les cartes, une carte jamais coupée ni masquée, les couleurs gardées, le zoom remis à 1", () => {
-  assert.deepEqual(declarations(REGLES.find((r) => r.selecteur === "@page cartes-adversaires").corps), { size: "A4", margin: "11mm 10mm" });
+  assert.deepEqual(declarations(REGLES.find((r) => r.selecteur === "@page cartes-adversaires").corps), { size: "A4", margin: "11mm 10mm", background: "var(--carte-papier)" });
   assert.deepEqual(REGLES.filter((r) => r.selecteur.startsWith("@page")).length, 1, "la page par défaut reste celle de fiche.css");
+  // La page nommée, trois fois : sans la racine, Firefox imprime la première
+  // page sans marge ; sans la carte, les pages après la deuxième (relecture
+  // du lot 3, mesuré dans Firefox 143 et 157).
+  const nommees = REGLES.filter((r) => r.cadre === "@media print" && declarations(r.corps).page === "cartes-adversaires").map((r) => r.selecteur);
+  assert.deepEqual(nommees, ["html:has(.cartes-adversaires), body:has(.cartes-adversaires)", ".cartes-adversaires", ".cartes-adversaires .carte-adversaire"]);
   assert.deepEqual(regle(".cartes-adversaires", "@media print"), {
     page: "cartes-adversaires",
     width: "190mm",
@@ -472,7 +514,7 @@ test("adversaire.css — l'impression : une page nommée A4 à marges, 190 mm, 4
     "-webkit-print-color-adjust": "exact",
   });
   assert.equal(regle(".cartes-adversaires .carte-adversaire", "@media print")["break-inside"], "avoid");
-  assert.deepEqual(regle("html:has(.cartes-adversaires)", "@media print"), { background: "var(--carte-papier)" });
+  assert.deepEqual(regle("html:has(.cartes-adversaires)", "@media print"), { page: "cartes-adversaires", background: "var(--carte-papier)" });
   // Hors impression aussi : la largeur, l'écart, et l'échelle de l'écran.
   assert.deepEqual(regle(".cartes-adversaires"), { width: "190mm", zoom: "var(--echelle, 1)" });
   assert.deepEqual(regle(".cartes-adversaires .carte-adversaire + .carte-adversaire"), { "margin-top": "4mm" });

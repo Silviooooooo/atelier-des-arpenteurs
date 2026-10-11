@@ -876,8 +876,28 @@ dl {
   margin: 0;
 }
 
+/* Un lien seul dans sa ligne (un type) se touche sur toute la hauteur de la
+   ligne, et non sur son seul texte. */
+.lecture-liste li > a {
+  display: flex;
+  align-items: center;
+  min-height: var(--cible-tactile);
+  margin: calc(-1 * var(--espace-2)) 0;
+}
+
 .lecture-zones .provenance {
   display: block;
+}
+
+/* Les faces d'une zone, « 12-13 », ne se coupent pas en deux lignes. */
+.lecture-zones .lecture-faces {
+  white-space: nowrap;
+}
+
+/* Un nom de zone fait d'un seul mot très long : c'est la rubrique qui
+   défile, jamais la page. */
+.lecture-section:has(> .lecture-zones) {
+  overflow-x: auto;
 }
 
 .nom-rencontre {
@@ -885,11 +905,14 @@ dl {
   min-width: 0;
 }
 
+/* overflow-wrap : un nom fait d'un seul mot plus large que l'écran se
+   replie, au lieu de faire défiler la page de côté. */
 .nom-rencontre a {
   display: inline-flex;
   align-items: center;
   min-height: var(--cible-tactile);
   margin-right: var(--espace-2);
+  overflow-wrap: anywhere;
 }
 
 .nom-rencontre .detail {
@@ -934,6 +957,35 @@ dl {
 
   .ecran-adversaire.vue-carte .lectures-adversaire {
     display: none;
+  }
+}
+
+/* Sur un grand écran, la place ne manque pas : la carte, puis la lecture, où
+   chaque valeur dit d'où elle vient, se montrent ensemble, et le choix d'une
+   vue n'a pas lieu d'être. Les deux vues sont pour le téléphone (§ 16.6). */
+@media screen and (min-width: 56rem) {
+  .ecran-adversaire {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .ecran-adversaire .choix-vue {
+    display: none;
+  }
+
+  .ecran-adversaire.vue-lecture .cadre-cartes,
+  .ecran-adversaire.vue-carte .cadre-cartes {
+    order: 1;
+    height: auto;
+    margin-bottom: var(--espace-4);
+    overflow: auto;
+    visibility: visible;
+  }
+
+  .ecran-adversaire.vue-lecture .lectures-adversaire,
+  .ecran-adversaire.vue-carte .lectures-adversaire {
+    display: block;
+    order: 2;
   }
 }
 

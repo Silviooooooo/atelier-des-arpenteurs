@@ -16,6 +16,16 @@ const ADRESSE_PERMISE = /^(?:#\/|\?|https:\/\/)/;
  * gestionnaire est toujours une fonction, jamais du texte ; ni style ni
  * srcdoc : la politique de sécurité n'est pas la seule barrière (§ 10.1).
  */
+// Les signes qui commandent le sens de l'écriture (propriété Unicode
+// Bidi_Control, dont U+202E). Laissé ouvert dans un nom venu d'un classeur,
+// l'un d'eux renverse tout ce qui le suit dans la ligne, jusqu'aux nombres
+// d'une carte imprimée : « 13/26/41 » se lirait « 14/62/31 ». Ils ne
+// s'affichent donc pas ; la banque, les adresses et les attributs gardent
+// le nom tel qu'il est écrit.
+const SENS_DE_L_ECRITURE = /\p{Bidi_Control}/gu;
+/** Un texte venu de la banque, tel qu'il s'affiche : sans signe qui commande le sens de l'écriture. */
+export const sansSensForce = (texte) => String(texte).replace(SENS_DE_L_ECRITURE, "");
+
 export function el(balise, attributs = {}, ...enfants) {
   const noeud = document.createElement(balise);
   for (const [nom, valeur] of Object.entries(attributs)) {
@@ -30,7 +40,7 @@ export function el(balise, attributs = {}, ...enfants) {
   }
   for (const enfant of enfants.flat(Infinity)) {
     if (enfant === null || enfant === undefined || enfant === false) continue;
-    noeud.append(enfant instanceof Node ? enfant : String(enfant));
+    noeud.append(enfant instanceof Node ? enfant : sansSensForce(enfant));
   }
   return noeud;
 }

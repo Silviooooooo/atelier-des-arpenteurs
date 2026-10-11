@@ -8,7 +8,7 @@
 // de capacités qu'il en faut, quatre au moins.
 //
 // Elle affiche l'adversaire résolu (resolution.js) sans rien recalculer, et
-// ne dit pas d'où vient une valeur : la provenance (« de Brigand ×2 ») est
+// ne dit pas d'où vient une valeur : la provenance (« de Saucier ×2 ») est
 // l'affaire de la vue lecture, à l'écran (§ 16.6).
 
 import { compte, el } from "../ecrans/dom.js";
@@ -33,12 +33,13 @@ const FACES_ABREGEES = 2;
 /**
  * Le nom d'une zone tel que la carte l'écrit : une zone de deux faces au
  * plus s'abrège en initiales si son nom a plusieurs mots (« Jambe gauche » :
- * « J. g. ») ; un nom d'un seul mot reste entier.
+ * « J. g. ») ; un nom d'un seul mot reste entier. Un nombre reste entier
+ * aussi : « Patte 12 » s'écrit « P. 12 », et non « P. 1. » comme « Patte 1 ».
  */
 export function abregerZone(nom, faces) {
   const mots = String(nom ?? "").trim().split(/\s+/u).filter(Boolean);
   if (faces > FACES_ABREGEES || mots.length < 2) return mots.join(" ");
-  return mots.map((mot) => `${[...mot][0]}.`).join(" ");
+  return mots.map((mot) => (/^\d+$/u.test(mot) ? mot : `${[...mot][0]}.`)).join(" ");
 }
 
 /** Le multiplicateur d'un adversaire, tel qu'il se lit : « ×2 », « ×1,4 ». */
