@@ -666,6 +666,8 @@ test("le module : il n'écrit ni HTML ni style, n'importe que dom.js, et n'ouvre
   for (const interdit of ["innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", ".style", "cssText", "confirm(", "alert(", "data-chargement", "Chargement de", "aria-live", "role: \"status\"", "localStorage", "indexedDB", "addEventListener"]) {
     assert.ok(!SOURCE.includes(interdit), `« ${interdit} » n'a pas sa place dans la préparation`);
   }
+  // Mission § 10.9 : le code n'écrit aucun style, pas même par un attribut.
+  assert.doesNotMatch(SOURCE, /\bstyle\s*[:=]|setAttribute\(\s*["'`]style/, "aucun style écrit par le code");
   assert.ok(!/["'`]disabled["'`]\s*[:,]/.test(SOURCE), "un bouton inactif garde le focus : aria-disabled, jamais disabled");
   assert.ok(!SOURCE.includes(String.fromCodePoint(0xa0)) && !SOURCE.includes(String.fromCodePoint(0x202f)), "aucune espace insécable");
   assert.match(SOURCE, /^\/\/ La préparation du combat \(SPECIFICATION\.md, § 17/);

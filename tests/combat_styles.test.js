@@ -293,6 +293,11 @@ test("combat.css — aucun outline hors du focus ; la cible est une bordure roug
   // Celui qui joue, et sa case, sont entourés de l'accent.
   assert.equal(valeur(COMBAT, ".combat-jeton.joue", "border-color"), "var(--accent)");
   assert.equal(valeur(COMBAT, ".combat-case.active", "border-color"), "var(--accent)");
+  // La légende, sous la carte, montre chaque marque telle que la carte la trace (mission § 10.4).
+  assert.match(valeur(COMBAT, ".combat-legende .cible .combat-rond", "border"), /dashed var\(--combat-adv\)$/);
+  assert.equal(valeur(COMBAT, ".combat-legende .joue .combat-rond", "border-color"), "var(--accent)");
+  assert.equal(valeur(COMBAT, ".combat-legende .joue .combat-rond", "background"), valeur(COMBAT, ".combat-jeton.joue", "background"));
+  assert.equal(valeur(COMBAT, ".combat-legende .mort .combat-rond", "background"), valeur(COMBAT, ".combat-jeton.mort .combat-rond", "background"));
   // La bordure d'un jeton existe au repos : une marque ne déplace rien.
   assert.match(valeur(COMBAT, ".combat-jeton", "border"), /solid transparent$/);
   // Pendant un choix, une case d'arrivée possible est marquée : un trait discontinu d'accent (mission § 10.4).
@@ -463,6 +468,15 @@ test("combat.css — une colonne ; à 56rem le plateau et l'action à gauche, le
     const colonnes = valeur(COMBAT, ".combat-cadre", "grid-template-columns", cadre);
     assert.deepEqual(colonnes.match(/minmax\(0, \d+fr\)/g).join(" "), colonnes, `${cadre}`);
   }
+  // Mission § 10.2 : une colonne, puis deux, puis trois ; autant de colonnes que de zones sur une ligne.
+  for (const [cadre, nombre] of [[null, 1], [MEDIA_56, 2], [MEDIA_80, 3]]) {
+    assert.equal(valeur(COMBAT, ".combat-cadre", "grid-template-columns", cadre).match(/minmax\(/g).length, nombre, `${cadre} : ${nombre} colonne(s)`);
+    const zones = valeur(COMBAT, ".combat-cadre", "grid-template-areas", cadre);
+    if (zones !== null) for (const ligne of zones.match(/"[^"]*"/g)) assert.equal(ligne.replace(/"/g, "").trim().split(/\s+/).length, nombre, `${cadre} : ${ligne}`);
+  }
+  // À 80rem, la carte et le panneau d'action tiennent la colonne du milieu, la plus large.
+  const [gauche, milieu, droite] = valeur(COMBAT, ".combat-cadre", "grid-template-columns", MEDIA_80).match(/\d+(?=fr)/g).map(Number);
+  assert.ok(milieu > gauche && milieu > droite && gauche === droite, "les deux listes de part et d'autre, de même largeur");
   // La barre du téléphone, comme la maquette : l'état, « Fin de tour » et « ⋯ » sur une ligne, les commandes au bout ;
   // ce que « ⋯ » ouvre sur sa rangée, sous lui ; l'état de l'enregistrement sur la sienne.
   assert.equal(valeur(COMBAT, ".combat-barre", "flex-wrap"), "wrap");

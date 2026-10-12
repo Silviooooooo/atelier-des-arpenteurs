@@ -144,12 +144,17 @@ async function lireLaBase(lieu, secret = SECRET) {
 const PHOTOS_D_ESSAI = { "Aubépine Crèmebrûlée": aubepineEssai(), "Chef de partie": chefDePartieEssai(), "Marmiton de corvée": marmitonDeCorveeEssai() };
 const texteDuCombat = (jusqua, revision, retoucher = (contenu) => contenu) => JSON.stringify(retoucher({ ...versContenu(scenario, PHOTOS_D_ESSAI, { jusqua }).contenu, revision }));
 
+const ATTENTE_MAX = 5000;
 /** Attend qu'une condition soit vraie : une écriture qui finit, une lecture qui revient. */
 async function attendre(condition, quoi) {
-  for (let essai = 0; essai < 3000; essai += 1) {
+  // Bornée au temps, non au nombre d'essais : une minuterie de 2 ms en dure une quinzaine sous Windows, et
+  // 3 000 essais y faisaient 47 s par attente déçue. Ce qu'on attend ici arrive en quelques millisecondes.
+  const limite = Date.now() + ATTENTE_MAX;
+  do {
     if (condition()) return;
     await laisserFiler(2);
-  }
+  } while (Date.now() < limite);
+  if (condition()) return;
   assert.fail(`toujours pas : ${quoi}`);
 }
 
@@ -159,14 +164,17 @@ async function attendre(condition, quoi) {
  * l'ordre, ou une source déjà faite. Rend l'écran et ce que le contrôle peut
  * observer : les téléchargements demandés, la source de dés, l'étagère.
  */
-async function ouvrirLEcran(page, { banque = BANQUE, secret = SECRET, magasin, des = [], personnages = [AUBEPINE], etagere = etagereDe(personnages), depot = null, etroit = false, navigateur = pressePapiers().navigateur, pose = true } = {}) {
+async function ouvrirLEcran(page, { banque = BANQUE, secret = SECRET, magasin, des = [], personnages = [AUBEPINE], etagere = etagereDe(personnages), depot = null, etroit = false, navigateur = pressePapiers().navigateur, horloge = SOIR, pose = true } = {}) {
   const source = Array.isArray(des) ? desImposes(des) : des;
   const telecharges = [];
   // Les largeurs que l'écran demande : il n'a pas d'autre moyen de savoir s'il est sur un téléphone.
   const requetes = new Set();
   const contexte = { etat: { mode: "demo", banque, index: indexDe(banque), secret, etagere, depot } };
-  const services = { maintenant: SOIR, media: (requete) => (requetes.add(requete), etroit), telecharger: (...parametres) => telecharges.push(parametres), navigateur };
-  // « des: null » : aucun service de dés, comme dans la page.
+  const services = { telecharger: (...parametres) => telecharges.push(parametres) };
+  // « des: null », « navigateur: null », « horloge: null », « etroit: null » : aucun service de ce nom, comme dans la page.
+  if (etroit !== null) services.media = (requete) => (requetes.add(requete), etroit);
+  if (navigateur !== null) services.navigateur = navigateur;
+  if (horloge !== null) services.maintenant = horloge;
   if (source !== null) services.des = source;
   if (magasin !== undefined) services.magasin = magasin;
   const ecran = page.afficher(contexte, services);
@@ -217,7 +225,12 @@ const boutonDit = (noeud, texte) => boutonOu(noeud, (b) => texteDe(b) === texte,
 const boutonCommencant = (noeud, debut) => boutonOu(noeud, (b) => texteDe(b).startsWith(debut), `qui commence par « ${debut} »`);
 const repere = (noeud, nom) => un(noeud, `[data-repere=${nom}]`);
 /** La raison liée à un bouton inactif, telle qu'un lecteur d'écran la dit. */
-const raisonDe = (ecran, bouton) => texteDe(un(ecran, `#${bouton.getAttribute("aria-describedby")}`));
+/** La raison liée à un bouton inactif : son texte. Elle se voit : un texte caché ne dirait rien à qui regarde l'écran. */
+const raisonDe = (ecran, bouton) => {
+  const raison = un(ecran, `#${bouton.getAttribute("aria-describedby")}`);
+  if (texteDe(raison) !== "") assert.equal(raison.hidden === true || raison.hasAttribute("hidden"), false, "la raison d'un bouton inactif se voit");
+  return texteDe(raison);
+};
 
 const barre = (ecran) => un(ecran, "header.combat-barre");
 const etatDuCombat = (ecran) => texteDe(un(ecran, "p.combat-etat"));
@@ -475,6 +488,8 @@ dansUnePage("ouverture — afficher() rend son nœud tout de suite : le titre et
   const zoneDuJournal = un(ecran, "section.combat-journal");
   assert.equal(texteDe(un(ecran, `#${zoneDuJournal.getAttribute("aria-labelledby")}`)), "Journal");
   assert.equal(un(ecran, `#${zoneDuJournal.getAttribute("aria-labelledby")}`).tagName, "H2");
+  // Sa hauteur est limitée et il défile : la liste de ses lignes s'atteint au clavier.
+  assert.equal(un(zoneDuJournal, "ol.combat-lignes").getAttribute("tabindex"), "0");
   assert.deepEqual(un(ecran, ".combat-cadre").children.map((noeud) => noeud.className), ["combat-plateau", "combat-preparation", "combat-camps"]);
   assert.equal(tous(ecran, ".combat-case").length, 100);
   assert.match(texteDe(un(ecran, "p.combat-aide")), /^Un protagoniste ajouté se pose d'office/);
@@ -535,6 +550,7 @@ dansUnePage("ouverture — deux visites pendant l'ouverture : une seule lecture 
   for (const ecran of [premiere, seconde]) {
     assert.equal(tous(ecran, ".combat-plateau").length, 0, "rien ne s'affiche après l'oubli");
     assert.equal(tous(ecran, "details").length, 0);
+    assert.equal(tous(ecran, "p.message").length, 0, "un oubli n'est pas un échec de l'ouverture : l'écran d'avant n'est plus touché");
   }
   // Rien n'est resté en mémoire : la visite suivante attend, et relit la base.
   const { ecran } = await ouvrirLEcran(page, { magasin: lent, pose: false });
@@ -1451,6 +1467,7 @@ dansUnePage("journal — le presse-papiers qui refuse, ou qui manque : le texte 
     const champ = un(zone, "textarea");
     assert.equal(champ.value, ["Simulateur de combat — L'Atelier des Arpenteurs", "Combat lancé le 12/10/2026 à 21 h 30 (démonstration)", "Personnages : Aubépine Crèmebrûlée", "Adversaires : Chef de partie ; Marmiton de corvée n° 1 et n° 2", "", ...journalAttendu.slice(0, 2)].join("\n"));
     assert.equal(champ.hasAttribute("readonly"), true);
+    assert.ok((champ.getAttribute("aria-label") ?? "").trim() !== "", "le champ a un nom");
     assert.deepEqual(selectionnes, [champ], "le texte est sélectionné");
     assert.equal(document.activeElement, champ);
     assert.match(texteDe(un(zone, `#${champ.getAttribute("aria-describedby")}`)), /^Copie refusée par le navigateur/);
@@ -1597,6 +1614,7 @@ dansUnePage("« Nouveau combat » — la confirmation dans la page ; « Annuler 
   await cliquer(boutonDit(autres, "Annuler"));
   assert.equal(tous(ecran, ".confirmation").length, 0);
   assert.equal(document.activeElement, nouveau);
+  assert.equal(autres.className, "combat-autres ouvert", "sur un téléphone, le menu reste ouvert : le bouton qui reprend le focus se voit");
   assert.equal(journal(ecran).length, 2);
   assert.equal(fiches(ecran).length, 4);
   assert.equal(etatDuCombat(ecran), "Tour 1 · camp des PJ");
@@ -1646,6 +1664,7 @@ dansUnePage("« Fiche complète » — le personnage et l'adversaire, d'après l
   await cliquer(repere(fiche(ecran, "pj1"), "fiche-complete"));
   assert.equal(texteDe(tous(panneau, "h2")[0]), "Fiche complète : Aubépine Crèmebrûlée");
   assert.equal(document.activeElement, tous(panneau, "h2")[0], "le focus va au titre du panneau");
+  assert.equal(tous(panneau, "h2")[0].getAttribute("tabindex"), "-1", "un titre ne reçoit le focus que s'il le peut, sans entrer dans l'ordre du clavier");
   assert.equal(tous(panneau, "h1").length, 0, "un seul titre de premier niveau dans la page");
   assert.equal(tous(panneau, ".lecture").length, 1);
   assert.equal(texteDe(un(panneau, ".lecture-titre")), "Aubépine Crèmebrûlée");
@@ -1910,6 +1929,8 @@ dansUnePage("enregistrement — « Combat ouvert ailleurs » : on ne joue plus, 
   const bloc = un(ecran, ".combat-cadre").children[1];
   assert.equal(texteDe(un(bloc, "h2")), "Combat ouvert ailleurs");
   assert.deepEqual(tous(bloc, "button").map(texteDe), ["Reprendre le combat le plus récent"]);
+  // Le focus était dans le panneau d'action, qui vient de quitter la page sans qu'on ait rien cliqué : il va au bloc qui le remplace.
+  assert.equal(document.activeElement, un(bloc, "h2"), "le focus n'est pas perdu avec le panneau");
   // « Nouveau combat » écraserait le combat de l'autre onglet : il est inactif, et le dit.
   const nouveau = boutonDit(barre(ecran), "Nouveau combat");
   assert.equal(inactif(nouveau), true);
@@ -2089,4 +2110,190 @@ dansUnePage("enregistrement — sans clé : le combat vit en mémoire, rien ne s
   assert.deepEqual(fiches(second), [["pj1", "Aubépine Crèmebrûlée"]]);
   await laisserFiler(30);
   assert.deepEqual(await pleine.gardee(), posee);
+});
+
+// ─── Ce que la mise à l'épreuve a ajouté ────────────────────────────────────
+
+dansUnePage("les services — sans service, « Copier » passe par le presse-papiers du navigateur, le combat se date à l'heure du moment, et la largeur se demande à la page", async (page) => {
+  // La page ne passe aucun service : le presse-papiers est celui du navigateur, l'heure celle de l'appareil, la largeur celle de la fenêtre.
+  const presse = pressePapiers();
+  const propre = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  Object.defineProperty(globalThis, "navigator", { value: presse.navigateur, configurable: true, writable: true });
+  const mediaDAvant = Object.getOwnPropertyDescriptor(globalThis, "matchMedia");
+  const demandees = new Set();
+  let telephone = true;
+  globalThis.matchMedia = (requete) => (demandees.add(requete), { matches: telephone });
+  try {
+    const { ecran, telecharges } = await ouvrirLEcran(page, { magasin: magasinCombatMemoire(), navigateur: null, horloge: null, etroit: null });
+    await preparerLaReference(ecran);
+    const avant = new Date();
+    await lancerLeCombat(ecran);
+    const apres = new Date();
+    // Sur un téléphone, personne ne jouant encore, aucune fiche n'est ouverte ; sur un grand écran, toutes le sont.
+    const ouvertes = (noeud) => tous(noeud, "details").filter((fiche) => fiche.hasAttribute("open")).length;
+    assert.deepEqual([...demandees], ["(max-width: 55.99rem)"]);
+    assert.equal(ouvertes(ecran), 0);
+    const zone = un(ecran, ".combat-journal");
+    await cliquer(boutonDit(zone, "Copier"));
+    assert.equal(presse.copies.length, 1, "la copie est allée au presse-papiers du navigateur");
+    assert.match(presse.copies[0], /^Simulateur de combat — L'Atelier des Arpenteurs\nCombat lancé le /);
+    assert.equal(tous(zone, "textarea").length, 0, "aucun champ de repli");
+    // Le fichier porte la date et l'heure locales du lancement : combat-AAAA-MM-JJ-HHhMM.txt.
+    const deux = (nombre) => String(nombre).padStart(2, "0");
+    const nomA = (date) => `combat-${date.getFullYear()}-${deux(date.getMonth() + 1)}-${deux(date.getDate())}-${deux(date.getHours())}h${deux(date.getMinutes())}.txt`;
+    await cliquer(boutonDit(zone, "Télécharger"));
+    assert.equal(telecharges.length, 1);
+    assert.ok([nomA(avant), nomA(apres)].includes(telecharges[0][0]), `${telecharges[0][0]} : l'heure du lancement, ${nomA(avant)}`);
+    // Une autre visite, la fenêtre élargie.
+    telephone = false;
+    assert.equal(ouvertes((await ouvrirLEcran(page, { magasin: magasinCombatMemoire(), navigateur: null, horloge: null, etroit: null })).ecran), 4);
+  } finally {
+    if (propre) Object.defineProperty(globalThis, "navigator", propre);
+    else delete globalThis.navigator;
+    if (mediaDAvant) Object.defineProperty(globalThis, "matchMedia", mediaDAvant);
+    else delete globalThis.matchMedia;
+  }
+});
+
+dansUnePage("« Fin de tour » — inactif pendant un geste, il dit pourquoi, et son clic ne demande rien au combat", async (page) => {
+  const { ecran } = await ouvrirLEcran(page, { magasin: magasinCombatMemoire(), des: desDe(scenario.gestes.slice(0, 1)) });
+  await preparerLaReference(ecran);
+  await lancerLeCombat(ecran);
+  const fin = boutonDit(barre(ecran), "Fin de tour");
+  assert.equal(inactif(fin), false);
+  // Après chaque dé du premier geste, tant que le geste n'est pas fini : le bouton, sa raison, puis un clic.
+  const vus = [];
+  await jouerLeGeste(ecran, scenario.gestes[0], {
+    apresChaqueDe() {
+      if (corps(ecran).querySelector(".combat-jet") === null) return;
+      const avant = [etatDuCombat(ecran), titreDuPanneau(ecran), journal(ecran).length];
+      const vu = { inactif: inactif(fin), horsDuClavier: fin.hasAttribute("disabled"), raison: raisonDe(ecran, fin) };
+      fin.click();
+      vus.push({ ...vu, bouge: JSON.stringify([etatDuCombat(ecran), titreDuPanneau(ecran), journal(ecran).length]) !== JSON.stringify(avant), avis: avis(ecran).children.length });
+    },
+  });
+  assert.ok(vus.length >= 1, "le geste a lancé au moins un dé");
+  for (const vu of vus) {
+    // Le bouton reste dans l'ordre du clavier, inactif, sa raison à côté de lui ; le clic n'est pas allé jusqu'au combat : rien ne bouge, aucun refus ne s'affiche.
+    assert.equal(vu.inactif, true);
+    assert.equal(vu.horsDuClavier, false);
+    assert.notEqual(vu.raison, "");
+    assert.equal(vu.bouge, false);
+    assert.equal(vu.avis, 0, "aucun refus ne s'affiche");
+  }
+  // Le geste fini, le journal est celui du combat de référence : le clic n'a rien dérangé.
+  assert.deepEqual(journal(ecran), journalAttendu.slice(0, 3));
+  assert.equal(inactif(fin), false);
+});
+
+dansUnePage("préparation — le combat lancé, revenir sur l'écran ne relit pas les personnages : un appel par ouverture de la préparation, aucun pendant le combat", async (page) => {
+  const magasin = magasinCombatMemoire();
+  const etagere = etagereDe([AUBEPINE]);
+  let enLigne = 0;
+  const depot = { lireEnLigne: async () => ((enLigne += 1), { personnages: [], erreur: null }) };
+  const { ecran } = await ouvrirLEcran(page, { magasin, etagere, depot });
+  await preparerLaReference(ecran);
+  await lancerLeCombat(ecran);
+  const lus = [etagere.journal.lectures, enLigne];
+  assert.equal(lus[0], 1);
+  // Le combat est en cours : la préparation n'est plus à l'écran, et personne ne s'ajoute.
+  const { ecran: revenue } = await ouvrirLEcran(page, { magasin, etagere, depot });
+  await laisserFiler(20);
+  assert.equal(etatDuCombat(revenue), "Tour 1 · camp des PJ");
+  assert.equal(tous(revenue, ".combat-preparation").length, 0);
+  assert.deepEqual([etagere.journal.lectures, enLigne], lus, "ni l'appareil ni les personnages en ligne ne sont relus");
+});
+
+dansUnePage("enregistrement — « Reprendre le combat le plus récent » trouve un combat qui ne se lit plus : l'écran le dit, avec « Nouveau combat »", async (page) => {
+  const lieu = lieuSimule();
+  const { ecran } = await ouvrirLEcran(page, { magasin: await lieu.onglet() });
+  await ajouterLePersonnage(ecran, "Aubépine Crèmebrûlée");
+  await attendre(() => garde(ecran) === PHRASES_DE_GARDE.garde, "la fin de l'écriture");
+  const gardee = await lieu.gardee();
+  // Ailleurs, le mot de passe de table a changé, et le combat a été écrit avec la clé nouvelle.
+  const posee = await chiffrerCombat(texteDuCombat(2, gardee.revision + 1), AUTRE, { mode: "demo", revision: gardee.revision + 1 });
+  assert.deepEqual(await (await lieu.onglet()).ecrireSi(posee, gardee.revision), { ecrit: true });
+  await ajouterDesAdversaires(ecran, "Plongeur", 1);
+  await attendre(() => garde(ecran) === "Combat ouvert ailleurs", "le refus de l'écriture");
+  await cliquer(boutonDit(avis(ecran), "Reprendre le combat le plus récent"));
+  await attendre(() => garde(ecran) === NE_SE_LIT_PLUS, "la reprise");
+  await laisserFiler(20);
+  // L'état nouveau passe par la zone d'avis, avec son bouton : la reprise ne l'efface pas.
+  assert.equal(garde(ecran), NE_SE_LIT_PLUS);
+  assert.deepEqual(tous(avis(ecran), "p").map(texteDe), [NE_SE_LIT_PLUS]);
+  assert.deepEqual(tous(avis(ecran), "button").map(texteDe), ["Nouveau combat"]);
+  const bloc = un(ecran, ".combat-cadre").children[1];
+  assert.equal(texteDe(un(bloc, "h2")), NE_SE_LIT_PLUS);
+  assert.deepEqual(tous(bloc, "button").map(texteDe), ["Nouveau combat"]);
+  await laisserFiler(20);
+  assert.deepEqual(await lieu.gardee(), posee, "rien n'est écrit par-dessus");
+});
+
+dansUnePage("oublier() — pendant une écriture : ce qui était parti avec la clé oubliée ne s'écrit plus", async (page) => {
+  const lieu = lieuSimule();
+  const { ecran } = await ouvrirLEcran(page, { magasin: await lieu.onglet() });
+  await ajouterLePersonnage(ecran, "Aubépine Crèmebrûlée");
+  await attendre(() => garde(ecran) === PHRASES_DE_GARDE.garde, "la fin de l'écriture");
+  const gardee = await lieu.gardee();
+  // « Oublier le mot de passe » tombe au moment où l'écriture suivante chiffre : la clé est déjà lue, rien n'est encore en base.
+  const subtil = crypto.subtle;
+  const chiffrer = subtil.encrypt;
+  let chiffrements = 0;
+  subtil.encrypt = function encrypt(...parametres) {
+    chiffrements += 1;
+    page.oublier();
+    return chiffrer.apply(subtil, parametres);
+  };
+  try {
+    await ajouterDesAdversaires(ecran, "Plongeur", 1);
+    await attendre(() => chiffrements > 0, "le chiffrement de l'écriture");
+    await laisserFiler(60);
+  } finally {
+    delete subtil.encrypt;
+  }
+  assert.equal(crypto.subtle.encrypt, chiffrer);
+  assert.equal(chiffrements, 1);
+  assert.deepEqual(await lieu.gardee(), gardee, "la base garde l'écriture d'avant l'oubli");
+});
+
+dansUnePage("« Nouveau combat » — pendant la préparation : le bouton cliqué quitte la page, le focus va au titre", async (page) => {
+  const { ecran } = await ouvrirLEcran(page, { magasin: magasinCombatMemoire() });
+  await ajouterLePersonnage(ecran, "Aubépine Crèmebrûlée");
+  await cliquer(boutonDit(barre(ecran), "Nouveau combat"));
+  const effacer = boutonDit(barre(ecran), "Effacer");
+  effacer.focus();
+  await cliquer(effacer);
+  assert.deepEqual(fiches(ecran), []);
+  assert.equal(etatDuCombat(ecran), "Préparation");
+  assert.equal(effacer.isConnected, false);
+  assert.equal(document.activeElement, un(ecran, "h1"), "le focus n'est pas perdu avec la question");
+});
+
+dansUnePage("la liste d'une case — avant le lancement elle dit quel jeton est tenu ; « Fermer » rend le focus au « +k » qui se voit à cette largeur", async (page) => {
+  for (const etroit of [true, false]) {
+    const { ecran } = await ouvrirLEcran(await pageNeuve(), { magasin: magasinCombatMemoire(), etroit });
+    await ajouterLePersonnage(ecran, "Aubépine Crèmebrûlée");
+    await ajouterDesAdversaires(ecran, "Marmiton de corvée", 3);
+    poserSur(ecran, "pj1", "J1");
+    // Quatre jetons sur J1 : la case porte ses deux « +k », celui du téléphone (deux jetons montrés) et celui du grand écran (trois).
+    const duTelephone = un(laCase(ecran, "J1"), "button.combat-plus-etroit");
+    const duGrandEcran = un(laCase(ecran, "J1"), "button.combat-plus-large");
+    assert.deepEqual([texteDe(duTelephone), texteDe(duGrandEcran)], ["+2", "+1"]);
+    const visible = etroit ? duTelephone : duGrandEcran;
+    const liste = un(un(ecran, ".combat-preparation"), ".combat-case-liste");
+    await cliquer(visible);
+    const noms = tous(liste, "button").map(texteDe).filter((nom) => nom !== "Fermer");
+    assert.equal(noms.length, 4);
+    // Personne n'est en main : chaque bouton de la liste le dit.
+    assert.deepEqual(tous(liste, "button").filter((b) => texteDe(b) !== "Fermer").map((b) => b.getAttribute("aria-pressed")), ["false", "false", "false", "false"]);
+    await cliquer(boutonDit(liste, "Fermer"));
+    assert.equal(document.activeElement, un(laCase(ecran, "J1"), etroit ? "button.combat-plus-etroit" : "button.combat-plus-large"), etroit ? "sur un téléphone" : "sur un grand écran");
+    // Un jeton pris sur la carte, puis la liste rouverte : elle dit lequel est tenu.
+    const premier = tous(laCase(ecran, "J1"), ".combat-jeton")[0];
+    await cliquer(premier);
+    assert.equal(premier.getAttribute("aria-pressed"), "true");
+    const tenu = premier.getAttribute("title");
+    await cliquer(un(laCase(ecran, "J1"), etroit ? "button.combat-plus-etroit" : "button.combat-plus-large"));
+    assert.deepEqual(tous(liste, "button").filter((b) => texteDe(b) !== "Fermer").map((b) => [texteDe(b), b.getAttribute("aria-pressed")]), noms.map((nom) => [nom, String(nom === tenu)]));
+  }
 });

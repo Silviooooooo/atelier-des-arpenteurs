@@ -243,7 +243,7 @@ js/
     offre.js                la seule porte : ce qui est permis à cet instant, et pourquoi le reste ne l'est pas
     moteur.js               le réducteur : un état, un événement, l'état suivant ; le rejeu d'un combat gardé
     journal.js              chaque ligne du journal, son en-tête, le nom du fichier, les annonces
-    lecture.js              les cinq vues que l'écran affiche, chaque bouton avec sa commande ou sa raison
+    lecture.js              les cinq vues que l'écran affiche, chaque bouton avec sa commande ou sa raison ; ce qu'une ligne du journal met en évidence
                             et le bord, qui touche le hasard, la banque, la clé et l'appareil :
     des.js                  la source de dés de l'écran (crypto.getRandomValues, sans biais)
     roles.js                le seul tableau des rôles câblés : noms de la démonstration en clair, ceux du vrai classeur par empreinte (§ 17.6)
@@ -1094,8 +1094,8 @@ de 44 px chacune, et leurs jetons aussi, comme le « +k » d'une case
 pleine : c'est admis. **Chaque choix fait sur la carte a son double en
 boutons de 44 px** : dans le panneau d'action, un bouton par cible possible
 et par case d'arrivée possible ; avant le lancement, un champ « Case » (de
-A1 à J10) sur chaque fiche. Tout bouton hors de la carte tient les 44 px
-(§ 17.7).
+A1 à J10) pour chaque fiche, hors de son volet : il s'atteint sans la
+déplier. Tout bouton hors de la carte tient les 44 px (§ 17.7).
 
 **L'aspect est sobre** (décision de l'auteur, 28/09/2026) : polices du
 système, aucune police téléchargée ; gris neutres et une seule couleur
@@ -1506,7 +1506,7 @@ Chaque contrôle nouveau se vérifie **armé puis désarmé**.
 | Routes et fiches | décodage des adresses de fiche (`#/capacite/Attaque%20de%20base`) et aller-retour des noms difficiles ; la fiche et la liste des blocs montrent leur type ; adresses abîmées, dont les noms d'`Object.prototype` ; un nom introuvable n'est jamais le titre ; recherche sans casse ni accents, sur les noms et les descriptions ; renvois résolus comme au contrôle ; « octroyée par », « porté par », nom affiché ; anomalies d'une ligne ; les adresses des adversaires, des types et de la rencontre, dont un nom forgé qui porte un demi-codet seul ; le lien de la navigation que marque chaque écran ; la recherche d'un adversaire par ce qu'il écrit ; l'index des adversaires et de leurs types, les lignes de la feuille Adversaires ; une banque d'avant le lot 3 indexée sans exception ; les entrées d'un nom comptent ses doublons à un signe invisible près (lot 4), celle du nom écrit d'abord, et aucune sous un nom que rien ne porte exactement ; un nom qui ne diffère d'un autre que par la casse, un accent ou une espace intérieure a ses propres entrées, et n'entre pas dans celles de l'autre ; l'adresse du combat (lot 4) : `#/combat`, et dix adresses abîmées autour d'elle (`#/combat/`, `#/combat/2`, `#/combats`, `#/Combat`…), la rubrique qu'elle marque, son lien après « Rencontre », et tout lien de la navigation écrit sous la forme que lit le contrôle (un lien écrit autrement manquait à la liste sans bruit) |
 | Site | politique de sécurité du `<meta>`, avant scripts et styles, toute la table des directives et rien d'autre ; zoom permis ; ni script, ni style, ni gestionnaire en ligne ; chaque fichier appelé existe ; le graphe des modules se résout et atteint les seize écrans (le combat est le seizième ; quatorze de ses modules y sont nommés), et tout module de `js/` y est, hors la veille ; manifeste, couleurs des jetons, icônes aux tailles dites, telles que les dessine leur outil ; contrastes, dont ceux des onze couleurs du combat dans les deux thèmes, le texte à 4,5:1 et les ronds à 3:1 sur le fond des cases, ces onze-là ayant chacune sa valeur sombre (§ 17.7) ; valeurs de `ecran.css`, de `personnage.css` et de `combat.css` tirées des jetons, hors les largeurs des `@media`, aucune police téléchargée par l'interface ; la banque de démonstration, au format 2, se déchiffre et vient du classeur d'essai, avec ce qu'y lit le simulateur de combat (lot 4 : ses comptes, les deux éléments, les deux capacités du bloc de base, mot pour mot) ; le mot de passe de démonstration, déjà en minuscules, saisi en majuscules, ouvre la banque, et la clé gardée la rouvre ; le format 1 ne s'ouvre plus ; au téléchargement, une empreinte de format 2 fausse et un format plus récent donnent leur message ; le diagnostic dit le format ; chargement : absente, présente, abîmée, `?v=`, clé gardée, mot de passe requis ou changé, stockage durable ; l'attente du mot de passe ne dépend pas de la peinture de la fenêtre ; le déverrouillage n'attend pas la réponse sur le stockage durable ; sans IndexedDB, la phrase au lieu de la case ; une erreur inattendue : un message. Dans un document simulé : le bouton « Publier » existe dans chaque état de l'espace auteur, et sa raison s'affiche ; la barre de publication reste collée au bas de l'écran ; « Oublier le mot de passe » ne laisse ni clé ni différences, même pendant une comparaison ; « Oublier la clé GitHub » annule la publication en attente ; « Se souvenir » décide de garder la clé ; la veille de 15 secondes, et rien sur une page chargée ; l'aide dit d'ajouter l'Atelier depuis son accueil ; `dom.js` refuse gestionnaires en texte, `style`, `srcdoc` et adresses étrangères, et n'affiche pas les signes qui commandent le sens de l'écriture, que les attributs gardent ; le document simulé refuse d'ajouter null ou undefined, que le navigateur afficherait, et son `querySelectorAll` rend, comme le navigateur, une liste qui se parcourt mais n'a ni `filter` ni `map`. L'espace auteur (lot 2 bis) : la section de la clé de dépôt (aide, état, saisie vérifiée ; la clé jamais à l'écran, dans un attribut ou un champ, ni gardée ; retirer, garder ; oubliée avec le mot de passe, et après une publication réussie ; la clé GitHub de l'auteur refusée ; une phrase en démonstration) ; le mot de passe : 7 signes refusés, 8 acceptés, deux saisies qui ne diffèrent que par la casse acceptées ; le changement compte les personnages avant l'envoi, puis écrit un seul commit ; s'il en laisse sous une autre clé, la section « Personnages en ligne » les montre aussitôt, avec la reprise ; une avance sans réponse : « Publiée » si la branche a avancé, sinon l'incertitude dite, et l'ancienne clé reste ; la vérification n'écrit rien, la reprise rechiffre. Le serveur local : la seule machine, les seuls fichiers du site, dont les polices, le personnage de démonstration et `personnages/` sous ses deux seules formes, casse comprise |
 | Personnage | chaque règle du § 15.2 : la table des dés, bornes comprises ; les paires d'attaque et de défense ; les types mêlés et le cas sans armure ; l'ordre des zones, la grille et le maximum par zone, et l'interdiction du livret ; la qualité (X, 1, 2, 3, 1,5) et l'arrondi une fois l'opération faite, dont un cas où la virgule flottante se tromperait ; les expressions et leurs refus ; l'expression de mains nues et son dé vide ; le coût à la puissance ; les coûts 1, 3 et 6, le plafond de 10, le reliquat, les capacités reçues au-delà de 10 ; la capacité reçue deux fois ; le niveau 0 et les capacités à venir hors décompte ; les groupes ( ) et [ ], un choix disparu ; le style de combat ; le tirage (chaque constellation atteignable, rejet des valeurs biaisées) ; les points de lien ; la banque sans types ; les choix modifiés ou disparus ; ce qui manque à chaque étape, un bloc d'un autre type. Le format : aller-retour du fichier, champ inconnu ou manquant, `__proto__`, chaque champ et ses bornes, 64 Ko, JSON illisible, mode inversé, nom de fichier sûr ; le lien : aller-retour dans le fragment, lien abîmé, forgé, bombe de décompression, UTF-8 invalide, mode inversé. L'étagère : modes séparés, ordre, illisibles comptés, un personnage du format 1 converti, les notes ; une base bloquée par un autre onglet : l'étagère en mémoire et la raison, sans attendre. Le format 2 (lot 2 bis) : les places d'un objet, une seule arme tenue, les tirages ; le format 1 converti (arme principale, bouclier, armures portées, tirage) ou refusé s'il est abîmé ; un personnage neuf à 2 partout. Les places dans le calcul : pièces du pack portées, bouclier équipé (un seul), rangés sans effet ; le parcours signale une place fautive. Les adresses des écrans du personnage. La répartition du recto et son débordement ; le recto et le verso dans un document simulé (en-tête, cases cochées et grisées, reliquat, souffle, zones, corps, équipement, liens, légende, pied de page, suite du recto, toutes les capacités et les armes, un nom en HTML qui reste du texte) ; l'impression (A4 sans marge, couleurs, saut de page, barre non imprimée) ; les polices hébergées (Marcellus, Alegreya Sans, EB Garamond), appelées par `fiche.css` et `adversaire.css` seulement, et leurs trois licences ; le personnage de démonstration, fabriqué par son outil et complet, qui suit ses dix-neuf capacités ; Aubépine et les ajouts du lot 4 (§ 15.7) : les deux capacités nouvelles du bloc de base, leur coût, leur description, Passif et Intervention sur les siennes, les mêmes points. Les écrans : liste, parcours, réception, fiche (vues, impression, banque sans types). Le parcours du lot 2 bis : les descriptions, dépliées sur grand écran et repliées sur téléphone ; les boutons + et − des caractéristiques (de 2 à 6, « + » arrêté à 36, le focus qui passe au voisin) ; le tirage refait et compté, la saisie ; l'arme tenue remplacée, les packs (un seul à la fois, la pièce portée seule renvoyée au sac), un pack non proposé (A10) avec sa raison, tous les objets au sac, qualité 2, la pièce refusée sur une zone couverte, un seul bouclier, l'arme prise en main ; l'étape 8 : seules les capacités qui peuvent évoluer, + et − dans les bornes, la raison d'un « + » inactif, avant et après, le focus gardé sur le bouton actionné ; les descriptions gardent leur état quand l'étape se redessine ; « — choisir — » ne défait pas la constellation ; le catalogue des armes, l'objet décrit avant d'être ajouté, un refus dit près de l'objet et le focus sur lui ; « Modifier » : la copie de travail, reprise, « Enregistrer » à la place de l'original, « Enregistrer sous un autre nom » (un autre nom exigé) ; l'enregistrement dépose (« creer », « remplacer »). La liste en ligne : les rubriques, l'attente, « Réessayer », « Supprimer » pour tous, « Modifier » d'un personnage en ligne, la phrase de la démonstration ; le mot de passe changé pendant la visite, une suppression dont le personnage ne se lit plus, une copie plus ancienne (« Envoyer quand même », « Retirer de l'appareil »), une base bloquée. La fiche : la qualité des objets (saisie fautive refusée, redépôt, panneau resté ouvert, focus sur la confirmation, deux objets de même nom distingués), « Modifier », un personnage ouvert depuis le site, ou dont la lecture échoue (« Réessayer »), « tirée N fois ». La mise en page se mesure dans un vrai navigateur (§ 15.4) |
-| Combat | le simulateur de combat (lot 4, § 17). **Le moteur, sans page, règle par règle** (§ 17.3 à § 17.6) : la forme d'un événement, d'une photographie et d'un contenu, chaque borne vue des deux côtés (dont cent tirages par dé, six cents façons par photographie et vingt de déplacement, 200 000 signes et 64 étages pour la source d'un adversaire, le compteur des identifiants), une grille de localisation à trou refusée, un contenu d'une autre version des règles reconnu comme tel et non dit abîmé ; les cases, la distance, les cases à portée, la pose d'office ; les noms courts, les jetons, les initiales, leurs collisions, un nom épuisé, un nom sans lettre, un nom qui finit par un chiffre et ne prend ni les initiales ni le jeton d'un exemplaire ; la chaîne et ses bornes, k désavantages, k relances, relancer et garder, le dé explosif (son seuil, l'enchaînement, sous désavantage, après une relance, le modificateur compté une fois, « exploser » seule suite), chaque transition refusée hors de son attente ; les plafonds de la préparation et leurs raisons, égaux à ceux de la rencontre, un personnage une seule fois, « Retirer » qui renumérote, la source de dés sans biais ; les sept modificateurs et les dix sources d'avantage et de désavantage, un par un et dans leur ordre, l'inversion dans les deux sens, un bonus au niveau 2 qui donne d10+2, le jet prêté sans désavantage de maîtrise, ce qui ne s'applique pas à un adversaire, chaque passif câblé actif et inactif avec sa raison, au niveau 0 compris ; les deux grilles, plusieurs dés de localisation, la face de contre-attaque que le décalage ne crée ni n'efface, les bornes du décalage, les dégâts zone par zone, dégrossir (chez un personnage, chez un adversaire, jamais sans dégâts ni en dégâts directs, pas sur un coup annulé), les dégâts directs, l'esquive et son imputation, deux dés sur la même zone, la blessure et son compte, la mort, ce qui dépasse et se perd ; quel événement est accepté à quel moment d'un geste, chaque code de refus, un refus qui rend l'état reçu, l'objet même, une capacité sans dégâts qui touche et se localise, la face de contre-attaque qui clôt le geste et arrête les dés, l'événement de trop au-delà de la borne du combat ; les tours, l'alternance, passer, la fin automatique, « Fin de tour », les actions retrouvées et celles qui manquent après une esquive, deux fins d'affilée au plus, un camp qui commence sans pouvoir agir, la fin du combat sans « Fin du tour » ; le paiement au premier dé et à la confirmation, « Revenir » qui ne dépense rien, la puissance d'office, X, le lien sur un personnage à deux jauges, l'adversaire qui ne paie pas le lien, chaque raison d'un bouton inactif, dont un déplacement qui n'offre aucune case, la portée et les cibles, le jet prêté. **Le journal** (§ 17.9) : chaque gabarit, mot pour mot, sur des gestes écrits à la main, ceux que la mission ne donne pas compris ; une valeur de dé passée sous zéro, écrite avec le moins du journal, sans aucun trait d'union ; ce que dit la région d'annonce après un dé, une esquive, une face décalée, et le bilan, en une phrase ; l'en-tête, le nom du fichier, les deux fins de ligne, aucune espace insécable ; les trente-six lignes du combat de référence refaites à la main. **Les vues** : les cinq, leurs titres, leurs étapes, leurs boutons et leurs raisons, leurs saisies et leurs bornes, les annonces ; et la concordance : à chaque pas d'un combat joué, tout événement que porte un élément actif d'une vue est accepté par le moteur, tout événement que porte un élément inactif est refusé, et l'événement réellement joué ensuite est de ceux que les vues portaient. **Les rôles câblés** (§ 17.6) : chaque rôle de la démonstration reconnu par son nom, aucun reconnu en mode réel par un nom de démonstration, la ligne des absents, des empreintes de 64 signes hexadécimaux dont aucune n'est celle d'un nom de démonstration, et leur condensat commun, calculé hors dépôt d'après le tableau de la mission ; la reconnaissance par empreinte du mode réel, vue sur un tableau d'essai aux noms fictifs condensés à l'exécution, qui ne se mémorise pas. **Les photographies** (§ 17.2) : Aubépine et les cinq adversaires de la démonstration, champ par champ ; qui ne s'ajoute pas ; le sac ; l'ordre des groupes ; sur des banques fabriquées en mémoire, plusieurs dés de localisation, des dégâts propres, un coût négatif, un coût illisible, une capacité à venir, un souffle absent, deux armes de même nom, un adversaire à passifs câblés, chacun à son rôle et au rang que sa ligne écrit, une maîtrise que seule une arme rangée au sac donnerait, et qui ne lève rien ; toute photographie rendue est gelée, passe par JSON à l'identique, et passe la validation qui la relira ; un nom à retour de ligne devient une seule ligne, une description au-delà de sa borne est un refus d'ajout ; les personnages disponibles, lus sans rien écrire, face au vrai rapprochement de l'écran Personnages. **L'enregistrement** (§ 17.8) : l'aller-retour, le mode à part, la révision entre deux onglets, le mot de passe changé, la donnée abîmée, l'absence d'IndexedDB, « Oublier » pendant une lecture lente, rien en clair ni dans la base ni dans `localStorage` ; la file à une place, jamais deux écritures à la fois, la clé relue à chaque écriture ; une enveloppe d'un format plus récent, que rien n'écrase ; une donnée abîmée jusque dans sa révision, que « Nouveau combat » remplace ; une enveloppe de plusieurs mégaoctets, ou piégée, qui se dit illisible sans rien faire lever, la borne du chiffré à l'octet près, une écriture qui refuse ce qui ne se relirait pas, la révision bornée et son retour à 1, rien de lourd dans le tour de la demande ; chaque propriété de l'IndexedDB simulée. **La séance** : l'ouverture cas par cas (contenu refusé, révision discordante, rejeu refusé, autre version des règles), un rechargement en plein geste qui retrouve le moment sans attendre un dé déjà lancé, un combat dont une description tient sur deux lignes gardé puis repris, « Nouveau combat », le blocage, et, sur les deux magasins, une enveloppe longue, une révision démesurée, des identifiants épuisés. **Le rejeu**, sur le combat de référence : chaque préfixe rejoué égale l'état tenu un événement à la fois, journal compris ; l'état passe par JSON à l'identique ; tout ce que rend le moteur est gelé ; ni heure ni hasard (l'horloge et les générateurs remplacés par des fonctions qui lèvent) ; ni banque (les sources des photographies ôtées) ; le graphe des imports du noyau, clos et sans cycle, et son texte sans rien qui dépende de l'appareil ; des événements au hasard, à graine écrite, bien et mal formés, qui ne font jamais lever le moteur ; un dé jamais relancé : en plein geste, l'offre est la même après rejeu ; une ligne de plus au journal ne fait regarder aucune de celles qui la précèdent, et le combat le plus long, 5 000 événements, se rejoue en entier. **Le combat de référence fictif** (§ 17.10) : les cases d'office des ajouts, l'état final, lien compris, et les trente-six lignes du journal, mot pour mot, l'écart dit au signe près ; le suivi des ressources après chaque geste et le compte des événements, transcrits du calcul à la main ; le départ que dit le banc, chaque zone avec ses faces et son armure. **L'écran**, dans un document simulé (§ 17.7) : chacune de ses quatre parties sur des vues écrites à la main (ce qu'elle montre, la commande que porte chaque bouton et son origine, un bouton inactif qui ne fait rien, les nœuds gardés d'un rendu à l'autre quand la vue n'a pas changé, refaits quand elle a changé) ; l'écran entier : la préparation, la rencontre placée, un tour, la mort, le journal copié (accepté, puis refusé par le navigateur) et téléchargé (nom et contenu), l'annonce après chaque dé et une seule région qui change de texte, le focus, un nom hostile qui reste du texte, « Nouveau combat », l'oubli, un rechargement, une cible « choisie sur la carte » ou « choisie ici », un état de garde qui prévient dit une fois ; sa feuille lue comme un texte : des jetons seulement, deux `@media`, à 56rem et 80rem, aucune classe hors de `combat-`, des classes d'état du contrat d'écriture et des deux classes communes du site (§ 17.7), aucun nom en « carte », les onze couleurs dans les deux thèmes. Avec eux, dans les domaines voisins : les trois fonctions de maîtrise et les champs neufs de la résolution (Adversaires), les sources et les éléments d'une capacité (Personnage), la rencontre préparée lue sans rien enregistrer ni vider, le câblage d'`application.js` lu dans son texte (l'écran après la banque, un seul appel, l'oubli à sa place, aucun enregistrement ouvert hors de l'écran). La mise en page ne se contrôle pas ici : elle se mesure dans un vrai navigateur (§ 17.11 : les mesures du 12/10/2026, leurs réserves, et ce qui reste à mesurer) |
+| Combat | le simulateur de combat (lot 4, § 17). **Le moteur, sans page, règle par règle** (§ 17.3 à § 17.6) : la forme d'un événement, d'une photographie et d'un contenu, chaque borne vue des deux côtés (dont cent tirages par dé, six cents façons par photographie et vingt de déplacement, 200 000 signes et 64 étages pour la source d'un adversaire, le compteur des identifiants), une grille de localisation à trou refusée, un contenu d'une autre version des règles reconnu comme tel et non dit abîmé ; les cases, la distance, les cases à portée, la pose d'office ; les noms courts, les jetons, les initiales, leurs collisions, un nom épuisé, un nom sans lettre, un nom qui finit par un chiffre et ne prend ni les initiales ni le jeton d'un exemplaire ; la chaîne et ses bornes, k désavantages, k relances, relancer et garder, le dé explosif (son seuil, l'enchaînement, sous désavantage, après une relance, le modificateur compté une fois, « exploser » seule suite), chaque transition refusée hors de son attente ; les plafonds de la préparation et leurs raisons, égaux à ceux de la rencontre, un personnage une seule fois, « Retirer » qui renumérote, la source de dés sans biais ; les sept modificateurs et les dix sources d'avantage et de désavantage, un par un et dans leur ordre, l'inversion dans les deux sens, un bonus au niveau 2 qui donne d10+2, le jet prêté sans désavantage de maîtrise, ce qui ne s'applique pas à un adversaire, chaque passif câblé actif et inactif avec sa raison, au niveau 0 compris ; les deux grilles, plusieurs dés de localisation, la face de contre-attaque que le décalage ne crée ni n'efface, les bornes du décalage, les dégâts zone par zone, dégrossir (chez un personnage, chez un adversaire, jamais sans dégâts ni en dégâts directs, pas sur un coup annulé), les dégâts directs, l'esquive et son imputation, deux dés sur la même zone, la blessure et son compte, la mort, ce qui dépasse et se perd ; quel événement est accepté à quel moment d'un geste, chaque code de refus, un refus qui rend l'état reçu, l'objet même, une capacité sans dégâts qui touche et se localise, la face de contre-attaque qui clôt le geste et arrête les dés, l'événement de trop au-delà de la borne du combat ; les tours, l'alternance, passer, la fin automatique, « Fin de tour », les actions retrouvées et celles qui manquent après une esquive, deux fins d'affilée au plus, un camp qui commence sans pouvoir agir, la fin du combat sans « Fin du tour » ; le paiement au premier dé et à la confirmation, « Revenir » qui ne dépense rien, la puissance d'office, X, le lien sur un personnage à deux jauges, l'adversaire qui ne paie pas le lien, chaque raison d'un bouton inactif, dont un déplacement qui n'offre aucune case, la portée et les cibles, le jet prêté. **Le journal** (§ 17.9) : chaque gabarit, mot pour mot, sur des gestes écrits à la main, ceux que la mission ne donne pas compris ; une valeur de dé passée sous zéro, écrite avec le moins du journal, sans aucun trait d'union ; ce que dit la région d'annonce après un dé, une esquive, une face décalée, et le bilan, en une phrase ; l'en-tête, le nom du fichier, les deux fins de ligne, aucune espace insécable ; les trente-six lignes du combat de référence refaites à la main. **Les vues** : les cinq, leurs titres, leurs étapes, leurs boutons et leurs raisons, leurs saisies et leurs bornes, les annonces ; la cible choisie, gardée seule et inactive pendant le jet ; le dé écrit nu dans le contexte, et le bilan d'une relance ; ce qu'une ligne du journal met en évidence, la seule phrase de la mort ; et la concordance : à chaque pas d'un combat joué, tout événement que porte un élément actif d'une vue est accepté par le moteur, tout événement que porte un élément inactif est refusé, et l'événement réellement joué ensuite est de ceux que les vues portaient. **Les rôles câblés** (§ 17.6) : chaque rôle de la démonstration reconnu par son nom, aucun reconnu en mode réel par un nom de démonstration, la ligne des absents, des empreintes de 64 signes hexadécimaux dont aucune n'est celle d'un nom de démonstration, et leur condensat commun, calculé hors dépôt d'après le tableau de la mission ; la reconnaissance par empreinte du mode réel, vue sur un tableau d'essai aux noms fictifs condensés à l'exécution, qui ne se mémorise pas. **Les photographies** (§ 17.2) : Aubépine et les cinq adversaires de la démonstration, champ par champ ; qui ne s'ajoute pas ; le sac ; l'ordre des groupes ; sur des banques fabriquées en mémoire, plusieurs dés de localisation, des dégâts propres, un coût négatif, un coût illisible, une capacité à venir, un souffle absent, deux armes de même nom, un adversaire à passifs câblés, chacun à son rôle et au rang que sa ligne écrit, une maîtrise que seule une arme rangée au sac donnerait, et qui ne lève rien ; toute photographie rendue est gelée, passe par JSON à l'identique, et passe la validation qui la relira ; un nom à retour de ligne devient une seule ligne, une description au-delà de sa borne est un refus d'ajout ; les personnages disponibles, lus sans rien écrire, face au vrai rapprochement de l'écran Personnages. **L'enregistrement** (§ 17.8) : l'aller-retour, le mode à part, la révision entre deux onglets, le mot de passe changé, la donnée abîmée, l'absence d'IndexedDB, « Oublier » pendant une lecture lente, rien en clair ni dans la base ni dans `localStorage` ; la file à une place, jamais deux écritures à la fois, la clé relue à chaque écriture ; une enveloppe d'un format plus récent, que rien n'écrase ; une donnée abîmée jusque dans sa révision, que « Nouveau combat » remplace ; une enveloppe de plusieurs mégaoctets, ou piégée, qui se dit illisible sans rien faire lever, la borne du chiffré à l'octet près, une écriture qui refuse ce qui ne se relirait pas, la révision bornée et son retour à 1, rien de lourd dans le tour de la demande ; chaque propriété de l'IndexedDB simulée. **La séance** : l'ouverture cas par cas (contenu refusé, révision discordante, rejeu refusé, autre version des règles), un rechargement en plein geste qui retrouve le moment sans attendre un dé déjà lancé, un combat dont une description tient sur deux lignes gardé puis repris, « Nouveau combat », le blocage, et, sur les deux magasins, une enveloppe longue, une révision démesurée, des identifiants épuisés. **Le rejeu**, sur le combat de référence : chaque préfixe rejoué égale l'état tenu un événement à la fois, journal compris ; l'état passe par JSON à l'identique ; tout ce que rend le moteur est gelé ; ni heure ni hasard (l'horloge et les générateurs remplacés par des fonctions qui lèvent) ; ni banque (les sources des photographies ôtées) ; le graphe des imports du noyau, clos et sans cycle, et son texte sans rien qui dépende de l'appareil ; des événements au hasard, à graine écrite, bien et mal formés, qui ne font jamais lever le moteur ; un dé jamais relancé : en plein geste, l'offre est la même après rejeu ; une ligne de plus au journal ne fait regarder aucune de celles qui la précèdent, et le combat le plus long, 5 000 événements, se rejoue en entier. **Le combat de référence fictif** (§ 17.10) : les cases d'office des ajouts, l'état final, lien compris, et les trente-six lignes du journal, mot pour mot, l'écart dit au signe près ; le suivi des ressources après chaque geste et le compte des événements, transcrits du calcul à la main ; le départ que dit le banc, chaque zone avec ses faces et son armure. **L'écran**, dans un document simulé (§ 17.7) : chacune de ses quatre parties sur des vues écrites à la main (ce qu'elle montre, la commande que porte chaque bouton et son origine, un bouton inactif qui ne fait rien, les nœuds gardés d'un rendu à l'autre quand la vue n'a pas changé, refaits quand elle a changé ; et, depuis la relecture de fin de groupe : l'ordre des blocs du jet, chaque rangée de choix en groupe que son intitulé nomme, une saisie refusée qui ne part pas et dit pourquoi, un réglage qui garde le focus, le libellé d'une face décalée, un nom accessible sans signe de sens, la table des zones nommée et ses en-têtes de ligne, « Case » et « Retirer » hors du volet, la carte qui n'offre rien quand on ne joue pas) ; l'écran entier : la préparation, la rencontre placée, un tour, la mort, le journal copié (accepté, puis refusé par le navigateur) et téléchargé (nom et contenu), l'annonce après chaque dé et une seule région qui change de texte, dans la page dès l'ouverture, le focus, un nom hostile qui reste du texte, « Nouveau combat » et son menu refermé, l'oubli, un rechargement, une cible « choisie sur la carte » ou « choisie ici », un état de garde qui prévient dit une fois, la dernière ligne du journal visible en revenant sur l'écran, les morts en dernier dans la liste d'une case, « Fiche complète » calculée du personnage photographié, la clé de table relue à chaque écriture et changée pendant la visite ; sa feuille lue comme un texte : des jetons seulement, deux `@media`, à 56rem et 80rem, aucune classe hors de `combat-`, des classes d'état du contrat d'écriture et des deux classes communes du site (§ 17.7), aucun nom en « carte », les onze couleurs dans les deux thèmes, le nom court d'un jeton mesuré sur sa case et son plancher, un bouton du site inactif qui n'a pas l'aspect d'un bouton actif, une saisie refusée qui se voit, le dé relancé qui garde le rouge de son échec, la seule phrase de la mort au journal, la préparation, la barre, les réglages à la main et les fiches rangés comme le dit le § 17.7. Avec eux, dans les domaines voisins : les trois fonctions de maîtrise et les champs neufs de la résolution (Adversaires), les sources et les éléments d'une capacité (Personnage), la rencontre préparée lue sans rien enregistrer ni vider, le câblage d'`application.js` lu dans son texte (l'écran après la banque, un seul appel, l'oubli à sa place, aucun enregistrement ouvert hors de l'écran). La mise en page ne se contrôle pas ici : elle se mesure dans un vrai navigateur (§ 17.11 : les mesures du 12/10/2026, leurs réserves, et ce qui n'est pas fait) |
 
 Les contrôles du dépôt portent sur les fichiers suivis et sur ceux que Git
 suivrait, c'est-à-dire non ignorés : une faute se voit avant d'être commitée.
@@ -2073,6 +2073,18 @@ l'arrêt d'essais, avec les précisions. Chacune est réversible.
   « Le compteur des identifiants n'est pas un entier de 0 à 99 999. » ;
   sur une fiche, « sans effet » et « niveau 0 » (point 45) ; sur un bouton
   de déplacement, « aucune case à sa portée ».
+- **Les textes de l'écran**, posés par ses corrections (§ 17.7) : à une
+  saisie refusée, « Un nombre entier de −20 à 20 est attendu. », aux
+  bornes de la saisie, « Un nombre entier est attendu. » sans bornes, et
+  « Une raison est demandée. » ; le nom des deux pas de la puissance,
+  « Baisser la puissance (actuelle : 2) » et « Monter la puissance
+  (actuelle : 2) » ; le libellé d'une face à décaler, « Décaler le dé
+  16 : face 18, bras droit », et le titre d'un dé décalé, « d20 : 16 » ;
+  le nom de la table des zones d'une fiche, « Zones : », suivi du nom du
+  protagoniste.
+- **Une mesure de l'écran** : à partir de 56rem, le nom court d'un jeton
+  de la carte à 15 % du côté de sa case, 9,8 px au moins, quand le petit
+  texte du site fait 14 px (§ 17.7, avec sa réserve mesurée).
 
 **Pour le lot des objets, sorts et équipement** (lot à fixer, § 13) : ce
 qu'est un sort (le mot n'apparaît pas dans le Word) ; la grammaire des
@@ -2234,20 +2246,23 @@ groupe 2. Les étapes du groupe 1 :
    le combat de référence fictif et le banc sur le classeur réel, hors
    dépôt (§ 17.10, § 17.11). Un contrôle du lot 2 bis, qui attendait une
    durée fixe et a fait refuser un envoi sur le poste chargé, attend
-   désormais ce qu'il vérifie (commit `d51c16a`). **Les contrôles de
-   l'écran ne sont pas encore mis à l'épreuve** à l'écriture de ce
-   paragraphe (§ 17.11) ;
+   désormais ce qu'il vérifie (commit `d51c16a`). À ce commit, les
+   contrôles de l'écran n'étaient pas mis à l'épreuve (plus bas) ;
 7. **la fin du groupe** : la spécification 1.4 (§ 17, nouveau ; § 0, § 2,
    § 9, § 11, § 12 amendés) et `CLAUDE.md` ; une relecture de la
    spécification, onze constats ; la relecture de fin de groupe, sept
-   relecteurs à sept angles, soixante constats (§ 14) ; ses corrections
-   du moteur et de l'enregistrement, chaque défaut vérifié avant d'être
-   corrigé (une sonde, une mesure ou la lecture du code), chaque
-   correction mise à l'épreuve (72 casses, toutes vues) : les corrections
-   du moteur (40 casses) sont dans le commit `c4cff7d`, avec l'étape 6 ;
-   celles de l'enregistrement et des bornes (32 casses) dans le commit de
-   fin de groupe ; celles de
-   l'écran, **en cours à l'écriture de ce paragraphe** ; le compte rendu.
+   relecteurs à sept angles, soixante constats (§ 14) ; ses corrections,
+   chaque défaut vérifié avant d'être corrigé (une sonde, une mesure, la
+   lecture du code, ou un regard dans un navigateur), chaque correction
+   mise à l'épreuve : 184 casses, toutes vues. Les corrections du moteur
+   (40 casses) sont dans le commit `c4cff7d`, avec l'étape 6 ; celles de
+   l'enregistrement et des bornes (32 casses) et les trente points de
+   l'écran (112 casses) dans le commit `8032ce2`, 1 517 contrôles. Puis
+   l'écran remesuré dans Edge et dans Firefox, sans case qui déborde, et
+   le temps d'un clic repris poste plus calme : la cible de 100 ms est
+   tenue dans les deux (§ 17.11) ; le site en ligne comparé, octet pour
+   octet, au commit `8032ce2` ; le commit de fin de groupe et le compte
+   rendu.
 
 **Un écart à la méthode**, relevé par la relecture : le commit `fda3a2a`
 (les étapes 3 à 5) a été envoyé sans son paragraphe, contre la règle de
@@ -2262,20 +2277,34 @@ ayant interrompu le lot 3 : le seuil d'arrêt de la mission, 18 Go de
 mémoire validée, a été relevé à 20 par l'auteur le 12/10/2026 ; aucun
 arrêt pour mémoire.
 
-**Ce qui manque encore pour que le groupe soit fini**, au sens de la
-mission (son § 17), à l'écriture de ce paragraphe : les corrections de
-l'écran et leur regard dans un navigateur ; les mises à l'épreuve des
-contrôles de l'écran ; la mesure du clic, refaite poste au calme, dans
-Firefox et dans Edge (§ 17.11) ; les contrôles passés par le crochet et
-sur GitHub Actions au commit de fin de groupe, et leur nombre ; le site en
-ligne qui joue un combat de démonstration jusqu'au bout ; le compte rendu.
+**Ce qui manquait encore à l'écriture de ce paragraphe est fait** : les
+contrôles de l'écran écrits avant la relecture sont mis à l'épreuve
+(369 casses, § 17.11), et le commit de fin de groupe compte 1 526
+contrôles, que le crochet passe à l'envoi. Le compte rendu du groupe
+(`plans/compte_rendu_lot4_groupe1.md`, hors dépôt) donne l'issue de
+GitHub Actions sur ce commit, les agents et leur coût, et la liste des
+essais de l'auteur. Reste, au sens de la mission (son § 17), le point du
+paragraphe suivant.
 
-Ce qui reste à l'auteur, à l'arrêt d'essais : la démonstration sur son
-téléphone ; sur son ordinateur, un combat réel avec deux de ses personnages
-en ligne et une rencontre de quatre adversaires posée d'un clic ; le début
-du combat de référence de la mission, rejoué à la main et comparé à la
-maquette ; un rechargement en plein combat ; « Copier » et « Télécharger » ;
-puis confirmer ou corriger les conventions du § 12, « Pour le lot 4 ».
+**Un point de la mission n'est fait par aucun agent** : « le site en
+ligne montre le simulateur dans la démonstration, et un combat s'y joue
+jusqu'au bout ». Le site sert, octet pour octet, le code du commit
+`8032ce2` (vérifié le 12/10/2026 vers 13 h 10), mais y ouvrir la
+démonstration demande de saisir son mot de passe, et la règle de
+sécurité de l'outil interdit à un agent de saisir un mot de passe hors
+du poste local, même public. Un combat de démonstration a été joué
+jusqu'au bout sur le serveur local, par de vrais clics, avant les
+corrections de l'écran (§ 17.11). C'est le premier essai de l'auteur.
+
+Ce qui reste à l'auteur, à l'arrêt d'essais : d'abord, un combat de
+démonstration joué jusqu'au bout sur le site en ligne ; la démonstration
+sur son téléphone ; sur son ordinateur, un combat réel avec deux de ses
+personnages en ligne et une rencontre de quatre adversaires posée d'un
+clic ; le début du combat de référence de la mission, rejoué à la main et
+comparé à la maquette ; un rechargement en plein combat ; « Copier » et
+« Télécharger » ; puis confirmer ou corriger les conventions du § 12,
+« Pour le lot 4 », avec les bornes, les phrases et les textes de l'écran
+que la mission ne donne pas.
 Rien de réel n'est publié par le lot : seul l'auteur publie.
 
 ---
@@ -2350,11 +2379,12 @@ jouable.
   douze écarts corrigés ; aucune case qui déborde sur 98 largeurs ; un
   clic à l'écran à jour en 31,6 ms dans Edge, à 1 440 px, sur un combat
   de 300 événements et quinze protagonistes (médiane ; le pire, 60,2 ms ;
-  poste chargé, sans fenêtre) ; dans Firefox, la cible de
-  100 ms n'est pas tenue pour tous les clics, sur un poste chargé : à
-  remesurer ; un combat joué de bout en bout par de vrais clics, dans
-  Edge, Firefox et Chrome. Les contrôles de l'écran ne sont pas encore
-  mis à l'épreuve (§ 17.11).
+  poste chargé, sans fenêtre) ; dans Firefox, la cible de 100 ms n'était
+  pas tenue pour tous les clics, sur un poste chargé (de 49 à 74 ms de
+  médiane à 1 440 px, de 0 à 19 clics à 100 ms ou plus selon la passe et
+  la largeur) : remesuré après la relecture, plus bas ; un combat joué
+  de bout en bout par de vrais clics, dans Edge, Firefox et Chrome. À ce
+  commit, les contrôles de l'écran n'étaient pas mis à l'épreuve.
 - Étape 7, **la spécification** : le § 17, nouveau ; le § 0 dit
   l'exception du combat à « le programme n'invente aucune règle », et
   l'interdit 2 la règle des noms du lot ; § 2, § 9, § 11, § 12 et § 13
@@ -2419,23 +2449,75 @@ jouable.
     bouton actif ; le focus invisible sur le jeton de celui qui joue ; une
     saisie refusée qui ne dit rien ; les noms courts de la carte coupés à
     partir de 56rem ; quatre endroits où le code est juste et où aucun
-    contrôle ne le tenait. **Leurs corrections sont en cours à
-    l'écriture de cette entrée** : elle sera complétée. Ceux qui visaient
-    ce document y sont portés (§ 13, § 17.7, § 17.11).
-  - Les corrections du moteur et de l'enregistrement ont été mises à
-    l'épreuve par le même lanceur : 72 casses, toutes vues (40 pour le
-    moteur, dont les corrections sont dans le commit `c4cff7d`, avec
-    l'étape 6 ; 32 pour l'enregistrement et les bornes, dont les
-    corrections sont dans le commit de fin de groupe) ; le banc sur
-    le classeur réel, relancé après chaque série, reste sans écart.
+    contrôle ne le tenait. **Corrigés en trente points** (commit
+    `8032ce2` ; § 17.7), chacun retrouvé dans le code ou dans un
+    navigateur avant d'être corrigé. Ce qui se voit : le nom court d'un
+    jeton à 15 % de sa case, 9,8 px au moins ; un bouton du site inactif
+    en trait discontinu ; le focus sur le jeton de celui qui joue ; le dé
+    relancé qui garde le rouge de son échec ; au journal, la seule phrase
+    de la mort en évidence ; la préparation et la barre du téléphone
+    rangées comme la maquette ; la barre de défilement du journal dans
+    Firefox ; le texte à 200 % ; la carte de « Fiche complète » sur un
+    téléphone ; le menu refermé après « Effacer ». Ce que dit le panneau
+    d'action : la cible gardée pendant le jet ; le bilan d'une relance,
+    le dé nu et ses modificateurs ; le libellé d'une face décalée ; une
+    saisie refusée qui dit pourquoi ; les réglages à la main entre le
+    contexte et les dés ; « Composez d'abord une rencontre », sans point.
+    L'accessibilité : la région polie dans la page dès le premier rendu ;
+    les rangées, les tables et les régions nommées ; le focus gardé après
+    un réglage ; « Case » et « Retirer » hors du volet ; aucun signe de
+    sens dans un nom accessible. Ce que fait l'écran : le journal sur sa
+    dernière ligne au retour ; un combat ouvert ailleurs sans commande
+    sur la carte ; les morts en dernier dans la liste d'une case. Et
+    quatre points faits de contrôles seuls : « Fiche complète » calculée
+    de la photographie, l'ordre des blocs du jet, des règles de la
+    feuille, la clé relue à chaque écriture. Deux points ne sont suivis
+    qu'en partie : le plancher des noms courts les laisse coupés là où la
+    case fait moins de 65 px, et la première rangée de la préparation
+    n'est pas celle de la maquette (§ 17.7). Laissés, et dits
+    (§ 17.11) : l'ordre du clavier, qui suit le document ; les initiales
+    et la grille d'un téléphone, qui sont celles de la maquette. Les
+    constats qui visaient ce document y sont portés (§ 13, § 17.7,
+    § 17.11).
+  - Toutes les corrections ont été mises à l'épreuve par le même
+    lanceur : 184 casses, toutes vues (40 pour le moteur, dont les
+    corrections sont dans le commit `c4cff7d`, avec l'étape 6 ; 32 pour
+    l'enregistrement et les bornes, et 112 pour l'écran, dont les
+    corrections sont dans le commit `8032ce2`, 1 517 contrôles) ; le
+    banc sur le classeur réel, relancé après chaque série, reste sans
+    écart.
+  - **Remesuré après ces corrections**, le 12/10/2026 : aucune case ne
+    déborde, sur 98 largeurs, dans Edge 155 et dans Firefox 143 ; un
+    clic à l'écran à jour, vers 13 h 10, poste plus calme, en 3,65 ms
+    dans Edge et 3,62 ms dans Firefox, à 1 440 px (médianes ; le pire,
+    8,7 et 8,3 ms), sur le même combat de 300 événements et quinze
+    protagonistes. **La cible de 100 ms est tenue dans les deux
+    navigateurs** : la réserve de l'étape 6 sur Firefox est levée, et
+    les deux séries restent écrites (§ 17.11).
+  - **Le site en ligne** sert, octet pour octet, le code du commit
+    `8032ce2` (90 fichiers : la page, les feuilles, les modules, la
+    banque et le personnage de démonstration ; vérifié le 12/10/2026 vers
+    13 h 10). Aucun
+    agent n'y a joué de combat : l'outil lui interdit d'y saisir le mot
+    de passe de la démonstration. C'est le premier essai de l'auteur
+    (§ 13, § 17.11).
+  - **Les contrôles de l'écran écrits avant la relecture, mis à
+    l'épreuve** en dernier : 369 casses, 336 vues d'emblée ; des 33
+    autres, 28 sont vues à la fin (vingt-trois contrôles ajoutés ou
+    complétés, et un contrôle existant hors de la liste jouée), 3 sont
+    équivalentes, et 2 font attendre les contrôles au-delà du délai du
+    lanceur (échec déduit, non observé). Aucun
+    défaut du code. Le commit de fin de groupe compte 1 526 contrôles
+    (§ 17.11).
 - Ce que le livret ne dit pas encore (§ 12) : un bloc « Pour le lot 4 —
   simulateur de combat », les vingt-deux conventions provisoires de la
   mission et vingt-quatre précisions (quatre que la mission dit ailleurs,
   vingt que l'auteur n'a pas vues : dix-neuf arrêtées en écrivant le
   moteur, une relevée par la relecture de fin de groupe),
   chacune « à écrire dans le livret », et ce que le simulateur laisse à la
-  main ; les bornes et les phrases que les corrections de la relecture
-  ont posées hors de la mission, à confirmer ; les entrées des lots
+  main ; les bornes, les phrases et les textes de l'écran que les
+  corrections de la relecture ont posés hors de la mission, avec la
+  taille du nom court d'un jeton, à confirmer ; les entrées des lots
   2 et 3 que le simulateur tranche y renvoient ; l'ancien bloc du lot 4
   devient « Pour le lot des objets, sorts et équipement ». La
   contre-attaque se lit sur le jet de localisation : la formulation du § 16
@@ -3883,7 +3965,7 @@ cycle ; un contrôle tient ce graphe (§ 11).
 | `offre.js` | **la seule porte** : ce qui est permis à cet instant, et pourquoi le reste ne l'est pas |
 | `moteur.js` | le réducteur : d'un état et d'un événement, l'état suivant ; le rejeu d'un combat gardé |
 | `journal.js` | chaque ligne du journal, son en-tête, le nom du fichier, et ce que la région d'annonce dit après chaque dé (§ 17.9) |
-| `lecture.js` | les cinq vues que l'écran affiche : la barre, la carte, une fiche, le panneau d'action, la préparation |
+| `lecture.js` | les cinq vues que l'écran affiche : la barre, la carte, une fiche, le panneau d'action, la préparation ; et, sixième fonction, ce qu'une ligne du journal met en évidence (`vueLigne`, § 17.7) |
 
 **Quatre règles tiennent le noyau** (ce que les contrôles en tiennent :
 § 11, § 17.11) :
@@ -4685,12 +4767,31 @@ autres ne font que placer. Une largeur de plus, `--largeur-combat` (90rem),
 **La barre de titre** : « Simulateur de combat » ; l'état (« Préparation »,
 « Tour 2 · camp des PJ », « Combat terminé ») ; l'état de l'enregistrement
 (§ 17.8) ; « Fin de tour », bouton principal pendant le combat, et
-« Nouveau combat ». Sur téléphone : « Fin de tour », et un menu « ⋯ » qui
-porte l'autre ; l'état de l'enregistrement reste visible sous le titre. Une
-ligne d'aide dessous, selon la phase.
+« Nouveau combat ». Une ligne d'aide dessous, selon la phase.
+
+- **Son ordre dans le document est celui du téléphone** : le titre,
+  l'état, « Fin de tour » et un menu « ⋯ », ce que ce menu ouvre
+  (« Nouveau combat », ou la question « Effacer ce combat et son
+  journal ? »), puis l'état de l'enregistrement.
+- **Sous 56rem**, l'état, « Fin de tour » et « ⋯ » tiennent sur une ligne,
+  comme sur la maquette ; là où ils ne tiennent pas (vu à 320 et à
+  360 px), les deux boutons passent à la ligne, à droite. Ce que « ⋯ »
+  ouvre se pose sous eux, sur sa propre rangée : rangé dans la leur, il
+  les faisait passer à la ligne en s'ouvrant. L'état de l'enregistrement
+  reste visible, sur sa ligne, la dernière. « Effacer » referme le menu.
+- **À partir de 56rem**, « ⋯ » disparaît, et la feuille range tout sur
+  une ligne : l'état de l'enregistrement prend la place libre, puis
+  viennent « Nouveau combat » et, au bout, « Fin de tour ». Ce qui passe
+  à la ligne, vers 56rem, reste à droite.
+- **« Fin de tour » est inactif** au milieu d'une action payée (« Une
+  action est en cours. »), et quand le combat est arrêté par son
+  enregistrement, avec la phrase de la barre pour raison (§ 17.8).
 
 **La carte** (dans le code, le plateau) : 10 × 10 cases, colonnes A à J,
-lignes 1 à 10, et une légende dessous.
+lignes 1 à 10 ; un en-tête dessus, celui de la maquette (« Carte de
+10 × 10 cases · une diagonale compte pour une case », et, à partir de
+56rem, « Survolez un jeton pour son nom complet » : le titre de chaque
+jeton est son nom entier) ; une légende dessous.
 
 - **Un jeton** est un rond vert (personnage) ou rouge (adversaire). À
   partir de 56rem, le nom court est à côté ; en dessous, les initiales sont
@@ -4702,8 +4803,35 @@ lignes 1 à 10, et une légende dessous.
   1 024, 70,9 px à 1 440. La case la plus grande relevée fait 74,2 px, à
   895 px, juste sous le seuil de 56rem ; elle tombe à 50,8 px à 896 px.
   Au seuil de 80rem, elle passe de 73,4 px (à 1 279 px) à 62 px (à
-  1 280 px). Aucune case ne déborde, sur 98 largeurs, avant les
-  corrections de la relecture de fin de groupe (§ 17.11).
+  1 280 px). **Aucune case ne déborde**, sur 98 largeurs : mesuré avant
+  les corrections de la relecture de fin de groupe, puis de nouveau
+  après elles (§ 17.11).
+- **Le nom court, à partir de 56rem, se mesure sur la case** : 15 % de
+  son côté, jamais plus que le petit texte du site (0,875rem, soit
+  14 px), ni moins que ses sept dixièmes (9,8 px) ; le rond du jeton et
+  le « +k » suivent la même mesure. À 20 %, la mesure d'avant, presque
+  tous les noms étaient coupés : 44 sur 46 sur le plateau chargé, à
+  1 440 px. C'est **une exception aux tailles de texte du site**, pour
+  les seuls jetons de la carte, posée par les corrections de la
+  relecture de fin de groupe : un choix fait seul, à confirmer par
+  l'auteur. Mesuré le 12/10/2026 dans Edge 155, sur 32 largeurs de 896 à
+  1 440 px : le texte va de 9,8 à 10,7 px ; à 1 440 px (Edge 155 et
+  Firefox 143, mêmes nombres), « Aubépine » et « Chef » sont entiers,
+  « Marmi… 2 » est coupé, dans un texte de 10,3 px. **Réserve mesurée :
+  le plancher de 9,8 px ne suffit pas partout.** Là où la case fait moins
+  de 65 px (de 896 à 1 100 px, puis de 1 280 à 1 312 px), presque tous
+  les noms restent coupés : 43 ou 44 sur 46 sur le plateau chargé ; 36 à
+  1 120 et à 1 344 px ; 26 de 1 152 à 1 279 px, et à partir de 1 366 px.
+  Au moment de la maquette : 3 noms coupés sur 3 de 896 à 960 px, 2 sur
+  3 de 976 à 1 072 px et de 1 280 à 1 296 px, 1 sur 3 ailleurs. Deux
+  issues, non suivies, hors de la liste des corrections : un plancher à
+  9 px, ou 3 px de remplissage de moins à droite du jeton.
+- **Le nom court se coupe s'il le faut, jamais le numéro d'un
+  exemplaire** (« Marmi… 2 ») : sans lui, deux exemplaires d'une même
+  case porteraient le même nom coupé. Sous 56rem, des initiales de plus
+  de deux signes (« Ma11 », à partir du dixième exemplaire d'un
+  adversaire) s'écrivent à 70 % de la taille des autres, pour tenir dans
+  le rond (§ 17.11).
 - **Une case montre trois jetons au plus**, deux sous 56rem. Au-delà,
   « +k » ouvre la liste de la case, dans le panneau d'action ou, avant le
   lancement, sous la préparation. Avant le lancement, les jetons d'une
@@ -4712,12 +4840,23 @@ lignes 1 à 10, et une légende dessous.
   protagonistes, ceux qu'on peut choisir ; puis les vivants, puis les
   morts ; à rang égal, l'ordre d'ajout. Sans ce rangement, relevé par le
   regard sur la maquette, un mort tenait la place d'un vivant qu'on
-  pouvait cibler, caché derrière « +1 ».
+  pouvait cibler, caché derrière « +1 ». Dans la liste d'une case, les
+  morts viennent de même en dernier : on l'ouvre pour choisir, et un mort
+  ne se choisit pas.
 - **Les marques.** Celui qui joue, et sa case, sont entourés de l'accent.
   La cible choisie est entourée d'un trait rouge discontinu. Un mort est
-  grisé et barré.
+  grisé et barré. Le contour du focus, de la couleur d'accent, tombait
+  sur la marque de celui qui joue, et sur celle d'un jeton tenu en main,
+  qui sont de cette couleur : il ne se voyait pas. Sur ces deux jetons,
+  le focus trace en plus un anneau dans le rond, de la couleur des
+  initiales.
 - **Pendant un choix** de cible ou d'arrivée, les jetons et les cases
   possibles sont marqués, les autres inactifs.
+- **Quand on ne joue pas** (un combat arrêté par son enregistrement,
+  § 17.8), la carte montre le combat sans rien offrir : aucun jeton ne
+  porte de commande, aucune case ne se choisit, rien ne se prend en main
+  ni ne glisse. Avant la relecture de fin de groupe, les jetons d'un
+  combat ouvert ailleurs restaient cliquables, sans effet ni message.
 - **Chaque jeton est un bouton nommé** : nom entier, camp, état, case
   (« Aubépine Crèmebrûlée, personnage, joue, case D4 »). Une case qu'on
   peut choisir l'est aussi. Jamais un bouton dans un bouton : le bouton
@@ -4733,7 +4872,11 @@ ajouter un adversaire, avec son nombre d'exemplaires ; **« Placer la
 rencontre préparée »** ; « Qui commence » ; « Lancer le combat » ; la ligne
 des câblés absents (§ 17.6) ; les avertissements des photographies posées.
 Une option qui ne s'ajoute pas reste choisissable : c'est ainsi que sa
-raison se lit.
+raison se lit. Chaque bloc a sa rangée. Sous 56rem, l'intitulé « Qui
+commence » prend sa ligne, et ses deux options (« Les PJ », « Les
+adversaires ») viennent ensemble dessous : à la suite de l'intitulé, la
+seconde passait seule à la ligne. À partir de 56rem, « Qui commence » et
+« Lancer le combat » partagent une rangée, le second au bout.
 
 - **Poser et déplacer**, par trois moyens qui mènent au même ordre : à la
   souris, par glisser-déposer ; partout, en touchant le jeton, puis la
@@ -4745,7 +4888,8 @@ raison se lit.
   dépassé, rien ne se pose, et le bouton dit pourquoi ; un adversaire qui
   ne s'ajoute pas reste hors du combat, les autres se posent, et l'écran
   dit lequel et pourquoi. Sans rencontre, le bouton est inactif :
-  « Composez d'abord une rencontre. »
+  « Composez d'abord une rencontre », sans point final, comme l'écrit la
+  mission.
 - Une banque sans adversaires : la préparation le dit, comme l'écran
   Rencontre. Un combat gardé reste jouable : ses photographies se
   suffisent.
@@ -4778,13 +4922,30 @@ c'est un volet, que son nom déplie.
   photographié ; pour un adversaire, la résolution d'une banque d'appoint
   qui porte sa ligne et celles de ses types, telles que photographiées. Si
   la banque a changé depuis l'ajout, il le dit : « La banque a changé
-  depuis l'ajout : cette fiche suit la banque du jour. »
+  depuis l'ajout : cette fiche suit la banque du jour. » La carte d'un
+  adversaire y est posée dans un nœud sans remplissage : son échelle se
+  mesure sur la largeur de ce qui la contient, et, posée dans le panneau
+  même, elle dépassait son cadre de 16 px à 390 px.
 - **Ouvertes ou repliées.** Sur un grand écran, les fiches sont ouvertes.
   Sous 56rem, seule celle de qui joue l'est. Une fiche que la personne a
   ouverte ou repliée elle-même garde cet état ; la mort du protagoniste la
   replie.
-- **Avant le lancement**, chaque fiche porte le champ « Case » et un bouton
-  « Retirer ».
+- **Avant le lancement**, le champ « Case » et un bouton « Retirer »
+  suivent chaque fiche, **hors de son volet**, sur une rangée qui en
+  prolonge le cadre : ils s'atteignent sans déplier la fiche, à toute
+  largeur. Sur un téléphone, où les fiches sont repliées tant que
+  personne ne joue, ce champ est le double de 44 px de la carte (§ 9) :
+  logé dans le volet, il demandait de déplier chaque fiche. Une case mal
+  écrite ne part pas : le champ est marqué, et sa phrase paraît (« Une
+  case s'écrit de A1 à J10. »). Un jeton déplacé ne refait pas le corps
+  de sa fiche. Quand on ne joue pas (§ 17.8), ni « Jouer », ni « Case »,
+  ni « Retirer » ne s'offrent.
+- **Une fiche ne refait que ce dont la vue a changé** : son en-tête,
+  son corps, ou le seul bouton « Jouer », qui paraît et disparaît à
+  chaque geste sur toutes les fiches du camp qui joue (§ 17.11).
+- **Avec le texte à 200 %** sur un téléphone, la table des zones est plus
+  large que la fiche : elle y défile, plutôt que de faire défiler la
+  page.
 
 **Le panneau d'action.**
 
@@ -4810,15 +4971,56 @@ c'est un volet, que son nom déplie.
   Inactif, il dit pourquoi : il garde le focus, et sa raison lui est liée.
   Une ligne nomme les passifs, qui ne sont pas des boutons, et les
   interventions, qui le sont à son propre tour.
+- **La puissance**, pour une capacité d'un personnage qui en a
+  plusieurs : deux pas, « − » et « + » ; le coût et la description
+  suivent. Leur nom dit la puissance du moment (« Baisser la puissance
+  (actuelle : 2) », « Monter la puissance (actuelle : 2) ») : le bouton
+  refait, c'est ce qu'un lecteur d'écran entend du pas qui vient d'être
+  fait. Un pas vers une puissance qu'on ne peut pas jouer est inactif, et
+  dit pourquoi ; à la première et à la dernière puissance, le pas sans
+  voisine est inactif sans rien dire (§ 17.11).
 - **La cible** : un clic sur un jeton, ou un bouton par cible possible ;
-  sous la cible, « choisie sur la carte » ou « choisie ici ».
-- **Les dés**, dans cet ordre : le contexte (le jet, la capacité et la
-  cible ; le dé, ses modificateurs et la difficulté ; les avantages et les
-  désavantages, chacun avec sa source ; les réglages à la main, avant le
-  premier dé) ; la chaîne, puis le bilan ; les rangs de dégâts, le rang
-  atteint en évidence ; les choix du moment : relancer ou garder, faire
-  exploser, les dégâts à fixer, la face à décaler, l'esquive et combien,
-  « Revenir » avant le premier dé.
+  sous la cible, « choisie sur la carte » ou « choisie ici ». **Pendant
+  le jet, la rangée « Cible : » reste montrée**, comme sur la maquette,
+  avec la seule cible choisie : enfoncée, entourée du trait rouge
+  discontinu, inactive (« Une action est en cours. »), son nom à la
+  couleur du texte. Elle n'offre rien : le moteur refuserait d'en
+  changer.
+- **Les dés**, dans cet ordre, qui est celui du document, donc du
+  téléphone. **Le contexte** : le jet, la capacité et la cible ; le dé,
+  ses modificateurs et la difficulté ; les avantages et les
+  désavantages, chacun avec sa source. **Les réglages à la main**, qui
+  n'existent qu'avant le premier dé. **Le jet** : la chaîne, puis le
+  bilan ; les rangs de dégâts, le rang atteint en évidence ; les choix du
+  moment : relancer ou garder, faire exploser, les dégâts à fixer, la
+  face à décaler, l'esquive et combien ; le détail des dégâts, avant
+  « Appliquer » ; « Confirmer » pour un geste sans jet, et « Revenir »
+  avant le premier dé. **Le texte de la capacité** ferme le bloc,
+  toujours montré, sous le titre de la maquette : « Effets de capacité
+  (mode assisté) ». À partir de 56rem, la grille range à droite
+  des dés le texte de la capacité, puis les réglages à la main, à la
+  place de la palette de la maquette ; le contexte garde sa rangée
+  au-dessus des dés, si long que soit ce texte.
+- **Le dé s'écrit nu dans le contexte**, puis ses modificateurs, chacun
+  une fois, avec sa source, sans séparateur : « Dé d8 (Force 4 +
+  Agilité 5) +1 (Vif) · difficulté 5, sa défense ». Écrit « d8+1 » devant
+  « +1 (Vif) », il se lisait d8+1+1.
+- **Le bilan d'une relance garde sa tête** : « 1 réussite pour l'instant.
+  Avantage dépensé : cliquez sur le d8 pour relancer le 2e dé. »
+- **La face à décaler se nomme sans équivoque** : le dé tiré, puis, s'il
+  est déjà décalé, la face qu'il vaut maintenant, puis la zone de cette
+  face. « Décaler le dé 16 : bras gauche », puis « Décaler le dé 16 :
+  face 18, bras droit », chacun suivi de ses bornes (« de −14 à 4 »). Le
+  dé décalé montre la face décalée, et porte en titre ce qu'il a tiré :
+  « d20 : 16 ».
+- **Une saisie refusée ne part pas, et le dit** : X, un modificateur, des
+  avantages, des dégâts, un décalage, l'esquive. Le champ fautif est
+  marqué, bordure et trait intérieur rouges, sans changer de taille, et
+  reçoit le focus ; une phrase liée aux champs de la saisie dit ce qui
+  est attendu : « Un nombre entier de −20 à 20 est attendu. », aux bornes
+  de la saisie (sans bornes : « Un nombre entier est attendu. »), ou
+  « Une raison est demandée. ». Avant la relecture de fin de groupe, une
+  saisie refusée ne disait rien.
 - **Quand un adversaire attaque**, c'est le même panneau : sa capacité et
   sa cible, puis le jet de défense du personnage.
 - **Un combat arrêté** par son enregistrement (§ 17.8) : un bloc prend la
@@ -4828,6 +5030,22 @@ c'est un volet, que son nom déplie.
 § 17.9, la dernière visible. Sa hauteur est limitée, 24rem sur un grand
 écran, 18rem sur un téléphone, et il défile. « Copier » et « Télécharger »
 sont inactifs avant le lancement : le journal est vide.
+
+- **La dernière ligne reste visible en revenant sur l'écran**, le combat
+  en mémoire. La page ne pose le nœud de l'écran qu'après l'avoir reçu :
+  le défilement, réglé avant, ne prenait pas, et le journal se rouvrait
+  sur ses premières lignes. Il se règle une fois de plus, dès que le tour
+  finit, si la visite est encore la bonne et son nœud dans la page.
+- **Dans une ligne où quelqu'un meurt, seule la phrase de la mort est en
+  évidence** (« Marmiton n° 1 meurt. », en rouge et en gras), comme sur
+  la maquette, et non la ligne entière. La vue la retrouve en fin de
+  ligne (`vueLigne`, § 17.1) : la forme d'une ligne ne change pas dans
+  l'état du combat. Introuvable, c'est la ligne entière qui est en
+  évidence.
+- **Les lignes laissent à droite la place d'une barre de défilement** :
+  dans Firefox, elle se pose sur le contenu, et couvrait la fin des
+  lignes.
+- **C'est une région que son titre nomme**, « Journal ».
 
 **Les lecteurs d'écran et le clavier.**
 
@@ -4842,17 +5060,53 @@ sont inactifs avant le lancement : le journal est vide.
   relecture de fin de groupe, elles étaient muettes. Une valeur de dé
   passée sous zéro y porte le moins du journal. Ni l'état de la barre ni
   celui de l'enregistrement ne sont des régions : le second change deux
-  fois par clic, et couvrirait
-  l'annonce du dé.
+  fois par clic, et couvrirait l'annonce du dé.
+- **Cette région est dans la page dès le premier rendu, vide**, sous la
+  racine de l'écran, après le journal, et elle y reste quand la
+  préparation ou un combat arrêté prend la place du panneau d'action : un
+  lecteur d'écran la connaît avant qu'elle parle. Logée dans le panneau,
+  elle entrait dans la page déjà pleine, et sa première annonce pouvait
+  ne pas être dite. « Journal copié. » y passe aussi, le focus restant
+  sur « Copier » ; l'annonce suivante du combat le remplace.
 - **Les états de l'enregistrement qui demandent un geste ou préviennent
   d'une perte** passent une fois, à leur arrivée, par une zone d'avis, avec
   leur bouton ; leur phrase reste ensuite dans la barre.
-- **Un bouton inactif garde le focus**, et sa raison lui est liée. Après
-  chaque geste, le focus va à la commande qui attend : le dé à lancer, le
-  choix du moment, « Appliquer ». Un dé lancé reste un bouton, pour relire
-  la chaîne au clavier, et son nom dit sa valeur et son état.
+- **Un bouton inactif garde le focus**, et sa raison lui est liée. Dans la
+  barre et le panneau d'action, elle se lit sous la rangée du bouton
+  quand on le survole, qu'on le touche ou qu'il a le focus : écrite en
+  clair à côté de chacun, elle se répétait pendant un geste et défaisait
+  les rangées. Dans la préparation, elle s'écrit sous le bouton.
+- **Un bouton inactif se voit** : trait discontinu, fond transparent,
+  texte au second gris, sans opacité, pour un bouton de capacité comme
+  pour un bouton du site (« Fin de tour » pendant un geste, « Lancer le
+  combat », « Ajouter », « Copier », « Confirmer », un pas de la
+  puissance). Avant la relecture de fin de groupe, un bouton du site
+  rendu inactif gardait l'aspect d'un bouton actif : sur un téléphone,
+  qui n'a pas de curseur, rien ne le disait avant l'appui.
+- **Le focus.** Après chaque geste, il va à la commande qui attend : le
+  dé à lancer, le choix du moment, « Appliquer ». Un réglage qui ne fait
+  pas avancer le geste le garde : après un pas de la puissance ou une
+  caractéristique sur deux, il revient au bouton actionné, pour qu'on y
+  revienne d'un geste. Un dé lancé reste un bouton, pour relire la chaîne
+  au clavier, et son nom dit sa valeur et son état.
+- **Les régions, les groupes et les tables se nomment.** Le journal et
+  les réglages à la main sont des régions que leur titre nomme. Chaque
+  rangée de choix du panneau (« Arme : », « Cible : », « Arrivée : », les
+  caractéristiques, « Difficulté : », « Lien payé sur : », « Dégâts : »,
+  « Nature : ») est un groupe que son intitulé nomme. Le double d'une
+  case d'arrivée porte le nom de la case de la carte (« Case G2 : s'y
+  déplacer ») : « G2 » seul ne disait pas quoi. La table des zones d'une
+  fiche porte le nom de son protagoniste (« Zones : Aubépine
+  Crèmebrûlée »), et le nom d'une zone y est l'en-tête de sa ligne. Avant
+  le lancement, « Case » et « Retirer » forment un groupe au nom du
+  protagoniste.
+- **Un nom accessible est un texte montré** : celui d'un bouton ou d'un
+  dé, qui peut porter un nom venu de la banque (une zone, une arme),
+  perd comme les autres les signes qui commandent le sens de l'écriture.
 - **Jamais la couleur seule** (§ 9) : un dé porte ✓ ou ✗, un jeton ses
-  initiales ou son nom, une armure entamée ses deux nombres.
+  initiales ou son nom, une armure entamée ses deux nombres. Un dé
+  relancé garde le rouge de son échec, en trait discontinu, et sa
+  valeur, grisée, est barrée.
 - L'écran ne redessine que ce dont la vue a changé : une saisie en cours et
   le focus survivent au rendu que provoque la fin d'une écriture.
 
@@ -4930,7 +5184,25 @@ sont inactifs avant le lancement : le journal est vide.
   maquette n'existe pas, les étapes le disent déjà ; dans une case
   pleine, un mort passe derrière « +k » (plus haut), quand la maquette le
   montre barré dans la case ; sur téléphone, l'état de l'enregistrement
-  reste visible, quand la maquette le cache.
+  reste visible, sur sa ligne, quand la maquette le cache.
+- **Ce qui reste après les corrections de la relecture de fin de
+  groupe**, vu le 12/10/2026 sur les images finales du moment de la
+  maquette, à 1 440 et 390 px, dans Edge 155 et Firefox 143 (même
+  disposition, mêmes éléments) :
+  - **la première rangée de la préparation.** La maquette met sur une
+    ligne le personnage, l'adversaire et « Placer la rencontre
+    préparée » ; l'écran leur laisse trois rangées. La raison d'un bouton
+    s'y écrit sous lui, dans son bloc ; le bloc de la rencontre n'a pas
+    d'intitulé au-dessus de son bouton, et celui des personnages devient
+    une phrase quand l'appareil n'en a aucun : sur une même rangée, les
+    boutons ne s'aligneraient plus. Seule la seconde rangée, « Qui
+    commence » et « Lancer le combat », suit la maquette ;
+  - **« Fin de tour » en trait discontinu pendant un geste**, puisqu'il
+    est alors inactif ; la maquette le montre plein ;
+  - **les noms des protagonistes sans gras dans le journal** : il
+    faudrait découper chaque ligne ;
+  - **le nom court encore coupé** à certaines largeurs (plus haut, « Le
+    nom court ») : « Marmi… 2 » à 1 440 px.
 
 ### 17.8 L'enregistrement
 
@@ -5394,7 +5666,9 @@ dit son outil, sa méthode et sa réserve ; ce qui n'est pas mesuré est dit
 **Les contrôles.** 1 392 contrôles au commit `fda3a2a` (deux processus,
 168 secondes), aucun échec, dont 934 neufs depuis les étapes 1 et 2 (458
 au commit `40db3a0`) ; 1 476 au commit `c4cff7d` (deux processus, 190
-secondes), aucun échec. Chaque règle y est vue dans les deux sens, dans
+secondes), aucun échec ; 1 517 au commit `8032ce2` (deux processus),
+aucun échec. Le nombre du commit de fin de groupe est dit à la fin de ce
+paragraphe. Chaque règle y est vue dans les deux sens, dans
 le contrôle même : le cas qui passe, et le cas refusé. Ce n'est pas la
 mise à l'épreuve « armé puis désarmé » du § 0, qui casse le code pour
 voir le contrôle échouer : celle-là est dite plus bas.
@@ -5442,9 +5716,10 @@ des adversaires portait deux mots du classeur : elle a été renommée avant
 d'être commitée. Le reste de ce que le script relève est sans objet : des
 mots courants du français, des noms d'éléments, permis en clair (§ 17),
 et **huit des quatorze libellés de rôle** du tableau du § 17.6, qui ont
-par nature la clé du nom qu'ils désignent, et que la mission ordonne. Les
-messages des deux commits que le lot comptait alors, relus de même, ne
-portent que des mots courants.
+par nature la clé du nom qu'ils désignent, et que la mission ordonne :
+ce constat rejoint celui des empreintes, à trancher par l'auteur
+(§ 17.6). Les messages des deux commits que le lot comptait alors, relus
+de même, ne portent que des mots courants.
 
 **Les modules d'avant** : ce que rendent la résolution et la fiche est
 inchangé, les champs neufs mis à part (85 adversaires, 7 fiches) ; la
@@ -5521,24 +5796,40 @@ adversaires approchent 0,7 Mo en clair, sous la borne de 8 Mo.
   fixe, a été corrigé (§ 13).
 
 **Les corrections de la relecture, mises à l'épreuve** par le même
-lanceur : 72 casses, 72 vues, aucune en délai. Quarante pour le moteur (le
-signe moins d'un dé, les annonces, les passifs d'un adversaire, le tableau
-des rôles, les maîtrises, les noms, le niveau 0, le déplacement sans case,
-les plafonds, la double relance, le départ du banc) ; trente-deux pour
-l'enregistrement et les bornes (l'enveloppe longue, le rejeu, les tirages
-et les façons, la révision, le compteur, la source d'un adversaire, le
-départ de l'écriture).
+lanceur : 184 casses, 184 vues, aucune en délai.
 
-**Les contrôles de l'écran ne sont pas mis à l'épreuve**, à l'écriture de
-ce paragraphe : ni les cinq modules de `js/ecrans/`, ni `css/combat.css`,
-ni le câblage d'`application.js`. N'en est connu que ceci. Les contrôles
-ajoutés ou retouchés par le regard sur la maquette, lancés sur une copie
-du code d'avant, échouent à 16 sur 148, et passent tous sur le code
-corrigé. Les trois corrections faites pendant les mesures ont chacune
-leur contrôle, vu échouer sur l'ancien code. Un relecteur a joué un
-échantillon de 81 casses sur les modules de l'écran et la feuille : 70
-vues, 11 non vues ; les règles que rien ne tenait sont à la liste des
-corrections de l'écran (§ 14). **À faire avant la fin du groupe.**
+- **Quarante pour le moteur** (commit `c4cff7d`) : le signe moins d'un
+  dé, les annonces, les passifs d'un adversaire, le tableau des rôles,
+  les maîtrises, les noms, le niveau 0, le déplacement sans case, les
+  plafonds, la double relance, le départ du banc.
+- **Trente-deux pour l'enregistrement et les bornes** (commit
+  `8032ce2`) : l'enveloppe longue, le rejeu, les tirages et les façons,
+  la révision, le compteur, la source d'un adversaire, le départ de
+  l'écriture.
+- **Cent douze pour l'écran** (commit `8032ce2`), sur ses trente points
+  corrigés (§ 14) : `css/combat.css`, `js/combat/lecture.js` et les cinq
+  modules de `js/ecrans/`, contre les sept fichiers de contrôles de
+  l'écran. Un premier passage avait laissé deux casses non vues, sur
+  « Case » et « Retirer » hors du volet, et sur la carte d'un combat
+  arrêté : deux contrôles creux, complétés, puis la liste entière
+  rejouée, 112 vues sur 112. Désarmé : les sept fichiers passent sur la
+  copie intacte. Les contrôles de l'écran, lancés avec ceux du site, de
+  la carte, des routes et des écrans, un processus à la fois, étaient
+  270 avant ces corrections, 282 après : douze neufs, les autres
+  complétés. Ceux du combat de référence et du rejeu, 42, passent sans
+  retouche : le journal attendu ne change pas.
+
+**Les contrôles de l'écran écrits avant la relecture** : les cinq modules
+de `js/ecrans/`, `css/combat.css`, le câblage d'`application.js`. En est
+établi ceci. Les contrôles ajoutés ou retouchés par le regard sur la
+maquette, lancés sur une copie du code d'avant, échouent à 16 sur 148,
+et passent tous sur le code corrigé. Les trois corrections faites pendant
+les mesures ont chacune leur contrôle, vu échouer sur l'ancien code. Un
+relecteur a joué un échantillon de 81 casses sur les modules de l'écran
+et la feuille : 70 vues, 11 non vues ; les règles que rien ne tenait
+sont entrées à la liste des corrections de l'écran, dont quatre points
+sont faits de contrôles seuls (§ 14). Leur mise à l'épreuve d'ensemble,
+par le lanceur : à la fin de ce paragraphe.
 
 **Dans de vrais navigateurs** : les conditions, pour tout ce qui suit.
 Edge 155.0.4283.45 (Chromium), piloté par le protocole DevTools, et
@@ -5550,20 +5841,30 @@ public. Un script par mesure, hors dépôt (`plans/`). Trois combats, tirés
 validés et rejoués avant d'être écrits : 300 événements et 15
 protagonistes (graine 7) ; 1 000 événements, 15 protagonistes, 152 775
 octets, 497 lignes de journal (graine 368) ; un combat ordinaire de 300
-événements et 4 protagonistes (graine 1). **Trois réserves valent pour
-toutes ces mesures :**
+événements et 4 protagonistes (graine 1). **Deux séries** : celle du
+matin du 12/10/2026, les quatre mesures de la mission ; puis, après les
+corrections de la relecture de fin de groupe, deux mesures reprises, le
+temps d'un clic (vers 13 h 10) et « aucune case ne déborde ». **Trois
+réserves :**
 
-- **le poste était chargé** par d'autres agents, dont les contrôles
-  tournaient : le rejeu sous Node, témoin de la charge, a varié de 63 à
-  251 ms d'une passe à l'autre ;
+- **le matin, le poste était chargé** par d'autres agents, dont les
+  contrôles tournaient : le rejeu sous Node, témoin de la charge, a varié
+  de 63 à 251 ms d'une passe à l'autre. La série de 13 h 10 est prise
+  poste plus calme, non au repos : 13,6 Go de mémoire validée, deux
+  agents de mise à l'épreuve tournant à côté, un processus de contrôles
+  à la fois ;
 - **un navigateur sans fenêtre n'a pas d'écran** : le temps de peinture
   n'est pas mesuré. De l'événement à l'image suivante, les nombres relevés
-  (médiane 67 ms dans Edge, 82 à 130 ms dans Firefox) ne sont pas à
-  retenir, non plus que ceux de l'API Event Timing (104 ms de médiane pour
-  30 ms de traitement) ;
-- **elles précèdent les corrections de la relecture de fin de groupe**
-  (le journal du rejeu, l'écriture sortie du clic, l'écran, en cours), et
-  rien n'a été remesuré dans un navigateur depuis.
+  (le matin, médiane 67 ms dans Edge, 82 à 130 ms dans Firefox ; à
+  13 h 10, 17,2 ms dans Edge et 5,97 ms dans Firefox, à 1 440 px) ne
+  sont pas à retenir, non plus que ceux de l'API Event Timing (le matin,
+  104 ms de médiane pour 30 ms de traitement ; à 13 h 10, dans Edge,
+  32 ms pour 3,5 ms) ;
+- **la série du matin précède les corrections de la relecture de fin de
+  groupe** (le journal du rejeu, l'écriture sortie du clic, l'écran).
+  Rejouer 1 000 événements et enregistrer un combat de 300 n'ont pas été
+  remesurés dans un navigateur depuis ; le rejeu l'a été sous Node (plus
+  bas).
 
 **Rejouer 1 000 événements** (mission, § 15). Les modules du site
 importés dans la page, le même texte, quinze passes, la première à part ;
@@ -5593,7 +5894,14 @@ que fait l'écran lui-même** pendant qu'on joue, de « Enregistrement… » à
 « Combat gardé sur cet appareil », relevé par un observateur de la barre :
 dans Edge, médiane 48,6 ms, 95e centile 83 ms, le pire 133 ms, sur 86
 écritures ; dans Firefox, médiane de 59 à 73 ms selon la passe, le pire
-554 ms et 1 855 ms. Ce temps court après le clic, sans le retenir.
+554 ms et 1 855 ms. Ce temps court après le clic, sans le retenir. À
+13 h 10, après les corrections et poste plus calme, sur 86 écritures
+dans chaque navigateur : dans Edge, médiane 17,6 ms, 95e centile 20,4 ms,
+le pire 22,4 ms ; dans Firefox, médiane 4,99 ms, 95e centile 8,4 ms, le
+pire 9,42 ms. C'est le même relevé, entre les deux textes de la barre ;
+dans Firefox, il est plus court que l'écriture entière mesurée le matin
+(22,7 ms), et la mesure ne dit pas pourquoi : il n'est pas à lire comme
+le temps d'une écriture.
 
 **Le temps d'un clic, jusqu'à l'écran à jour** (cible de la mission :
 moins de 100 ms), sur un combat de 300 événements. Des clics de souris
@@ -5603,6 +5911,11 @@ son tour ») ; dans la page, de l'entrée d'un écouteur de capture posé sur
 le document à la sortie d'un écouteur de bulle, puis le style et la mise
 en page forcés : le rendu de l'écran est synchrone. Pour que le combat
 dure cent clics, le joueur fixe à 0 les dégâts portés au personnage.
+**La cible est tenue dans les deux navigateurs**, à la seconde série ;
+les deux séries restent écrites, datées.
+
+**Première série, le matin du 12/10/2026**, poste chargé, avant les
+corrections de la relecture de fin de groupe :
 
 | Navigateur, combat, largeur | Clics | Médiane | 95e centile | Le pire | À 100 ms ou plus |
 |---|---|---|---|---|---|
@@ -5617,36 +5930,67 @@ dure cent clics, le joueur fixe à 0 les dégâts portés au personnage.
 | Firefox 143, 4 protagonistes, 1 440 px, seconde passe | 60 | 53,2 ms | 110 ms | 164 ms | 6 |
 | Firefox 143, 4 protagonistes, 390 px, seconde passe | 25 | 44,8 ms | 94,4 ms | 129 ms | 1 |
 
-- **Dans Edge, la cible est tenue**, et le nombre de protagonistes ne
-  pèse plus sur le clic. La mesure y avait d'abord trouvé un défaut : à
-  l'ouverture et à la fin de chaque geste, 12 à 14 fiches sur 15 étaient
-  refaites en entier, environ 1 400 nœuds, pour le seul bouton « Jouer »
-  qui y paraît ou disparaît ; le clic allait alors à 84,6 ms au 95e
-  centile et 108,2 ms au pire, 3 clics sur 70 à 100 ms ou plus. Corrigé
-  avant les nombres du tableau : une fiche ne refait plus que ce qui a
-  changé.
-- **Dans Firefox, la cible n'est pas tenue de façon sûre** : selon la
-  passe et la largeur, de 0 à 19 clics y sont à 100 ms ou plus, sur 25 à
-  70. Diagnostic pris dans
-  la page : refaire le corps du panneau d'action (123 nœuds) puis mettre
-  en page coûte de 17 à 42 ms dans Firefox, contre 6 à 9 ms dans Edge ;
-  refaire une fiche (118 nœuds), 22 ms contre 4,6 ms. Le script du moteur
-  pèse peu (les vues 2,5 ms, un événement 0,7 ms) ; ni les règles `:has()`
-  ni les cent cases en conteneur ne sont en cause (de 1,7 à 2,5 ms). Le
-  remède serait de ne plus refaire le panneau en entier à chaque clic : il
-  n'est pas fait. **Point à trancher**, après une mesure poste au calme,
-  qui reste à faire ; le Firefox 157 de l'auteur, ouvert pendant les
-  mesures, n'a pas été lancé.
-- **D'où vient le temps d'un clic, dans Edge** : les compteurs du moteur
-  de rendu, lus avant et après chacun de 78 clics, donnent 18,4 ms de
-  script, 4 ms de styles et 6,6 ms de mise en page (médianes), 6 calculs
-  de style et 2 mises en page par clic. Un profil du processeur, sur 70
-  clics : remplacer le contenu du panneau d'action, 10,5 ms par clic ;
-  poser le focus, 7,4 ms ; ouvrir la compression, 4 ms ; encoder le texte,
-  1,5 ms. Ces deux dernières parts étaient celles de l'enregistrement,
-  parti dans l'écouteur du clic : il part depuis un tour plus tard
-  (§ 17.8), et le clic n'a pas été remesuré. Une série profilée est plus
-  lente (médiane de 36 à 41 ms) : ses temps ne sont pas ceux à retenir.
+- **Dans Edge, le matin, la cible est tenue**, et le nombre de
+  protagonistes ne pèse plus sur le clic. La mesure y avait d'abord
+  trouvé un défaut : à l'ouverture et à la fin de chaque geste, 12 à 14
+  fiches sur 15 étaient refaites en entier, environ 1 400 nœuds, pour le
+  seul bouton « Jouer » qui y paraît ou disparaît ; le clic allait alors
+  à 84,6 ms au 95e centile et 108,2 ms au pire, 3 clics sur 70 à 100 ms
+  ou plus. Corrigé avant les nombres du tableau : une fiche ne refait
+  plus que ce qui a changé.
+- **Dans Firefox, le matin, la cible n'est pas tenue de façon sûre** :
+  selon la passe et la largeur, de 0 à 19 clics y sont à 100 ms ou plus,
+  sur 25 à 70. Diagnostic pris dans la page : refaire le corps du panneau
+  d'action (123 nœuds) puis mettre en page coûte de 17 à 42 ms dans
+  Firefox, contre 6 à 9 ms dans Edge ; refaire une fiche (118 nœuds),
+  22 ms contre 4,6 ms. Le script du moteur pèse peu (les vues 2,5 ms, un
+  événement 0,7 ms) ; ni les règles `:has()` ni les cent cases en
+  conteneur ne sont en cause (de 1,7 à 2,5 ms). Le remède envisagé
+  alors, ne plus refaire le panneau en entier à chaque clic, n'est pas
+  fait : le corps du panneau est toujours refait en entier quand sa vue
+  change (§ 17.7).
+- **D'où vient le temps d'un clic, dans Edge, le matin** : les compteurs
+  du moteur de rendu, lus avant et après chacun de 78 clics, donnent
+  18,4 ms de script, 4 ms de styles et 6,6 ms de mise en page (médianes),
+  6 calculs de style et 2 mises en page par clic. Un profil du
+  processeur, sur 70 clics : remplacer le contenu du panneau d'action,
+  10,5 ms par clic ; poser le focus, 7,4 ms ; ouvrir la compression,
+  4 ms ; encoder le texte, 1,5 ms. Ces deux dernières parts étaient
+  celles de l'enregistrement, parti dans l'écouteur du clic : il part
+  depuis un tour plus tard (§ 17.8). Une série profilée est plus lente
+  (médiane de 36 à 41 ms) : ses temps ne sont pas ceux à retenir.
+
+**Seconde série, le 12/10/2026 vers 13 h 10**, après les corrections de
+la relecture de fin de groupe, poste plus calme (plus haut). Même
+script, même méthode, même combat de 300 événements et 15 protagonistes
+(graine 7) : au départ, « Tour 10 · camp des PJ », 14 fiches ouvertes,
+2 135 nœuds. Cent clics joués dans chaque navigateur, sans erreur de
+console ni requête hors du serveur local ; le combat ordinaire de 4
+protagonistes n'a pas été repris.
+
+| Navigateur, largeur | Clics | Médiane | 95e centile | Le pire | À 50 ms ou plus | À 100 ms ou plus |
+|---|---|---|---|---|---|---|
+| Edge 155.0.4283.45, 1 440 px | 70 | 3,65 ms | 6,8 ms | 8,7 ms | 0 | 0 |
+| Edge 155.0.4283.45, 390 px | 30 | 2,8 ms | 5,2 ms | 5,3 ms | 0 | 0 |
+| Firefox 143.0.4, 1 440 px | 70 | 3,62 ms | 7,76 ms | 8,3 ms | 0 | 0 |
+| Firefox 143.0.4, 390 px | 30 | 4,62 ms | 9,06 ms | 11,72 ms | 0 | 0 |
+
+- **La cible de 100 ms est tenue dans les deux navigateurs** : aucun
+  clic n'atteint 50 ms. La réserve du matin sur Firefox est levée, et le
+  point n'est plus à trancher.
+- **Dans Edge**, les compteurs du moteur de rendu, sur 76 clics à
+  1 440 px : 1,8 ms de script (18,4 ms le matin), 0,76 ms de styles et
+  1,2 ms de mise en page (médianes), 6 calculs de style et 3 mises en
+  page par clic.
+- **Ce qui a changé entre les deux séries.** Le code : une ligne du
+  journal n'est plus regelée à chaque événement (§ 17.1) ; l'écriture
+  part hors de l'écouteur du clic (§ 17.8) ; les trente points de
+  l'écran (§ 14). La fiche qui ne refait que ce qui change était déjà
+  dans les nombres d'Edge du matin. Le poste : plus calme. **La mesure ne
+  dit pas ce qui revient à chacun.**
+- **Ce que cette série ne dit pas** : le temps de peinture, qu'un
+  navigateur sans fenêtre ne donne pas ; le Firefox 157 de l'auteur, qui
+  n'a pas été mesuré.
 
 **Aucune case ne déborde**, dans Edge 155 comme dans Firefox 143 : aucun
 défaut sur 98 largeurs (chaque pixel de 320 à 414, puis 768, 1 024 et
@@ -5672,6 +6016,18 @@ défaut sur 98 largeurs (chaque pixel de 320 à 414, puis 768, 1 024 et
   chaque côté, et sortaient de leur case de 0,6 à 0,9 px sur téléphone, de
   1,9 px à 768 px : 96 largeurs sur 98 en défaut. Corrigé avant les
   nombres ci-dessus.
+- **Remesuré après les corrections de l'écran**, le 12/10/2026, dans
+  Edge 155.0.4283.45 puis dans Firefox 143.0.4, un seul navigateur à la
+  fois, par le même script, sur les mêmes cinq plateaux : aucun défaut
+  sur 98 largeurs, 17 938 boîtes dans chacun, console vide. Le côté d'une
+  case est le même aux largeurs relevées. Les noms courts raccourcis à
+  1 440 px : 26 sur 46 sur le plateau chargé (44 avant la correction de
+  leur taille), 1 sur 3 au moment de la maquette (3 avant), 1 sur 5 sur
+  le combat de 300 événements, 2 sur 4 pendant le choix d'une arrivée.
+- **Une mesure de plus, dans Edge seul**, sur 32 largeurs de 896 à
+  1 440 px et trois de ces plateaux : aucun défaut, 8 768 boîtes ; le
+  texte des jetons y va de 9,8 à 10,7 px, et presque tous les noms
+  restent coupés là où la case fait moins de 65 px (§ 17.7).
 
 **Le regard sur la maquette** (mission, § 15). Le combat de référence
 fictif, écrit chiffré dans la base par un script de capture hors dépôt,
@@ -5698,7 +6054,8 @@ geste.
   la fiche d'un mort, les jauges, le titre du panneau ; un arrêt de
   tabulation invisible sur le journal vide ; un lien de 89 × 21 px, seule
   cible sous 44 px hors de la carte.
-- **Mesuré sur les vues finales**, dans les deux navigateurs : aucun
+- **Mesuré sur les vues finales de ce regard**, avant la relecture de fin
+  de groupe, dans les deux navigateurs : aucun
   défilement horizontal (0 px) à 1 440, 1 100 et 390 px ; aucune cible
   sous 44 px hors de la carte ; aucune case fautive sur 294 mesures par
   navigateur (98 largeurs, trois moments) ; au clavier, 42 arrêts au
@@ -5711,8 +6068,61 @@ geste.
   protocole ne mène pas à son terme sans fenêtre.
 - **Console et réseau** : aucune erreur, aucun avertissement, aucune
   requête échouée ni hors du serveur local, sur toutes les séances.
-- Le § 17.7 ne porte pas encore tout ce que ce regard a changé à l'écran :
-  il sera accordé avec les corrections de la relecture, en cours.
+- Le § 17.7 porte ce que ce regard a changé à l'écran, avec les
+  corrections de la relecture de fin de groupe.
+
+**Les corrections de l'écran, vues dans un navigateur** (12/10/2026,
+après la relecture de fin de groupe ; Edge 155.0.4283.45 et Firefox
+143.0.4, sur le serveur local, profils jetables). Les trente points de
+la liste (§ 14) ont été retrouvés dans le code ou dans un navigateur
+avant d'être corrigés ; aucun n'a été jugé non fondé.
+
+- **Des images** : dans les deux navigateurs, à 1 440 et 390 px, au
+  moment de la maquette, à la préparation, au septième geste avant son
+  premier dé et au combat terminé, en thème sombre ; dans Edge, en thème
+  clair, à 900, 1 000, 1 100, 1 440, 390 et 320 px. Partout : aucun
+  défilement horizontal, aucun nœud hors de la fenêtre, console vide,
+  aucune requête hors du serveur local.
+- **Des gestes joués par un script**, dans les deux navigateurs, mêmes
+  résultats. Un bouton du site inactif : trait discontinu, fond
+  transparent, opacité 1, en sombre et en clair. Le focus sur le jeton
+  de celui qui joue : un anneau intérieur de 2 px, vu sur les images
+  agrandies. Une saisie refusée (« 99 » au modificateur, puis une raison
+  vide), à 1 440 et 390 px : le champ marqué, sa phrase visible, le focus
+  sur lui. Le focus gardé après « − », « + » et une caractéristique. La
+  région polie : un seul nœud, enfant de la racine. Les tables des
+  zones : 24 en-têtes de ligne pour 24 lignes, quatre tables nommées.
+- **Sur un téléphone.** À 390 px, l'état, « Fin de tour » et « ⋯ » sur
+  une ligne, « Combat gardé sur cet appareil » dessous ; le menu ouvert,
+  puis la question, ne déplacent pas les deux boutons ; à 320 et 360 px,
+  ils passent à la ligne, à droite ; après « Effacer », le menu est
+  fermé. La préparation, à 320, 360 et 390 px : « Les PJ » et « Les
+  adversaires » sur la même ligne, sous leur intitulé. Avant le
+  lancement, aux mêmes largeurs : aucune fiche ouverte sur quatre, et
+  les quatre champs « Case » visibles (96 × 44 px), chacun avec
+  « Retirer » (82 × 44 px) sur la même ligne. Le texte de la racine à
+  200 %, à 390 px : la page ne défile plus de côté (96 px avant), la
+  table des zones (429 px) défile dans sa fiche (324 px). La carte de
+  « Fiche complète », à 390 px : 340 px dans un cadre de 340 (356
+  avant), à l'échelle 0,473.
+- **Sur un grand écran.** À 1 440 px, « Nouveau combat » puis « Fin de
+  tour » au bout de la barre ; vu en chemin et corrigé : à 900 px, « Fin
+  de tour » tombait seul à gauche, sous le titre. À 1 440 et 900 px,
+  « Lancer le combat » au bout de la rangée de « Qui commence ».
+- **Le journal.** Dans Firefox 143, le texte le plus à droite s'arrête à
+  12,6 px du bord (12,2 px à 390 px), et la barre de défilement tient
+  dans cette marge. Le combat terminé, 36 lignes : après un aller à
+  l'écran Rencontre et un retour, le journal est au bas de son
+  défilement (984 px, soit 1 368 − 384), dans Edge et dans Firefox. Au
+  journal, seule « Marmiton n° 1 meurt. » est rouge et grasse.
+- **Un combat ouvert ailleurs**, un second écrivant dans la base : au
+  clic suivant, les trois jetons montrés sont inactifs, et aucun bouton
+  « Jouer » ne reste.
+- **Ce qui n'a pas été regardé à part dans un navigateur** : les groupes
+  nommés des rangées et le nom accessible d'un dé, où rien ne se voit,
+  et les quatre points faits de contrôles seuls. Vu, et non corrigé :
+  dans Firefox, le trait qui barre la valeur d'un dé relancé se confond
+  avec la barre d'un « 4 », qui est le dessin du chiffre.
 
 **Un combat joué de bout en bout, par de vrais clics** et de vraies
 frappes du protocole, quatre fois, jusqu'à « Combat terminé : victoire des
@@ -5721,7 +6131,12 @@ adversaires. », sans aucun échec : Edge 155 à 1 440 px (59 vérifications,
 185 pas, 64 dés, 137 secondes), Chrome 154.0.8037.99 à 1 440 px (59
 vérifications, 216 pas, 78 dés), Edge à 390 px (59 vérifications, 149
 pas). Dans les quatre : aucune erreur ni avertissement de console, aucune
-requête échouée, aucune hors du serveur local.
+requête échouée, aucune hors du serveur local. **Ces quatre combats
+précèdent les corrections de l'écran** de la relecture de fin de
+groupe, et n'ont pas été rejoués depuis par de vrais clics : depuis, les
+contrôles de l'écran rejouent le combat de référence en entier dans le
+document simulé, et la seconde série du clic a joué cent clics dans
+chaque navigateur, sans mener un combat à son terme.
 
 - **La préparation** : la démonstration ouverte par son mot de passe tapé
   au clavier ; sur un appareil neuf, le personnage de démonstration
@@ -5825,20 +6240,88 @@ plafond pourrait alors remonter, et les deux bornes des façons se retirer.
   la demande prend de 0,49 à 0,65 ms en médiane, de 1,35 à 5,79 ms au
   pire, et le texte est assemblé dans le tour de la demande 40 fois sur
   40 ; après, 0,02 ms en médiane, 0,06 ms au pire, 0 fois sur 40, et les
-  40 révisions s'écrivent comme avant. Sous Node seulement : le clic n'a
-  pas été remesuré dans un navigateur.
+  40 révisions s'écrivent comme avant. C'est une mesure sous Node ; dans
+  un navigateur, le clic a été remesuré depuis (plus haut, la seconde
+  série).
 
-**Ce qui reste à mesurer ou à faire**, à l'écriture de ce paragraphe.
+**Le site en ligne**, vérifié par l'agent principal le 12/10/2026 vers
+13 h 10. Quatre-vingt-dix fichiers du site (`index.html`, les six
+feuilles de `css/`, les quatre-vingt-un modules de `js/`, la banque et le
+personnage de démonstration ; ni le manifeste, ni les icônes, ni les
+polices n'ont été comparés) que sert
+`https://silviooooooo.github.io/atelier-des-arpenteurs/` sont
+identiques, octet pour octet, à ceux du commit `8032ce2` ; 24 d'entre
+eux sont ceux du combat. Sur GitHub Actions, « Contrôles » a réussi sur
+les commits `d51c16a` et `8032ce2` (issue relue le 12/10/2026 vers
+13 h 40).
 
-- **Les mises à l'épreuve des contrôles de l'écran** (plus haut).
-- **Le temps d'un clic**, poste au calme : dans Firefox, où la cible
-  n'est pas tenue de façon sûre ; dans Edge, depuis que l'écriture a
-  quitté le clic.
-- **L'écran, de nouveau, dans un navigateur**, une fois finies les
-  corrections de la relecture : le regard, et « aucune case ne déborde ».
-- **Le site en ligne** : la mission veut qu'un combat de démonstration
-  s'y joue jusqu'au bout (son § 17). Rien n'en est mesuré ici.
-- **Le nombre de contrôles du commit de fin de groupe.**
+- **Aucun combat n'a été joué par un agent sur le site en ligne
+  lui-même.** Y ouvrir la démonstration demande de saisir son mot de
+  passe, et la règle de sécurité de l'outil interdit à l'agent de saisir
+  un mot de passe hors du poste local, même public.
+- **Ce qui en tient lieu, sans le remplacer** : le site sert, octet pour
+  octet, le code du commit `8032ce2` ; un combat de démonstration a été
+  joué jusqu'à « Combat terminé », par de vrais clics, dans Edge et dans
+  Firefox, sur le serveur local, avant les corrections de l'écran (plus
+  haut) ; depuis, les contrôles de l'écran rejouent le combat de
+  référence en entier dans le document simulé.
+- La mission demande qu'un combat s'y joue jusqu'au bout (son § 17) :
+  **c'est le premier essai de la liste de l'auteur** (§ 13).
+
+**Les contrôles de l'écran écrits avant la relecture, mis à l'épreuve**
+le 12/10/2026 après 13 h 15, par le même lanceur, sur une copie du commit
+`8032ce2` : 369 casses.
+
+- **L'écran assemblé et son câblage** (`js/ecrans/combat.js`,
+  `js/routes.js`, `js/application.js`, `index.html`) : 127 casses. Au
+  premier passage, 102 vues, 21 non vues, 4 en délai. À la fin : 122
+  vues, 3 équivalentes, preuve à l'appui, 2 en délai. Des 21 non vues, 17
+  le sont devenues après l'ajout de sept contrôles et le complément de
+  huit autres ; une l'était déjà par un contrôle de `tests/carte.test.js`,
+  hors de la liste jouée ; les 3 dernières sont les équivalentes. Les deux
+  casses restées en délai font attendre presque chaque contrôle cinq
+  secondes avant d'échouer, et la somme dépasse la minute que le lanceur
+  accorde : leur échec est déduit de cette borne, non observé.
+- **Les quatre parties de l'écran et la feuille** (`combat_plateau.js`,
+  `combat_fiches.js`, `combat_action.js`, `combat_preparation.js`,
+  `css/combat.css`, les jetons du combat) : 242 casses, en deux listes.
+  234 vues d'emblée ; les 8 autres le sont après l'ajout ou le complément
+  de huit contrôles. Aucune équivalente, aucun délai.
+- **Aucune casse n'a révélé de défaut du code.** Un défaut de contrôle,
+  corrigé : l'attente de `tests/combat_ecran.test.js`, bornée en nombre
+  d'essais, durait 47 secondes par attente déçue ; elle est bornée à cinq
+  secondes.
+
+**Le commit de fin de groupe** compte 1 526 contrôles, que le crochet
+passe à l'envoi. L'issue de GitHub Actions sur ce commit n'existe pas
+quand ce paragraphe s'écrit : elle est au compte rendu du groupe.
+
+**Ce qui n'est pas fait.**
+
+- **Un combat joué sur le site en ligne** par un agent (plus haut).
+- **Un combat de bout en bout par de vrais clics, depuis les corrections
+  de l'écran** (plus haut). Les outils hors dépôt qui l'avaient joué
+  n'ont pas été vérifiés contre la structure nouvelle de l'écran.
+- **Rejouer 1 000 événements et enregistrer un combat de 300 dans un
+  navigateur, depuis les corrections** ; le combat ordinaire de 4
+  protagonistes, à la seconde série du clic.
+- **Laissés par les corrections de l'écran**, à dire à l'auteur :
+  - l'ordre du clavier suit le document, qui est celui du téléphone, et
+    non l'œil sur un grand écran : dans la barre, « Fin de tour » vient
+    avant « Nouveau combat », qui est à sa gauche ; à 80rem et plus, le
+    clavier va de la carte et du panneau d'action aux personnages, puis
+    aux adversaires ;
+  - sur un téléphone, les initiales sont très petites dès que deux
+    jetons partagent une case (relevé par la relecture : 6,5 px dans un
+    rond de 12,7 px à 390 px, 4,9 px à 320 px), et les traits de la
+    grille sont pâles, de 1,18:1 à 1,35:1 selon le thème et le fond.
+    C'est la maquette ;
+  - à la première et à la dernière puissance d'une capacité, « − » ou
+    « + » est inactif sans dire pourquoi : il y faudrait une phrase
+    neuve ;
+  - ce que le § 17.7 range sous « Ce qui change par rapport à la
+    maquette » : la première rangée de la préparation, les noms sans
+    gras au journal, le nom court encore coupé à certaines largeurs.
 - **À l'auteur, à l'arrêt d'essais** (§ 13), ce que ni un document simulé
   ni un navigateur sans fenêtre ne montrent : le dépôt d'un
   glisser-déposer dans Firefox, à faire une fois à la main ; un vrai

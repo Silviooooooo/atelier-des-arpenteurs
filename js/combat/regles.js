@@ -39,7 +39,8 @@ export const PLAFOND_EXEMPLAIRES = 12;
 // poste chargé par deux navigateurs : 5 000 événements du genre le plus cher
 // (une capacité jouée par un protagoniste aux bornes de sa photographie) en
 // 4,7 s ; 5 000 du genre qui écrit le plus au journal en 0,3 s ; 5 000 du
-// moins cher en 0,02 s. Un combat ordinaire en compte de 100 à 3 000. La
+// moins cher en 0,02 s. Un combat ordinaire en compterait de 100 à 3 000
+// (estimé, non mesuré). La
 // borne était de 20 000 : le journal seul demandait alors 31 s, et une
 // photographie forgée, que rien ne bornait en tout, 30 ms par événement.
 export const EVENEMENTS_MAX = 5000;

@@ -493,6 +493,33 @@ test("« Jouer » n'existe que sur une fiche qu'on peut choisir, et rend sa comm
   }
 });
 
+test("rien ne s'actionne dans un en-tête, même sur une fiche qu'on peut choisir dès son premier rendu, ni avant le lancement", () => {
+  // Mission § 10.5 : le volet se déplie au clic sur le nom ; arbitrage § 7.6 :
+  // jamais un bouton dans un en-tête. L'en-tête ne se refait pas quand
+  // « Jouer » paraît : c'est au premier rendu qu'un bouton s'y glisserait.
+  const jouer = (id) => ({ commande: { choisir: id } });
+  const { partie, retirer } = monter({
+    pj: [aubepine({ jouer: jouer("pj1"), avant: avantDe("pj1", "D4") })],
+    adv: [chef({ jouer: jouer("adv2") }), marmiton1({ avant: avantDe("adv3", "E5") })],
+  });
+  try {
+    const entetes = [...partie.noeud.querySelectorAll("summary")];
+    assert.equal(entetes.length, 3);
+    for (const entete of entetes) {
+      for (const balise of ["button", "a", "input", "select", "textarea"]) assert.equal(entete.querySelectorAll(balise).length, 0, balise);
+    }
+    // Les boutons existent bien, ailleurs : dans le corps, et dans le groupe d'avant le lancement.
+    for (const id of ["pj1", "adv2"]) {
+      const bouton = repere(ficheDe(partie, id), "jouer");
+      assert.equal(bouton.parentNode.parentNode, ficheDe(partie, id).querySelector(".combat-fiche-corps"), id);
+    }
+    assert.equal(repere(ficheDe(partie, "adv3"), "jouer"), null);
+    assert.ok(repere(groupeDe(partie, "pj1"), "retirer"));
+  } finally {
+    retirer();
+  }
+});
+
 test("un état qui change seul (« a joué », les actions, une marque) ne refait que l'en-tête ; le corps garde ses nœuds", () => {
   const { partie, retirer } = monter();
   try {
@@ -979,6 +1006,8 @@ test("le texte du module : ses seuls imports, aucun mot interdit, aucun bouton �
   for (const interdit of ["innerHTML", "outerHTML", "insertAdjacent", ".style", "cssText", "confirm(", "Chargement de", "data-chargement", "localStorage", "indexedDB", "matchMedia", "classList", "closest(", "insertBefore"]) {
     assert.ok(!SOURCE.includes(interdit), `« ${interdit} » n'a pas sa place dans les fiches`);
   }
+  // Mission § 10.9 : le code n'écrit aucun style, pas même par un attribut.
+  assert.doesNotMatch(SOURCE, /\bstyle\s*[:=]|setAttribute\(\s*["'`]style/, "aucun style écrit par le code");
   assert.ok(!/["'`]disabled["'`]\s*[:,]/.test(SOURCE), "jamais disabled");
   assert.ok(!/addEventListener\(/.test(SOURCE), "aucun écouteur global : chaque écouteur passe par el()");
   assert.ok(!SOURCE.includes(String.fromCodePoint(0xa0)) && !SOURCE.includes(String.fromCodePoint(0x202f)), "aucune espace insécable");

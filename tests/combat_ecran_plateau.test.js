@@ -361,6 +361,13 @@ test("dans une case pleine, ceux qu'on peut choisir passent devant et les morts 
     // ligne à l'autre à chaque tour.
     partie.rendre(vueDe({ places: { pj1: "D4", adv3: "D4", adv4: "D4" }, jetons: { adv3: { choix: CHOISIR("adv3") }, adv4: { choix: CHOISIR("adv4") } } }), {});
     assert.deepEqual(titres(partie, "D4"), noms("pj1", "adv3", "adv4"));
+    // Sans aucun mort : la seule cible possible, quatrième de sa case, passe devant des vivants
+    // qu'on ne peut pas choisir (mission § 10.4 : la cible se choisit d'un clic sur son jeton).
+    partie.rendre(vueDe({ places: tous, jetons: { pj1: { marque: "joue", inactif: true }, adv2: { inactif: true }, adv3: { inactif: true }, adv4: { choix: CIBLER("adv4") } } }), {});
+    assert.deepEqual(titres(partie, "D4"), noms("pj1", "adv4", "adv2"));
+    assert.equal(inactif(jetonDe(partie, "adv4")), false);
+    partie.rendre(vueDe({ places: { adv2: "D4", adv3: "D4", adv4: "D4", adv5: "D4" }, jetons: { adv2: { inactif: true }, adv3: { inactif: true }, adv4: { inactif: true }, adv5: { choix: CIBLER("adv5") } } }), {});
+    assert.deepEqual(titres(partie, "D4"), noms("adv5", "adv2", "adv3"));
     // Un jeton écarté qui porterait un choix ne passe pas devant : il ne se choisit pas.
     partie.rendre(vueDe({ places: tous, jetons: { adv4: { choix: CIBLER("adv4"), inactif: true } } }), {});
     assert.deepEqual(titres(partie, "D4"), noms("pj1", "adv2", "adv3"));
@@ -960,6 +967,8 @@ test("le module : il n'écrit ni HTML ni style, n'importe que dom.js et deux con
   for (const interdit of ["innerHTML", "outerHTML", "insertAdjacentHTML", "document.write", ".style", "cssText", "confirm(", "alert(", "data-chargement", "Chargement de", "aria-live", "role: \"status\"", "localStorage", "indexedDB", "addEventListener", "getData("]) {
     assert.ok(!SOURCE.includes(interdit), `« ${interdit} » n'a pas sa place dans le plateau`);
   }
+  // Mission § 10.9 : le code n'écrit aucun style, pas même par un attribut.
+  assert.doesNotMatch(SOURCE, /\bstyle\s*[:=]|setAttribute\(\s*["'`]style/, "aucun style écrit par le code");
   assert.ok(!/["'`]disabled["'`]\s*[:,]/.test(SOURCE), "un bouton inactif garde le focus : aria-disabled, jamais disabled");
   assert.ok(!SOURCE.includes(String.fromCodePoint(0xa0)) && !SOURCE.includes(String.fromCodePoint(0x202f)), "aucune espace insécable");
   assert.match(SOURCE, /^\/\/ Le plateau du combat \(SPECIFICATION\.md, § 17/);

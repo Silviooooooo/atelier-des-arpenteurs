@@ -412,6 +412,26 @@ test("panneau d'action — la puissance : + et − émettent leur commande ; à 
   });
 });
 
+test("panneau d'action — la puissance à sa borne basse : − se tait et dit pourquoi, + émet la sienne", () => {
+  // Mission § 10.6 : des boutons + et − ; inactif, un bouton dit pourquoi. Les deux bornes se voient, chacune de son côté.
+  avecPanneau(({ noeud, rendre, appels }) => {
+    const puissance = { valeur: 1, moins: { actif: false, raison: "c'est la plus basse", commande: regler("facon", 0) }, plus: { actif: true, commande: regler("facon", 1) } };
+    rendre(vueDuGeste({ puissance }));
+    const [moins, plus] = tous(noeud.querySelector(".combat-puissance"), "button");
+    assert.equal(texteDe(moins), "−");
+    assert.equal(texteDe(plus), "+");
+    assert.equal(moins.getAttribute("aria-disabled"), "true");
+    assert.equal(moins.hasAttribute("disabled"), false, "inactif, il garde le focus");
+    assert.equal(texteDe(noeud.querySelector(`#${moins.getAttribute("aria-describedby")}`)), "c'est la plus basse");
+    assert.equal(plus.hasAttribute("aria-disabled"), false);
+    assert.equal(plus.hasAttribute("aria-describedby"), false);
+    moins.click();
+    assert.deepEqual(appels, []);
+    plus.click();
+    assert.deepEqual(appels, [{ commande: regler("facon", 1), origine: "panneau" }]);
+  });
+});
+
 test("panneau d'action — un réglage qui ne fait pas avancer le geste garde le focus : la puissance, une caractéristique ; tout autre le rend à la commande qui attend", () => {
   const retirer = installerDom();
   try {
