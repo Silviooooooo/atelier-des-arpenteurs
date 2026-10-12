@@ -91,7 +91,10 @@ test("partage — un fichier de plus de 64 Ko n'est pas même lu ; le lien garde
       emplacement: { origin: "https://silviooooooo.github.io", pathname: "/atelier-des-arpenteurs/" },
       navigateur: { clipboard: { writeText: async (t) => presse.push(t) } },
     });
-    await laisserFiler(50);
+    // Le lien se fabrique sans qu'on sache en combien de temps (compression) :
+    // on attend qu'il soit là, cinq secondes au plus, plutôt qu'une durée fixe
+    // qu'un poste chargé dépasse (mesuré le 12/10/2026 : deux échecs sur trois).
+    for (let essais = 0; essais < 100 && !panneau.querySelector("input")?.value; essais += 1) await laisserFiler(50);
     const adresse = panneau.querySelector("input").value;
     assert.match(adresse, /^https:\/\/silviooooooo\.github\.io\/atelier-des-arpenteurs\/\?demo=1#\/recevoir\/[A-Za-z0-9_-]+$/);
     assert.equal((await lireCode(adresse.split("#/recevoir/")[1], { mode: "demo" })).personnage.identite.nom, "Aubépine Crèmebrûlée");
