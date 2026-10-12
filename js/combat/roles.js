@@ -40,16 +40,17 @@ export const TABLE = Object.freeze([
 
 // Les deux façons de reconnaître, une par mode et jamais les deux à la fois :
 // un nom fictif ne doit pas câbler une capacité du vrai classeur qui
-// porterait ce nom par hasard, ni l'inverse.
+// porterait ce nom par hasard, ni l'inverse. « attendus » dit, d'un tableau,
+// les rôles dont le mode attend un nom.
 const PREFIXE = "sha256:";
 const RECONNAITRE = {
   demo: {
-    attendus: TABLE.filter((entree) => entree.demo !== null),
+    attendus: (table) => table.filter((entree) => entree.demo !== null),
     marque: (entree) => cle(entree.demo),
     marqueDe: async (cleDuNom) => cleDuNom,
   },
   reel: {
-    attendus: TABLE,
+    attendus: (table) => [...table],
     marque: (entree) => entree.empreinte,
     marqueDe: async (cleDuNom) => (await empreinte(cleDuNom)).slice(PREFIXE.length),
   },
@@ -60,8 +61,9 @@ const RECONNAITRE = {
 // synchrones. La banque est un objet neuf à chaque ouverture ou republication.
 const memoire = new WeakMap();
 
-async function dresser(banque, mode) {
-  const { attendus, marque, marqueDe } = RECONNAITRE[mode];
+async function dresser(banque, mode, table) {
+  const { marque, marqueDe } = RECONNAITRE[mode];
+  const attendus = RECONNAITRE[mode].attendus(table);
   const roleParMarque = new Map(attendus.map((entree) => [marque(entree), entree.role]));
   const cles = new Set();
   for (const capacite of Array.isArray(banque.capacites) ? banque.capacites : []) {
@@ -81,17 +83,25 @@ async function dresser(banque, mode) {
  * l'ordre du tableau, les libellés des rôles que ce mode attend et qu'aucune
  * capacité de la banque ne porte. Le résultat est le même objet d'un appel à
  * l'autre : qui le reçoit ne le modifie pas.
+ *
+ * « table » est le tableau des rôles : TABLE, toujours, pour le jeu. Seul un
+ * contrôle en donne un autre, de la même forme, pour voir la reconnaissance
+ * par empreinte sur un nom fictif, condensé à l'exécution : aucun nom du vrai
+ * classeur ne peut s'écrire dans le dépôt. Un tel tableau ne se mémorise pas,
+ * et ne change rien à ce que la banque a mémorisé pour TABLE.
  */
-export async function tableDesRoles(banque, mode) {
+export async function tableDesRoles(banque, mode, table = TABLE) {
   if (!Object.hasOwn(RECONNAITRE, mode)) throw new TypeError(`Mode inconnu : ${mode}`);
   if (banque === null || typeof banque !== "object") throw new TypeError("La banque n'est pas ouverte.");
+  if (!Array.isArray(table)) throw new TypeError("Le tableau des rôles n'est pas une liste.");
+  if (table !== TABLE) return dresser(banque, mode, table);
   let parMode = memoire.get(banque);
   if (!parMode) {
     parMode = new Map();
     memoire.set(banque, parMode);
   }
   if (!parMode.has(mode)) {
-    const promesse = dresser(banque, mode);
+    const promesse = dresser(banque, mode, TABLE);
     parMode.set(mode, promesse);
     // Un échec (un navigateur sans condensat) ne se mémorise pas : la visite
     // suivante de l'écran réessaie.

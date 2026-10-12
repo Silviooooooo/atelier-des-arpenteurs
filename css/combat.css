@@ -25,11 +25,23 @@
 .combat textarea,
 .combat input {
   min-height: var(--cible-tactile);
-  font: inherit;
 }
 
 .combat button {
   min-width: var(--cible-tactile);
+}
+
+/* La police du site, pour tout ce qui s'actionne. « :where » ne pèse rien :
+   chaque classe garde ainsi la taille, la graisse et l'interligne qu'elle
+   se donne, ici (un dé, un jeton) comme dans ecran.css (.bouton). Écrite
+   sous « .combat button », cette règle l'emportait sur elles : les
+   étiquettes d'un dé sortaient de son cadre, les noms des jetons de leur
+   case (vu dans Edge et dans Firefox). */
+:where(.combat) button,
+:where(.combat) select,
+:where(.combat) textarea,
+:where(.combat) input {
+  font: inherit;
 }
 
 .combat input[type="checkbox"],
@@ -114,10 +126,14 @@
   background: var(--fond-2);
 }
 
+/* Le journal vide s'efface lui aussi : il peut recevoir le focus pour
+   défiler au clavier, et le clavier s'arrêtait sur une liste sans hauteur
+   (vu dans Edge, avant le lancement). */
 .combat-avis:empty,
 .combat-panneau:empty,
 .combat-case-liste:empty,
-.combat-copie:empty {
+.combat-copie:empty,
+.combat-lignes:empty {
   display: none;
 }
 
@@ -172,6 +188,23 @@
 }
 
 /* Le plateau */
+
+/* Son en-tête, comme sur la maquette : ce qu'est la carte et comment s'y
+   compte une distance ; puis, là où une souris survole, où lire un nom
+   entier. */
+.combat-plateau-tete {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--espace-1) var(--espace-3);
+  margin: 0 0 var(--espace-2);
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+.combat-plateau-survol {
+  display: none;
+}
 
 /* Onze colonnes et onze lignes : une bande de repères, puis dix cases. Les
    pistes « minmax(0, 1fr) » et le rapport carré fixent la taille des cases :
@@ -241,7 +274,6 @@
   min-width: 0;
   min-height: 0;
   margin: 0;
-  font: inherit;
 }
 
 /* Le focus se trace en dedans : en dehors, la case le couperait. */
@@ -300,6 +332,13 @@
   border-radius: 50%;
   color: var(--combat-sur-jeton);
   font-weight: var(--graisse-forte);
+}
+
+/* Trois signes (« M12 », à partir du dixième exemplaire d'un adversaire) ne
+   tiennent pas dans le rond à la taille des autres : mesuré de 320 à 414 px,
+   le rond en rognait 1,6 px de chaque côté. */
+.combat-initiales-longues {
+  font-size: 70%;
 }
 
 .combat-pj .combat-rond {
@@ -435,10 +474,28 @@
 
 /* Le panneau d'action et la préparation */
 
+.combat-preparation h2 {
+  margin-top: 0;
+}
+
+/* Un lien dans une phrase est une cible comme une autre (§ 9) : 44 px. */
+.combat-preparation a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--cible-tactile);
+}
+
 .combat-qui {
   margin: 0 0 var(--espace-2);
   font-size: var(--taille-sous-titre);
   overflow-wrap: anywhere;
+}
+
+/* Qui joue se lit d'abord ; ses actions et son souffle suivent, plus bas. */
+.combat-qui-suite {
+  color: var(--texte-2);
+  font-size: var(--taille-texte);
+  font-weight: normal;
 }
 
 .combat-etapes {
@@ -491,10 +548,22 @@
   align-items: flex-end;
 }
 
+/* L'intitulé d'une rangée de boutons (« Qui commence », « Arrivée : ») se
+   centre sur eux ; un champ, lui, s'aligne par le bas avec son bouton. */
+.combat-ligne > span {
+  align-self: center;
+}
+
 .combat-ligne .champ,
 .combat-reglages .champ,
 .combat-fiche-corps .champ {
   margin-bottom: 0;
+}
+
+/* Un nombre (un modificateur, un décalage, des exemplaires) tient en peu
+   de place : son champ ne prend pas toute la rangée. */
+.combat input[type="number"] {
+  width: calc(var(--espace-6) * 3);
 }
 
 .combat-groupe-titre {
@@ -551,6 +620,40 @@
   border-style: dashed;
   background: transparent;
   color: var(--texte-2);
+}
+
+/* La raison d'un bouton inactif lui est liée (aria-describedby) : un lecteur
+   d'écran la dit avec lui. À l'œil, elle se lit sous sa rangée quand on
+   survole le bouton, qu'on le touche ou qu'il a le focus. Écrite en clair à
+   côté de chaque bouton, elle se répétait treize fois pendant un geste et
+   défaisait les rangées (vu à 1 440 et à 390 px). */
+.combat-commandes,
+.combat-autres,
+.combat-groupe,
+.combat-cibles,
+.combat-choix,
+.combat-ligne {
+  position: relative;
+}
+
+.combat-raison {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 2;
+  display: none;
+  max-width: 100%;
+  padding: var(--espace-1) var(--espace-2);
+  border: var(--trait) solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--fond);
+  color: var(--texte);
+  font-size: var(--taille-petite);
+}
+
+.combat [aria-disabled="true"]:hover + .combat-raison,
+.combat [aria-disabled="true"]:focus + .combat-raison {
+  display: block;
 }
 
 .combat-degats {
@@ -626,6 +729,24 @@
   border-top: var(--trait) solid var(--separateur);
 }
 
+.combat-reglages h3 {
+  margin: 0 0 var(--espace-2);
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+/* Le texte de la capacité, toujours montré (mode assisté) : dans son cadre,
+   comme sur la maquette. */
+.combat-description {
+  margin: 0 0 var(--espace-3);
+  padding: var(--espace-2);
+  border: var(--trait) solid var(--separateur);
+  border-radius: var(--rayon);
+  background: var(--fond);
+  font-size: var(--taille-petite);
+  overflow-wrap: anywhere;
+}
+
 .combat-contexte p,
 .combat-bilan {
   margin: 0 0 var(--espace-1);
@@ -645,8 +766,8 @@
   align-items: center;
   justify-content: center;
   gap: var(--trait);
-  width: calc(var(--cible-tactile) + var(--espace-4));
-  height: calc(var(--cible-tactile) + var(--espace-4));
+  width: calc(var(--cible-tactile) + var(--espace-5));
+  height: calc(var(--cible-tactile) + var(--espace-5));
   padding: 0;
   border: calc(var(--trait) * 2) solid var(--bordure);
   border-radius: calc(var(--rayon) * 2);
@@ -658,11 +779,20 @@
   cursor: default;
 }
 
+/* Un dé grandit avec ce qu'il porte (« Localisation », « jambe gauche »),
+   jamais en deçà de son carré. */
+.combat-chaine .combat-de {
+  width: auto;
+  min-width: calc(var(--cible-tactile) + var(--espace-5));
+  padding: 0 var(--espace-1);
+}
+
 .combat-de-titre,
 .combat-de-detail {
   color: var(--texte-2);
   font-size: var(--taille-petite);
   font-weight: normal;
+  white-space: nowrap;
 }
 
 .combat-de-valeur {
@@ -781,7 +911,7 @@
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   grid-template-areas:
     "pastille nom actions repli"
-    "pastille sous statut repli";
+    "pastille sous sous repli";
   align-items: center;
   gap: 0 var(--espace-2);
   min-height: var(--cible-tactile);
@@ -832,18 +962,25 @@
   overflow-wrap: anywhere;
 }
 
-.combat-sous {
+/* Sous le nom, une seule ligne, comme sur la maquette : l'espèce et
+   l'archétype (ou les types), puis l'état, qui s'y enchaîne. Rangé à droite
+   sous les actions, l'état élargissait leur colonne et faisait passer le nom
+   d'un mort sur deux lignes. */
+.combat-sous-ligne {
   grid-area: sous;
   color: var(--texte-2);
   font-size: var(--taille-petite);
   overflow-wrap: anywhere;
 }
 
+/* Le point qui les sépare tient à la ligne, non à l'état : un état passé à
+   la ligne ne commence pas par un point. */
+.combat-sous:not(:last-child)::after {
+  content: " ·";
+}
+
 .combat-statut {
-  grid-area: statut;
-  justify-self: end;
-  color: var(--texte-2);
-  font-size: var(--taille-petite);
+  white-space: nowrap;
 }
 
 .combat-actions {
@@ -877,6 +1014,11 @@
   background: var(--combat-mort);
 }
 
+/* Un mort n'a plus d'action à montrer. */
+.combat-fiche.morte .combat-actions {
+  display: none;
+}
+
 .combat-fiche-corps {
   display: flex;
   flex-direction: column;
@@ -890,27 +1032,51 @@
   margin: 0;
 }
 
+/* Une jauge, comme sur la maquette : son nom, ses cases qui se partagent la
+   largeur, son nombre rangé à droite. Les noms du souffle et du corps ont la
+   même largeur, pour que leurs cases s'alignent. */
 .combat-jauge {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   align-self: stretch;
-  gap: var(--espace-1);
+  gap: calc(var(--trait) * 2);
   font-size: var(--taille-petite);
+}
+
+.combat-jauge > :first-child {
+  flex: none;
+  min-width: var(--largeur-etiquette);
+  margin-right: var(--espace-1);
+}
+
+.combat-jauge > :last-child {
+  flex: none;
+  margin-left: auto;
+  padding-left: var(--espace-1);
+  color: var(--texte-2);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Une case de jauge : pleine, ou vide. Le nombre l'accompagne toujours. */
 .combat-point {
   display: inline-block;
-  flex: none;
+  flex: 1 1 0;
   width: var(--espace-2);
+  max-width: var(--espace-6);
   height: var(--espace-3);
-  border: var(--trait) solid var(--bordure);
+  border: var(--trait) solid var(--texte-2);
   border-radius: calc(var(--rayon) / 2);
   background: var(--texte-2);
 }
 
-.combat-point.vide {
+/* Le souffle se dépense : il est de la couleur d'accent. */
+.combat-jauge-souffle .combat-point {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.combat-jauge .combat-point.vide {
+  border-color: var(--bordure);
   background: transparent;
 }
 
@@ -924,8 +1090,9 @@
 
 .combat-zones th,
 .combat-zones td {
-  padding: var(--espace-1) var(--espace-1) var(--espace-1) 0;
+  padding: calc(var(--trait) * 2) var(--espace-2) calc(var(--trait) * 2) 0;
   border-bottom: var(--trait) solid var(--separateur);
+  line-height: var(--interligne-titre);
   text-align: left;
   vertical-align: middle;
 }
@@ -935,8 +1102,38 @@
   font-weight: normal;
 }
 
+/* Les faces du d20 se lisent d'un bloc ; l'armure se range à droite, pour
+   que ses chiffres s'alignent. */
+.combat-zones td:first-child {
+  color: var(--texte-2);
+  white-space: nowrap;
+}
+
+.combat-zones th:nth-child(3),
+.combat-zones td:nth-child(3) {
+  padding-right: var(--espace-3);
+  text-align: right;
+}
+
+/* Une zone abrégée garde son nom entier en titre : pas de soulignement. */
+.combat-zones abbr {
+  text-decoration: none;
+}
+
+/* La résistance, en cases à cocher comme sur la maquette : une case intacte
+   est vide, une case perdue est pleine, de la couleur de l'échec. Son compte
+   est dit à côté, pour qui ne voit pas les cases. */
 .combat-zones .combat-point {
+  width: var(--espace-2);
+  height: var(--espace-2);
   margin-right: var(--trait);
+  border-radius: var(--trait);
+  background: transparent;
+}
+
+.combat-zones .combat-point.vide {
+  border-color: var(--combat-echec);
+  background: var(--combat-echec);
 }
 
 .combat-zones .abimee {
@@ -1063,9 +1260,20 @@
     display: none;
   }
 
+  /* Comme sur la maquette, le bouton principal ferme la barre : « Nouveau
+     combat » passe devant « Fin de tour ». Le document garde l'ordre du
+     téléphone (« Fin de tour », puis le menu). */
   .combat-autres {
     display: flex;
     flex: 0 1 auto;
+    order: -1;
+  }
+
+  /* La raison de « Fin de tour » se lit sous lui, au bout de la barre, et
+     non sous « Nouveau combat ». */
+  .combat-commandes > .combat-raison {
+    right: 0;
+    left: auto;
   }
 
   .combat-plateau,
@@ -1110,20 +1318,25 @@
   .combat-jeton,
   .combat-jeton:only-child,
   .combat-jeton.cible {
-    grid-column: 1;
+    grid-column: 1 / -1;
     display: flex;
     align-items: center;
     gap: calc(var(--trait) * 2);
     width: auto;
     max-width: 100%;
-    padding: 0 var(--espace-1) 0 0;
+    padding: 0 var(--espace-1) 0 var(--trait);
     border-width: calc(var(--trait) * 2);
     font-size: var(--taille-petite);
     font-size: min(var(--taille-petite), 20cqi);
     line-height: var(--interligne-titre);
   }
 
+  /* Les deux premiers jetons (qui joue, puis la cible) ont toute la largeur
+     de la case ; le troisième partage sa ligne avec « +k », quand il existe.
+     Dans une colonne à lui sur les trois lignes, « +k » ne laissait aux noms
+     que 26 px sur 71 (mesuré à 1 440 px). */
   .combat-jeton ~ .combat-jeton ~ .combat-jeton {
+    grid-column: 1;
     display: flex;
   }
 
@@ -1141,12 +1354,28 @@
     display: none;
   }
 
+  /* Le nom court se coupe s'il le faut, mais jamais le numéro d'un
+     exemplaire : sans lui, deux adversaires d'une même case portaient le
+     même nom coupé. */
   .combat-nom-court {
-    display: block;
+    display: flex;
+    gap: calc(var(--trait) * 3);
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  .combat-nom-debut {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+  }
+
+  .combat-nom-numero {
+    flex: none;
+  }
+
+  .combat-plateau-survol {
+    display: inline;
   }
 
   .combat-plus-etroit {
@@ -1155,7 +1384,7 @@
 
   .combat-plus-large {
     grid-column: 2;
-    grid-row: 1 / span 3;
+    grid-row: 3;
     display: block;
     padding: 0 calc(var(--trait) * 2);
     font-size: var(--taille-petite);
@@ -1178,8 +1407,12 @@
   }
 
   .combat-de {
-    width: calc(var(--cible-tactile) + var(--espace-5));
-    height: calc(var(--cible-tactile) + var(--espace-5));
+    width: calc(var(--cible-tactile) + var(--espace-6));
+    height: calc(var(--cible-tactile) + var(--espace-6));
+  }
+
+  .combat-chaine .combat-de {
+    min-width: calc(var(--cible-tactile) + var(--espace-6));
   }
 
   .combat-lignes {

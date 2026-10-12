@@ -316,6 +316,40 @@ test("les maîtrises — le désavantage tient au poids de l'objet, à la positi
   assert.ok(v.capacites.filter((c) => c.groupe.genre !== "arme").every((c) => c.facons.every((f) => f.desavantage === false)));
 });
 
+// Relecture de fin de groupe (lot 4) : les rangs de maîtrise se lisaient sur
+// toutes les capacités de la fiche, celles d'une arme rangée au sac comprises.
+test("les maîtrises — seule compte celle qu'une origine valable donne : celle d'une arme rangée au sac ne lève rien", async () => {
+  // Aubépine tient la Spatule souple, agile ; son archétype lui donne la maîtrise du lourd, non celle de l'agile.
+  const spatule = (modifier) => personnageEssai((p) => {
+    p.equipement[0] = { nom: "Spatule souple", choix: [], qualite: "2", place: "arme" };
+    p.archetype.choix = ["Solo du chef", "Maîtrise du lourd"];
+    modifier?.(p);
+  });
+  const desavantages = (v) => ["Frappe", "Moulinet farineux"].map((nom) => laCapacite(v, nom).facons.map((f) => f.desavantage));
+  const donnePar = (objet) => monde((banque) => {
+    blocDe(banque, objet).capacites.push({ forme: "simple", nom: "Maîtrise de l'agile" });
+  });
+
+  // Le Rouleau de fonte, rangé au sac, la donne : elle n'est pas photographiée, et ne lève aucun désavantage.
+  const auSac = valeursDe(pj(await donnePar("Rouleau de fonte"), spatule()));
+  assert.ok(!noms(auSac).includes("Maîtrise de l'agile"));
+  assert.deepEqual(desavantages(auSac), [[true], [true]]);
+  // Le même rouleau, tenu : sa maîtrise vaut, mais c'est lui l'arme, et il est lourd.
+  const tenu = valeursDe(pj(await donnePar("Rouleau de fonte"), personnageEssai((p) => {
+    p.equipement[0].place = "sac";
+    p.equipement[1].place = "arme";
+  })));
+  assert.ok(noms(tenu).includes("Maîtrise de l'agile"));
+  // La même maîtrise par l'archétype : elle lève le désavantage de la première capacité de la spatule.
+  assert.deepEqual(desavantages(valeursDe(pj(DEMO, spatule((p) => {
+    p.archetype.choix = ["Solo du chef", "Maîtrise de l'agile"];
+  })))), [[false], [true]]);
+  // Par un objet qui donne ses capacités où qu'il soit (le bouillon, au sac) : elle compte aussi.
+  const bue = valeursDe(pj(await donnePar("Bouillon revigorant"), spatule()));
+  assert.ok(noms(bue).includes("Maîtrise de l'agile"));
+  assert.deepEqual(desavantages(bue), [[false], [true]]);
+});
+
 test("la position compte les groupes au choix et les entrées illisibles du bloc", async () => {
   // Une entrée glissée devant Frappe la fait passer en deuxième position : la maîtrise de niveau 1 ne la couvre plus.
   const spatule = personnageEssai((p) => {
@@ -865,4 +899,217 @@ test("le module — aucun nom de bloc ni de capacité de la démonstration, et p
   assert.doesNotMatch(source, /groupes\.style\.|\.style\s*\[/);
   // Le rôle d'une capacité ne se décide qu'ici et dans la table des rôles.
   assert.match(source, /roles\?\.parCle\?\.get\(cle\(/);
+});
+
+// ─── Mise à l'épreuve (lot 4) : ce que les casses du code n'avaient pas fait échouer ───
+
+const SANS_EFFET = { puissance: "0", cout_souffle: "", cout_lien: "", elements: [], description: "" };
+
+test("une capacité que donnent deux blocs prend le premier groupe dans l'ordre du panneau, et n'a qu'un bouton", async () => {
+  // Goûter vient du bloc de base ; l'archétype la donne aussi : elle passe sous l'archétype.
+  const m = await monde((banque) => {
+    blocDe(banque, "Saucier").capacites.push({ forme: "simple", nom: "Goûter" });
+  });
+  const v = valeursDe(pj(m));
+  assert.equal(noms(v).filter((nom) => nom === "Goûter").length, 1);
+  assert.deepEqual(laCapacite(v, "Goûter").groupe, { genre: "archetype", titre: "Saucier" });
+  assert.equal(laCapacite(v, "Goûter").role, "jet_de_caracteristique", "son rôle tient à son nom, pas à son groupe");
+  // Sans cet ajout, elle reste sous le bloc de base.
+  assert.deepEqual(laCapacite(valeursDe(pj(DEMO)), "Goûter").groupe, { genre: "base", titre: "Gestes de cuisine" });
+});
+
+test("les capacités d'un même objet se suivent : un seul groupe par objet", async () => {
+  // « Boire le bouillon » est aussi donnée par le Plastron, au sac : il ne compte pas, mais la fiche la rencontre là,
+  // avant le Couvercle. Le Bouillon donne une seconde capacité, que la fiche rencontre après le Couvercle.
+  const m = await monde((banque) => {
+    banque.capacites.push({ nom: "Tour de main", variantes: [{ ...SANS_EFFET }] });
+    blocDe(banque, "Plastron de fonte").capacites.push({ forme: "simple", nom: "Boire le bouillon" });
+    blocDe(banque, "Bouillon revigorant").capacites.push({ forme: "simple", nom: "Tour de main" });
+  });
+  const v = valeursDe(pj(m));
+  const objets = v.capacites.filter((c) => c.groupe.genre === "objet").map((c) => [c.nom, c.groupe.titre]);
+  assert.deepEqual(objets, [["Boire le bouillon", "Bouillon revigorant"], ["Tour de main", "Bouillon revigorant"], ["Se couvrir", "Couvercle de marmite"]]);
+  assert.equal(new Set(groupes(v)).size, groupes(v).length, "aucun groupe ne s'ouvre deux fois");
+});
+
+test("une portée écrite 0 et un seul dé de localisation écrit se lisent tels quels, sans avertissement", async () => {
+  const m = await monde((banque) => {
+    blocDe(banque, "Couteau d'office").parametres.push({ nom: "portee", valeur: "0", cible: "Frappe" }, { nom: "loc_multiple", valeur: "1", cible: "Frappe" });
+  });
+  const { photo } = pj(m);
+  const frappe = laCapacite(photo.valeurs, "Frappe").facons[0];
+  assert.deepEqual([frappe.portee, frappe.locMultiple], [0, 1]);
+  assert.equal(laCapacite(photo.valeurs, "Émincer").facons[0].portee, 1, "l'autre capacité garde la portée du couteau");
+  assert.deepEqual(photo.avertissements, []);
+});
+
+test("le N d'un passif câblé est le niveau de sa capacité, pas celui d'une autre", () => {
+  const v = valeursDe(pj(DEMO, personnageEssai((p) => {
+    p.niveaux = [{ capacite: "Réduction", niveau: 2 }];
+  })));
+  assert.deepEqual(
+    v.passifs.map((passif) => [v.capacites[passif.capacite].nom, passif.role, passif.niveau]),
+    [["Réduction", "degrossir", 2], ["Vif", "bonus_agilite", 1], ["Solo du chef", "seul_sur_sa_case", 1]],
+  );
+  assert.equal(laCapacite(v, "Réduction").niveau, 2);
+});
+
+// Relecture de fin de groupe (lot 4) : aucun adversaire de la démonstration ne
+// porte de passif câblé, et les contrôles du moteur posent les leurs à la
+// main. Rien ne tenait donc la chaîne « ligne de la banque, rôle reconnu,
+// passif au rang écrit ».
+test("un adversaire à passifs câblés — chacun porte son rôle, au rang que sa ligne écrit ; sans ces capacités, aucun", async () => {
+  const m = await monde((banque) => {
+    banque.adversaires.push(
+      ligneAdversaire("Second de cuisine", { capacites: "Brigade[2], Frappe, Réduction[3], Costaud" }),
+      ligneAdversaire("Second de salle", { capacites: "Frappe" }),
+    );
+  });
+  const passifs = (v) => v.passifs.map((passif) => [v.capacites[passif.capacite].nom, passif.role, passif.niveau]);
+
+  const cuisine = valeursDe(adv(m, "Second de cuisine"));
+  assert.deepEqual(passifs(cuisine), [["Brigade", "en_meute", 2], ["Réduction", "degrossir", 3], ["Costaud", "bonus_force", 1]]);
+  assert.deepEqual(cuisine.capacites.map((c) => [c.nom, c.role, c.niveau]), [["Brigade", "en_meute", 2], ["Frappe", null, 0], ["Réduction", "degrossir", 3], ["Costaud", "bonus_force", 1]]);
+  // L'indice d'un passif désigne sa capacité, même quand une capacité sans rôle s'intercale.
+  assert.deepEqual(cuisine.passifs.map((passif) => passif.capacite), [0, 2, 3]);
+  assert.deepEqual(passifs(valeursDe(adv(m, "Second de salle"))), [], "sans capacité câblée, aucun passif");
+
+  // Le mode décide : en mode réel, ces noms de la démonstration ne câblent rien.
+  const reel = await monde((banque) => {
+    banque.adversaires.push(ligneAdversaire("Second de cuisine", { capacites: "Brigade[2], Frappe, Réduction[3], Costaud" }));
+  }, "reel");
+  assert.deepEqual(valeursDe(adv(reel, "Second de cuisine")).passifs, []);
+  // Un rôle qui n'est pas un passif (le déplacement du Chef de partie) n'en fait pas un.
+  const chef = valeursDe(adv(DEMO, "Chef de partie"));
+  assert.equal(laCapacite(chef, "Pas chassé").role, "deplacement");
+  assert.deepEqual(chef.passifs, []);
+});
+
+test("deux cents avertissements tiennent tous ; le deux cent unième fait place à la phrase qui compte", async () => {
+  // Cent capacités, deux avertissements chacune ; la cent unième, s'il y en a une, n'en laisse qu'un.
+  const avec = (combien) => monde((banque) => {
+    const saucier = blocDe(banque, "Saucier");
+    for (let k = 1; k <= 101; k += 1) {
+      const nom = `Tour de main ${k}`;
+      banque.capacites.push({ nom, variantes: [{ ...SANS_EFFET }] });
+      saucier.capacites.push({ forme: "simple", nom });
+      if (2 * k - 1 <= combien) saucier.parametres.push({ nom: "portee", valeur: "loin", cible: nom });
+      if (2 * k <= combien) saucier.parametres.push({ nom: "loc_multiple", valeur: "peu", cible: nom });
+    }
+  });
+  assert.equal(BORNES_PHOTO.avertissements, 200);
+  const juste = pj(await avec(200)).photo.avertissements;
+  assert.equal(juste.length, 200);
+  assert.equal(juste.at(-1), "« Tour de main 100 » : son nombre de dés de localisation, « peu », ne se lit pas ; il vaut 1.");
+  assert.ok(juste.every((ligne) => ligne.startsWith("« Tour de main ")), "aucune phrase de décompte");
+  const trop = pj(await avec(201)).photo.avertissements;
+  assert.equal(trop.length, 200);
+  assert.equal(trop.at(-2), "« Tour de main 100 » : sa portée, « loin », ne se lit pas ; elle vaut 0.");
+  assert.equal(trop.at(-1), "Et 2 autres avertissements.");
+});
+
+test("Passif, Intervention et Dégâts se reconnaissent par cle() : la casse et les accents n'y changent rien", async () => {
+  const m = await monde((banque) => {
+    capaciteDe(banque, "Nez fin").variantes[0].elements = [{ nom: "PASSIF" }];
+    capaciteDe(banque, "Dressage minute").variantes[0].elements = [{ nom: "intervention" }];
+    banque.capacites.push({ nom: "Coup de bec", variantes: [{ ...SANS_EFFET, elements: [{ nom: "degats" }] }] });
+    blocDe(banque, "Saucier").capacites.push({ forme: "simple", nom: "Coup de bec" });
+  });
+  const v = valeursDe(pj(m));
+  assert.deepEqual([laCapacite(v, "Nez fin").facons[0].passif, laCapacite(v, "Nez fin").facons[0].intervention], [true, false]);
+  assert.deepEqual([laCapacite(v, "Dressage minute").facons[0].passif, laCapacite(v, "Dressage minute").facons[0].intervention], [false, true]);
+  assert.equal(laCapacite(v, "Coup de bec").facons[0].attaque, true);
+});
+
+test("la position d'une capacité est celle de l'entrée qui la donne : une option qui n'est pas choisie ne la donne pas", async () => {
+  // Devant Frappe, un groupe au choix qui propose aussi Moulinet farineux ; le personnage y choisit l'autre option.
+  // Moulinet farineux lui vient donc de son entrée simple, la troisième : la maîtrise de niveau 2 ne la couvre pas.
+  const m = await monde((banque) => {
+    blocDe(banque, "Spatule souple").capacites.unshift({ forme: "choix", options: ["Moulinet farineux", "Choc sourd"] });
+  });
+  const avec = (choix, niveau) => valeursDe(pj(m, personnageEssai((p) => {
+    p.equipement[0] = { nom: "Spatule souple", choix: [choix], qualite: "2", place: "arme" };
+    p.niveaux = niveau > 1 ? [{ capacite: "Maîtrise de l'agile", niveau }] : [];
+  })));
+  const moulinet = (v) => laCapacite(v, "Moulinet farineux").facons.at(-1).desavantage;
+  assert.deepEqual([moulinet(avec("Choc sourd", 2)), moulinet(avec("Choc sourd", 3))], [true, false]);
+  // Choisie dans le groupe, elle prend sa position : la première.
+  assert.equal(moulinet(avec("Moulinet farineux", 1)), false);
+});
+
+test("l'élément Dégâts fait une attaque à lui seul, sans valeur de dégâts, dans les deux camps", async () => {
+  const m = await monde((banque) => {
+    banque.capacites.push({ nom: "Coup de bec", variantes: [{ ...SANS_EFFET, elements: [{ nom: "Dégâts" }] }] });
+    banque.capacites.push({ nom: "Coup d'aile", variantes: [{ ...SANS_EFFET, elements: [{ nom: "Dégâts" }, { nom: "Intervention" }] }] });
+    banque.capacites.push({ nom: "Bec acéré", variantes: [{ ...SANS_EFFET, elements: [{ nom: "Dégâts" }, { nom: "Passif" }] }] });
+    blocDe(banque, "Saucier").capacites.push({ forme: "simple", nom: "Coup de bec" }, { forme: "simple", nom: "Coup d'aile" }, { forme: "simple", nom: "Bec acéré" });
+    banque.adversaires.push(ligneAdversaire("Goéland", { capacites: "Coup de bec, Coup d'aile, Bec acéré" }));
+  });
+  for (const v of [valeursDe(pj(m)), valeursDe(adv(m, "Goéland"))]) {
+    const bec = laCapacite(v, "Coup de bec").facons[0];
+    assert.deepEqual([bec.attaque, bec.degats, bec.arme, bec.elements], [true, null, null, ["Dégâts"]], v.nom);
+    const aile = laCapacite(v, "Coup d'aile").facons[0];
+    assert.deepEqual([aile.attaque, aile.intervention], [false, true], `${v.nom} : une intervention n'est pas une attaque`);
+    const acere = laCapacite(v, "Bec acéré").facons[0];
+    assert.deepEqual([acere.attaque, acere.passif], [false, true], `${v.nom} : un passif n'est pas une attaque`);
+  }
+});
+
+test("chez un adversaire, une intervention ou un passif que son arme dote de dégâts n'est pas une attaque", async () => {
+  const m = await monde((banque) => {
+    banque.blocs.push({ nom: "Louche creuse", type: "Arme", elements: [{ nom: "Arme" }], capacites: [{ forme: "simple", nom: "Pas de côté" }, { forme: "simple", nom: "Nez fin" }, { forme: "simple", nom: "Goûter" }], parametres: [{ nom: "degats", valeur: "1/2/3", cible: null }], notes: "" });
+    banque.adversaires.push(ligneAdversaire("Goéland", { equipement: "Louche creuse" }));
+  });
+  const v = valeursDe(adv(m, "Goéland"));
+  assert.deepEqual(v.capacites.map((c) => [c.nom, c.facons.map((f) => [f.arme, f.degats, f.intervention, f.passif, f.attaque])]), [
+    ["Pas de côté", [[0, [1, 2, 3], true, false, false]]],
+    ["Nez fin", [[0, [1, 2, 3], false, true, false]]],
+    ["Goûter", [[0, [1, 2, 3], false, false, true]]],
+  ]);
+});
+
+test("chez un adversaire, sans façon armée : le désavantage ne vaut que si tous les objets qui donnent la capacité la gênent", async () => {
+  const louche = (nom, elements) => ({ nom, type: "Arme", elements: elements.map((element) => ({ nom: element })), capacites: [{ forme: "simple", nom: "Goûter" }], parametres: [], notes: "" });
+  const m = await monde((banque) => {
+    banque.blocs.push(louche("Louche creuse", ["Arme", "Agile"]), louche("Louche plate", ["Arme"]));
+    banque.adversaires.push(ligneAdversaire("Goéland", { equipement: "Louche creuse" }), ligneAdversaire("Mouette rieuse", { equipement: "Louche creuse, Louche plate" }));
+  });
+  const gouter = (nom) => laCapacite(valeursDe(adv(m, nom)), "Goûter").facons.map((f) => [f.arme, f.desavantage]);
+  assert.deepEqual(gouter("Goéland"), [[null, true]], "agile, sans maîtrise de l'agile");
+  assert.deepEqual(gouter("Mouette rieuse"), [[null, false]], "la louche plate, sans poids, la donne sans gêne");
+});
+
+test("chez un adversaire, le groupe d'une capacité est l'arme de sa première façon armée, même après une façon sans arme", async () => {
+  const m = await monde((banque) => {
+    banque.blocs.push({ nom: "Poivrière", type: "Équipement", elements: [], capacites: [{ forme: "simple", nom: "Frappe" }], parametres: [{ nom: "degats", valeur: "1/2/3", cible: null }], notes: "" });
+    banque.adversaires.push(ligneAdversaire("Goéland", { equipement: "Poivrière, Couteau d'office" }));
+  });
+  const frappe = laCapacite(valeursDe(adv(m, "Goéland")), "Frappe");
+  assert.deepEqual(frappe.facons.map((f) => [f.arme, f.libelle, f.degats]), [[null, "Poivrière", [1, 2, 3]], [0, "Couteau d'office", [3, 8, 20]]]);
+  assert.deepEqual(frappe.groupe, { genre: "arme", titre: "Couteau d'office" });
+});
+
+test("un avertissement ne se répète pas d'une puissance à l'autre de la même capacité", async () => {
+  // Flambage a deux puissances jouables : sa portée illisible se dit une fois.
+  const m = await monde((banque) => {
+    blocDe(banque, "Saucier").parametres.push({ nom: "portee", valeur: "loin", cible: "Flambage" });
+  });
+  const { photo } = pj(m);
+  assert.deepEqual(laCapacite(photo.valeurs, "Flambage").facons.map((f) => [f.puissance, f.portee]), [[1, 0], [2, 0]]);
+  assert.deepEqual(photo.avertissements, ["« Flambage » : sa portée, « loin », ne se lit pas ; elle vaut 0."]);
+});
+
+test("deux armes que leur nom nettoyé confond — le groupe de la seconde porte son libellé, « (2) » compris", async () => {
+  // Deux objets différents de la banque, dont les noms ne diffèrent que par un caractère de contrôle : une fois
+  // nettoyés pour le journal, c'est le même nom, et seul le libellé les distingue.
+  const jumelle = `Spatule${SONNETTE}souple`;
+  const m = await monde((banque) => {
+    banque.blocs.push({ nom: jumelle, type: "Arme", elements: [{ nom: "Arme" }], capacites: [{ forme: "simple", nom: "Goûter" }], parametres: [{ nom: "degats", valeur: "1/2/3", cible: null }], notes: "" });
+    banque.adversaires.push(ligneAdversaire("Goéland", { equipement: `Spatule souple, ${jumelle}` }));
+  });
+  const v = valeursDe(adv(m, "Goéland"));
+  assert.deepEqual(v.armes.map((arme) => [arme.nom, arme.libelle, arme.degats]), [["Spatule souple", "Spatule souple", [5, 10, 15]], ["Spatule souple", "Spatule souple (2)", [1, 2, 3]]]);
+  assert.deepEqual(groupes(v), ["arme : Spatule souple", "arme : Spatule souple (2)"]);
+  assert.deepEqual(laCapacite(v, "Goûter").facons.map((f) => [f.arme, f.libelle]), [[1, "Spatule souple (2)"]]);
+  assert.deepEqual(laCapacite(v, "Goûter").groupe, { genre: "arme", titre: "Spatule souple (2)" });
 });

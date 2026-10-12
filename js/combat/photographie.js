@@ -221,7 +221,14 @@ export function photographierPersonnage(banque, personnage, { index = indexerCre
   };
   const { noter, rendre } = carnet();
   const nomResolu = (nom) => index.capacite(nom)?.nom ?? nom;
-  const rangs = rangsDeMaitrise(fiche.capacites.filter((c) => !c.aVenir).map((c) => ({ capacite: index.capacite(c.nom), rang: c.niveau })));
+  // Les maîtrises possédées sont celles qu'une origine valable donne au
+  // combat, comme toute capacité : une maîtrise que seule une arme rangée au
+  // sac donnerait ne lève aucun désavantage.
+  const possedees = fiche.capacites
+    .filter((c) => !c.aVenir)
+    .map((c) => ({ capacite: index.capacite(c.nom), rang: c.niveau, sources: c.sources }))
+    .filter(({ capacite, sources }) => sources.some((source) => origineDe(index, fiche, source, capacite) !== null));
+  const rangs = rangsDeMaitrise(possedees);
 
   // La capacité de l'attaque à mains nues : celle que vise le paramètre
   // degats du bloc de base (§ 15.2). Elle ne tient pas à un nom.

@@ -89,6 +89,7 @@ export function acteurCourant(etat, choisi) {
 
 const ABSENTE = "absente de la banque";
 const COUT_ILLISIBLE = "coût illisible dans la banque";
+const AUCUNE_CASE = "aucune case à sa portée";
 const PASSIF = "Passif à cette puissance.";
 const PLUS_D_ACTION = "Plus d'action à ce tour.";
 
@@ -117,13 +118,23 @@ function resteDeLien(courant, capacite) {
   return Math.max(0, ...courant.liens.map((jauge) => jauge.points));
 }
 
+// Les cases où mène un déplacement, depuis une case : à une distance de 1 à
+// sa puissance.
+const casesDuDeplacement = (depart, facon) => casesEntre(depart, 1, facon?.puissance ?? 0);
+
 // Pourquoi une façon ne se joue pas, ou null si elle se paie. L'ordre des
-// raisons est celui où l'écran les dit.
+// raisons est celui où l'écran les dit : ce qui tient à la capacité d'abord
+// (la banque, puis un déplacement qui ne mène nulle part), ce qui tient au
+// moment ensuite (l'action, le souffle, le lien).
 function empechement(etat, id, capacite, facon, { x = 0, jauge = null } = {}) {
   if (facon.passif) return PASSIF;
   const cout = coutDe(facon, x);
   if (cout === null) return COUT_ILLISIBLE;
   const courant = courantDe(etat, id);
+  // Un déplacement à la puissance 0 (une capacité de déplacement qui
+  // n'évolue pas) n'offre aucune case : son bouton le dit, au lieu d'ouvrir
+  // un geste sans issue.
+  if (capacite.role === "deplacement" && casesDuDeplacement(courant?.case ?? null, facon).length === 0) return AUCUNE_CASE;
   if (courant === null || courant.actions < ACTIONS_D_UN_GESTE) return PLUS_D_ACTION;
   if (cout.souffle > courant.souffle) return `Pas assez de souffle : ${accorder(cout.souffle, "demandé")}, ${accorder(courant.souffle, "restant")}.`;
   // Un adversaire ne paie pas le lien : rien ne peut lui en manquer.
@@ -274,7 +285,7 @@ export function cibles(etat) {
 export function arrivees(etat) {
   const geste = enPreparation(etat);
   if (geste === null || geste.mode !== "deplacement") return [];
-  return casesEntre(courantDe(etat, geste.acteur)?.case ?? null, 1, faconDe(etat, geste)?.puissance ?? 0);
+  return casesDuDeplacement(courantDe(etat, geste.acteur)?.case ?? null, faconDe(etat, geste));
 }
 
 // Vrai quand le dé du geste se fait d'une ou deux caractéristiques au choix :

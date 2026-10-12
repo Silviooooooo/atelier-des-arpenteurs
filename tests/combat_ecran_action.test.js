@@ -207,6 +207,22 @@ test("panneau d'action — le titre tel que la vue l'écrit ; chaque étape fait
   avecPanneau(({ noeud, rendre }) => {
     rendre(vueAction());
     assert.equal(texteDe(noeud.querySelector("h2.combat-qui")), "Aubépine Crèmebrûlée joue — 1 action sur 2, souffle 10");
+    // Qui joue se lit d'abord : la suite (ses actions, son souffle) est dans
+    // un morceau à part, que la feuille écrit plus bas, comme sur la maquette.
+    // La coupe ne change pas le texte.
+    const titre = noeud.querySelector("h2.combat-qui");
+    assert.equal(titre.textContent, "Aubépine Crèmebrûlée joue — 1 action sur 2, souffle 10");
+    assert.equal(titre.children.length, 1);
+    assert.equal(titre.children[0].className, "combat-qui-suite");
+    assert.equal(titre.children[0].textContent, " — 1 action sur 2, souffle 10");
+    // Un nom qui porte lui-même un tiret reste entier devant : la coupe est au dernier.
+    rendre(vueAction({ titre: "Aubépine — dite la Brûlée joue — 2 actions sur 2, souffle 10" }));
+    assert.equal(noeud.querySelector("h2.combat-qui").textContent, "Aubépine — dite la Brûlée joue — 2 actions sur 2, souffle 10");
+    assert.equal(noeud.querySelector(".combat-qui-suite").textContent, " — 2 actions sur 2, souffle 10");
+    // Sans tiret, rien ne se coupe.
+    rendre(vueAction({ titre: "Aubépine Crèmebrûlée joue" }));
+    assert.equal(noeud.querySelector("h2.combat-qui").children.length, 0);
+    rendre(vueAction());
     const etapes = tous(noeud, "ol.combat-etapes li");
     assert.deepEqual(etapes.map(texteDe), ["Capacité", "Cible", "Jet d'attaque", "Localisation", "Interventions", "Dégâts"]);
     assert.deepEqual(etapes.map((li) => li.className), ["fait", "fait", "en-cours", "", "", ""]);
@@ -287,6 +303,13 @@ test("panneau d'action — un bouton inactif garde le focus, dit pourquoi, et ne
     const raison = noeud.querySelector(`#${emincer.getAttribute("aria-describedby")}`);
     assert.equal(texteDe(raison), "il manque du souffle (5)");
     assert.equal(raison.parentNode, emincer.parentNode, "la raison est à côté du bouton, jamais dedans");
+    // Juste après lui, avec sa classe : c'est ainsi que la feuille la montre
+    // sous la rangée quand on survole le bouton ou qu'il a le focus, et la
+    // tient hors de la vue le reste du temps.
+    const rangee = emincer.parentNode.children;
+    assert.equal(rangee[rangee.indexOf(emincer) + 1], raison);
+    assert.equal(raison.className, "combat-raison");
+    assert.equal(raison.tagName, "SPAN");
 
     const flambage = leBouton(noeud, "Flambage");
     assert.equal(texteDe(noeud.querySelector(`#${flambage.getAttribute("aria-describedby")}`)), "absente de la banque");
@@ -598,7 +621,9 @@ test("panneau d'action — les réglages à la main, avant le premier dé : un n
     };
     rendre(vueAction({ geste: gesteVu({ contexte: { ...gesteVu().contexte, reglages } }) }));
     const aside = noeud.querySelector(".combat-des aside.combat-reglages");
-    assert.equal(texteDe(aside.querySelector("h3")), "Réglages à la main");
+    // Le texte de la capacité sous son titre (celui de la maquette), puis les réglages sous le leur.
+    assert.deepEqual(tous(aside, "h3").map(texteDe), ["Effets de capacité (mode assisté)", "Réglages à la main"]);
+    assert.deepEqual(aside.children.slice(0, 3).map((enfant) => `${enfant.tagName} ${enfant.className}`), ["H3 ", "P combat-description", "H3 "]);
     const [modificateur, avantages] = tous(aside, "input[type=number]");
     const [raisonDuModificateur, raisonDesAvantages] = tous(aside, "input[type=text]");
     assert.equal(texteDe(modificateur.parentNode), "Modificateur de chaque dé (de −20 à 20)");
@@ -638,6 +663,10 @@ test("panneau d'action — les réglages à la main, avant le premier dé : un n
     rendre(vueAction());
     assert.equal(tous(noeud, ".combat-reglages input").length, 0);
     assert.equal(texteDe(noeud.querySelector(".combat-reglages .combat-description")), "Une taloche qui inflige 2/4/8.");
+    assert.deepEqual(tous(noeud, ".combat-reglages h3").map(texteDe), ["Effets de capacité (mode assisté)"]);
+    // Des réglages sans description : leur seul titre.
+    rendre(vueAction({ geste: gesteVu({ description: null, contexte: { ...gesteVu().contexte, reglages } }) }));
+    assert.deepEqual(tous(noeud, ".combat-reglages h3").map(texteDe), ["Réglages à la main"]);
     // Sans description ni réglage, pas d'encart.
     rendre(vueAction({ geste: gesteVu({ description: null }) }));
     assert.equal(noeud.querySelector(".combat-reglages"), null);
@@ -838,9 +867,9 @@ test("panneau d'action — la localisation : les d20 lancés, le d20 attendu à 
     const nombre = ligne.querySelector("input[type=number]");
     assert.equal(texteDe(nombre.parentNode), "Décaler le 14 (jambe droite) (de −13 à 5)");
     nombre.value = "-2";
-    ligne.querySelector("input[type=text]").value = "Visée";
+    ligne.querySelector("input[type=text]").value = "Minutie";
     leBouton(noeud, "Décaler").click();
-    assert.deepEqual(appels, [{ commande: { evenement: { type: "decaler", de: 0, valeur: -2, raison: "Visée" } }, origine: "panneau" }]);
+    assert.deepEqual(appels, [{ commande: { evenement: { type: "decaler", de: 0, valeur: -2, raison: "Minutie" } }, origine: "panneau" }]);
     appels.length = 0;
     nombre.value = "6";
     leBouton(noeud, "Décaler").click();

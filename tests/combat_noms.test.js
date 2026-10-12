@@ -88,6 +88,23 @@ test("nommer : deux PJ de même nom, ou un PJ et un adversaire de même nom, ne 
   assert.deepEqual(champ(meles, "jeton"), { pj1: "Marmiton", adv2: "Marmiton" });
 });
 
+test("nommer : un PJ ajouté après un adversaire de même nom n'en devient pas l'exemplaire", () => {
+  // L'ordre d'ajout n'y change rien : seuls des adversaires sont des
+  // exemplaires, et un PJ ne prend jamais de numéro.
+  const apres = nommer(liste(["adv", "Marmiton"], ["pj", "Marmiton"]));
+  assert.deepEqual(champ(apres, "exemplaire"), { adv1: null, pj2: null });
+  assert.deepEqual(champ(apres, "entier"), { adv1: "Marmiton", pj2: "Marmiton" });
+  assert.deepEqual(champ(apres, "court"), { adv1: "Marmiton", pj2: "Marmiton" });
+  assert.deepEqual(champ(apres, "jeton"), { adv1: "Marmiton", pj2: "Marmiton" });
+  assert.notEqual(apres.adv1.initiales, apres.pj2.initiales, "deux protagonistes différents ont des initiales différentes");
+  for (const { initiales } of Object.values(apres)) assert.ok(!/\d$/.test(initiales), `« ${initiales} » ne porte pas de numéro d'exemplaire`);
+
+  // Pris entre deux exemplaires, le PJ reste hors de leur numérotation.
+  const entre = nommer(liste(["adv", "Marmiton"], ["pj", "Marmiton"], ["adv", "Marmiton"]));
+  assert.deepEqual(champ(entre, "exemplaire"), { adv1: 1, pj2: null, adv3: 2 });
+  assert.deepEqual(champ(entre, "entier"), { adv1: "Marmiton n° 1", pj2: "Marmiton", adv3: "Marmiton n° 2" });
+});
+
 test("nommer : le nom court est le premier mot, quand il ne se confond avec aucun autre", () => {
   const noms = nommer(liste(["pj", "Aubépine Crèmebrûlée"], ["adv", "Chef de partie"], ["adv", "Marmiton de corvée"]));
   assert.deepEqual(champ(noms, "court"), { pj1: "Aubépine", adv2: "Chef", adv3: "Marmiton" });
@@ -199,6 +216,76 @@ test("nommer : dans un combat plein, toutes les initiales sont distinctes", () =
   assert.equal(initiales.length, 72);
   assert.equal(new Set(initiales).size, 72);
   assert.equal(new Set(Object.values(champ(noms, "court"))).size, 72);
+});
+
+// Relecture de fin de groupe (lot 4) : la confusion se jugeait sur les lettres
+// seules, avant d'y coller le numéro d'exemplaire. Un nom qui finit par un
+// chiffre recevait alors les initiales et le jeton d'un exemplaire.
+const distincts = (noms, nom) => {
+  const valeurs = Object.values(champ(noms, nom));
+  assert.equal(new Set(valeurs).size, valeurs.length, `${nom} : ${valeurs.join(" | ")}`);
+};
+
+test("nommer : un nom qui finit par un chiffre ne prend ni les initiales ni le jeton d'un exemplaire", () => {
+  // « Commis 1 », à côté de deux « Commis » : sans rien de plus, le premier des deux s'écrirait comme lui.
+  const commis = nommer(liste(["adv", "Commis 1"], ["adv", "Commis"], ["adv", "Commis"]));
+  assert.deepEqual(champ(commis, "court"), { adv1: "Commis 1", adv2: "Commis n° 1", adv3: "Commis n° 2" }, "le journal les distinguait déjà");
+  assert.deepEqual(champ(commis, "jeton"), { adv1: "Commis 1", adv2: "Commis n° 1", adv3: "Commis n° 2" }, "les exemplaires gardent « n° k », tous les deux");
+  assert.deepEqual(champ(commis, "initiales"), { adv1: `Commis1${PRIME}`, adv2: `Commis${SECONDE}1`, adv3: `Commis${SECONDE}2` }, "les deux noms épuisés, une marque les sépare");
+
+  // « A2 » seul, à côté de deux « A » : les jetons se distinguaient déjà (« A2 », « A 2 »), pas les initiales.
+  const a = nommer(liste(["adv", "A2"], ["adv", "A"], ["adv", "A"]));
+  assert.deepEqual(champ(a, "jeton"), { adv1: "A2", adv2: "A 1", adv3: "A 2" });
+  assert.deepEqual(champ(a, "initiales"), { adv1: `A2${PRIME}`, adv2: `A${SECONDE}1`, adv3: `A${SECONDE}2` });
+
+  // Deux « A1 » contre douze « A » : « A11 » et « A12 » ne s'écrivent pas deux fois.
+  const douze = nommer(liste(["adv", "A1"], ["adv", "A1"], ...Array.from({ length: 12 }, () => ["adv", "A"])));
+  assert.deepEqual(Object.values(champ(douze, "initiales")).slice(0, 4), [`A1${PRIME}1`, `A1${PRIME}2`, `A${SECONDE}1`, `A${SECONDE}2`]);
+  assert.equal(douze.adv14.initiales, `A${SECONDE}12`);
+  for (const noms of [commis, a, douze]) {
+    distincts(noms, "initiales");
+    distincts(noms, "jeton");
+  }
+  // Un personnage se confond de même avec un exemplaire.
+  const pj = nommer(liste(["adv", "Commis"], ["pj", "Commis 2"], ["adv", "Commis"]));
+  assert.deepEqual(champ(pj, "jeton"), { adv1: "Commis n° 1", pj2: "Commis 2", adv3: "Commis n° 2" });
+  distincts(pj, "initiales");
+});
+
+test("nommer : un chiffre final qui ne rencontre aucun exemplaire ne change rien, ni marque ni « n° » sur le jeton", () => {
+  // « Commis 3 » : aucun des deux « Commis » ne porte le numéro 3.
+  const noms = nommer(liste(["adv", "Commis 3"], ["adv", "Commis"], ["adv", "Commis"]));
+  assert.deepEqual(champ(noms, "jeton"), { adv1: "Commis 3", adv2: "Commis 1", adv3: "Commis 2" });
+  assert.deepEqual(champ(noms, "initiales"), { adv1: "Commis3", adv2: "Commis1", adv3: "Commis2" });
+  // Dès qu'un troisième « Commis » s'ajoute, le numéro 3 existe : tout se sépare.
+  const trois = nommer(liste(["adv", "Commis 3"], ["adv", "Commis"], ["adv", "Commis"], ["adv", "Commis"]));
+  assert.deepEqual(champ(trois, "jeton"), { adv1: "Commis 3", adv2: "Commis n° 1", adv3: "Commis n° 2", adv4: "Commis n° 3" });
+  assert.deepEqual(champ(trois, "initiales"), { adv1: `Commis3${PRIME}`, adv2: `Commis${SECONDE}1`, adv3: `Commis${SECONDE}2`, adv4: `Commis${SECONDE}3` });
+  // Les lettres seules confondent toujours, quel que soit le numéro : un seul et des exemplaires s'allongent ensemble.
+  const lettres = nommer(liste(["adv", "Mitron"], ["adv", "Marmiton de corvée"], ["adv", "Marmiton de corvée"]));
+  assert.deepEqual(champ(lettres, "initiales"), { adv1: "Mi", adv2: "Ma1", adv3: "Ma2" });
+});
+
+test("nommer : dans un combat plein de noms à chiffres, toutes les initiales sont distinctes, et tous les jetons", () => {
+  const exemplaires = (nom, nombre) => Array.from({ length: nombre }, () => ["adv", nom]);
+  const noms = nommer(
+    liste(
+      ["pj", "C1"],
+      ["pj", "C12"],
+      ["pj", "Commis 3"],
+      ...exemplaires("Commis", 12),
+      ...exemplaires("Commis 1", 12),
+      ["adv", "Commis 1 1"],
+      ["adv", "Commis 12"],
+      ...exemplaires("C", 12),
+      ...exemplaires("C1", 2),
+      ...exemplaires("1", 12),
+      ["adv", "11"],
+      ["adv", "112"],
+    ),
+  );
+  assert.equal(Object.keys(noms).length, 57);
+  for (const nom of ["initiales", "jeton", "court", "entier"]) distincts(noms, nom);
 });
 
 test("nommer : retirer un exemplaire renumérote, et le dernier resté perd son numéro", () => {

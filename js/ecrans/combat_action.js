@@ -39,6 +39,11 @@ const ETATS_DE = {
 };
 
 const SIGNE_MOINS = "−";
+// Le titre du texte d'une capacité, à côté des dés : celui de la maquette.
+const TITRE_DE_LA_DESCRIPTION = "Effets de capacité (mode assisté)";
+// Ce qui sépare, dans le titre du panneau, qui joue de ce qu'il lui reste :
+// « Aubépine Crèmebrûlée joue — 1 action sur 2, souffle 10 ».
+const TIRET_DU_TITRE = " — ";
 
 const present = (valeur) => valeur !== null && valeur !== undefined;
 
@@ -444,8 +449,10 @@ function gesteVu(r, geste) {
     fins.length ? el("div", { classe: "combat-choix" }, fins) : null,
   );
 
+  // Le texte de la capacité se montre toujours (mode assisté) : c'est au
+  // joueur d'en appliquer l'effet. Son titre est celui de la maquette.
   const aCote = [
-    present(geste.description) && geste.description !== "" ? el("p", { classe: "combat-description" }, geste.description) : null,
+    present(geste.description) && geste.description !== "" ? [el("h3", {}, TITRE_DE_LA_DESCRIPTION), el("p", { classe: "combat-description" }, geste.description)] : null,
     geste.contexte?.reglages ? reglages(r, geste.contexte.reglages) : null,
   ].filter(present);
 
@@ -468,7 +475,14 @@ function gesteVu(r, geste) {
 function composer(r, vue) {
   if (vue.genre === "preparation") return [];
   // Le titre peut recevoir le focus : c'est là qu'il va quand aucune commande n'attend.
-  const titre = (texte) => el("h2", { classe: "combat-qui", tabindex: "-1" }, texte);
+  // Ce qui suit le dernier tiret (les actions, le souffle) s'écrit plus bas
+  // que le nom, comme sur la maquette : la coupe ne change pas le texte, et
+  // un nom qui porterait lui-même un tiret reste entier devant.
+  const titre = (texte) => {
+    const coupe = String(texte).lastIndexOf(TIRET_DU_TITRE);
+    const contenu = coupe > 0 ? [texte.slice(0, coupe), el("span", { classe: "combat-qui-suite" }, texte.slice(coupe))] : [texte];
+    return el("h2", { classe: "combat-qui", tabindex: "-1" }, contenu);
+  };
   let noeuds;
   if (vue.genre === "qui_joue") {
     const candidats = (vue.candidats ?? []).map((candidat) => bouton(r, { cle: `candidat:${candidat.id}`, classe: "bouton secondaire", commande: candidat.commande, contenu: candidat.nom }));

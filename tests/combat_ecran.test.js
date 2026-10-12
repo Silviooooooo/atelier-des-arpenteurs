@@ -919,10 +919,13 @@ dansUnePage("combat — le combat de référence, joué à l'écran du premier c
   for (const geste of scenario.gestes.slice(2, 6)) await jouerLeGeste(ecran, geste, { apresChaqueDe: seuleLAnnonce });
   assert.deepEqual(journal(ecran), journalAttendu.slice(0, 12));
   assert.match(journal(ecran).at(-1), /Marmiton n° 1 meurt\.$/);
-  // La mort : le jeton barré, la fiche repliée, le compte du camp, la ligne du journal.
-  const mort = jeton(ecran, "Marmiton de corvée n° 1");
-  assert.ok(mort.className.split(" ").includes("mort"));
-  assert.equal(inactif(mort), true);
+  // La mort : la fiche repliée, le compte du camp, la ligne du journal. La
+  // case D4 porte quatre protagonistes et n'en montre que trois : les
+  // vivants d'abord. Le mort est derrière « +1 » (vu dans un navigateur : il
+  // tenait la place du Marmiton n° 2, qu'on pouvait encore cibler).
+  assert.deepEqual(jetons(ecran).D4, ["Aubépine", "Chef", "Marmiton 2"]);
+  assert.equal(tous(ecran, ".combat-jeton").filter((j) => j.className.split(" ").includes("mort")).length, 0);
+  assert.equal(texteDe(un(ecran, ".combat-plus-large")), "+1");
   assert.ok(fiche(ecran, "adv3").className.split(" ").includes("morte"));
   assert.equal(fiche(ecran, "adv3").hasAttribute("open"), false, "la fiche d'un mort se replie");
   assert.equal(fiche(ecran, "adv4").hasAttribute("open"), true, "celle d'un vivant reste ouverte");
@@ -945,6 +948,11 @@ dansUnePage("combat — le combat de référence, joué à l'écran du premier c
   assert.equal(finDeTour.hidden, true);
   assert.equal(tous(ecran, "[data-repere=jouer]").length, 0);
   assert.match(texteDe(un(ecran, "p.combat-aide")), /^Le combat est terminé\./);
+  // Les morts se voient dès que la case a de la place : Aubépine, seule en vie, puis deux jetons barrés.
+  assert.deepEqual(jetons(ecran).D4, ["Aubépine", "Chef", "Marmiton 1"]);
+  const mort = jeton(ecran, "Marmiton de corvée n° 1");
+  assert.ok(mort.className.split(" ").includes("mort"));
+  assert.equal(inactif(mort), true);
   assert.equal(inactif(boutonDit(un(ecran, ".combat-journal"), "Copier")), false);
   assert.equal(inactif(boutonDit(un(ecran, ".combat-journal"), "Télécharger")), false);
 
@@ -1768,10 +1776,15 @@ dansUnePage("enregistrement — « Combat ouvert ailleurs » : on ne joue plus, 
   await cliquer(nouveau);
   assert.equal(tous(ecran, ".confirmation").length, 0);
 
+  // « Fin de tour » ne jouerait rien : il est inactif lui aussi, et le dit par la même phrase.
+  const fin = boutonDit(barre(ecran), "Fin de tour");
+  assert.equal(inactif(fin), true);
+  assert.equal(raisonDe(ecran, fin), "Combat ouvert ailleurs");
+
   // On ne joue plus : un clic est refusé, rien ne change, rien ne s'écrit, et l'avis ne se redit pas.
   const dit = un(avis(ecran), "p");
   const avant = journal(ecran);
-  await cliquer(boutonDit(barre(ecran), "Fin de tour"));
+  await cliquer(fin);
   await cliquer(jeton(ecran, "Aubépine Crèmebrûlée"));
   assert.deepEqual(journal(ecran), avant);
   assert.equal(un(avis(ecran), "p"), dit, "le même nœud : un lecteur d'écran ne l'entend qu'une fois");
@@ -1786,6 +1799,7 @@ dansUnePage("enregistrement — « Combat ouvert ailleurs » : on ne joue plus, 
   assert.deepEqual(journal(ecran), [...journalAttendu.slice(0, 2), "Aubépine passe son tour.", "Fin du tour des PJ : ils retrouvent leurs actions.", "— Tour 1 · camp des adversaires —"]);
   assert.equal(etatDuCombat(ecran), "Tour 1 · camp des adversaires");
   assert.equal(inactif(boutonDit(barre(ecran), "Nouveau combat")), false);
+  assert.equal(inactif(boutonDit(barre(ecran), "Fin de tour")), false, "le combat repris, « Fin de tour » rejoue");
   await cliquer(boutonDit(corps(ecran), "Chef de partie"));
   assert.equal(titreDuPanneau(ecran), "Chef de partie joue — 1 action sur 1, souffle 7");
   // Et l'on écrit de nouveau : le geste suivant monte la révision de l'autre onglet.

@@ -28,6 +28,10 @@ const TITRE = "Carte";
 // cache le troisième : d'où deux « +k », dont elle ne montre qu'un.
 const MONTRES = 3;
 const MONTRES_ETROIT = 2;
+// Au-delà de deux signes (« M12 », à partir du dixième exemplaire d'un
+// adversaire), des initiales ne tiennent plus dans le rond d'un téléphone à
+// la taille des autres : une classe les signale à la feuille de style.
+const INITIALES_COURTES = 2;
 const LEGENDE = [
   ["combat-pj", "personnage"],
   ["combat-adv", "adversaire"],
@@ -35,6 +39,23 @@ const LEGENDE = [
   ["cible", "cible"],
   ["mort", "mort, barré"],
 ];
+// L'en-tête de la carte, tel que sur la maquette : ce qu'elle est et comment
+// s'y compte une distance ; puis, pour qui a une souris, où lire un nom
+// entier (le titre de chaque jeton).
+const EN_TETE = "Carte de 10 × 10 cases · une diagonale compte pour une case";
+const AU_SURVOL = "Survolez un jeton pour son nom complet";
+
+/**
+ * Le nom court d'un jeton, en deux morceaux : le nom, que la case peut
+ * couper, et le numéro d'exemplaire qui le finit (« Marmiton 2 »), qu'elle ne
+ * coupe jamais. Sans lui, deux exemplaires d'une même case porteraient le
+ * même nom coupé. C'est de l'affichage : le nom court vient de la vue.
+ */
+function morceauxDuNom(nomCourt) {
+  const lu = /^(.*\S)\s+(\d+)$/su.exec(nomCourt);
+  const debut = el("span", { classe: "combat-nom-debut" }, lu ? lu[1] : nomCourt);
+  return lu ? [debut, " ", el("span", { classe: "combat-nom-numero" }, lu[2])] : [debut];
+}
 
 const possede = (objet, nom) => Object.prototype.hasOwnProperty.call(objet, nom);
 
@@ -219,8 +240,10 @@ export function creer(actions) {
     // son nom dit qui est là.
     attribuer(fiche.noeud, "aria-disabled", etat.agit ? null : "true");
     attribuer(fiche.noeud, "draggable", etat.tenu === null ? null : "true");
-    fiche.initiales.replaceChildren(sansSensForce(etat.initiales));
-    fiche.nomCourt.replaceChildren(sansSensForce(etat.jeton));
+    const initiales = sansSensForce(etat.initiales);
+    fiche.initiales.className = [...initiales].length > INITIALES_COURTES ? "combat-initiales combat-initiales-longues" : "combat-initiales";
+    fiche.initiales.replaceChildren(initiales);
+    fiche.nomCourt.replaceChildren(...morceauxDuNom(sansSensForce(etat.jeton)));
   }
 
   function montrerCase(fiche, etat) {
@@ -270,7 +293,28 @@ export function creer(actions) {
     const avant = preparation();
     if (!avant || enMain === null || !possede(vue.jetons, enMain)) enMain = null;
 
-    const connus = (nom) => (possede(vue.cases, nom) ? vue.cases[nom].jetons.filter((id) => possede(vue.jetons, id)) : []);
+    // La vue met en tête qui joue, puis la cible. Pour le reste, les morts
+    // passent derrière les vivants ; et dans une case qui ne peut pas tout
+    // montrer, ceux qu'on peut choisir passent devant. Sans cela un mort
+    // tenait la place d'un vivant qu'on pouvait cibler, caché derrière
+    // « +1 ». Rien d'autre ne change à l'ordre de la vue : un jeton ne saute
+    // pas d'une ligne à l'autre à chaque tour. Avant le lancement, rien ne
+    // se range.
+    const rangDe = (id, pleine) => {
+      const jeton = vue.jetons[id];
+      if (jeton.marque === "joue") return 0;
+      if (jeton.marque === "cible") return 1;
+      if (pleine && jeton.choix && jeton.inactif !== true) return 2;
+      return jeton.mort === true ? 4 : 3;
+    };
+    const ranger = (ids) =>
+      avant
+        ? ids
+        : ids
+            .map((id, place) => ({ id, place, rang: rangDe(id, ids.length > MONTRES) }))
+            .sort((a, b) => a.rang - b.rang || a.place - b.place)
+            .map(({ id }) => id);
+    const connus = (nom) => (possede(vue.cases, nom) ? ranger(vue.cases[nom].jetons.filter((id) => possede(vue.jetons, id))) : []);
     caseDe = new Map();
     for (const nom of cases.keys()) for (const id of connus(nom)) caseDe.set(id, nom);
     const caseTenue = enMain === null ? null : (caseDe.get(enMain) ?? null);
@@ -326,7 +370,8 @@ export function creer(actions) {
     { classe: "combat-legende" },
     LEGENDE.map(([classe, texte]) => el("li", { classe }, el("span", { classe: "combat-rond" }), texte)),
   );
-  const noeud = el("section", { classe: "combat-plateau", "aria-label": TITRE }, grille, legende);
+  const tete = el("p", { classe: "combat-plateau-tete" }, el("span", {}, EN_TETE), " ", el("span", { classe: "combat-plateau-survol" }, AU_SURVOL));
+  const noeud = el("section", { classe: "combat-plateau", "aria-label": TITRE }, tete, grille, legende);
 
   /**
    * Montre la vue. Le second argument que l'écran passe à chaque partie (sa

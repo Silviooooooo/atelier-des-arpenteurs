@@ -833,7 +833,8 @@ test("ouvrir : l'oubli du mot de passe pendant la lecture ne remet rien en mémo
   };
   const { seance, gardien } = await monter(lieu, { magasin: lent });
   const ouverture = seance.ouvrir();
-  while (lectures === 0) await new Promise((suite) => setTimeout(suite, 0));
+  for (const limite = Date.now() + 5000; lectures === 0 && Date.now() < limite; ) await new Promise((suite) => setTimeout(suite, 1));
+  assert.equal(lectures, 1, "la lecture est partie");
   gardien.oublier();
   lacher();
   assert.deepEqual(await ouverture, { issue: "sans_cle" });
@@ -955,4 +956,51 @@ test("le mode à part : la séance de la démonstration ne lit ni n'écrit le co
   assert.deepEqual(JSON.parse((await lireLaBase(lieu, { mode: "demo" })).texte).miseEnPlace.protagonistes.map((protagoniste) => protagoniste.id), ["pj1"]);
   assert.equal(JSON.parse(demo.seance.texte(1)).miseEnPlace.mode, "demo");
   assert.equal(JSON.parse(reel.seance.texte(1)).miseEnPlace.mode, "reel");
+});
+
+// ─── Ce que la mise à l'épreuve a montré sans contrôle ──────────────────────
+
+partout("reprendre : comme à l'ouverture, hors d'un geste, personne n'est choisi après la relecture", async (lieu) => {
+  const ici = await monter(lieu);
+  const ailleurs = await monter(lieu);
+  await ici.seance.ouvrir();
+  lancerLeTrio(ici.seance);
+  accepte(ici.seance.choisir("pj2"));
+  await ici.gardien.repos();
+  assert.equal(ici.seance.choisi(), "pj2");
+
+  // L'autre onglet reprend le combat et y joue : Ciboulette peut toujours agir.
+  assert.deepEqual(await ailleurs.seance.ouvrir(), { issue: "repris" });
+  accepte(ailleurs.seance.jouer({ type: "passer", qui: "pj1" }));
+  await ailleurs.gardien.repos();
+
+  assert.deepEqual(await ici.seance.reprendre(), { issue: "repris" });
+  assert.deepEqual(ici.seance.etat(), ailleurs.seance.etat());
+  assert.equal(ici.seance.choisi(), null, "« choisi » n'est jamais gardé : la relecture ne le retrouve pas");
+  // Elle reste choisissable : c'est bien la relecture qui l'a retiré.
+  accepte(ici.seance.choisir("pj2"));
+  assert.equal(ici.seance.choisi(), "pj2");
+});
+
+partout("ouvrir : un combat illisible, remplacé depuis un autre onglet, se reprend à la relecture et ne bloque plus", async (lieu) => {
+  await poserEnBase(lieu, abime((contenu) => ({ ...contenu, enTrop: [] })));
+  const ici = await monter(lieu);
+  const ailleurs = await monter(lieu);
+  assert.deepEqual(await ici.seance.ouvrir(), { issue: "illisible" });
+  assert.equal(ici.seance.bloque(), "illisible");
+
+  // L'autre onglet fait « Nouveau combat », et y pose un personnage.
+  assert.deepEqual(await ailleurs.seance.ouvrir(), { issue: "illisible" });
+  accepte(ailleurs.seance.nouveau());
+  accepte(ailleurs.seance.preparer({ type: "ajouter_personnage", photo: AUBEPINE }));
+  await ailleurs.gardien.repos();
+
+  // Ici, la relecture trouve un combat sain : le verrou d'avant ne lui survit pas.
+  assert.deepEqual(await ici.seance.ouvrir(), { issue: "repris" });
+  assert.equal(ici.gardien.etat(), lieu.durable ? "garde" : "memoire");
+  assert.equal(ici.seance.bloque(), null);
+  assert.deepEqual(ici.seance.etat().ordre, ["pj1"]);
+  accepte(ici.seance.preparer({ type: "qui_commence", camp: "adv" }));
+  await ici.gardien.repos();
+  assert.equal(JSON.parse((await lireLaBase(lieu)).texte).miseEnPlace.quiCommence, "adv");
 });

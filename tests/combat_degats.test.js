@@ -783,6 +783,13 @@ test("imputerEsquive : sur plusieurs zones, zone après zone, dans l'ordre des d
   assert.deepEqual(imputerEsquive(coups, 3), [7, 10], "la liste reçue ne change pas");
 });
 
+test("imputerEsquive : l'esquive annule, elle n'ajoute jamais ; un coup de 0 ou moins ne lui prend rien", () => {
+  assert.deepEqual(imputerEsquive([12], -3), [12], "X se choisit à partir de 1 : un X négatif n'ajoute aucun dégât");
+  assert.deepEqual(imputerEsquive([10, 10], -5), [10, 10]);
+  assert.deepEqual(imputerEsquive([-2, 12], 5), [-2, 7], "5 points annulent 5 dégâts : des dégâts négatifs n'en rendent pas à l'esquive");
+  assert.deepEqual(imputerEsquive([-2, -2], 3), [-2, -2], "des dégâts de 0 ou moins restent ce qu'ils sont");
+});
+
 test("degatsFixes : l'esquive laisse « avant » et le total, et retire ses points de « parCoup »", () => {
   const etat = duel();
   const geste = (interventions) => frappeDeLAdversaire(etat, 1, { localisation: d20(6, 13), interventions });

@@ -236,6 +236,19 @@ test("geler — ne touche ni une Map ni une date ; ne reparcourt pas ce qui est 
   assert.ok(Object.isFrozen(boucle));
 });
 
+test("geler — un objet sans prototype est un objet simple : il est gelé, et ce qu'il porte aussi", () => {
+  // La forme de ce qui se garde tient un objet sans prototype pour un objet
+  // simple (validerEvenement l'accepte) : geler() le traite de même.
+  const nu = Object.assign(Object.create(null), { a: { b: [1] }, c: Object.assign(Object.create(null), { d: {} }) });
+  assert.equal(geler(nu), nu);
+  assert.ok(Object.isFrozen(nu));
+  assert.ok(Object.isFrozen(nu.a) && Object.isFrozen(nu.a.b));
+  assert.ok(Object.isFrozen(nu.c) && Object.isFrozen(nu.c.d));
+  // Porté par un objet ordinaire, il l'est tout autant.
+  const porte = geler({ nu: Object.assign(Object.create(null), { libre: {} }) });
+  assert.ok(Object.isFrozen(porte.nu) && Object.isFrozen(porte.nu.libre));
+});
+
 test("le socle n'importe que ce que dit son contrat, et n'écrit aucune espace insécable", () => {
   const lire = (chemin) => readFileSync(new URL(chemin, import.meta.url), "utf8");
   const imports = (source) => [...source.matchAll(/^\s*(?:import|export)\b[^;]*?\bfrom\s+"([^"]+)"/gms)].map((trouve) => trouve[1]);
@@ -493,6 +506,49 @@ test("validerEvenement — l'erreur est une phrase, qui nomme l'événement et n
   assert.equal(validerEvenement({ type: "de", faces: 10, valeurs: [11] }).erreur, "L'événement « de » : une valeur n'est pas un entier de 1 à 10.");
 });
 
+test("validerEvenement — l'heure du lancement, borne par borne : mois de 01 à 12, jour de 01 à 31, heure de 00 à 23, minutes de 00 à 59", () => {
+  for (const le of ["2026-01-01T00:00", "2026-12-31T23:59", "2026-10-12T21:30"]) {
+    assert.deepEqual(validerEvenement({ type: "lancer", le }), { evenement: { type: "lancer", le } }, le);
+  }
+  for (const le of ["2026-00-12T21:30", "2026-13-12T21:30", "2026-10-00T21:30", "2026-10-32T21:30", "2026-10-12T24:00", "2026-10-12T21:60", "26-10-12T21:30", "2026-1-12T21:30"]) {
+    assert.deepEqual(validerEvenement({ type: "lancer", le }), { erreur: "L'événement « lancer » : son heure ne s'écrit pas « AAAA-MM-JJTHH:MM »." }, le);
+  }
+});
+
+test("validerEvenement — un nom hérité de tout objet n'est ni un type ni un réglage, et le refus le dit", () => {
+  for (const type of ["toString", "constructor", "hasOwnProperty", "valueOf", "__proto__"]) {
+    assert.deepEqual(validerEvenement({ type }), { erreur: "Le type de l'événement n'est pas connu." }, type);
+    assert.deepEqual(validerEvenement({ type: "regler", champ: type, valeur: 1 }), { erreur: "L'événement « regler » : son champ n'est pas un réglage connu." }, type);
+  }
+});
+
+test("validerEvenement — les caractéristiques réglées sont copiées : la donnée n'est ni gelée, ni partagée", () => {
+  const donnee = { type: "regler", champ: "caracteristiques", valeur: ["sens", "parole"] };
+  const { evenement } = validerEvenement(donnee);
+  assert.deepEqual(evenement.valeur, ["sens", "parole"]);
+  assert.notEqual(evenement.valeur, donnee.valeur);
+  assert.ok(Object.isFrozen(evenement.valeur));
+  assert.ok(!Object.isFrozen(donnee.valeur), "valider ne gèle pas ce qu'on lui donne");
+  donnee.valeur.reverse();
+  assert.deepEqual(evenement.valeur, ["sens", "parole"]);
+});
+
+test("validerEvenement — une opération sans l'un de ses champs, des valeurs qui ne sont pas une liste : le refus nomme la faute", () => {
+  const operation = { op: "ajuster", valeur: 4, raison: "Brûlure" };
+  for (const champ of Object.keys(operation)) {
+    const { [champ]: _retire, ...reste } = operation;
+    assert.deepEqual(
+      validerEvenement({ type: "degats", base: "lettre", operations: [reste], nature: "normaux" }),
+      { erreur: `L'événement « degats » : son opération n'a pas de champ « ${champ} ».` },
+      champ,
+    );
+  }
+  for (const valeurs of ["64", { length: 1, 0: 6 }, null, 6, new Set([6])]) {
+    assert.deepEqual(validerEvenement({ type: "de", faces: 10, valeurs }), { erreur: "L'événement « de » : « valeurs » n'est pas une liste d'au moins un dé." }, JSON.stringify(valeurs));
+  }
+  assert.deepEqual(validerEvenement({ type: "de", faces: 10, valeurs: [] }), { erreur: "L'événement « de » : « valeurs » n'est pas une liste d'au moins un dé." });
+});
+
 // ─── Les photographies ──────────────────────────────────────────────────────
 
 const ESSAIS = { pjEssai, adversaireEssai, aubepineEssai, chefDePartieEssai, marmitonDeCorveeEssai };
@@ -680,6 +736,22 @@ test("validerPhoto — la copie est gelée, et ne partage rien avec la donnée",
   donnee.valeurs.capacites[0].facons[0].elements.push("Dégâts");
   assert.equal(photo.valeurs.zones[0].armure, 10);
   assert.deepEqual(photo.valeurs.capacites[0].facons[0].elements, []);
+});
+
+test("validerPhoto — les caractéristiques d'un dé sont copiées : la donnée n'est ni gelée, ni partagée", () => {
+  const donnee = structuredClone(aubepineEssai());
+  const armee = donnee.valeurs.armes.findIndex((arme) => arme.caracteristiques !== null);
+  assert.notEqual(armee, -1, "la photographie d'essai porte une arme à dé fixe : sinon ce contrôle ne dirait rien");
+  const attendues = { arme: [...donnee.valeurs.armes[armee].caracteristiques], defense: [...donnee.valeurs.deDefense.caracteristiques] };
+  const { photo } = validerPhoto(donnee);
+  assert.notEqual(photo.valeurs.armes[armee].caracteristiques, donnee.valeurs.armes[armee].caracteristiques);
+  assert.notEqual(photo.valeurs.deDefense.caracteristiques, donnee.valeurs.deDefense.caracteristiques);
+  assert.ok(!Object.isFrozen(donnee.valeurs.armes[armee].caracteristiques), "valider ne gèle pas ce qu'on lui donne");
+  assert.ok(!Object.isFrozen(donnee.valeurs.deDefense.caracteristiques));
+  donnee.valeurs.armes[armee].caracteristiques.push("force");
+  donnee.valeurs.deDefense.caracteristiques.push("force");
+  assert.deepEqual(photo.valeurs.armes[armee].caracteristiques, attendues.arme);
+  assert.deepEqual(photo.valeurs.deDefense.caracteristiques, attendues.defense);
 });
 
 test("validerPhoto — une description de deux lignes est acceptée, un nom à retour de ligne est refusé", () => {
@@ -1074,6 +1146,25 @@ test("validerPhoto — la source : rien, un personnage que « accepter » vérif
   for (let niveau = 0; niveau < 60; niveau += 1) admise = { admise };
   profonde.source = { ligne: {}, types: [], resolu: admise };
   assert.equal(validerPhoto(profonde).erreur, undefined);
+});
+
+test("validerPhoto — la source : 64 étages passent, la source comprise, et le 65e est refusé", () => {
+  // La borne, vue de ses deux côtés : la source est le premier étage, sa
+  // résolution le deuxième, et chaque objet ou tableau imbriqué en fait un de plus.
+  const empilee = (etages, enveloppe) => {
+    let dedans = {};
+    for (let etage = 3; etage < etages; etage += 1) dedans = enveloppe(dedans);
+    const donnee = retouchee(chefDePartieEssai(), () => {});
+    donnee.source = { ligne: {}, types: [], resolu: { dedans } };
+    return donnee;
+  };
+  for (const [nom, enveloppe] of [["des objets", (dedans) => ({ dedans })], ["des tableaux", (dedans) => [dedans]]]) {
+    const juste = empilee(64, enveloppe);
+    const rendu = validerPhoto(juste);
+    assert.equal(rendu.erreur, undefined, `64 étages, ${nom}`);
+    assert.deepEqual(rendu.photo.source, juste.source);
+    assert.deepEqual(validerPhoto(empilee(65, enveloppe)), { erreur: "la source de la photographie est trop imbriquée." }, `un étage de trop, ${nom}`);
+  }
 });
 
 // ─── Le contenu ─────────────────────────────────────────────────────────────

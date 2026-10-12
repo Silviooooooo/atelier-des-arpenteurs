@@ -291,3 +291,37 @@ test("le module — il ne rapproche pas, et n'écrit rien", () => {
   assert.match(code, /etagere\.lister\(\)/);
   assert.match(code, /lireEnLigne\(\)/);
 });
+
+// ─── Mise à l'épreuve (lot 4) : ce que les casses du code n'avaient pas fait échouer ───
+
+test("le tri ignore la casse et les accents : deux noms qui n'en diffèrent que par là sont le même nom, rangés par identifiant", () => {
+  const paires = [[personnage("y", "persil"), personnage("x", "Persil")], [personnage("y", "Céleri"), personnage("x", "celeri")]];
+  for (const [un, deux] of paires) {
+    assert.deepEqual(retenir([un, deux], [], []).map(({ personnage: p }) => p.id), [deux.id, un.id]);
+    assert.deepEqual(retenir([deux, un], [], []).map(({ personnage: p }) => p.id), [deux.id, un.id]);
+  }
+});
+
+test("la suppression demandée se lit dans les notes de l'étagère : ni la copie de l'appareil ni la version en ligne ne se proposent", async () => {
+  const a = personnage("a", "Aubépine");
+  const b = personnage("b", "Basilic");
+  for (const etat of ["envoye", "non_envoye"]) {
+    const { etagere, ecritures } = await etagereEspionnee("reel", [a, b], [note(a, envoi("supprimer", etat))]);
+    const lu = await personnagesDisponibles({ etagere, depot: depotSimule({ personnages: [a] }) });
+    assert.deepEqual(resume(lu.personnages), [["Basilic", "appareil", AUJOURD_HUI]], etat);
+    assert.deepEqual(resume((await personnagesDisponibles({ etagere })).personnages), [["Basilic", "appareil", AUJOURD_HUI]], `${etat}, sans dépôt`);
+    assert.deepEqual(ecritures, []);
+  }
+});
+
+test("des notes qui ne se lisent pas : rien de l'appareil ne se propose, car une suppression demandée ne se verrait pas", async () => {
+  const sansNotes = {
+    lister: async () => ({ personnages: [personnage("a", "Aubépine")], illisibles: 0 }),
+    listerNotes: async () => {
+      throw new Error("les notes sont fermées");
+    },
+  };
+  const lu = await personnagesDisponibles({ etagere: sansNotes, depot: depotSimule({ personnages: [personnage("b", "Basilic")] }) });
+  assert.deepEqual(resume(lu.personnages), [["Basilic", "en_ligne", AUJOURD_HUI]]);
+  assert.deepEqual(lu.phrases, ["Les personnages de cet appareil n'ont pas pu être lus : les notes sont fermées"]);
+});

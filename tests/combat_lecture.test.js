@@ -1525,3 +1525,125 @@ test("module : il n'importe jamais le moteur, seulement ce que le contrat lui pe
   }
   for (const code of [0x00a0, 0x202f]) assert.equal(source.includes(String.fromCodePoint(code)), false, "aucune espace insécable");
 });
+
+// ─── Ce que la mise à l'épreuve a montré sans contrôle ──────────────────────
+
+const CIBOULETTE_ESSAI = () => pjEssai((valeurs) => Object.assign(valeurs, { identifiant: "essai-ciboulette-0000000002", nom: "Ciboulette" }));
+
+test("fiche : « a joué » ne se dit que dans le camp dont c'est le tour, même de qui n'a aucune action", () => {
+  // Un adversaire sans action : il n'a rien à jouer, mais ce n'est pas son tour.
+  const etat = combat([
+    { photo: pjEssai(), case: "D4" },
+    { photo: CIBOULETTE_ESSAI(), case: "D4" },
+    { photo: adversaireEssai((valeurs) => void (valeurs.actions = 0)), case: "D4" },
+  ]);
+  assert.equal(etat.tour.camp, "pj");
+  const fiche = vueFiche(etat, "adv3", null);
+  assert.deepEqual(fiche.actions, { reste: 0, max: 0 });
+  assert.equal(fiche.statut, null, "le tour est aux PJ : l'adversaire n'« a » pas « joué »");
+  assert.deepEqual(fiche.marques, []);
+  assert.doesNotMatch(vuePlateau(etat, null).jetons.adv3.nom, /a joué/);
+  // Dans l'autre sens : le PJ qui passe, au tour des PJ, « a joué ».
+  const passe = jouer(etat, { type: "passer", qui: "pj1" });
+  assert.equal(passe.tour.camp, "pj");
+  assert.equal(vueFiche(passe, "pj1", null).statut, "a joué");
+  assert.equal(vueFiche(passe, "adv3", null).statut, null);
+});
+
+test("plateau : dès qu'une action est en cours, aucun jeton ne propose de jouer, pas même celui d'un candidat", () => {
+  const trio = combat([
+    { photo: pjEssai(), case: "D4" },
+    { photo: CIBOULETTE_ESSAI(), case: "D4" },
+    { photo: adversaireEssai(), case: "D4" },
+  ]);
+  assert.deepEqual(vuePlateau(trio, null).jetons.pj2.choix, { commande: { choisir: "pj2" } }, "au repos, le candidat se choisit par son jeton");
+
+  // Le dé est tombé : le choix de la cible est fermé, l'action n'est pas finie.
+  const paye = jouer(trio, capacite(trio, "pj1", "Frappe"), regler("cible", "adv3"), de(8, 6));
+  assert.ok(candidats(paye).includes("pj2"), "Ciboulette peut encore agir à ce tour");
+  const vue = vuePlateau(paye, null);
+  assert.deepEqual([vue.jetons.pj1.choix, vue.jetons.pj2.choix, vue.jetons.adv3.choix], [null, null, null]);
+  assert.deepEqual([vue.jetons.pj1.inactif, vue.jetons.pj2.inactif, vue.jetons.adv3.inactif], [false, false, false], "hors d'un choix, rien n'est écarté");
+
+  // Un geste qui se règle sans cible ni arrivée : rien n'est « au repos » non plus.
+  const gouter = jouer(trio, capacite(trio, "pj1", "Goûter"));
+  assert.equal(vuePlateau(gouter, null).jetons.pj2.choix, null);
+});
+
+test("panneau : seule une attaque porte des dégâts sur son bouton, même si la banque en écrit à une autre capacité", () => {
+  const pj = pjEssai((valeurs) => {
+    valeurs.capacites.push(capaciteEssai({ nom: "Coup de louche", facons: [faconEssai({ description: "Ajoute 8/11/13 à la prochaine attaque.", degats: [8, 11, 13] })] }));
+  });
+  const vue = vuePanneau(duel({ pj }), "pj1");
+  assert.equal(boutonNomme(vue, "Coup de louche").degats, null, "ce n'est pas une attaque");
+  assert.equal(boutonNomme(vue, "Frappe").degats, "5/10/15");
+});
+
+test("panneau : la ligne des passifs ne nomme que ce qui n'a pas de bouton : une capacité jouable à une puissance garde le sien", () => {
+  const avec = (facons) =>
+    pjEssai((valeurs) => {
+      valeurs.capacites.push(capaciteEssai({ nom: "Tour de main", niveau: 2, evolue: true, facons }));
+    });
+  const passive = (puissance) => faconEssai({ puissance, elements: ["Passif"], passif: true });
+
+  // Passive à la puissance 1, jouable à la puissance 2.
+  const mixte = vuePanneau(duel({ pj: avec([passive(1), faconEssai({ puissance: 2 })]) }), "pj1");
+  assert.equal(mixte.mentions.passifs, null, "elle a un bouton : ce n'est pas un passif");
+  assert.equal(boutonsDe(mixte).filter((bouton) => bouton.libelle.startsWith("Tour de main")).length, 1);
+
+  // Passive à toutes ses puissances : nommée, avec son niveau, sans bouton.
+  const toute = vuePanneau(duel({ pj: avec([passive(1), passive(2)]) }), "pj1");
+  assert.equal(toute.mentions.passifs, "Tour de main [2]");
+  assert.equal(boutonsDe(toute).filter((bouton) => bouton.libelle.startsWith("Tour de main")).length, 0);
+});
+
+test("panneau : le dé d'un jet de caractéristique compte les deux caractéristiques choisies, pas deux fois la première", () => {
+  let etat = duel({ pj: pjEssai((valeurs) => void (valeurs.caracteristiques.sens = 6)) });
+  etat = jouer(etat, capacite(etat, "pj1", "Goûter"), regler("caracteristiques", ["force", "sens"]));
+  let vue = vuePanneau(etat, null);
+  assert.deepEqual([vue.geste.caracteristiques.choisies, vue.geste.caracteristiques.de], [["force", "sens"], "d10"], "Force 4 + Sens 6 : un d10");
+
+  etat = jouer(etat, regler("difficulte", 6));
+  vue = vuePanneau(etat, null);
+  assert.deepEqual([vue.geste.contexte.de, vue.geste.contexte.detail], ["d10", "Force 4 + Sens 6"]);
+  assert.equal(vue.geste.aLancer.faces, 10, "le dé que le moteur attend est le même");
+});
+
+test("fiche : les actions restantes baissent dès que l'action est payée, sur leur maximum inchangé", () => {
+  let etat = duel();
+  assert.deepEqual(vueFiche(etat, "pj1", null).actions, { reste: 2, max: 2 });
+  etat = jouer(etat, capacite(etat, "pj1", "Frappe"), regler("cible", "adv2"));
+  assert.deepEqual(vueFiche(etat, "pj1", null).actions, { reste: 2, max: 2 }, "rien n'est payé avant le premier dé");
+  etat = jouer(etat, de(8, 6));
+  assert.deepEqual(vueFiche(etat, "pj1", null).actions, { reste: 1, max: 2 });
+  assert.deepEqual(vueFiche(etat, "adv2", null).actions, { reste: 1, max: 1 });
+});
+
+test("panneau : une attaque à deux localisations : entre ses deux d20, l'étape « Localisation » est en cours", () => {
+  let etat = duel({ pj: pjEssai((valeurs) => void (valeurs.capacites[0].facons[0].locMultiple = 2)) });
+  etat = jouer(etat, capacite(etat, "pj1", "Frappe"), regler("cible", "adv2"), de(8, 6), de(8, 2));
+  assert.equal(gesteEnCours(etat).moment, "bilan");
+  assert.equal(etapeDite(vuePanneau(etat, null), 2), "Jet d'attaque:en_cours");
+
+  // Le premier d20 est tombé, le second reste à lancer.
+  etat = jouer(etat, de(20, 12));
+  let vue = vuePanneau(etat, null);
+  assert.equal(gesteEnCours(etat).moment, "localisation");
+  assert.equal(etapesDites(vue), "Capacité:faite Cible:faite Jet d'attaque:faite Localisation:en_cours Interventions:a_venir Dégâts:a_venir");
+  assert.deepEqual(vue.geste.aLancer, { faces: 20, combien: 1, libelle: "d20", motif: "localisation" });
+  assert.deepEqual(
+    vue.geste.localisation.map(({ brut, zone }) => `${brut} ${zone}`),
+    ["12 jambe gauche"],
+  );
+  assert.equal(vue.geste.appliquer, null, "rien ne s'applique avant le dernier d20");
+
+  etat = jouer(etat, de(20, 3));
+  vue = vuePanneau(etat, null);
+  assert.equal(gesteEnCours(etat).moment, "suites");
+  assert.equal(etapesDites(vue), "Capacité:faite Cible:faite Jet d'attaque:faite Localisation:faite Interventions:faite Dégâts:en_cours");
+  assert.deepEqual(
+    vue.geste.localisation.map(({ brut, zone, decaler }) => `${brut} ${zone} ${decaler.gabarit.evenement.de}`),
+    ["12 jambe gauche 0", "3 torse 1"],
+    "chaque d20 se décale par son propre rang",
+  );
+});

@@ -292,6 +292,15 @@ const EFFETS = {
   degrossir: (niveau) => `+${niveau} contre l'armure par réussite`,
 };
 
+// Au niveau 0, un passif câblé ne fait rien (§ 12, « Pour le lot 4 ») : sa
+// fiche ne dit pas « +0 », elle le dit inactif, « niveau 0 ». Seul reste ce
+// qui ne dépend pas du niveau : le −1 de Force du rôle « petit ». C'est la
+// table des bonus qui le dit, celle que lit le jet.
+const SANS_EFFET = "sans effet";
+const NIVEAU_NUL = "niveau 0";
+const EFFETS_AU_NIVEAU_NUL = { petit: `${SIGNES.moins}1 en force` };
+const joueAuNiveauNul = (role) => BONUS.some((bonus) => bonus.role === role && bonus.valeur(0) !== 0);
+
 // Pourquoi un passif ne joue pas, ou null s'il joue. Hors d'un jet, seule la
 // case se regarde : le corps-à-corps et le sens du jet se jugent au jet.
 function raisonDuRepos(role, { adversaire, accompagne }) {
@@ -304,9 +313,13 @@ function raisonDuRepos(role, { adversaire, accompagne }) {
 /**
  * Les passifs câblés d'un protagoniste, dans l'ordre de sa photographie, pour
  * sa fiche : { capacite, nom, role, niveau, effet, actif, raison }. « raison »
- * dit pourquoi un passif inactif ne joue pas (« aucun allié sur sa case »,
- * « un allié sur sa case », « ne s'applique pas à un adversaire ») ; elle est
- * null quand il est actif.
+ * dit pourquoi un passif inactif ne joue pas (« niveau 0 », « aucun allié sur
+ * sa case », « un allié sur sa case », « ne s'applique pas à un adversaire ») ;
+ * elle est null quand il est actif.
+ *
+ * Au niveau 0, l'effet s'écrit « sans effet », et le passif est inactif,
+ * « niveau 0 », avant toute autre raison : rien ne le rendrait actif. Le rôle
+ * « petit » garde son −1 de Force, seul écrit alors.
  */
 export function passifsDe(etat, id) {
   const passifs = photoDe(etat, id)?.passifs ?? [];
@@ -314,7 +327,11 @@ export function passifsDe(etat, id) {
   return passifs
     .filter((passif) => Object.hasOwn(EFFETS, passif.role))
     .map(({ capacite, role, niveau }) => {
+      const commun = { capacite, nom: capaciteDe(etat, id, capacite)?.nom ?? null, role, niveau };
+      const nul = !(niveau > 0);
+      if (nul && !joueAuNiveauNul(role)) return { ...commun, effet: SANS_EFFET, actif: false, raison: NIVEAU_NUL };
       const raison = raisonDuRepos(role, situation);
-      return { capacite, nom: capaciteDe(etat, id, capacite)?.nom ?? null, role, niveau, effet: EFFETS[role](niveau), actif: raison === null, raison };
+      const effet = nul && Object.hasOwn(EFFETS_AU_NIVEAU_NUL, role) ? EFFETS_AU_NIVEAU_NUL[role] : EFFETS[role](niveau);
+      return { ...commun, effet, actif: raison === null, raison };
     });
 }

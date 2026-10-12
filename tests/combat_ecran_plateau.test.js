@@ -124,7 +124,16 @@ test("le plateau : cent cases de A1 à J10, leurs repères, la légende", () => 
     assert.equal(noeud.tagName, "SECTION");
     assert.equal(noeud.className, "combat-plateau");
     assert.equal(noeud.getAttribute("aria-label"), "Carte");
-    assert.deepEqual(noeud.children.map((enfant) => enfant.className), ["combat-grille", "combat-legende"]);
+    assert.deepEqual(noeud.children.map((enfant) => enfant.className), ["combat-plateau-tete", "combat-grille", "combat-legende"]);
+
+    // L'en-tête de la maquette : ce qu'est la carte, comment s'y compte une
+    // distance ; et, à part, où lire un nom entier (la feuille ne le montre
+    // que là où une souris survole).
+    const tete = noeud.querySelector(".combat-plateau-tete");
+    assert.equal(tete.tagName, "P");
+    assert.deepEqual(tete.children.map(texteDe), ["Carte de 10 × 10 cases · une diagonale compte pour une case", "Survolez un jeton pour son nom complet"]);
+    assert.deepEqual(tete.children.map((enfant) => enfant.className), ["", "combat-plateau-survol"]);
+    for (const balise of ["button", "a", "input"]) assert.equal(tete.querySelectorAll(balise).length, 0, `rien ne s'y actionne : ${balise}`);
 
     // L'ordre du document est celui que la feuille range : le coin, les dix
     // lettres, puis chaque ligne, son numéro devant ses dix cases.
@@ -193,6 +202,13 @@ test("un jeton est un bouton nommé : nom entier en titre, camp, état et case d
     assert.deepEqual(classesDe(marmiton), ["combat-jeton", "combat-adv"], "sans marque, ni joue ni cible ni mort");
     assert.equal(texteDe(marmiton.querySelector(".combat-initiales")), "M1");
     assert.equal(texteDe(marmiton.querySelector(".combat-nom-court")), "Marmiton 1");
+    // Le nom court est en deux morceaux : la case peut couper le nom, jamais
+    // le numéro d'exemplaire (vu dans un navigateur : deux Marmitons d'une
+    // même case portaient le même nom coupé, « Mar… »).
+    const morceaux = (jeton) => jeton.querySelector(".combat-nom-court").children.map((enfant) => [enfant.className, texteDe(enfant)]);
+    assert.deepEqual(morceaux(marmiton), [["combat-nom-debut", "Marmiton"], ["combat-nom-numero", "1"]]);
+    assert.deepEqual(morceaux(aubepine), [["combat-nom-debut", "Aubépine"]], "sans numéro, un seul morceau");
+    assert.equal(marmiton.querySelector(".combat-nom-court").textContent, "Marmiton 1", "lu d'un trait, le nom court garde son espace");
 
     const mort = jetonDe(partie, "adv4");
     assert.deepEqual(classesDe(mort), ["combat-jeton", "combat-adv", "mort"]);
@@ -214,6 +230,46 @@ test("un jeton est un bouton nommé : nom entier en titre, camp, état et case d
       assert.equal(jeton.hasAttribute("aria-pressed"), false);
       assert.equal(jeton.hasAttribute("draggable"), false);
     }
+  } finally {
+    retirer();
+  }
+});
+
+test("des initiales de trois signes (« M12 ») portent la classe qui les écrit plus petit ; une ou deux, non ; et la classe suit le jeton", () => {
+  const jetonDe = (id, initiales) => ({ camp: "adv", entier: `Marmiton de corvée n° ${id}`, jeton: `Marmiton ${id}`, initiales, marque: null, mort: false, nom: `Marmiton de corvée n° ${id}, adversaire, case D6`, choix: null, inactif: false });
+  const vueDe = (douzieme) => ({ phase: "combat", cases: { D6: { jetons: ["a", "b", "c"], active: false, choix: null } }, jetons: { a: jetonDe(1, "M"), b: jetonDe(2, "M2"), c: jetonDe(12, douzieme) } });
+  const retirer = installerDom();
+  try {
+    const partie = creer({ executer() {}, ouvrirCase() {} });
+    document.body.append(partie.noeud);
+    partie.rendre(vueDe("M12"));
+    const initiales = [...partie.noeud.querySelectorAll(".combat-jeton .combat-initiales")];
+    assert.deepEqual(initiales.map(texteDe), ["M", "M2", "M12"]);
+    assert.deepEqual(initiales.map((noeud) => noeud.className), ["combat-initiales", "combat-initiales", "combat-initiales combat-initiales-longues"]);
+    // Le même jeton, renommé : la classe s'en va avec le troisième signe.
+    partie.rendre(vueDe("M9"));
+    assert.equal(initiales[2].className, "combat-initiales");
+    assert.equal(texteDe(initiales[2]), "M9");
+  } finally {
+    retirer();
+  }
+});
+
+test("le nom court d'un jeton : seul un numéro final, après une espace, s'en détache", () => {
+  const vue = vueDe({
+    places: { pj1: "A1", adv2: "B1", adv3: "C1", adv4: "D1", adv5: "E1" },
+    jetons: { pj1: { jeton: "R2" }, adv2: { jeton: "Chef de partie 12" }, adv3: { jeton: "Marmiton" }, adv4: { jeton: "7" }, adv5: { jeton: "Marmiton 3 bis" } },
+  });
+  const { partie, retirer } = monter(vue);
+  try {
+    const morceaux = (id) => jetonDe(partie, id).querySelector(".combat-nom-court").children.map((enfant) => [enfant.className, enfant.textContent]);
+    assert.deepEqual(morceaux("pj1"), [["combat-nom-debut", "R2"]], "un chiffre collé au nom n'est pas un numéro d'exemplaire");
+    assert.deepEqual(morceaux("adv2"), [["combat-nom-debut", "Chef de partie"], ["combat-nom-numero", "12"]]);
+    assert.deepEqual(morceaux("adv3"), [["combat-nom-debut", "Marmiton"]]);
+    assert.deepEqual(morceaux("adv4"), [["combat-nom-debut", "7"]], "un nombre seul est un nom");
+    assert.deepEqual(morceaux("adv5"), [["combat-nom-debut", "Marmiton 3 bis"]], "un nombre au milieu reste dans le nom");
+    // Dans tous les cas, le texte du nom court est celui de la vue.
+    for (const [id, { jeton }] of Object.entries(vue.jetons)) assert.equal(jetonDe(partie, id).querySelector(".combat-nom-court").textContent, jeton, id);
   } finally {
     retirer();
   }
@@ -271,6 +327,53 @@ test("trois jetons par case au plus, puis « +k » : un compte au-delà de deux,
     } finally {
       retirer();
     }
+  }
+});
+
+test("dans une case pleine, ceux qu'on peut choisir passent devant et les morts derrière : un mort ne cache pas un vivant", () => {
+  const titres = (partie, nom) => jetonsDe(partie, nom).map((b) => b.getAttribute("title"));
+  const noms = (...ids) => ids.map((id) => PROTAGONISTES[id].entier);
+  const tous = { pj1: "D4", adv2: "D4", adv3: "D4", adv4: "D4" };
+  // Vu dans un navigateur : après la mort du Marmiton n° 1, la case D4 montrait
+  // Aubépine, le Chef et le mort ; le Marmiton n° 2, qu'on pouvait cibler,
+  // était derrière « +1 ».
+  const cibles = vueDe({ places: tous, jetons: { pj1: { marque: "joue", inactif: true }, adv2: { choix: CIBLER("adv2") }, adv3: { mort: true, inactif: true }, adv4: { choix: CIBLER("adv4") } } });
+  const { partie, appels, retirer } = monter(cibles);
+  try {
+    assert.deepEqual(titres(partie, "D4"), noms("pj1", "adv2", "adv4"));
+    jetonDe(partie, "adv4").click();
+    assert.deepEqual(appels, [["executer", CIBLER("adv4").commande, "plateau"]], "le vivant qu'on peut cibler se touche sur la carte");
+    assert.equal(jetonDe(partie, "adv3"), null, "le mort est derrière « +1 »");
+    assert.equal(texteDe(caseDe(partie, "D4").querySelector(".combat-plus-large")), "+1");
+
+    // La cible choisie reste devant ceux qu'on peut encore choisir (l'ordre de la vue) ; le mort reste dernier.
+    partie.rendre(vueDe({ places: { pj1: "D4", adv4: "D4", adv2: "D4", adv3: "D4" }, jetons: { pj1: { marque: "joue", inactif: true }, adv4: { marque: "cible", choix: CIBLER("adv4") }, adv2: { choix: CIBLER("adv2") }, adv3: { mort: true, inactif: true } } }), {});
+    assert.deepEqual(titres(partie, "D4"), noms("pj1", "adv4", "adv2"));
+
+    // Au repos (« Qui joue ? »), un vivant passe devant un mort, même sans rien à choisir.
+    partie.rendre(vueDe({ places: tous, jetons: { adv2: { mort: true }, adv3: { mort: true } } }), {});
+    assert.deepEqual(titres(partie, "D4"), noms("pj1", "adv4", "adv2"));
+    // À trois dans la case, tous se voient : le mort en dernier.
+    partie.rendre(vueDe({ places: { pj1: "D4", adv3: "D4", adv4: "D4" }, jetons: { adv3: { mort: true } } }), {});
+    assert.deepEqual(titres(partie, "D4"), noms("pj1", "adv4", "adv3"));
+    // Et rien d'autre ne bouge : au tour des adversaires, ceux qui peuvent
+    // jouer ne passent pas devant le personnage. Un jeton ne saute pas d'une
+    // ligne à l'autre à chaque tour.
+    partie.rendre(vueDe({ places: { pj1: "D4", adv3: "D4", adv4: "D4" }, jetons: { adv3: { choix: CHOISIR("adv3") }, adv4: { choix: CHOISIR("adv4") } } }), {});
+    assert.deepEqual(titres(partie, "D4"), noms("pj1", "adv3", "adv4"));
+    // Un jeton écarté qui porterait un choix ne passe pas devant : il ne se choisit pas.
+    partie.rendre(vueDe({ places: tous, jetons: { adv4: { choix: CIBLER("adv4"), inactif: true } } }), {});
+    assert.deepEqual(titres(partie, "D4"), noms("pj1", "adv2", "adv3"));
+  } finally {
+    retirer();
+  }
+
+  // Avant le lancement, rien ne se range : l'ordre d'ajout.
+  const avant = monter(vueDe({ phase: "preparation", places: tous, jetons: { adv3: { mort: true } } }));
+  try {
+    assert.deepEqual(titres(avant.partie, "D4"), noms("pj1", "adv2", "adv3"));
+  } finally {
+    avant.retirer();
   }
 });
 

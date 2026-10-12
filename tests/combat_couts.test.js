@@ -376,6 +376,34 @@ test("le même X vaut pour le souffle et pour le lien : il est borné par le plu
   assert.deepEqual(ressources(jouer(regle, CONFIRMER), "pj1"), { actions: 1, souffle: 8, liens: [0] });
 });
 
+test("X va jusqu'à ce qui reste, non jusqu'au maximum : le souffle et le lien déjà dépensés à ce tour ne se rechoisissent pas", () => {
+  // Le souffle : Flambage [1] en prend 5 sur 10 ; le Pas de côté qui suit ne va plus que de 0 à 5.
+  const depart = contre(AUBEPINE);
+  const entame = jouer(depart, capacite(depart, "pj1", "Flambage", 0), CONFIRMER);
+  assert.deepEqual(ressources(entame, "pj1"), { actions: 1, souffle: 5, liens: [2] });
+  assert.equal(entame.protagonistes.pj1.souffleMax, 10, "le maximum, lui, n'a pas bougé");
+  const ouvert = jouer(entame, capacite(entame, "pj1", "Pas de côté"));
+  assert.deepEqual(reglages(ouvert).x, { valeur: 0, min: 0, max: 5 });
+  refuse(ouvert, regler("x", 6), "hors_bornes", "Cette valeur ne va que de 0 à 5.");
+  assert.equal(jouer(ouvert, regler("x", 5), CONFIRMER).protagonistes.pj1.souffle, 0);
+
+  // Le lien : Fournaise prend 1 point des 2 du Grand Four ; Braise, du même primordial, coûte X de lien.
+  const braisiere = contre(
+    pjEssai((champs) => {
+      champs.capacites.push(capaciteEssai({ nom: "Braise", groupe: { genre: "primordial", titre: "Grand Four" }, lien: 0, facons: [faconEssai({ cout: { souffle: 0, lien: "X" } })] }));
+    }),
+  );
+  const rechauffe = jouer(braisiere, capacite(braisiere, "pj1", "Fournaise"), CONFIRMER);
+  assert.deepEqual(ressources(rechauffe, "pj1"), { actions: 1, souffle: 9, liens: [1] });
+  assert.equal(rechauffe.protagonistes.pj1.liens[0].max, 2);
+  const braise = jouer(rechauffe, capacite(rechauffe, "pj1", "Braise"));
+  assert.deepEqual(reglages(braise).x, { valeur: 0, min: 0, max: 1 });
+  refuse(braise, regler("x", 2), "hors_bornes", "Cette valeur ne va que de 0 à 1.");
+  const vide = jouer(braise, regler("x", 1), CONFIRMER);
+  assert.deepEqual(vide.protagonistes.pj1.liens, [{ points: 0, max: 2 }]);
+  assert.equal(derniereLigne(vide), "Aubépine : Braise (1 lien).");
+});
+
 // ─── Le lien ────────────────────────────────────────────────────────────────
 
 // Un personnage à deux jauges : le Grand Four (1 point), dont vient Fournaise
@@ -607,6 +635,41 @@ test("un adversaire se déplace à son rang, s'il en a la capacité ; sans elle,
     boutons(cloue, "adv2").map((bouton) => cloue.photos.adv2.capacites[bouton.capacite].nom),
     ["Frappe", "Moulinet farineux"],
   );
+});
+
+// Relecture de fin de groupe (lot 4) : une capacité de déplacement qui
+// n'évolue pas se joue à la puissance 0. Son bouton, actif, ouvrait un geste
+// sans aucune case d'arrivée, dont on ne sortait que par « Revenir ».
+test("un déplacement à la puissance 0 n'offre aucune case : son bouton est inactif, et dit pourquoi", () => {
+  const surPlace = (champs) => {
+    const pas = champs.capacites.find((une) => une.role === "deplacement");
+    Object.assign(pas, { niveau: 0, evolue: false, facons: [faconEssai({ puissance: 0, description: "Se déplace de 0 cases." })] });
+  };
+  const depart = combat(surD4(pjEssai(surPlace), MARMITON, CIBOULETTE));
+  const pas = indiceDe(depart, "pj1", "Pas chassé");
+  assert.deepEqual(boutonDe(depart, "pj1", "Pas chassé"), [{ capacite: pas, facon: 0, actif: false, raison: "aucune case à sa portée" }]);
+  assert.deepEqual(faconsDe(depart, "pj1", pas), [{ facon: 0, actif: false, raison: "aucune case à sa portée" }]);
+  refuse(depart, capacite(depart, "pj1", "Pas chassé"), "interdit", "aucune case à sa portée");
+  assert.equal(gesteEnCours(depart), null, "aucun geste ne s'ouvre");
+  assert.equal(boutonDe(depart, "pj1", "Frappe")[0].actif, true, "ses autres boutons n'en savent rien");
+  // La raison tient à la capacité : elle se dit avant l'action qui manque.
+  const frappe = [capacite(depart, "pj1", "Frappe"), viser("adv2"), d8(1)];
+  const sansAction = jouer(depart, frappe, frappe);
+  assert.equal(sansAction.protagonistes.pj1.actions, 0);
+  assert.equal(boutonDe(sansAction, "pj1", "Pas chassé")[0].raison, "aucune case à sa portée");
+  assert.equal(boutonDe(sansAction, "pj1", "Frappe")[0].raison, "Plus d'action à ce tour.");
+
+  // Un adversaire dont le déplacement est au rang 0, de même.
+  const fige = adverse(adversaireEssai(surPlace));
+  assert.deepEqual(boutonDe(fige, "adv2", "Pas chassé").map(({ actif, raison }) => [actif, raison]), [[false, "aucune case à sa portée"]]);
+  refuse(fige, capacite(fige, "adv2", "Pas chassé"), "interdit", "aucune case à sa portée");
+
+  // Le voisin : à la puissance 1, le même bouton est actif, et mène à huit cases.
+  const mobile = contre(AUBEPINE);
+  assert.deepEqual(boutonDe(mobile, "pj1", "Pas chassé").map(({ actif, raison }) => [actif, raison]), [[true, null]]);
+  assert.equal(arrivees(jouer(mobile, capacite(mobile, "pj1", "Pas chassé", 0))).length, 8);
+  // Une autre capacité à la puissance 0 n'est pas un déplacement : elle se joue.
+  assert.equal(boutonDe(mobile, "pj1", "Goûter")[0].actif, true);
 });
 
 // ─── Le jet prêté ───────────────────────────────────────────────────────────

@@ -206,7 +206,8 @@ function defautsDesClasses(css) {
   const defauts = [];
   for (const { selecteur } of selecteursDe(css)) {
     // Chaque règle part de l'écran du combat : elle ne touche rien d'autre.
-    if (!/^(?:\.combat(?![\w])|\.combat-[a-z]|#ecran:has\(> \.combat\)$)/.test(selecteur)) defauts.push(`règle hors de l'écran du combat : ${selecteur}`);
+    // « :where(.combat) » en part aussi, sans rien peser (la police, plus bas).
+    if (!/^(?:\.combat(?![\w])|\.combat-[a-z]|:where\(\.combat\) [a-z]|#ecran:has\(> \.combat\)$)/.test(selecteur)) defauts.push(`règle hors de l'écran du combat : ${selecteur}`);
     for (const [, classe] of selecteur.matchAll(/\.([\w-]+)/g)) {
       if (/carte/.test(classe)) defauts.push(`classe en « carte » : ${selecteur}`);
       else if (classe !== "combat" && !classe.startsWith("combat-") && !CLASSES_DU_SITE.has(classe) && !ETATS.has(classe)) defauts.push(`classe inconnue .${classe} : ${selecteur}`);
@@ -228,7 +229,9 @@ test("combat.css — chaque règle part d'une classe « combat » ; aucune class
   refuse(".combat-x.choisie { margin: 0; }", /classe inconnue \.choisie/);
   refuse(".combat-carte { margin: 0; }", /classe en « carte »/);
   refuse(".combat .carte-adversaire { margin: 0; }", /classe en « carte »/);
-  assert.deepEqual(defautsDesClasses(".combat { margin: 0; }\n.combat-fiche.joue summary::after,\n.combat-copie .champ { margin: 0; }"), []);
+  refuse(":where(.fiche) button { margin: 0; }", /hors de l'écran du combat/);
+  refuse(":where(button) { margin: 0; }", /hors de l'écran du combat/);
+  assert.deepEqual(defautsDesClasses(".combat { margin: 0; }\n.combat-fiche.joue summary::after,\n.combat-copie .champ { margin: 0; }\n:where(.combat) button { font: inherit; }"), []);
   // La racine que vise la largeur, et quelques nœuds du contrat (§ 7.9).
   const classes = new Set(selecteursDe(COMBAT).flatMap((regle) => [...regle.selecteur.matchAll(/\.([\w-]+)/g)].map(([, classe]) => classe)));
   for (const attendue of [
@@ -240,6 +243,11 @@ test("combat.css — chaque règle part d'une classe « combat » ; aucune class
     "combat-reglages", "combat-case-liste", "combat-annonce", "combat-camps", "combat-camp", "combat-camp-pj", "combat-camp-adv", "combat-compte", "combat-fiche",
     "combat-pastille", "combat-nom", "combat-sous", "combat-statut", "combat-actions", "combat-pion", "combat-fiche-corps", "combat-jauge", "combat-point",
     "combat-zones", "combat-contre", "combat-valeurs", "combat-effets", "combat-journal", "combat-journal-tete", "combat-lignes", "combat-copie",
+    // Ce que le regard dans un navigateur a fait ajouter (la maquette).
+    "combat-raison", "combat-plateau-tete", "combat-plateau-survol", "combat-nom-debut", "combat-nom-numero", "combat-qui-suite", "combat-description",
+    "combat-sous-ligne", "combat-jauge-souffle",
+    // Ce que la mesure des cases a fait ajouter (des initiales de trois signes, rognées par le rond).
+    "combat-initiales-longues",
   ]) {
     assert.ok(classes.has(attendue), `.${attendue} n'a aucune règle`);
   }
@@ -480,22 +488,182 @@ test("combat.css — le plateau : des pistes que rien n'élargit, des cases qui 
   assert.equal(valeur(COMBAT, ".combat-plus-large", "display"), "none");
   assert.notEqual(valeur(COMBAT, ".combat-plus-etroit", "display"), "none");
   // À partir de 56rem : le nom court à côté du rond, les initiales cachées ; trois jetons, puis le « +k » large.
-  assert.equal(valeur(COMBAT, ".combat-nom-court", "display", MEDIA_56), "block");
-  assert.equal(valeur(COMBAT, ".combat-nom-court", "text-overflow", MEDIA_56), "ellipsis");
+  // Le nom court se coupe, jamais le numéro d'exemplaire qui le finit.
+  assert.equal(valeur(COMBAT, ".combat-nom-court", "display", MEDIA_56), "flex");
+  assert.equal(valeur(COMBAT, ".combat-nom-court", "min-width", MEDIA_56), "0");
+  assert.equal(valeur(COMBAT, ".combat-nom-court", "white-space", MEDIA_56), "nowrap");
+  assert.equal(valeur(COMBAT, ".combat-nom-debut", "text-overflow", MEDIA_56), "ellipsis");
+  assert.equal(valeur(COMBAT, ".combat-nom-debut", "overflow", MEDIA_56), "hidden");
+  assert.equal(valeur(COMBAT, ".combat-nom-debut", "min-width", MEDIA_56), "0");
+  assert.equal(valeur(COMBAT, ".combat-nom-numero", "flex", MEDIA_56), "none");
+  assert.equal(valeur(COMBAT, ".combat-nom-numero", "overflow", MEDIA_56), null);
   assert.equal(valeur(COMBAT, ".combat-grille .combat-initiales", "display", MEDIA_56), "none");
   assert.equal(valeur(COMBAT, ".combat-jeton ~ .combat-jeton ~ .combat-jeton", "display", MEDIA_56), "flex");
   assert.equal(valeur(COMBAT, ".combat-jeton ~ .combat-jeton ~ .combat-jeton ~ .combat-jeton", "display", MEDIA_56), "none");
   assert.equal(valeur(COMBAT, ".combat-plus-etroit", "display", MEDIA_56), "none");
   assert.equal(valeur(COMBAT, ".combat-plus-large", "display", MEDIA_56), "block");
-  // Le « +k » large ne prend aucune ligne aux trois jetons.
+  // Le « +k » large ne prend aucune ligne aux trois jetons, ni aucune largeur
+  // aux deux premiers : il partage la troisième ligne avec le troisième.
   assert.equal(valeur(COMBAT, ".combat-plus-large", "grid-column", MEDIA_56), "2");
-  assert.equal(valeur(COMBAT, ".combat-plus-large", "grid-row", MEDIA_56), "1 / span 3");
+  assert.equal(valeur(COMBAT, ".combat-plus-large", "grid-row", MEDIA_56), "3");
+  assert.equal(valeur(COMBAT, ".combat-jeton", "grid-column", MEDIA_56), "1 / -1");
+  assert.equal(valeur(COMBAT, ".combat-jeton ~ .combat-jeton ~ .combat-jeton", "grid-column", MEDIA_56), "1");
+  assert.equal(valeur(COMBAT, ".combat-case", "grid-template-columns", MEDIA_56), "minmax(0, 1fr) auto");
   // Le bouton d'une case qu'on choisit la couvre, sous ses jetons : jamais un bouton dans un bouton.
   assert.equal(valeur(COMBAT, ".combat-case-choix", "position"), "absolute");
   assert.equal(valeur(COMBAT, ".combat-case-choix", "inset"), "0");
   assert.equal(valeur(COMBAT, ".combat-jeton", "z-index"), "1");
-  // Le seul positionnement absolu, avec la région d'annonce.
-  assert.deepEqual(selecteursDe(COMBAT).filter((regle) => /position:\s*(?:absolute|fixed|sticky)/.test(regle.corps)).map((regle) => regle.selecteur), [".combat-case-choix", ".combat-annonce"]);
+  // Les seuls positionnements absolus, avec la raison d'un bouton inactif et la région d'annonce.
+  assert.deepEqual(selecteursDe(COMBAT).filter((regle) => /position:\s*(?:absolute|fixed|sticky)/.test(regle.corps)).map((regle) => regle.selecteur), [".combat-case-choix", ".combat-raison", ".combat-annonce"]);
+  // L'en-tête de la carte ; sa seconde phrase ne se montre que là où une souris survole.
+  assert.equal(valeur(COMBAT, ".combat-plateau-tete", "display"), "flex");
+  assert.equal(valeur(COMBAT, ".combat-plateau-tete", "flex-wrap"), "wrap");
+  assert.equal(valeur(COMBAT, ".combat-plateau-survol", "display"), "none");
+  assert.equal(valeur(COMBAT, ".combat-plateau-survol", "display", MEDIA_56), "inline");
+});
+
+// ——— La cascade : ce qu'un navigateur a montré ———
+
+// Le poids d'un sélecteur : [identifiants, classes, balises]. « :where(…) »
+// ne pèse rien ; « :has(…) », « :is(…) » et « :not(…) » pèsent ce qu'ils
+// contiennent ; une autre pseudo-classe et un attribut pèsent une classe.
+function poids(selecteur) {
+  const texte = selecteur.replace(/:where\([^()]*\)/g, " ").replace(/:(?:has|is|not)\(/g, " (").replace(/\[[^\]]*\]/g, "[a]");
+  const identifiants = (texte.match(/#[\w-]+/g) ?? []).length;
+  const classes = (texte.match(/\.[\w-]+|\[a\]|(?<!:):(?!:)[\w-]+/g) ?? []).length;
+  const balises = (texte.replace(/#[\w-]+|\.[\w-]+|\[a\]|::?[\w-]+(?:\([^()]*\))?/g, " ").match(/[a-z][\w-]*/gi) ?? []).length + (texte.match(/::[\w-]+/g) ?? []).length;
+  return [identifiants, classes, balises];
+}
+const pese = ([a, b, c]) => a * 10000 + b * 100 + c;
+const POLICE = /^(?:font|font-size|font-weight|font-family|line-height)$/;
+// Une règle générale : son sujet est une balise qui s'actionne, sans classe.
+const GENERALE = /(?:^|[\s>+~])(?:button|select|textarea|input)$/;
+
+/**
+ * Les règles générales qui règlent la police en pesant autant qu'une classe.
+ * Une telle règle l'emporte sur « .combat-de », « .combat-jeton » ou
+ * « .bouton », qui ne pèsent qu'une classe : la taille, la graisse et
+ * l'interligne qu'elles se donnent sont alors perdus, sans bruit.
+ */
+function policesEcrasees(css) {
+  return selecteursDe(css)
+    .filter((regle) => GENERALE.test(regle.selecteur) && declarations(regle.corps).some(([propriete]) => POLICE.test(propriete)))
+    .filter((regle) => pese(poids(regle.selecteur)) >= pese([0, 1, 0]))
+    .map((regle) => regle.selecteur);
+}
+
+test("combat.css — aucune règle générale ne l'emporte sur la police d'une classe : un dé, un jeton et un bouton gardent leur taille, leur graisse et leur interligne", () => {
+  // Les poids, sur des sélecteurs de la feuille.
+  assert.deepEqual(poids(".combat button"), [0, 1, 1]);
+  assert.deepEqual(poids(":where(.combat) button"), [0, 0, 1]);
+  assert.deepEqual(poids(".combat-de"), [0, 1, 0]);
+  assert.deepEqual(poids(".combat-cibles button[aria-pressed=\"true\"]"), [0, 2, 1]);
+  assert.deepEqual(poids(".combat-fiche[open] summary::after"), [0, 2, 2]);
+  assert.deepEqual(poids("#ecran:has(> .combat)"), [1, 1, 0]);
+  assert.deepEqual(poids(".combat-jeton ~ .combat-jeton ~ .combat-jeton"), [0, 3, 0]);
+  assert.deepEqual(poids(".combat-coord:nth-child(n + 12)"), [0, 2, 0]);
+
+  assert.deepEqual(policesEcrasees(COMBAT), []);
+  // La feuille telle qu'elle a été vue dans Edge 155 et Firefox 143 : « font:
+  // inherit » sous « .combat button » rendait à un dé 16 px sur 24 (ses
+  // étiquettes sortaient de 6 px en haut et en bas), et à un jeton de même.
+  assert.deepEqual(policesEcrasees(".combat button,\n.combat select {\n  min-height: var(--cible-tactile);\n  font: inherit;\n}"), [".combat button", ".combat select"]);
+  assert.deepEqual(policesEcrasees(".combat-grille button {\n  min-width: 0;\n  font: inherit;\n}"), [".combat-grille button"]);
+  assert.deepEqual(policesEcrasees(".combat-choix > button { line-height: 1; }"), [".combat-choix > button"]);
+  assert.deepEqual(policesEcrasees(".combat input { font-size: var(--taille-petite); }"), [".combat input"]);
+  // Ce qui ne pèse rien, ou qui ne touche pas à la police, passe.
+  assert.deepEqual(policesEcrasees(":where(.combat) button { font: inherit; }\n.combat button { min-height: var(--cible-tactile); }\n.combat-cibles button { color: var(--texte); }"), []);
+
+  // La police du site arrive par une règle qui ne pèse rien, pour les quatre balises.
+  for (const balise of ["button", "select", "textarea", "input"]) assert.equal(valeur(COMBAT, `:where(.combat) ${balise}`, "font"), "inherit", balise);
+  // Et ce que le dé et le jeton se donnent est bien écrit sur leur seule classe.
+  assert.equal(valeur(COMBAT, ".combat-de", "line-height"), "1");
+  assert.equal(valeur(COMBAT, ".combat-de", "font-weight"), "var(--graisse-forte)");
+  assert.equal(valeur(COMBAT, ".combat-jeton", "line-height"), "1");
+  assert.equal(valeur(COMBAT, ".combat-case-plus", "line-height"), "1");
+});
+
+// ——— La raison d'un bouton inactif ———
+
+test("combat.css — la raison d'un bouton inactif ne s'écrit pas à côté de lui : elle se lit sous sa rangée au survol et au focus", () => {
+  assert.equal(valeur(COMBAT, ".combat-raison", "display"), "none");
+  assert.equal(valeur(COMBAT, ".combat-raison", "position"), "absolute");
+  assert.equal(valeur(COMBAT, ".combat-raison", "top"), "100%");
+  assert.equal(valeur(COMBAT, ".combat-raison", "max-width"), "100%");
+  // Elle se lit sur le fond, dans la couleur du texte : pas une couleur de second rang.
+  assert.equal(valeur(COMBAT, ".combat-raison", "background"), "var(--fond)");
+  assert.equal(valeur(COMBAT, ".combat-raison", "color"), "var(--texte)");
+  // Au survol (souris, doigt) et au focus (clavier, doigt) du bouton qui la précède.
+  for (const etat of ["hover", "focus"]) assert.equal(valeur(COMBAT, `.combat [aria-disabled="true"]:${etat} + .combat-raison`, "display"), "block", etat);
+  // Chaque rangée qui porte un bouton à raison la tient sous elle.
+  for (const rangee of [".combat-commandes", ".combat-autres", ".combat-groupe", ".combat-cibles", ".combat-choix", ".combat-ligne"]) {
+    assert.equal(valeur(COMBAT, rangee, "position"), "relative", rangee);
+  }
+  // Sur un grand écran, celle de « Fin de tour » se range sous lui, au bout de la barre (vu : elle paraissait sous « Nouveau combat »).
+  assert.equal(valeur(COMBAT, ".combat-commandes > .combat-raison", "right", MEDIA_56), "0");
+  assert.equal(valeur(COMBAT, ".combat-commandes > .combat-raison", "left", MEDIA_56), "auto");
+  // Rien d'autre ne la montre : ni une règle sans survol ni focus, ni un affichage dans un @media.
+  const montrent = (css) => selecteursDe(css).filter((regle) => /\.combat-raison$/.test(regle.selecteur) && /display:\s*(?!none)[a-z]/.test(regle.corps)).map((regle) => regle.selecteur);
+  assert.deepEqual(montrent(COMBAT), [".combat [aria-disabled=\"true\"]:hover + .combat-raison", ".combat [aria-disabled=\"true\"]:focus + .combat-raison"]);
+  assert.deepEqual(montrent(".combat-raison { display: none; }\n.combat-groupe .combat-raison { display: inline; }"), [".combat-groupe .combat-raison"]);
+});
+
+// ——— La barre, les fiches, le panneau : la maquette ———
+
+test("combat.css — comme sur la maquette : « Fin de tour » ferme la barre ; l'état suit la ligne sous le nom ; les jauges, la résistance, le texte de la capacité", () => {
+  // La barre : sur un grand écran, « Nouveau combat » passe devant « Fin de tour », bouton principal.
+  assert.equal(valeur(COMBAT, ".combat-autres", "order", MEDIA_56), "-1");
+  assert.equal(valeur(COMBAT, ".combat-autres", "order"), null);
+
+  // L'en-tête d'une fiche : deux lignes, et l'état dans la seconde, à la suite.
+  assert.equal(valeur(COMBAT, ".combat-fiche summary", "grid-template-areas"), "\"pastille nom actions repli\" \"pastille sous sous repli\"");
+  assert.equal(valeur(COMBAT, ".combat-sous-ligne", "grid-area"), "sous");
+  // Le point qui les sépare tient à la ligne : un état passé à la ligne ne commence pas par un point.
+  assert.equal(valeur(COMBAT, ".combat-sous:not(:last-child)::after", "content"), "\" ·\"");
+  assert.equal(valeur(COMBAT, ".combat-statut", "white-space"), "nowrap");
+  assert.ok(!selecteursDe(COMBAT).some((regle) => /\.combat-statut/.test(regle.selecteur) && /grid-area|justify-self/.test(regle.corps)), "l'état n'a plus de place à lui");
+  // Un mort n'a plus d'action à montrer.
+  assert.equal(valeur(COMBAT, ".combat-fiche.morte .combat-actions", "display"), "none");
+
+  // Une jauge : le nom, des cases qui se partagent la largeur, le nombre à droite.
+  assert.equal(valeur(COMBAT, ".combat-jauge", "display"), "flex");
+  assert.equal(valeur(COMBAT, ".combat-jauge", "flex-wrap"), null);
+  assert.equal(valeur(COMBAT, ".combat-jauge > :first-child", "min-width"), "var(--largeur-etiquette)");
+  assert.equal(valeur(COMBAT, ".combat-jauge > :last-child", "margin-left"), "auto");
+  assert.equal(valeur(COMBAT, ".combat-point", "flex"), "1 1 0");
+  assert.equal(valeur(COMBAT, ".combat-jauge-souffle .combat-point", "background"), "var(--accent)");
+  assert.equal(valeur(COMBAT, ".combat-jauge .combat-point.vide", "background"), "transparent");
+  // La résistance : une case intacte est vide, une case perdue est pleine.
+  assert.equal(valeur(COMBAT, ".combat-zones .combat-point", "background"), "transparent");
+  assert.equal(valeur(COMBAT, ".combat-zones .combat-point.vide", "background"), "var(--combat-echec)");
+  // La table : l'armure rangée à droite, les noms abrégés sans soulignement.
+  assert.equal(valeur(COMBAT, ".combat-zones td:nth-child(3)", "text-align"), "right");
+  assert.equal(valeur(COMBAT, ".combat-zones abbr", "text-decoration"), "none");
+
+  // Le titre du panneau : la suite plus bas que le nom.
+  assert.equal(valeur(COMBAT, ".combat-qui-suite", "font-weight"), "normal");
+  assert.equal(valeur(COMBAT, ".combat-qui-suite", "color"), "var(--texte-2)");
+  // Le texte de la capacité, dans son cadre.
+  assert.match(valeur(COMBAT, ".combat-description", "border"), /solid var\(--separateur\)$/);
+  assert.equal(valeur(COMBAT, ".combat-description", "background"), "var(--fond)");
+  // Un dé grandit avec ce qu'il porte, jamais en deçà de son carré.
+  assert.equal(valeur(COMBAT, ".combat-chaine .combat-de", "width"), "auto");
+  for (const cadre of [null, MEDIA_56]) assert.equal(valeur(COMBAT, ".combat-chaine .combat-de", "min-width", cadre), valeur(COMBAT, ".combat-de", "width", cadre), `${cadre}`);
+  // Ses trois lignes (14, 24 et 14 px) y tiennent : 68 px sur un téléphone (à 60, elles touchaient le bord), 76 au-delà, comme la maquette.
+  const definis = jetons(JETONS, "clair");
+  const cote = (cadre) => {
+    const [, espace] = valeur(COMBAT, ".combat-de", "height", cadre).match(/^calc\(var\(--cible-tactile\) \+ var\(--(espace-\d)\)\)$/);
+    return parseFloat(definis["cible-tactile"]) + parseFloat(definis[espace]) * 16;
+  };
+  assert.equal(cote(null), 68);
+  assert.equal(cote(MEDIA_56), 76);
+
+  // Une rangée : son intitulé se centre sur ses boutons ; un nombre n'en prend pas toute la largeur.
+  assert.equal(valeur(COMBAT, ".combat-ligne > span", "align-self"), "center");
+  assert.equal(enRem(valeur(COMBAT, ".combat input[type=\"number\"]", "width"), definis), 6);
+  // La préparation : son lien vers les personnages est une cible de 44 px.
+  assert.equal(valeur(COMBAT, ".combat-preparation a", "min-height"), "var(--cible-tactile)");
+  assert.equal(valeur(COMBAT, ".combat-preparation a", "display"), "inline-flex");
 });
 
 // ——— Les cibles de 44 px, le journal ———
@@ -528,6 +696,9 @@ test("combat.css — toute cible fait 44 px, hors les cases ; le journal est lim
   assert.equal(enRem(valeur(COMBAT, ".combat-lignes", "max-height", MEDIA_56), definis), 24);
   assert.equal(valeur(COMBAT, ".combat-lignes", "max-height", MEDIA_80), null);
   assert.equal(valeur(COMBAT, ".combat-lignes", "overflow"), "auto");
+  // Vide, le journal quitte la page : une liste sans hauteur ne garde pas un arrêt du clavier (vu avant le lancement).
+  assert.equal(valeur(COMBAT, ".combat-lignes:empty", "display"), "none");
+  for (const vide of [".combat-avis:empty", ".combat-panneau:empty", ".combat-case-liste:empty", ".combat-copie:empty"]) assert.equal(valeur(COMBAT, vide, "display"), "none", vide);
   assert.equal(enRem("calc(var(--espace-6) * 10)", definis), 20);
   assert.equal(enRem("20rem", definis), null);
   assert.equal(valeur(COMBAT, ".combat-lignes", "font-family"), "var(--police-chasse-fixe)");

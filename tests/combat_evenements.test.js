@@ -27,7 +27,7 @@ import { peutLancer } from "../js/combat/preparation.js";
 import { EVENEMENTS_MAX, REGLES } from "../js/combat/regles.js";
 import * as valeurs from "../js/combat/valeurs.js";
 import { casesDOffice, journalAttendu, scenario } from "./outils/combat_reference.js";
-import { adversaireEssai, aubepineEssai, chefDePartieEssai, etatEssai, marmitonDeCorveeEssai, miseEnPlaceEssai, pjEssai } from "./outils/photographies_essai.js";
+import { adversaireEssai, aubepineEssai, capaciteEssai, chefDePartieEssai, etatEssai, faconEssai, marmitonDeCorveeEssai, miseEnPlaceEssai, pjEssai } from "./outils/photographies_essai.js";
 import { versContenu } from "./outils/scenario.js";
 
 // ─── Les outils ─────────────────────────────────────────────────────────────
@@ -847,6 +847,43 @@ test("l'esquive : offerte au PJ visé, de 1 au plus petit du souffle et des dég
   assert.equal(offre(jouer(bilan, d20(5))).esquive, null, "le souffle d'un adversaire n'annule rien");
 });
 
+test("« confirmer » ne s'offre qu'à un geste prêt : un déplacement sans case d'arrivée ne le montre pas, et le refuse", () => {
+  const { etat: sansGeste } = temoins().sans_geste;
+  const sansArrivee = jouer(sansGeste, capacite(sansGeste, "pj1", "Pas chassé", 1));
+  assert.deepEqual(offre(sansArrivee).pret, { ok: false, manque: "Choisissez une case d'arrivée." });
+  assert.equal(offre(sansArrivee).types.includes("confirmer"), false, "un type nommé par l'offre est un événement accepté");
+  refuse(sansArrivee, { type: "confirmer" }, "interdit", "Choisissez une case d'arrivée.");
+  const pret = jouer(sansArrivee, regler("arrivee", "F4"));
+  assert.deepEqual(offre(pret).pret, { ok: true });
+  assert.equal(offre(pret).types.includes("confirmer"), true);
+  assert.equal(jouer(pret, { type: "confirmer" }).protagonistes.pj1.case, "F4");
+});
+
+test("l'esquive n'est proposée qu'à un PJ : un adversaire qui en porte la capacité, avec son action et du souffle, n'esquive pas", () => {
+  // Un Marmiton qui a, lui aussi, un Pas de côté : la capacité ne suffit pas, il faut être le PJ visé.
+  const esquiveur = adversaireEssai((champs) => {
+    champs.capacites.push(
+      capaciteEssai({
+        nom: "Pas de côté",
+        role: "esquive",
+        groupe: { genre: "capacites", titre: "Capacités" },
+        facons: [faconEssai({ cout: { souffle: "X", lien: 0 }, description: "Annulez X dégâts reçus.", elements: ["Intervention"], intervention: true })],
+      }),
+    );
+  });
+  const depart = combat(surD4(AUBEPINE, esquiveur));
+  // La Frappe d'Aubépine touche : une réussite, A = 5, sur le torse.
+  const suites = jouer(depart, capacite(depart, "pj1", "Frappe"), viser("adv2"), d8(8), d8(2), d20(5));
+  assert.equal(gesteEnCours(suites).moment, "suites");
+  assert.deepEqual({ actions: suites.protagonistes.adv2.actions, souffle: suites.protagonistes.adv2.souffle }, { actions: 1, souffle: 5 }, "il aurait de quoi payer");
+  assert.equal(offre(suites).esquive, null);
+  assert.equal(offre(suites).types.includes("esquive"), false);
+  refuse(suites, { type: "esquive", x: 1 }, "hors_moment", "L'esquive ne s'offre pas à cet instant.");
+  const fini = jouer(suites, APPLIQUER);
+  assert.deepEqual({ actions: fini.protagonistes.adv2.actions, souffle: fini.protagonistes.adv2.souffle }, { actions: 1, souffle: 5 });
+  assert.equal(fini.protagonistes.adv2.zones[0].armure, 5, "les 5 dégâts sont reçus en entier");
+});
+
 test("appliquer : les dégâts vont à la victime, la ligne s'écrit, le geste quitte la pile", () => {
   const { etat: bilan } = temoins().bilan;
   const suites = jouer(bilan, d20(5));
@@ -891,6 +928,59 @@ test("l'annonce porte le pas de l'événement qui l'a dite ; un événement qui 
   // La fin d'un geste : sa ligne, entière.
   const fini = jouer(lance, d8(2), d20(5), APPLIQUER);
   assert.deepEqual(fini.annonce, { pas: fini.pas, texte: derniereLigne(fini) });
+});
+
+// Relecture de fin de groupe (lot 4) : ce que dit la région d'annonce, de bout
+// en bout par le moteur. Le bilan suivait le dé sans majuscule ; l'esquive et
+// la face décalée ne disaient rien avant « Appliquer » ; une attaque sans arme
+// se disait « touché » avant que ses dégâts soient saisis.
+test("l'annonce, par le moteur : le bilan d'une défense est une phrase ; la face décalée et l'esquive se disent, chacune à son pas", () => {
+  // Le Marmiton frappe Aubépine, qui manque sa défense.
+  const adverse = combat(surD4(AUBEPINE, MARMITON), { quiCommence: "adv" });
+  const bilan = jouer(adverse, capacite(adverse, "adv2", "Frappe"), viser("pj1"), d8(2));
+  assert.deepEqual(bilan.annonce, { pas: bilan.pas, texte: "1er dé : 2, échec. Aucune réussite, Aubépine reçoit C = 15." });
+  const suites = jouer(bilan, d20(5));
+  assert.deepEqual(suites.annonce, { pas: suites.pas, texte: "Localisation : 5, torse." });
+
+  // La face décalée : la phrase que le journal en écrira ; ramenée à 0, la localisation d'origine.
+  const decale = jouer(suites, { type: "decaler", de: 0, valeur: 9, raison: "Coup d'œil" });
+  assert.deepEqual(decale.annonce, { pas: decale.pas, texte: "Localisation d20 → 5, décalée à 14 (Coup d'œil) : jambe droite." });
+  const remis = jouer(decale, { type: "decaler", de: 0, valeur: 0 });
+  assert.deepEqual(remis.annonce, { pas: remis.pas, texte: "Localisation d20 → 5 : torse." });
+
+  // L'esquive : la phrase de l'intervention.
+  const esquive = jouer(decale, { type: "esquive", x: 3 });
+  assert.deepEqual(esquive.annonce, { pas: esquive.pas, texte: "Aubépine intervient : Pas de côté (1 action, 3 souffle), 15 → 12." });
+  assert.equal(esquive.pas, decale.pas + 1);
+
+  // Les deux phrases sont, mot pour mot, dans la ligne du geste fini, que dit « Appliquer ».
+  const fini = jouer(esquive, APPLIQUER);
+  const ligne = derniereLigne(fini);
+  assert.ok(ligne.includes(` ${decale.annonce.texte} ${esquive.annonce.texte} `), ligne);
+  assert.ok(fini.annonce.texte.startsWith(ligne));
+
+  // Un refus ne dit rien : l'annonce d'avant reste, l'objet même.
+  assert.equal(appliquer(esquive, { type: "esquive", x: 1 }).etat.annonce, esquive.annonce);
+});
+
+test("l'annonce, par le moteur : rien n'est dit de dégâts qui restent à saisir", () => {
+  // Un adversaire sans arme : sa Frappe emprunte un jet « sans arme », et ses dégâts se saisissent après lui.
+  const sansArme = adversaireEssai((champs) => {
+    champs.armes = [];
+    champs.capacites = [capaciteEssai({ nom: "Frappe", groupe: { genre: "capacites", titre: "Capacités" } })];
+  });
+  const depart = combat(surD4(AUBEPINE, sansArme), { quiCommence: "adv" });
+  const touche = jouer(depart, capacite(depart, "adv2", "Frappe"), regler("jet_prete", true), viser("pj1"), d8(2));
+  assert.equal(gesteEnCours(touche).moment, "bilan");
+  assert.deepEqual(touche.annonce, { pas: touche.pas, texte: "1er dé : 2, échec. Aucune réussite." });
+  // Le nombre saisi n'annonce rien : le d20 parle ensuite, puis la ligne dit ce qui a été fixé.
+  const saisi = jouer(touche, { type: "degats", base: "aucun", operations: [{ op: "ajuster", valeur: 4, raison: "Frappe" }], nature: "normaux" });
+  assert.equal(saisi.annonce, touche.annonce);
+  assert.match(jouer(saisi, d20(5), APPLIQUER).annonce.texte, /aucune réussite, Aubépine reçoit 4 \(à la main : Frappe\)\. Localisation d20 → 5 : torse\. Armure 10 → 6\./);
+
+  // Le voisin : la même attaque, d'un adversaire armé, dit sa lettre et ses dégâts.
+  const arme = combat(surD4(AUBEPINE, MARMITON), { quiCommence: "adv" });
+  assert.equal(jouer(arme, capacite(arme, "adv2", "Frappe"), viser("pj1"), d8(4), d8(2)).annonce.texte, "2e dé : 2, échec. 1 réussite, Aubépine reçoit B = 10.");
 });
 
 // ─── Le rejeu ───────────────────────────────────────────────────────────────

@@ -429,7 +429,11 @@ function monter(visite) {
     const fin = vue.finDeTour;
     commandeDeFin = fin?.commande ?? null;
     finDeTour.hidden = fin === null;
-    reglerBouton(finDeTour, raisonDeFin, fin === null || fin.actif === true, fin?.raison ?? null);
+    // Quand on ne joue pas (un combat ouvert ailleurs), la séance refuserait
+    // la fin du tour sans rien montrer : le bouton est inactif, et dit
+    // pourquoi, par la phrase de la barre.
+    const joue = bloque === null;
+    reglerBouton(finDeTour, raisonDeFin, fin === null || (joue && fin.actif === true), joue ? (fin?.raison ?? null) : gardien.phrase());
     // Un combat ouvert ailleurs se reprend, un combat plus récent ne
     // s'écrase pas : la séance refuserait le combat vide.
     const libre = bloque !== "ailleurs" && bloque !== "recent";

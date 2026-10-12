@@ -46,7 +46,8 @@
 // Les trois comparaisons sont exportées : le contrôle du combat de référence
 // fictif (tests/combat_reference.test.js) emploie les mêmes, et les voit dire
 // un écart puis se taire. Ce que le banc compare sur le vrai classeur est
-// ainsi tenu par node --test.
+// ainsi tenu par node --test. Les valeurs de départ qu'il écrit (ecrireDepart)
+// le sont de même, sur les protagonistes de la démonstration.
 
 import { readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
@@ -261,10 +262,16 @@ function tableau(lignes) {
   for (const ligne of lignes) dire(`  ${ligne.map((cellule, colonne) => String(cellule).padEnd(largeurs[colonne])).join("   ").trimEnd()}`);
 }
 
+// Les faces d'une zone, comme le site les écrit : « 2-11 », « 20 ».
+const ecrireFaces = ({ debut, fin }) => (debut === fin ? `${debut}` : `${debut}-${fin}`);
+
 // Les valeurs de départ d'un protagoniste, telles que le classeur les donne
-// aujourd'hui : c'est par elles qu'un écart s'explique (une armure, un dé ou
-// des dégâts qui ne sont plus ceux du jour où le scénario a été écrit).
-function ecrireDepart({ camp, valeurs, avertissements }) {
+// aujourd'hui : c'est par elles qu'un écart s'explique (une armure, un dé,
+// des dégâts ou une grille qui ne sont plus ceux du jour où le scénario a été
+// écrit). Chaque zone porte ses faces : sans elles, une localisation du
+// journal ne se recalculerait pas d'après cette sortie. Exportée, comme les
+// comparaisons : un contrôle la tient sur la démonstration.
+export function ecrireDepart({ camp, valeurs, avertissements }) {
   const arme = ({ libelle, poids, faces, degats, portee, locMultiple }) =>
     [libelle, poids, faces === null ? null : `d${faces}`, degats === null ? "sans dégâts lisibles" : degats.join("/"), `portée ${portee}`, locMultiple > 1 ? `${locMultiple} d20` : null].filter(Boolean).join(", ");
   const jet =
@@ -276,7 +283,7 @@ function ecrireDepart({ camp, valeurs, avertissements }) {
   return [
     `  ${valeurs.nom} — ${accorder(valeurs.actions, "action", "actions")}, souffle ${valeurs.souffleAbsent ? "absent" : valeurs.souffle}, corps ${valeurs.corps} ; ${jet}`,
     `      armes : ${valeurs.armes.map(arme).join(" · ") || "aucune"}`,
-    `      zones, dans l'ordre du d20 : ${valeurs.zones.map((zone) => `${zone.nom.toLowerCase()} ${zone.armure}`).join(", ")} ; face de contre-attaque : ${valeurs.faceContre}`,
+    `      zones, dans l'ordre du d20 (faces : armure) : ${valeurs.zones.map((zone) => `${zone.nom.toLowerCase()} ${ecrireFaces(zone)} : ${zone.armure}`).join(", ")} ; face de contre-attaque : ${valeurs.faceContre}`,
     `      passifs câblés : ${cables.join(", ") || "aucun"} ; autres rôles : ${roles.map((capacite) => `${capacite.role} [${capacite.niveau}]`).join(", ") || "aucun"}`,
     ...avertissements.map((avertissement) => `      avertissement : ${avertissement}`),
   ];

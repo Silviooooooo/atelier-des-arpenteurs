@@ -1,9 +1,11 @@
 # L'Atelier des Arpenteurs — spécification
 
-**Version 1.3 — 11/10/2026.** Le lot 1 est en service ; le lot 2, le
+**Version 1.4 — 12/10/2026.** Le lot 1 est en service ; le lot 2, le
 créateur de personnage (§ 15), le lot 2 bis, ses améliorations et les
 personnages en ligne (§ 15.8), et le lot 3, les adversaires (§ 16), sont
-livrés. Ce document fait foi pour le code. Toute décision
+livrés. Le lot 4, le simulateur de combat (§ 17), en est à la fin de son
+groupe 1, le combat jouable ; son groupe 2 suivra un arrêt d'essais (§ 13).
+Ce document fait foi pour le code. Toute décision
 qui le contredit y est reportée, avec une entrée de révision et un numéro de
 version (§ 14). Le nom « L'Atelier des Arpenteurs » est validé par l'auteur ;
 le dépôt s'appelle `atelier-des-arpenteurs`.
@@ -14,8 +16,9 @@ le dépôt s'appelle `atelier-des-arpenteurs`.
 
 **Ce qu'est ce programme.** Un site web statique, hébergé par GitHub Pages,
 qui sert aux joueurs et au MJ des *Arpenteurs d'Abrasia* à consulter la banque
-du jeu (blocs, capacités, éléments, adversaires, prétirés) et à créer des
-personnages, des adversaires et des objets, avec une sortie PDF.
+du jeu (blocs, capacités, éléments, adversaires, prétirés), à créer des
+personnages, des adversaires et des objets, avec une sortie PDF, et à jouer
+un combat à la main (§ 17).
 
 **Trois sources, et une seule fait foi pour les règles.**
 
@@ -30,6 +33,16 @@ le Word ne dit pas, on ne la devine pas : on l'inscrit au § 12 comme « à
 écrire dans le Word, section … », et on s'arrête sur ce point. L'auteur ne
 répond pas aux questions de règles en conversation ; il les écrit dans le Word.
 
+**Une exception, écrite : le simulateur de combat (lot 4).** Le livret ne
+dit pas tout du combat, et un simulateur ne peut pas s'arrêter à chaque
+silence. Il applique des **conventions provisoires**, toutes inscrites au
+§ 12 (« Pour le lot 4 — simulateur de combat ») : les unes acceptées par
+l'auteur le 11/10/2026, d'autres tranchées par la mission du 12/10/2026,
+les dernières arrêtées en écrivant le moteur ; toutes sont à confirmer à
+l'arrêt d'essais. Elles priment jusqu'à la réécriture du livret, jusque là
+où elles s'en écartent (§ 2, § 17). Pour toute autre règle absente, il
+n'invente rien et laisse la main au joueur.
+
 **Les cinq interdits.**
 
 1. **Aucun classeur réel dans le dépôt.** Le dépôt est public. Seuls les
@@ -39,7 +52,10 @@ répond pas aux questions de règles en conversation ; il les écrit dans le Wor
    28/09/2026), et la légende des huit primordiaux du modèle de fiche,
    reproduite sur la fiche de personnage (décision de l'auteur, 29/09/2026,
    § 15.4). La banque publiée est chiffrée (§ 7), les personnages en ligne
-   aussi (§ 15.8) ; des contrôles le vérifient.
+   aussi (§ 15.8) ; des contrôles le vérifient. Depuis le lot 4, aucun
+   nouveau nom de bloc, de capacité, de type ou d'adversaire du vrai
+   classeur n'entre dans le dépôt, exemples de cette spécification compris
+   (§ 17).
 3. **Aucune clé ni aucun mot de passe dans le code** ni dans un fichier
    versionné. Ils se saisissent dans la page, sur l'appareil de la personne.
    Seule exception : le mot de passe de la démonstration, public par
@@ -78,14 +94,22 @@ et ses MJ. Sur ordinateur et sur téléphone.
 3. Les **adversaires** (lot 3, § 16) : leurs types, chaque adversaire
    résolu, et la carte imprimable d'une rencontre. L'éditeur d'adversaire
    dans la page et l'assistant de calibrage viendront dans un lot ultérieur.
-4. Un **créateur d'objets, de sorts et d'équipement** (lot 4).
-5. L'**export PDF** de chaque création, depuis un ordinateur ; la vue d'un
+4. Un **simulateur de combat** (lot 4, § 17) : des personnages du site et
+   des adversaires de la banque sur une carte de 10 × 10 cases, un combat
+   joué à la main, dé après dé, dont les règles générales s'appliquent
+   seules ; il est gardé sur l'appareil, chiffré, et son journal se copie
+   et se télécharge.
+5. La **progression du personnage**, puis un **créateur d'objets, de sorts
+   et d'équipement** (lots à fixer, § 13).
+6. L'**export PDF** de chaque création, depuis un ordinateur ; la vue d'un
    personnage sur téléphone, adaptée à l'écran et zoomable.
 
 **Hors périmètre.** Serveur, base de données, comptes utilisateurs (les
 personnages en ligne passent par des tickets GitHub et un automate de
 GitHub, § 15.8). Écriture
-dans un classeur. PDF sur téléphone en première version (lot 5). Tout lien
+dans un classeur. PDF sur téléphone en première version (lot des
+finitions, § 13). Un combat partagé entre appareils, et tout jeu automatique
+des adversaires (§ 17). Tout lien
 avec Book of Abrasia ou World Anvil : ce projet en est indépendant.
 
 ---
@@ -102,14 +126,14 @@ avec Book of Abrasia ou World Anvil : ce projet en est indépendant.
 | **Seul le JSON chiffré entre dans le dépôt**, jamais le classeur | le dépôt est public ; un JSON montre ses changements ligne par ligne dans l'historique |
 | **Le texte d'origine de chaque cellule est conservé** dans la banque | un lot futur pourra réinterpréter les données sans nouvel import ; rien ne se perd |
 | **Deux classeurs** : règles d'un côté, prétirés de l'autre (à venir) | choix de l'auteur, pour ne pas mélanger. Les **adversaires**, d'abord prévus dans le second, vivent depuis le 11/10/2026 dans une feuille du classeur des règles, facultative : ils citent ses blocs et ses capacités, que le contrôle vérifie dans le même classeur (§ 16.1) |
-| **Le Word fait foi** pour les règles | l'auteur veut que n'importe qui puisse comprendre le jeu en relisant le Word depuis zéro |
+| **Le Word fait foi** pour les règles | l'auteur veut que n'importe qui puisse comprendre le jeu en relisant le Word depuis zéro ; seule exception, les conventions provisoires du combat (plus bas) |
 | **PDF par l'impression du navigateur**, sur ordinateur | aucune dépendance ; le PDF sur téléphone n'est pas une priorité |
 | Le dossier du dépôt reste dans **OneDrive** | choix de l'auteur ; précautions au § 10.3 |
 | Un **lecteur XML écrit pour le projet**, le même dans la page et dans les contrôles | avec deux lecteurs, les contrôles vérifieraient un code que la page n'exécute pas (§ 6.1) |
 | Le **sel** du chiffrement ne change qu'avec le mot de passe | la clé gardée sur un appareil doit déchiffrer les publications suivantes (§ 7.1) |
 | Le **cache de GitHub Pages** (`max-age=600`) est accepté ; une page restée 15 secondes sur « Chargement » propose de recharger | un numéro de version dans les adresses des modules ne vaudra la peine que si le cache gêne à l'usage (§ 9) |
 | La **première vraie publication** suit le groupe 3, sans attendre les corrections du classeur ni du Word | les erreurs sont publiées en connaissance de cause (§ 6.3) ; l'auteur publie lui-même, guidé par Claude (§ 13) |
-| Le **créateur de personnage** est le lot 2, avant l'adversaire (lot 3) et les objets et sorts (lot 4) | décision de l'auteur, 29/09/2026 |
+| Le **créateur de personnage** est le lot 2, avant l'adversaire (lot 3). Le **simulateur de combat** est le lot 4 ; la progression du personnage, les objets et sorts, puis les finitions suivent, sans numéro | décisions de l'auteur, 29/09/2026, puis 12/10/2026 (mission du lot 4, § 13) |
 | Les **règles chiffrées du personnage vivent dans le code**, chacune avec la section du livret qui la fonde | le livret n'est pas lu par le programme ; une règle se retrouve ainsi dans sa source (§ 15.2) |
 | Un **personnage garde ses choix, pas des copies** de la banque | sa fiche suit la banque du jour et en imprime la date ; un fichier ou un lien ne transporte aucune donnée de la banque (§ 15.1) |
 | Le personnage part vers le téléphone **dans le fragment de l'adresse** | aucun serveur ; le fragment n'est jamais envoyé ; le code QR viendra plus tard (§ 15.1) |
@@ -121,6 +145,13 @@ avec Book of Abrasia ou World Anvil : ce projet en est indépendant.
 | **Un seul module** résout un adversaire, pour le contrôle de l'import comme pour l'affichage ; la banque garde les lignes brutes | ce que le rapport annonce est ce que l'écran montre ; un lot futur réinterprète sans nouvel import (§ 16.2) |
 | **Pas de mot de passe du MJ** : les adversaires se lisent avec le mot de passe de table | une table de confiance, comme pour les personnages ; décision de l'auteur, lot 3 |
 | La **carte d'adversaire** a l'identité de sa maquette, et sa police, EB Garamond, est **hébergée dans le dépôt** | elle est du papier, comme la fiche de personnage ; aucune connexion à un tiers (§ 16.5) ; licence OFL |
+| Le simulateur de combat est **assisté, et joué à la main** : les règles générales du combat s'appliquent seules ; l'effet propre d'une capacité, écrit en texte libre dans le classeur, s'applique à la main, sa description toujours sous les yeux ; aucune intelligence artificielle, l'utilisateur joue tous les protagonistes et lance chaque dé d'un clic | décision de l'auteur, lot 4 : lire seul l'effet d'une capacité demanderait une colonne codée dans le classeur, qui n'existe pas (§ 17) |
+| Les **conventions provisoires** du combat priment jusqu'à la réécriture du livret | le livret ne dit pas tout du combat, et le simulateur ne peut pas s'arrêter à chaque silence : l'auteur en a accepté une partie le 11/10/2026, la mission du 12/10/2026 a tranché le reste pour qu'aucun choix ne reste ouvert ; toutes sont au § 12, à confirmer à l'arrêt d'essais. Pour toute autre règle absente, le simulateur laisse la main au joueur |
+| Un combat est **une mise en place, puis une suite d'événements**, dés compris ; l'état et le journal se recalculent en les rejouant, par **un seul moteur, sans page ni hasard** | l'écran, le rechargement, les contrôles et le banc passent par le même chemin ; un dé déjà lancé n'est jamais relancé (§ 17.1, § 17.8) |
+| Un protagoniste entre au combat par une **photographie** de ses valeurs | republier la banque ou modifier un personnage ne change pas un combat commencé (§ 17.2) |
+| Le combat se garde **sur l'appareil, chiffré par la clé de table**, dans une base à part | il porte des valeurs de la banque, qui ne s'écrit jamais en clair sur un appareil (§ 7.2, § 17.8) |
+| Les capacités que le simulateur sait jouer seul se reconnaissent **à leur nom** ; ceux du vrai classeur ne sont dans le code que **par leur empreinte** | aucun nom du vrai classeur n'entre dans le dépôt, qui est public (interdit 2) ; un nom changé dans le classeur se voit à la préparation (§ 17.6) |
+| **Vert pour les personnages, rouge pour les adversaires**, à l'écran du combat | demande de l'auteur ; c'est une exception à « une seule couleur d'accent », et jamais la couleur seule : initiales, noms, listes, ✓ et ✗ la doublent (§ 9, § 17.7) |
 
 ---
 
@@ -153,16 +184,17 @@ manifest.webmanifest        l'Atelier sur l'écran d'accueil d'un téléphone (�
 package.json                { "type": "module" } et rien d'autre : Node lit les .js comme modules
 icones/                     monogramme « AA » : icone.svg, icone-180.png, icone-192.png, icone-512.png
 css/
-  jetons.css                toutes les valeurs de mise en page en variables
+  jetons.css                toutes les valeurs de mise en page en variables, dont les onze couleurs du combat (§ 17.7)
   ecran.css                 l'interface, pensée pour le téléphone d'abord ; les deux vues d'un adversaire et la rencontre (§ 16.6)
   personnage.css            l'écran d'un personnage : vue lecture, vue fiche
   fiche.css                 la fiche imprimable, reproduction du modèle (§ 15.4)
   adversaire.css            la carte d'un adversaire, reproduction de la maquette, et son impression (§ 16.5)
+  combat.css                l'écran du simulateur de combat, ses trois dispositions et ses deux couleurs de camp (§ 17.7)
 polices/                    Marcellus, Alegreya Sans et EB Garamond (woff2), et leurs licences OFL
 js/
   application.js            démarrage, routes, chargement de la banque
   veille.js                 script classique : 15 s sur « Chargement », il propose de recharger (§ 9)
-  routes.js                 les adresses des écrans, décodées sans exception
+  routes.js                 les adresses des écrans, décodées sans exception ; #/combat depuis le lot 4
   lecture/
     zip.js                  lecteur d'archive ZIP (DecompressionStream)
     xml.js                  lecteur XML du projet, le même pour la page et les contrôles
@@ -191,12 +223,33 @@ js/
     packs.js                les packs d'armure, partagés par le créateur et le contrôle (A10)
     en_ligne.js             les personnages en ligne : ticket, fichier rangé, index, chiffrement (§ 15.8)
     depot.js                côté page : déposer, lire l'index et les fichiers, l'état de chaque dépôt
+    disponibles.js          les personnages qu'on peut ajouter à un combat, lus sans rien écrire sur l'appareil (§ 17.2)
   adversaire/               les adversaires (§ 16)
     notation.js             les cellules de la feuille Adversaires : types, localisation, nombres, listes (§ 16.1)
-    resolution.js           le seul module qui résout un adversaire, pour le contrôle comme pour la page (§ 16.2)
+    resolution.js           le seul module qui résout un adversaire, pour le contrôle comme pour la page (§ 16.2) ; la règle de position des maîtrises, partagée avec le combat (§ 16.4)
     controle.js             les constats de la feuille Adversaires (§ 6.3)
     carte.js                la carte d'un adversaire résolu (§ 16.5)
     lecture.js              la vue lecture d'un adversaire : chaque valeur et sa provenance (§ 16.6)
+  combat/                   le simulateur de combat (§ 17) ; le noyau, sans page, sans banque, sans hasard ni heure :
+    regles.js               les constantes du combat, chacune avec sa source ; la racine du graphe du noyau
+    forme.js                la forme de ce qui se garde (événement, photographie, contenu), vérifiée avant tout rejeu
+    plateau.js              les cases de la carte, la distance, la pose d'office
+    noms.js                 le nom court, le jeton et les initiales de chaque protagoniste
+    preparation.js          la mise en place d'avant le lancement, ses plafonds et ses refus
+    jet.js                  la chaîne d'un jet : réussites, avantage, désavantage, dé explosif
+    valeurs.js              toute lecture d'un protagoniste et du geste en cours
+    circonstances.js        qui lance, quel dé, contre quoi ; modificateurs, avantages et désavantages avec leur source ; les passifs câblés
+    degats.js               la lettre, la localisation, les dégâts zone par zone, dégrossir, l'esquive, la blessure, la mort
+    offre.js                la seule porte : ce qui est permis à cet instant, et pourquoi le reste ne l'est pas
+    moteur.js               le réducteur : un état, un événement, l'état suivant ; le rejeu d'un combat gardé
+    journal.js              chaque ligne du journal, son en-tête, le nom du fichier, les annonces
+    lecture.js              les cinq vues que l'écran affiche, chaque bouton avec sa commande ou sa raison
+                            et le bord, qui touche le hasard, la banque, la clé et l'appareil :
+    des.js                  la source de dés de l'écran (crypto.getRandomValues, sans biais)
+    roles.js                le seul tableau des rôles câblés : noms de la démonstration en clair, ceux du vrai classeur par empreinte (§ 17.6)
+    photographie.js         fige les valeurs d'un personnage ou d'un adversaire à son ajout ; dit qui ne s'ajoute pas
+    enregistrement.js       le combat chiffré, sa base IndexedDB, la file des écritures, la révision (§ 17.8)
+    seance.js               le lien entre l'écran, le moteur et l'enregistrement
   fiche/
     feuilles.js             le recto (le modèle) et le verso imprimables
     repartition.js          ce qui tient au recto, ce qui passe au verso
@@ -210,6 +263,9 @@ js/
     fiche_capacite.js  fiche_element.js  anomalies.js  espace_auteur.js
     personnages.js  creation.js  reception.js  fiche_personnage.js
     fiche_adversaire.js  fiche_type.js  rencontre.js
+    combat.js               l'écran du simulateur de combat ; le seul module qui garde le combat en mémoire (§ 17.7)
+    combat_plateau.js  combat_fiches.js  combat_action.js  combat_preparation.js
+                            ses quatre parties : la carte, les fiches vivantes, le panneau d'action, la préparation
     partage.js              fichier et lien d'un personnage
     echelle.js              l'échelle d'un papier à l'écran : la seule écriture de style du code (§ 10.1)
     dom.js                  fabrique des éléments, sans jamais insérer de HTML
@@ -230,8 +286,11 @@ outils/
   automate_personnages.js   l'automate des personnages : range les tickets, ne commite que dans personnages/ (§ 15.8)
 tests/
   *.test.js                 contrôles, lancés par `node --test`
-  outils/                   fabrique de classeurs, description du classeur d'essai, personnage d'essai, document simulé des écrans
+  outils/                   fabrique de classeurs, description du classeur d'essai, personnage d'essai, document simulé des écrans ;
+                            pour le combat : photographies d'essai, dés imposés, lecteur de scénario, combat de référence fictif,
+                            IndexedDB simulée, espion du stockage (§ 17.10)
   banc_classeur_reel.js     bancs sur le classeur réel (§ 6.3), lancés à la main
+  banc_combat_reel.js       banc du combat sur le classeur réel et un scénario hors dépôt (§ 17.10), lancé à la main
 .github/workflows/
   controles.yml             lance les contrôles à chaque envoi
   personnages.yml           lance l'automate à l'ouverture d'un ticket, ou à la main (§ 15.8)
@@ -808,11 +867,26 @@ la dérivation donne lui aussi un message.
   l'auteur vient de saisir attend en mémoire la prochaine publication.
 - Les personnages en ligne se chiffrent avec la clé de table gardée : elle
   sait chiffrer comme déchiffrer (§ 15.8).
+- **Le combat du simulateur** (lot 4, § 17.8) se garde sur l'appareil,
+  **chiffré par la même clé de table** : il porte des valeurs de la banque
+  (les photographies de ses protagonistes), qui ne s'écrit jamais en clair
+  sur un appareil. Il vit dans une base IndexedDB à lui,
+  `atelier-des-arpenteurs-combat`, **jamais dans le coffre**, qui ne garde
+  que des clés, **ni dans `localStorage`**. Il y a un combat par mode : la
+  démonstration, chiffrée par sa propre clé, ne touche jamais le combat
+  réel. La page ne copie pas la clé pour lui : elle la relit dans son état
+  à chaque écriture. Un combat chiffré sous un sel ou un nombre
+  d'itérations qui ne sont plus ceux de la clé (le mot de passe de table a
+  changé) ne se lit plus, et l'écran le dit ; sans IndexedDB, le combat vit
+  en mémoire le temps de la visite, et l'écran le dit aussi.
 - Un bouton « Oublier le mot de passe sur cet appareil » efface la clé, du
   coffre et de la mémoire. Il annule aussi le circuit en cours de l'espace
   auteur : une confirmation en attente se referme sans rien écrire, et les
   différences déchiffrées quittent l'écran. Une clé lue juste avant l'oubli
-  ne revient pas en mémoire.
+  ne revient pas en mémoire. Depuis le lot 4, il efface aussi **le combat
+  de la mémoire** de la page, qui porte des valeurs de la banque en clair :
+  une lecture partie avant l'oubli n'y remet rien. L'enregistrement chiffré
+  reste sur l'appareil, illisible sans la clé.
 - La dérivation prend 63 ms dans Chromium et 77 ms dans Node 24 sur le PC de
   l'auteur (relevé du 28/09/2026), et **123 ms sur Android 15, dans
   Firefox 156** (relevé de l'auteur, 28/09/2026), puis **119 ms en mode réel**
@@ -1014,14 +1088,24 @@ au moins, **zoom jamais interdit** (pas de `user-scalable=no`). Sur un grand
 écran (56rem et plus), la liste et la fiche se placent côte à côte ; sur un
 téléphone, la fiche s'ouvre seule, avec un lien de retour à sa liste.
 
+**Une exception aux 44 px : les cases de la carte du combat** (décision de
+l'auteur, mission du lot 4). Dix cases de front sur un téléphone font moins
+de 44 px chacune, et leurs jetons aussi, comme le « +k » d'une case
+pleine : c'est admis. **Chaque choix fait sur la carte a son double en
+boutons de 44 px** : dans le panneau d'action, un bouton par cible possible
+et par case d'arrivée possible ; avant le lancement, un champ « Case » (de
+A1 à J10) sur chaque fiche. Tout bouton hors de la carte tient les 44 px
+(§ 17.7).
+
 **L'aspect est sobre** (décision de l'auteur, 28/09/2026) : polices du
 système, aucune police téléchargée ; gris neutres et une seule couleur
 d'accent ; un thème clair et un thème sombre, selon le réglage de l'appareil
 (`prefers-color-scheme`). Le texte contraste d'au moins 4,5:1 avec chacun de
 ses fonds, et les bordures des champs d'au moins 3:1. Toutes les valeurs
 vivent dans `css/jetons.css` : une identité visuelle s'y posera plus tard,
-sans toucher au reste ; seule la largeur de la condition `@media` s'écrit
-dans `ecran.css`, car CSS n'y lit pas de variable. La gravité d'une anomalie
+sans toucher au reste ; seules les largeurs des conditions `@media`
+s'écrivent en dur, car CSS n'y lit pas de variable : 56rem dans `ecran.css`,
+56rem et 80rem dans `css/combat.css` (§ 17.7). La gravité d'une anomalie
 se lit en toutes lettres, jamais à la seule couleur. Aucune identité
 visuelle propre à Abrasia dans l'interface. Seules exceptions : la fiche de
 personnage imprimable et la carte d'adversaire, qui sont du papier. La
@@ -1029,6 +1113,19 @@ première a l'identité du modèle de fiche, ses couleurs (`--fiche-…`, claire
 dans les deux thèmes) et ses polices, hébergées dans le dépôt (§ 15.4) ; la
 seconde, celle de la maquette des adversaires (`--carte-…`, EB Garamond,
 § 16.5).
+
+**Une exception à « une seule couleur d'accent » : le simulateur de
+combat** (demande de l'auteur, mission du lot 4). Le vert y désigne les
+personnages, le rouge les adversaires ; avec le gris d'un mort, le vert et
+le rouge d'un dé réussi ou échoué, et l'ambre d'une alerte (une armure
+entamée, la mention « désavantage »), ce sont **onze couleurs**
+(`--combat-…`, § 17.7), dans `css/jetons.css`, pour les deux thèmes, aux
+mêmes contrastes que le reste : 4,5:1 pour un texte, 3:1 pour un rond sur
+le fond d'une case. **Aucune ne porte seule une information** : un jeton a
+ses initiales ou son nom, un camp sa liste et son titre, un dé son signe
+(✓ ou ✗) et son état dans son nom accessible. Ces couleurs ne servent qu'à
+l'écran du combat ; l'accent du site y reste celui de qui joue et de sa
+case.
 
 | Écran | Contenu |
 |---|---|
@@ -1041,6 +1138,7 @@ seconde, celle de la maquette des adversaires (`--carte-…`, EB Garamond,
 | Fiche d'un adversaire | l'adversaire **résolu** : sa carte, et la lecture, où chaque valeur dit d'où elle vient ; ensemble sur un grand écran, en deux vues sur un téléphone ; « Ajouter à la rencontre », « Imprimer / PDF » (§ 16.6) |
 | Fiche d'un type | sa ligne telle que la résolution la lit, et les adversaires qui l'utilisent (§ 16.6) |
 | Rencontre | des adversaires, un nombre d'exemplaires par + et −, « Imprimer / PDF », l'aperçu des cartes ; rien n'est enregistré (§ 16.6) |
+| Combat | le simulateur de combat (`#/combat`, § 17.7) : la carte de 10 × 10 cases et ses jetons ; avant le lancement, la préparation (ajouter un personnage, des adversaires, placer la rencontre préparée, qui commence, « Lancer le combat ») ; ensuite le panneau d'action (qui joue, la capacité, la cible, les dés, la localisation, l'esquive, les dégâts) ; une fiche vivante par protagoniste, et sa fiche complète en panneau ; le journal, « Copier » et « Télécharger » ; « Fin de tour », « Nouveau combat » ; l'état de l'enregistrement chiffré (§ 17.8) |
 | Anomalies | le rapport publié avec la banque ; `#/anomalies/Blocs/14` met en avant les anomalies d'une ligne, `#/anomalies/Adversaires/3` de même |
 | Espace auteur | clé GitHub ; import ; rapport ; différences ; publication ; changement de mot de passe, avec les personnages en ligne ; clé de dépôt des personnages ; vérification et reprise des personnages en ligne (§ 8.4) |
 | Personnages | en ligne, tous les personnages du site et ceux que l'appareil vient d'envoyer ; à part, les non-envoyés (« Réessayer ») et les brouillons ; créer, reprendre, ouvrir, modifier, enregistrer le fichier, importer, ouvrir sur mon téléphone, supprimer après confirmation (pour tous, en ligne) ; en démonstration, le personnage de démonstration, et rien en ligne (§ 15.3, § 15.8) |
@@ -1048,8 +1146,15 @@ seconde, celle de la maquette des adversaires (`--carte-…`, EB Garamond,
 | Fiche d'un personnage | vue lecture ou vue fiche, « Imprimer / PDF » (recto puis verso), fichier, lien vers le téléphone, « Modifier », qualité des objets ; un personnage en ligne s'y ouvre aussi (§ 15.3, § 15.4, § 15.5) |
 | Personnage reçu | un lien #/recevoir/… : aperçu, puis « Enregistrer sur cet appareil » (§ 15.1) |
 
-La navigation porte les liens « Personnages », « Adversaires » et
-« Rencontre ». Les types d'adversaires s'atteignent par les onglets des
+La navigation porte les liens « Personnages », « Adversaires »,
+« Rencontre » et, depuis le lot 4, **« Combat », après « Rencontre »** :
+neuf liens en tout (Blocs, Capacités, Éléments, Adversaires, Rencontre,
+Combat, Personnages, Anomalies, Auteur). L'écran du combat marque
+« Combat », attend comme les autres que la banque soit ouverte, et n'a
+qu'une adresse : `#/combat` suivi de quoi que ce soit mène à « page
+introuvable ». Son attente d'ouverture ne porte pas `data-chargement` : la
+veille de 15 secondes (plus bas) ne la concerne pas. Il ne s'imprime pas.
+Les types d'adversaires s'atteignent par les onglets des
 listes et depuis chaque fiche d'adversaire ; leurs écrans marquent
 « Adversaires ». À l'impression d'une fiche de la consultation, ni la liste
 ni le lien de retour ne sortent. Chaque fiche a une adresse
@@ -1224,6 +1329,14 @@ clair ; un chemin qui porte une barre inverse ou un caractère de contrôle
 est refusé (sous Windows, `/plans%5Cx` passait, relecture du lot 2). Les écrans se contrôlent dans un document simulé, écrit pour le
 projet (`tests/outils/dom_simule.js`), sans dépendance.
 
+**Le simulateur de combat** (lot 4) n'ajoute aucune dépendance. Il emploie
+du navigateur ce que le site employait déjà (`crypto.subtle`, `indexedDB`,
+`CompressionStream`, `DecompressionStream`), et `crypto.getRandomValues`
+pour ses dés. Son enregistrement se contrôle sur une IndexedDB simulée,
+écrite pour le projet (`tests/outils/indexeddb_simulee.js`), plus stricte
+qu'un navigateur : une transaction y devient inactive dès la première
+attente, ce qui fait voir un chiffrement glissé dans une transaction.
+
 GitHub Actions emploie deux actions, **seules dépendances du dépôt** :
 `actions/checkout` (récupérer le dépôt et son historique) et
 `actions/setup-node` (installer Node). Elles sont publiées par GitHub et
@@ -1390,9 +1503,10 @@ Chaque contrôle nouveau se vérifie **armé puis désarmé**.
 | Préparation | première publication, mise à jour sous le même secret ; mot de passe à choisir, à saisir ou changé ; E1 refusé ; changement de mot de passe ; la clé de dépôt suivie d'une publication à l'autre ; circuit complet, de l'import à la lecture par un joueur |
 | En ligne | les trois formats du § 15.8 dans les deux sens : personnage chiffré, ticket, fichier rangé, déchiffré, le même personnage ; aucun nom en clair dans le ticket, le fichier ni l'index ; seul un personnage enregistré, de la banque réelle, part ; « supprimer » sans personnage ; un ticket hostile (JSON, tableau, champ en plus, `__proto__`, format, action, identifiant hostile, date locale ou impossible, sel, IV, contenu, base64 sans remplissage ou url, signe non ASCII, trop gros) refusé avec une raison ; un personnage trop gros pour un ticket ne part pas ; un chiffré recopié sous un autre identifiant, ou d'une autre clé, ne se lit pas ; le contenu déchiffré hostile (bombe, format, UTF-8, autre identifiant, brouillon, démonstration) refusé ; l'index trié, trois champs, un doublon de casse refusé ; le rechiffrement sans lecture. La page : la démonstration ne dépose ni ne lit rien ; sans clé de dépôt, « non envoyé » et sa raison ; le ticket ouvert avec la clé, le sel de la banque en place vérifié d'abord ; les refus de GitHub (401, 403, 404, 410, 422, réseau) laissent « non envoyé », « Réessayer » le refait ; l'index lu sans cache, chaque fichier par sa version, une seconde lecture sans nouvelle requête ; une ancienne clé et un fichier hostile comptés à part, un mot de passe changé pendant la visite distingué d'une ancienne clé ; GitHub Pages en retard juste après un changement fait d'ici ne bloque pas le dépôt, une page en retard, si ; une version en ligne plus récente arrête l'envoi, sauf confirmation ; une lecture échouée n'est pas un personnage absent ; le rapprochement (rattrapé, attente, retard, suppression gardée tant que l'index ne se lit pas, copie plus ancienne qui ne cache pas la version en ligne) |
 | Automate | lancé hors de GitHub, sur une simulation de l'API et de vrais dépôts git jetables : un ticket « creer » conforme rangé (fichier qui se déchiffre, index, commit du robot aux deux seuls chemins, message sans nom, ticket fermé et verrouillé, Pages demandée) ; « remplacer », ticket repassé sans effet (même deux tickets rejoués, déjà rangés : aucun commit), « supprimer », suppression d'un absent, passage sans ticket ; tickets non conformes (JSON illisible, autre titre, identifiant hostile ou en forme de jeton, trop gros, base64 faux, contenu en clair, sel périmé, corps vide, champ en plus, commandes de shell et chemins) fermés avec leur raison, sans rien recopier, écrire ni exécuter ; collision de casse ; inconnu (autre login, ou même login d'un autre compte) fermé et verrouillé sans commentaire, même quand la partie git s'arrête ; avalanche d'inconnus au-delà de la limite de pages : les plus anciens fermés, les autres au passage suivant, les tickets du propriétaire lus à part et rangés ; demande de fusion ignorée ; envoi refusé puis réussi, tickets rejugés sur la banque republiée ; cinq refus : aucun ticket du propriétaire fermé ; fichier illisible, intrus, ou `.gitignore` qui cache les fichiers rangés : arrêt sans commit ni fermeture ; chemin hors de `personnages/` : arrêt avant l'envoi ; la variable du jeton ôtée de toute commande git, le jeton à la seule commande d'envoi, jamais sur le disque ; Pages refusée ; lancé à la main, l'automate redemande Pages ; l'API et l'environnement de GitHub Actions. Aucun nom en clair nulle part |
-| Routes et fiches | décodage des adresses de fiche (`#/capacite/Attaque%20de%20base`) et aller-retour des noms difficiles ; la fiche et la liste des blocs montrent leur type ; adresses abîmées, dont les noms d'`Object.prototype` ; un nom introuvable n'est jamais le titre ; recherche sans casse ni accents, sur les noms et les descriptions ; renvois résolus comme au contrôle ; « octroyée par », « porté par », nom affiché ; anomalies d'une ligne ; les adresses des adversaires, des types et de la rencontre, dont un nom forgé qui porte un demi-codet seul ; le lien de la navigation que marque chaque écran ; la recherche d'un adversaire par ce qu'il écrit ; l'index des adversaires et de leurs types, les lignes de la feuille Adversaires ; une banque d'avant le lot 3 indexée sans exception ; les entrées d'un nom comptent ses doublons à un signe invisible près (lot 4), celle du nom écrit d'abord, et aucune sous un nom que rien ne porte exactement ; un nom qui ne diffère d'un autre que par la casse, un accent ou une espace intérieure a ses propres entrées, et n'entre pas dans celles de l'autre |
-| Site | politique de sécurité du `<meta>`, avant scripts et styles, toute la table des directives et rien d'autre ; zoom permis ; ni script, ni style, ni gestionnaire en ligne ; chaque fichier appelé existe ; le graphe des modules se résout et atteint les quinze écrans, et tout module de `js/` y est, hors la veille ; manifeste, couleurs des jetons, icônes aux tailles dites, telles que les dessine leur outil ; contrastes ; valeurs de `ecran.css` et de `personnage.css` tirées des jetons, aucune police téléchargée par l'interface ; la banque de démonstration, au format 2, se déchiffre et vient du classeur d'essai, avec ce qu'y lit le simulateur de combat (lot 4 : ses comptes, les deux éléments, les deux capacités du bloc de base, mot pour mot) ; le mot de passe de démonstration, déjà en minuscules, saisi en majuscules, ouvre la banque, et la clé gardée la rouvre ; le format 1 ne s'ouvre plus ; au téléchargement, une empreinte de format 2 fausse et un format plus récent donnent leur message ; le diagnostic dit le format ; chargement : absente, présente, abîmée, `?v=`, clé gardée, mot de passe requis ou changé, stockage durable ; l'attente du mot de passe ne dépend pas de la peinture de la fenêtre ; le déverrouillage n'attend pas la réponse sur le stockage durable ; sans IndexedDB, la phrase au lieu de la case ; une erreur inattendue : un message. Dans un document simulé : le bouton « Publier » existe dans chaque état de l'espace auteur, et sa raison s'affiche ; la barre de publication reste collée au bas de l'écran ; « Oublier le mot de passe » ne laisse ni clé ni différences, même pendant une comparaison ; « Oublier la clé GitHub » annule la publication en attente ; « Se souvenir » décide de garder la clé ; la veille de 15 secondes, et rien sur une page chargée ; l'aide dit d'ajouter l'Atelier depuis son accueil ; `dom.js` refuse gestionnaires en texte, `style`, `srcdoc` et adresses étrangères, et n'affiche pas les signes qui commandent le sens de l'écriture, que les attributs gardent ; le document simulé refuse d'ajouter null ou undefined, que le navigateur afficherait, et son `querySelectorAll` rend, comme le navigateur, une liste qui se parcourt mais n'a ni `filter` ni `map`. L'espace auteur (lot 2 bis) : la section de la clé de dépôt (aide, état, saisie vérifiée ; la clé jamais à l'écran, dans un attribut ou un champ, ni gardée ; retirer, garder ; oubliée avec le mot de passe, et après une publication réussie ; la clé GitHub de l'auteur refusée ; une phrase en démonstration) ; le mot de passe : 7 signes refusés, 8 acceptés, deux saisies qui ne diffèrent que par la casse acceptées ; le changement compte les personnages avant l'envoi, puis écrit un seul commit ; s'il en laisse sous une autre clé, la section « Personnages en ligne » les montre aussitôt, avec la reprise ; une avance sans réponse : « Publiée » si la branche a avancé, sinon l'incertitude dite, et l'ancienne clé reste ; la vérification n'écrit rien, la reprise rechiffre. Le serveur local : la seule machine, les seuls fichiers du site, dont les polices, le personnage de démonstration et `personnages/` sous ses deux seules formes, casse comprise |
+| Routes et fiches | décodage des adresses de fiche (`#/capacite/Attaque%20de%20base`) et aller-retour des noms difficiles ; la fiche et la liste des blocs montrent leur type ; adresses abîmées, dont les noms d'`Object.prototype` ; un nom introuvable n'est jamais le titre ; recherche sans casse ni accents, sur les noms et les descriptions ; renvois résolus comme au contrôle ; « octroyée par », « porté par », nom affiché ; anomalies d'une ligne ; les adresses des adversaires, des types et de la rencontre, dont un nom forgé qui porte un demi-codet seul ; le lien de la navigation que marque chaque écran ; la recherche d'un adversaire par ce qu'il écrit ; l'index des adversaires et de leurs types, les lignes de la feuille Adversaires ; une banque d'avant le lot 3 indexée sans exception ; les entrées d'un nom comptent ses doublons à un signe invisible près (lot 4), celle du nom écrit d'abord, et aucune sous un nom que rien ne porte exactement ; un nom qui ne diffère d'un autre que par la casse, un accent ou une espace intérieure a ses propres entrées, et n'entre pas dans celles de l'autre ; l'adresse du combat (lot 4) : `#/combat`, et dix adresses abîmées autour d'elle (`#/combat/`, `#/combat/2`, `#/combats`, `#/Combat`…), la rubrique qu'elle marque, son lien après « Rencontre », et tout lien de la navigation écrit sous la forme que lit le contrôle (un lien écrit autrement manquait à la liste sans bruit) |
+| Site | politique de sécurité du `<meta>`, avant scripts et styles, toute la table des directives et rien d'autre ; zoom permis ; ni script, ni style, ni gestionnaire en ligne ; chaque fichier appelé existe ; le graphe des modules se résout et atteint les seize écrans (le combat est le seizième ; quatorze de ses modules y sont nommés), et tout module de `js/` y est, hors la veille ; manifeste, couleurs des jetons, icônes aux tailles dites, telles que les dessine leur outil ; contrastes, dont ceux des onze couleurs du combat dans les deux thèmes, le texte à 4,5:1 et les ronds à 3:1 sur le fond des cases, ces onze-là ayant chacune sa valeur sombre (§ 17.7) ; valeurs de `ecran.css`, de `personnage.css` et de `combat.css` tirées des jetons, hors les largeurs des `@media`, aucune police téléchargée par l'interface ; la banque de démonstration, au format 2, se déchiffre et vient du classeur d'essai, avec ce qu'y lit le simulateur de combat (lot 4 : ses comptes, les deux éléments, les deux capacités du bloc de base, mot pour mot) ; le mot de passe de démonstration, déjà en minuscules, saisi en majuscules, ouvre la banque, et la clé gardée la rouvre ; le format 1 ne s'ouvre plus ; au téléchargement, une empreinte de format 2 fausse et un format plus récent donnent leur message ; le diagnostic dit le format ; chargement : absente, présente, abîmée, `?v=`, clé gardée, mot de passe requis ou changé, stockage durable ; l'attente du mot de passe ne dépend pas de la peinture de la fenêtre ; le déverrouillage n'attend pas la réponse sur le stockage durable ; sans IndexedDB, la phrase au lieu de la case ; une erreur inattendue : un message. Dans un document simulé : le bouton « Publier » existe dans chaque état de l'espace auteur, et sa raison s'affiche ; la barre de publication reste collée au bas de l'écran ; « Oublier le mot de passe » ne laisse ni clé ni différences, même pendant une comparaison ; « Oublier la clé GitHub » annule la publication en attente ; « Se souvenir » décide de garder la clé ; la veille de 15 secondes, et rien sur une page chargée ; l'aide dit d'ajouter l'Atelier depuis son accueil ; `dom.js` refuse gestionnaires en texte, `style`, `srcdoc` et adresses étrangères, et n'affiche pas les signes qui commandent le sens de l'écriture, que les attributs gardent ; le document simulé refuse d'ajouter null ou undefined, que le navigateur afficherait, et son `querySelectorAll` rend, comme le navigateur, une liste qui se parcourt mais n'a ni `filter` ni `map`. L'espace auteur (lot 2 bis) : la section de la clé de dépôt (aide, état, saisie vérifiée ; la clé jamais à l'écran, dans un attribut ou un champ, ni gardée ; retirer, garder ; oubliée avec le mot de passe, et après une publication réussie ; la clé GitHub de l'auteur refusée ; une phrase en démonstration) ; le mot de passe : 7 signes refusés, 8 acceptés, deux saisies qui ne diffèrent que par la casse acceptées ; le changement compte les personnages avant l'envoi, puis écrit un seul commit ; s'il en laisse sous une autre clé, la section « Personnages en ligne » les montre aussitôt, avec la reprise ; une avance sans réponse : « Publiée » si la branche a avancé, sinon l'incertitude dite, et l'ancienne clé reste ; la vérification n'écrit rien, la reprise rechiffre. Le serveur local : la seule machine, les seuls fichiers du site, dont les polices, le personnage de démonstration et `personnages/` sous ses deux seules formes, casse comprise |
 | Personnage | chaque règle du § 15.2 : la table des dés, bornes comprises ; les paires d'attaque et de défense ; les types mêlés et le cas sans armure ; l'ordre des zones, la grille et le maximum par zone, et l'interdiction du livret ; la qualité (X, 1, 2, 3, 1,5) et l'arrondi une fois l'opération faite, dont un cas où la virgule flottante se tromperait ; les expressions et leurs refus ; l'expression de mains nues et son dé vide ; le coût à la puissance ; les coûts 1, 3 et 6, le plafond de 10, le reliquat, les capacités reçues au-delà de 10 ; la capacité reçue deux fois ; le niveau 0 et les capacités à venir hors décompte ; les groupes ( ) et [ ], un choix disparu ; le style de combat ; le tirage (chaque constellation atteignable, rejet des valeurs biaisées) ; les points de lien ; la banque sans types ; les choix modifiés ou disparus ; ce qui manque à chaque étape, un bloc d'un autre type. Le format : aller-retour du fichier, champ inconnu ou manquant, `__proto__`, chaque champ et ses bornes, 64 Ko, JSON illisible, mode inversé, nom de fichier sûr ; le lien : aller-retour dans le fragment, lien abîmé, forgé, bombe de décompression, UTF-8 invalide, mode inversé. L'étagère : modes séparés, ordre, illisibles comptés, un personnage du format 1 converti, les notes ; une base bloquée par un autre onglet : l'étagère en mémoire et la raison, sans attendre. Le format 2 (lot 2 bis) : les places d'un objet, une seule arme tenue, les tirages ; le format 1 converti (arme principale, bouclier, armures portées, tirage) ou refusé s'il est abîmé ; un personnage neuf à 2 partout. Les places dans le calcul : pièces du pack portées, bouclier équipé (un seul), rangés sans effet ; le parcours signale une place fautive. Les adresses des écrans du personnage. La répartition du recto et son débordement ; le recto et le verso dans un document simulé (en-tête, cases cochées et grisées, reliquat, souffle, zones, corps, équipement, liens, légende, pied de page, suite du recto, toutes les capacités et les armes, un nom en HTML qui reste du texte) ; l'impression (A4 sans marge, couleurs, saut de page, barre non imprimée) ; les polices hébergées (Marcellus, Alegreya Sans, EB Garamond), appelées par `fiche.css` et `adversaire.css` seulement, et leurs trois licences ; le personnage de démonstration, fabriqué par son outil et complet, qui suit ses dix-neuf capacités ; Aubépine et les ajouts du lot 4 (§ 15.7) : les deux capacités nouvelles du bloc de base, leur coût, leur description, Passif et Intervention sur les siennes, les mêmes points. Les écrans : liste, parcours, réception, fiche (vues, impression, banque sans types). Le parcours du lot 2 bis : les descriptions, dépliées sur grand écran et repliées sur téléphone ; les boutons + et − des caractéristiques (de 2 à 6, « + » arrêté à 36, le focus qui passe au voisin) ; le tirage refait et compté, la saisie ; l'arme tenue remplacée, les packs (un seul à la fois, la pièce portée seule renvoyée au sac), un pack non proposé (A10) avec sa raison, tous les objets au sac, qualité 2, la pièce refusée sur une zone couverte, un seul bouclier, l'arme prise en main ; l'étape 8 : seules les capacités qui peuvent évoluer, + et − dans les bornes, la raison d'un « + » inactif, avant et après, le focus gardé sur le bouton actionné ; les descriptions gardent leur état quand l'étape se redessine ; « — choisir — » ne défait pas la constellation ; le catalogue des armes, l'objet décrit avant d'être ajouté, un refus dit près de l'objet et le focus sur lui ; « Modifier » : la copie de travail, reprise, « Enregistrer » à la place de l'original, « Enregistrer sous un autre nom » (un autre nom exigé) ; l'enregistrement dépose (« creer », « remplacer »). La liste en ligne : les rubriques, l'attente, « Réessayer », « Supprimer » pour tous, « Modifier » d'un personnage en ligne, la phrase de la démonstration ; le mot de passe changé pendant la visite, une suppression dont le personnage ne se lit plus, une copie plus ancienne (« Envoyer quand même », « Retirer de l'appareil »), une base bloquée. La fiche : la qualité des objets (saisie fautive refusée, redépôt, panneau resté ouvert, focus sur la confirmation, deux objets de même nom distingués), « Modifier », un personnage ouvert depuis le site, ou dont la lecture échoue (« Réessayer »), « tirée N fois ». La mise en page se mesure dans un vrai navigateur (§ 15.4) |
+| Combat | le simulateur de combat (lot 4, § 17). **Le moteur, sans page, règle par règle** (§ 17.3 à § 17.6) : la forme d'un événement, d'une photographie et d'un contenu, chaque borne vue des deux côtés, une grille de localisation à trou refusée, un contenu d'une autre version des règles reconnu comme tel et non dit abîmé ; les cases, la distance, les cases à portée, la pose d'office ; les noms courts, les jetons, les initiales, leurs collisions, un nom épuisé, un nom sans lettre ; la chaîne et ses bornes, k désavantages, k relances, relancer et garder, le dé explosif (son seuil, l'enchaînement, sous désavantage, après une relance, le modificateur compté une fois, « exploser » seule suite), chaque transition refusée hors de son attente ; les plafonds de la préparation et leurs raisons, égaux à ceux de la rencontre, un personnage une seule fois, « Retirer » qui renumérote, la source de dés sans biais ; les sept modificateurs et les dix sources d'avantage et de désavantage, un par un et dans leur ordre, l'inversion dans les deux sens, un bonus au niveau 2 qui donne d10+2, le jet prêté sans désavantage de maîtrise, ce qui ne s'applique pas à un adversaire, chaque passif câblé actif et inactif avec sa raison ; les deux grilles, plusieurs dés de localisation, la face de contre-attaque que le décalage ne crée ni n'efface, les bornes du décalage, les dégâts zone par zone, dégrossir (chez un personnage, chez un adversaire, jamais sans dégâts ni en dégâts directs, pas sur un coup annulé), les dégâts directs, l'esquive et son imputation, deux dés sur la même zone, la blessure et son compte, la mort, ce qui dépasse et se perd ; quel événement est accepté à quel moment d'un geste, chaque code de refus, un refus qui rend l'état reçu, l'objet même, une capacité sans dégâts qui touche et se localise, la face de contre-attaque qui clôt le geste et arrête les dés, l'événement de trop au-delà de la borne du combat ; les tours, l'alternance, passer, la fin automatique, « Fin de tour », les actions retrouvées et celles qui manquent après une esquive, deux fins d'affilée au plus, un camp qui commence sans pouvoir agir, la fin du combat sans « Fin du tour » ; le paiement au premier dé et à la confirmation, « Revenir » qui ne dépense rien, la puissance d'office, X, le lien sur un personnage à deux jauges, l'adversaire qui ne paie pas le lien, chaque raison d'un bouton inactif, la portée et les cibles, le jet prêté. **Le journal** (§ 17.9) : chaque gabarit, mot pour mot, sur des gestes écrits à la main, ceux que la mission ne donne pas compris ; l'en-tête, le nom du fichier, les deux fins de ligne, aucune espace insécable ; les trente-six lignes du combat de référence refaites à la main. **Les vues** : les cinq, leurs titres, leurs étapes, leurs boutons et leurs raisons, leurs saisies et leurs bornes, les annonces ; et la concordance : à chaque pas d'un combat joué, tout événement que porte un élément actif d'une vue est accepté par le moteur, tout événement que porte un élément inactif est refusé, et l'événement réellement joué ensuite est de ceux que les vues portaient. **Les rôles câblés** (§ 17.6) : chaque rôle de la démonstration reconnu par son nom, aucun reconnu en mode réel par un nom de démonstration, la ligne des absents, des empreintes de 64 signes hexadécimaux dont aucune n'est celle d'un nom de démonstration. **Les photographies** (§ 17.2) : Aubépine et les cinq adversaires de la démonstration, champ par champ ; qui ne s'ajoute pas ; le sac ; l'ordre des groupes ; sur des banques fabriquées en mémoire, plusieurs dés de localisation, des dégâts propres, un coût négatif, un coût illisible, une capacité à venir, un souffle absent, deux armes de même nom ; toute photographie rendue est gelée, passe par JSON à l'identique, et passe la validation qui la relira ; un nom à retour de ligne devient une seule ligne, une description au-delà de sa borne est un refus d'ajout ; les personnages disponibles, lus sans rien écrire, face au vrai rapprochement de l'écran Personnages. **L'enregistrement** (§ 17.8) : l'aller-retour, le mode à part, la révision entre deux onglets, le mot de passe changé, la donnée abîmée, l'absence d'IndexedDB, « Oublier » pendant une lecture lente, rien en clair ni dans la base ni dans `localStorage` ; la file à une place, jamais deux écritures à la fois, la clé relue à chaque écriture ; une enveloppe d'un format plus récent, que rien n'écrase ; une donnée abîmée jusque dans sa révision, que « Nouveau combat » remplace ; chaque propriété de l'IndexedDB simulée. **La séance** : l'ouverture cas par cas (contenu refusé, révision discordante, rejeu refusé, autre version des règles), un rechargement en plein geste qui retrouve le moment sans attendre un dé déjà lancé, un combat dont une description tient sur deux lignes gardé puis repris, « Nouveau combat », le blocage. **Le rejeu**, sur le combat de référence : chaque préfixe rejoué égale l'état tenu un événement à la fois, journal compris ; l'état passe par JSON à l'identique ; tout ce que rend le moteur est gelé ; ni heure ni hasard (l'horloge et les générateurs remplacés par des fonctions qui lèvent) ; ni banque (les sources des photographies ôtées) ; le graphe des imports du noyau, clos et sans cycle, et son texte sans rien qui dépende de l'appareil ; des événements au hasard, à graine écrite, bien et mal formés, qui ne font jamais lever le moteur ; un dé jamais relancé : en plein geste, l'offre est la même après rejeu. **Le combat de référence fictif** (§ 17.10) : les cases d'office des ajouts, l'état final, lien compris, et les trente-six lignes du journal, mot pour mot, l'écart dit au signe près ; le suivi des ressources après chaque geste et le compte des événements, transcrits du calcul à la main. **L'écran**, dans un document simulé (§ 17.7) : chacune de ses quatre parties sur des vues écrites à la main (ce qu'elle montre, la commande que porte chaque bouton et son origine, un bouton inactif qui ne fait rien, les nœuds gardés d'un rendu à l'autre quand la vue n'a pas changé, refaits quand elle a changé) ; l'écran entier : la préparation, la rencontre placée, un tour, la mort, le journal copié (accepté, puis refusé par le navigateur) et téléchargé (nom et contenu), l'annonce après chaque dé et une seule région qui change de texte, le focus, un nom hostile qui reste du texte, « Nouveau combat », l'oubli, un rechargement, une cible « choisie sur la carte » ou « choisie ici », un état de garde qui prévient dit une fois ; sa feuille lue comme un texte : des jetons seulement, deux `@media`, à 56rem et 80rem, aucune classe hors de `combat-` et des classes communes du site, aucun nom en « carte », les onze couleurs dans les deux thèmes. Avec eux, dans les domaines voisins : les trois fonctions de maîtrise et les champs neufs de la résolution (Adversaires), les sources et les éléments d'une capacité (Personnage), la rencontre préparée lue sans rien enregistrer ni vider, le câblage d'`application.js` lu dans son texte (l'écran après la banque, un seul appel, l'oubli à sa place, aucun enregistrement ouvert hors de l'écran). La mise en page ne se contrôle pas ici : elle se mesure dans un vrai navigateur, et le § 17.11 dit ce qui en est mesuré et ce qui ne l'est pas |
 
 Les contrôles du dépôt portent sur les fichiers suivis et sur ceux que Git
 suivrait, c'est-à-dire non ignorés : une faute se voit avant d'être commitée.
@@ -1400,7 +1514,12 @@ suivrait, c'est-à-dire non ignorés : une faute se voit avant d'être commitée
 **Les bancs** (§ 6.3) ne font pas partie de `node --test` : ils demandent le
 classeur réel, qui n'est pas dans le dépôt. Le banc de lecture se lance dès que
 `xlsx.js` existe, avant la notation ; le banc complet, une fois l'import et le
-contrôle écrits.
+contrôle écrits. **Le banc du combat** (`tests/banc_combat_reel.js`,
+§ 17.10) demande en plus un scénario, hors dépôt lui aussi, car il porte des
+noms du classeur. Ce qu'il compare hors de `node --test` est pourtant tenu
+par elle : ses fonctions d'écart (le journal, l'état final, un arrêt en
+plein geste) sont celles que le contrôle du combat de référence emploie, et
+voit dans les deux sens.
 
 ---
 
@@ -1434,7 +1553,10 @@ livret, et laisse vide ce qu'aucune source ne dit) :
 
 - **Le dé d'attaque à mains nues** : à écrire dans le Word, section « Jets
   d'attaque ». Le bloc de base ne porte ni lourde, ni agile, ni précise : la
-  fiche montre les dégâts de mains nues et laisse le dé vide.
+  fiche montre les dégâts de mains nues et laisse le dé vide. Le simulateur
+  de combat, lui, le fait choisir au moment du jet, par une convention
+  provisoire (plus bas, « Pour le lot 4 », point 10) ; la fiche ne change
+  pas.
 - **Styles de combat et maîtrises** : le livret (« Système », « Blocs », et
   « Style de combat ») fait du style **un type de bloc**, que le créateur
   reconnaît ; le classeur en fait **une capacité au choix d'un archétype**.
@@ -1470,7 +1592,9 @@ livret, et laisse vide ce qu'aucune source ne dit) :
   du créateur : un objet qui transmet un paramètre `defense` est un
   bouclier ; équipé, un seul compte (lot 2 bis), et la fiche en montre la
   défense après qualité. Dans le classeur, aucun élément ne reçoit
-  `defense` (A2). À écrire dans le Word, section « Objet ».
+  `defense` (A2). À écrire dans le Word, section « Objet ». Au combat, sa
+  défense s'affiche, sans effet, tant que le livret ne dit pas ce qu'elle
+  fait (« Pour le lot 4 », point 18).
 - **La qualité** n'est dite que dans l'élément Qualité du classeur (1/3 +
   qualité/3) ; le livret (« Paramètre ») n'en donne qu'un exemple. À écrire
   dans le Word, section « Objet ».
@@ -1479,13 +1603,19 @@ livret, et laisse vide ce qu'aucune source ne dit) :
   capacités comptent. Le créateur compte les capacités de tout
   l'équipement possédé, sac compris ; depuis le lot 2 bis, où tout objet
   ajouté va d'abord au sac, la question compte davantage. À écrire dans le
-  Word, section « Objet ».
+  Word, section « Objet ». **Le simulateur de combat ne lit pas comme le
+  créateur** : une arme, une armure ou un bouclier n'y donne ses capacités
+  que porté, et une seule arme, la tenue (« Pour le lot 4 », point 19). La
+  fiche garde sa lecture ; l'écart se lèvera avec la règle.
 - **La maîtrise des pièces d'armure** (types mêlés : « désavantage s'il ne
   possède pas la maîtrise de l'ensemble des pièces ») : la fiche l'écrit en
   mention, sans la calculer ; le lien avec les capacités de maîtrise du
-  classeur n'est pas écrit. Section « Jets de défense ».
+  classeur n'est pas écrit. Section « Jets de défense ». Au combat, faute
+  de cette règle, des types mêlés donnent toujours 1 désavantage en défense
+  (« Pour le lot 4 », point 20).
 - **La jauge de lien au départ** : pleine ou vide ? La fiche montre le
-  maximum, et des cases à remplir en jeu. Section « Ressources ».
+  maximum, et des cases à remplir en jeu. Section « Ressources ». Au
+  combat, elle part pleine (« Pour le lot 4 », point 17).
 - **L'espèce** : le livret (« Espèce ») lui donne une capacité activable et
   une passive à dé miroir ; dans le classeur, chaque espèce donne deux
   capacités passives (l'une ajoute +N, l'autre retourne un dé), aucune
@@ -1498,10 +1628,17 @@ livret, et laisse vide ce qu'aucune source ne dit) :
   aux N premières couvertes par une Maîtrise du combat ; le livret
   (« Maîtrises ») fait de la maîtrise une condition de progression, objet
   par objet. Le recto donne le dé d'attaque sans ce désavantage, qui n'est
-  pas calculé. Sections « Jets d'attaque » et « Maîtrises ».
+  pas calculé. Sections « Jets d'attaque » et « Maîtrises ». **Le simulateur
+  de combat le calcule**, lui, pour un personnage comme pour un adversaire,
+  par la lecture du classeur que les adversaires suivent déjà (§ 16.4 ;
+  « Pour le lot 4 », point 23) ; la fiche de personnage ne change pas.
 - **Une seule arme** : l'élément Arme dit « une seule arme dans le même
   tour », le livret (« Objet ») « une seule arme équipée à la fois ». Le
   créateur suit le livret (lot 2 bis) : une arme tenue, les autres au sac.
+  Au combat, un personnage n'a que son arme tenue (« Pour le lot 4 »,
+  point 19) ; « une seule arme dans le même tour » n'y est pas contrôlé, et
+  un adversaire, qui peut porter plusieurs armes (§ 16.4), peut en jouer
+  plusieurs dans un tour (point 21).
 - **Le modèle de fiche** : son sous-titre du souffle, « 5 par niveau »,
   contredit le livret (10 à la création, +1 par point d'historique) ; le
   livret fait foi. Il n'a pas de place pour le reliquat des points de
@@ -1605,7 +1742,9 @@ disant, **à confirmer ou à corriger dans le livret ou le classeur** :
   résolus et signalés (A1), comme partout (§ 6.3) : « Maitrise du combat
   agile » pour « Maîtrise du combat agile », deux fois dans le classeur
   réel.
-- **Le sort des blessures d'un adversaire**, que le lot ne traite pas.
+- **Le sort des blessures d'un adversaire**, que le lot ne traite pas. Le
+  simulateur de combat le tranche provisoirement : une zone sans résistance
+  est « blessée », sans effet calculé (« Pour le lot 4 », point 14).
 
 **Un signe invisible dans un nom : tranché au lot 4** (décision de
 l'auteur, mission du 12/10/2026). La relecture finale du lot 3 l'avait
@@ -1656,14 +1795,251 @@ trancher par l'auteur** :
 - **L'en-tête sur un téléphone** : la navigation porte huit liens, et prend
   une rangée de plus (189 px de 360 à 414 px de large) ; les onglets des
   listes, cinq, en prennent deux. Un en-tête replié serait un choix d'aspect.
+  Depuis le lot 4, les liens sont neuf (« Combat », § 9) : la hauteur de
+  l'en-tête n'a pas été reprise. La mission du lot 4 range l'en-tête du
+  téléphone au lot des finitions (§ 13).
 - **Une capacité d'arme sans arme** (A15) imprime « {degats} » tel quel sur
   la carte : c'est le comportement décrit, et il se verra à la table.
 
-**Pour le lot 4 — objets, sorts, équipement** : ce qu'est un sort (le mot
-n'apparaît pas dans le Word) ; la grammaire des expressions : le créateur de
-personnage en calcule une (§ 15.2 : nombres, `{nom}`, `N`, + − × ÷, `X`,
-arrondi inférieur), que le Word ou `lisez_moi` devra confirmer ou
-étendre (parenthèses, signe).
+**Pour le lot 4 — simulateur de combat** (mission du 12/10/2026, § 17).
+Ce sont des **conventions provisoires** : les règles qu'applique le
+simulateur sans que le livret les dise, ou là où il s'en écarte. **Elles
+priment jusqu'à la réécriture du livret**, et le simulateur les applique
+toutes. Celles qui portent « (11/10) » ont été acceptées par l'auteur le
+11/10/2026 ; les autres ont été tranchées par la mission, le 12/10/2026,
+pour qu'aucun choix ne reste ouvert : l'auteur les confirme ou les corrige
+à l'arrêt d'essais (§ 13). **Chacune est à écrire dans le livret**, à la
+section dite. Les capacités que le simulateur reconnaît s'y nomment par
+leur rôle (§ 17.6), les exemples viennent de la démonstration. Les règles
+d'interface (choisir qui joue, revenir avant le premier dé, poser les
+jetons, les noms courts) ne sont pas des règles du jeu : elles sont au
+§ 17, et non ici.
+
+1. **L'inversion (11/10)**, règle de l'auteur que le livret ne dit pas
+   encore : le jet d'attaque d'un adversaire est le jet de défense du
+   personnage visé ; un avantage de l'adversaire devient un désavantage du
+   personnage dans le même jet, et inversement. Sections « Asymétrie des
+   rôles lors des combats » et « Avantage et désavantage ».
+2. **La distance.** Une diagonale compte pour une case : la distance de
+   Tchebychev (11/10). Une portée absente vaut 0, la même case. La
+   capacité de déplacement, jouée à la puissance P, mène à une case située
+   à une distance de 1 à P. Section « Cases de combat ».
+3. **Le désavantage et l'avantage sur la chaîne.** Le désavantage pèse sur
+   chaque dé de la chaîne (11/10) : avec k désavantages, chaque dé se
+   lance k + 1 fois, et l'on garde le pire. L'avantage relance le dé qui
+   échoue, au choix du joueur. Section « Avantage et désavantage ».
+4. **Le dé miroir** (groupe 2) : la valeur opposée vaut faces + 1 − valeur
+   (11/10), prise sur la valeur brute, avant les modificateurs. Section
+   « Dé miroir ».
+5. **Le dé explosif.** La valeur maximale s'entend modificateurs compris ;
+   le modificateur ne compte qu'une fois ; le dé explose tant qu'il montre
+   sa face maximale et que la somme reste sous la difficulté. Section « Dé
+   explosif ».
+6. **Le coup critique** (groupe 2). Le quatrième dé ne se propose qu'aux
+   jets d'attaque et de caractéristique ; il double aussi le surplus du
+   passif « dégrossir ». Section « Coup critique ».
+7. **Le moment des interventions** : après le jet de défense, avant les
+   dégâts (11/10) ; après la localisation, s'il y en a une. Section
+   « Actions de jeu ».
+8. **Annuler des dégâts avec le souffle** passe par la capacité d'esquive,
+   qui coûte une action (11/10, la maquette) ; **le livret (« Ressources »)
+   le dit sans action**. Avec plusieurs zones touchées, l'annulation se
+   fait zone après zone. Section « Ressources ».
+9. **Les capacités qui « touchent » sans dégâts propres.** Leur jet est
+   celui d'une arme, sur un bouton (11/10, la maquette) ; les dégâts de
+   l'arme ne s'appliquent que si le joueur les demande. Sections
+   « Capacités » et « Jets d'attaque ».
+10. **Le dé d'attaque à mains nues** : une ou deux caractéristiques,
+    choisies au moment du jet (11/10). Section « Jets d'attaque » (lot 2,
+    plus haut).
+11. **Le corps-à-corps** : l'attaquant et la cible sur la même case.
+    Section « Cases de combat ».
+12. **La face de contre-attaque.** La face 1 d'un adversaire annule
+    l'attaque du personnage, comme la face 20 d'un personnage annule celle
+    de l'adversaire ; **le livret ne le dit que pour le personnage**. Sur
+    l'un des dés d'une localisation multiple, elle annule toute l'attaque.
+    **Le livret dit « un 1 sur un jet d'attaque » (« Jets de
+    localisation »), puis « un jet de localisation » (« Contre-attaque ») :
+    le simulateur suit le second**, comme les grilles des adversaires
+    (§ 16.3). La localisation se fait dès que l'attaque touche, même sans
+    dégâts : **une capacité sans dégâts peut donc être annulée**. La face
+    se lit sur le dé brut : un décalage ne la crée ni ne l'efface ; la face
+    décalée reste sur une zone, de 1 à 19 sur un personnage, de 2 à 20 sur
+    un adversaire. Sections « Jets de localisation » et « Contre-attaque »,
+    à accorder.
+13. **Les blessures** : le −1 par zone sans résistance vaut pour les dés de
+    la chaîne, pas pour le dé de localisation. Section « Ressources ».
+14. **Les adversaires** : leur souffle ne se recharge pas pendant un
+    combat, et n'annule pas de dégâts (11/10) ; une zone sans résistance
+    est « blessée », sans effet calculé (11/10) ; ils meurent à 0 de corps
+    (11/10) ; un coût en lien ne se paie pas, et le journal le dit ; ils
+    jouent leurs capacités à leur rang ; ils n'ont que les capacités de
+    leur ligne : sans capacité de déplacement, un adversaire ne se déplace
+    pas, sauf par le clic droit (groupe 2) ; les bonus et malus +N des
+    passifs ne s'appliquent pas à eux. Section « Caractéristiques d'un
+    adversaire » (lot 3, plus haut).
+15. **Les effets « jusqu'à votre prochain tour »** cessent au début du
+    prochain tour du camp de leur auteur (11/10) (groupe 2). À la mort d'un
+    protagoniste, les effets qu'il a lancés durent jusqu'à leur échéance.
+    La capacité d'attente dure de même : jusqu'au prochain tour du camp de
+    son auteur. Section « Temporalité ».
+16. **Alterner dans un camp** : les protagonistes du camp qui joue peuvent
+    alterner leurs actions ; le livret (« Temporalité ») dit seulement
+    qu'ils choisissent qui joue dans quel ordre. Section « Temporalité ».
+17. **Le lien** : la jauge part pleine. Section « Ressources » (lot 2, plus
+    haut).
+18. **Le bouclier.** Sa défense s'affiche, sans effet, car le livret
+    (« Objet ») ne le définit pas. Section « Objet » (lot 2, plus haut).
+19. **Les objets portés.** Les armes, les armures et le bouclier ne donnent
+    leurs capacités que portés, et une seule arme : la tenue. Les autres
+    objets les donnent où qu'ils soient. Section « Objet » (lot 2, plus
+    haut : le créateur de personnage, lui, compte tout l'équipement).
+20. **Les types d'armure mêlés** donnent 1 désavantage en défense : **la
+    maîtrise des pièces n'est pas définie**. Section « Jets de défense »
+    (lot 2, plus haut).
+21. **Une seule arme par tour** (élément Arme) : le simulateur ne le
+    contrôle pas. Section « Objet » (lot 2, plus haut).
+22. **Une attaque à plusieurs cibles** se fait avec un jet par cible
+    (groupe 2). Section « Jets d'attaque ».
+
+**Les précisions**, que ni le livret ni ces vingt-deux points ne portent.
+La mission en dit quatre ailleurs qu'en sa liste (son § 8.4, accepté le
+11/10/2026 : les points 23, 24 et 33, et le cœur du 34) ; les dix-neuf
+autres ont été arrêtées le 12/10/2026, en écrivant le moteur, par l'agent
+principal, par le contrat d'écriture du lot ou par un lot d'écriture :
+**l'auteur ne les a pas vues**, et les confirme ou les corrige à l'arrêt
+d'essais. Chacune est réversible, et **à écrire dans le livret** de même,
+ou, pour ce qui tient à une cellule, dans le classeur et son `lisez_moi`.
+
+23. **Les maîtrises au combat.** Une capacité que donne un objet Lourde,
+    Agile ou Précise a 1 désavantage, sauf si une maîtrise de ce poids, au
+    rang N, couvre sa position dans la liste du bloc : la règle des
+    adversaires (§ 16.4), appliquée au personnage aussi, par la même
+    fonction. Au rang 0, une maîtrise ne couvre rien. La fiche de
+    personnage ne le calcule toujours pas. Sections « Maîtrises » et « Jets
+    d'attaque » (lot 2, plus haut).
+24. **Le N d'un passif câblé** (§ 17.6) est le niveau de cette capacité
+    chez le personnage, son rang chez l'adversaire ; le niveau du
+    personnage n'entre dans aucun calcul. Section « Niveau », et la
+    description de ces capacités dans le classeur. Ce que cela donne au
+    niveau 0, et pour deux passifs du même rôle : point 45.
+25. **Un paramètre présent mais non calculé** (une portée, un nombre de dés
+    de localisation, des dégâts écrits d'une façon que le § 15.2 ne lit
+    pas) prend sa valeur neutre : portée 0, un dé, pas de dégâts ; pour un
+    personnage, la préparation le dit par un avertissement. Un
+    `loc_multiple` inférieur à 1 vaut 1, une portée négative 0, des dégâts
+    négatifs 0. Dans `lisez_moi`.
+26. **Les puissances jouables** vont de 1 au niveau, parmi celles qui ont
+    une variante (des variantes 1 et 3, au niveau 3 : 1 et 3). Une capacité
+    qui n'évolue pas se joue à la puissance 0. Section « Capacités ».
+27. **Le coût.** Négatif, il vaut 0. Le même X vaut pour le souffle et pour
+    le lien d'une capacité ; il se choisit de 0 à ce qui reste, le plus
+    petit des restes des ressources dont le coût porte X ; pour un
+    adversaire, qui ne paie pas le lien, seul le souffle le borne. Un coût
+    illisible rend la capacité injouable, et l'écran le dit. Sections
+    « Capacités » et « Ressources ».
+28. **Les dégâts à mains nues** à la puissance P se lisent dans la
+    description de la capacité, comme sur la fiche (§ 15.2). Section « Jets
+    d'attaque ».
+29. **Une attaque que ne donnent ni l'arme tenue ni le bloc de base** :
+    son dé se choisit comme à mains nues. Aucun cas aujourd'hui. Section
+    « Jets d'attaque ».
+30. **La défense, à égalité de dés** : le type retenu est celui de la
+    première pièce portée ; sans armure, l'ordre lourde, agile, précise
+    (c'est la fiche, § 15.2). Le livret laisse ce choix au joueur : l'écran
+    affiche le type retenu, sans le laisser changer. Section « Jets de
+    défense ».
+31. **Une capacité reçue de plusieurs origines** n'a qu'un bouton, sous la
+    première qui la donne valablement, dans cet ordre : l'arme tenue,
+    l'archétype, l'espèce, le style, la constellation, le primordial, les
+    autres objets, le bloc de base. Elle en suit les paramètres, la
+    description et la maîtrise. Section « Création » (lot 2, plus haut,
+    « Une capacité reçue deux fois »).
+32. **Un adversaire sans nombre d'actions** ne s'ajoute pas à un combat ;
+    avec zéro action écrit, il s'ajoute et ne joue jamais. **Sans souffle
+    écrit**, il a un souffle de 0, affiché « — ». Section
+    « Caractéristiques d'un adversaire ».
+33. **« Dégrossir » chez un adversaire** : les réussites de son attaque
+    valent 3 moins celles de la défense du personnage. Section « Asymétrie
+    des rôles lors des combats ».
+34. **« Dégrossir », son champ.** Il vaut pour toute attaque, mains nues
+    comprises, et pour un jet d'arme prêté dont le joueur demande les
+    dégâts de l'arme ; jamais sans dégâts, ni pour des dégâts fixés à 0, ni
+    pour des dégâts directs, ni sur un coup que l'esquive a annulé en
+    entier. Il compte les réussites du jet, non un ajustement fait à la
+    main. Son surplus ne passe pas à la résistance, qui reçoit « les dégâts
+    moins l'armure d'avant le coup ». Section « Armure, résistance et
+    corps ».
+35. **Passer son tour** ne coûte rien ; le protagoniste a joué, et ses
+    actions restantes ne servent plus à ce tour. Section « Actions de
+    jeu ».
+36. **Le dé explosif, la suite.** Devant un dé qui peut exploser, le faire
+    exploser est la seule suite ; le dé d'une explosion se lance une seule
+    fois, même sous désavantage, où seul le dé gardé explose ; une relance
+    d'avantage remplace le dé et sa somme ; l'explosion s'arrête dès que la
+    somme n'est plus sous la difficulté. Section « Dé explosif ».
+37. **Un allié** est un protagoniste vivant du même camp, autre que soi.
+    **Les effets qui portent sur un mort cessent.** Section « Combat ».
+38. **Le jet d'arme prêté** (point 9) prend la portée et le nombre de dés
+    de localisation de l'arme prêtée : pour un personnage, l'arme tenue,
+    et sans elle sa capacité à mains nues à son niveau, avec son dé au
+    choix et ses dégâts ; pour un adversaire, l'arme qu'il choisit s'il en
+    a plusieurs, et sans arme une portée de 0, un dé, des dégâts saisis à
+    la main. Il reçoit les avantages des passifs, **sans le désavantage de
+    maîtrise**, ni pour qui le lance, ni par inversion. Sections « Jets
+    d'attaque » et « Maîtrises ».
+39. **Les dégâts directs**, saisis à la main : ils remplacent ceux du
+    coup, demandent un nombre et une raison, et vont à la résistance de la
+    zone touchée (le reste au corps) ou droit au corps, sans toucher
+    l'armure. Section « Armure, résistance et corps ».
+40. **Une seule esquive par attaque** (groupe 1) : elle s'offre au
+    personnage visé tant qu'il lui reste une action et du souffle, et que
+    les dégâts dépassent 0 ; elle annule de 1 au plus petit de son souffle
+    et du total des dégâts. Section « Ressources ».
+41. **Après une face de contre-attaque**, les dés de localisation restants
+    ne se lancent pas ; **l'action et le coût de l'attaquant restent
+    payés** (ils le sont au premier dé). C'est, de toutes ces lectures, la
+    seule qui change un état : à confirmer en premier. Section
+    « Contre-attaque ».
+42. **Un adversaire qui porte la capacité du jet de caractéristique** la
+    joue sans jet : seuls les joueurs lancent des dés, et il n'a pas de
+    caractéristiques. Section « Jets de caractéristique ».
+43. **Une attaque dont les dégâts ne se lisent pas** touche « sans
+    dégâts », et le joueur les saisit. Chez un adversaire, une capacité
+    citée sans arme est une attaque si elle a des dégâts propres ou porte
+    l'élément Dégâts ; sinon elle se joue sans jet, ou par le jet prêté.
+    Section « Jets d'attaque ».
+44. **La face d'un dé de localisation se décale** tant que ni l'esquive ni
+    l'application des dégâts n'ont été jouées. Section « Jets de
+    localisation ».
+45. **Un passif câblé au niveau 0, et deux passifs du même rôle**
+    (12/10/2026, en écrivant le moteur ; la mission n'en dit rien). Au
+    niveau 0, un passif câblé ne fait rien (+0, aucun avantage), sauf le
+    −1 du rôle « petit », qui ne dépend pas de N. Deux passifs du même
+    rôle comptent tous les deux ; pour « dégrossir », le premier seul. À
+    confirmer. Section « Niveau », et la description de ces capacités
+    dans le classeur.
+
+**Ce qui manque encore, et que le simulateur laisse à la main**, par une
+saisie ou un choix, sans rien inventer :
+
+- **L'effet propre de chaque capacité**, écrit en texte libre dans le
+  classeur : il s'applique à la main, sa description sous les yeux (§ 17).
+  Le lire seul demanderait une colonne codée dans le classeur, hors de ce
+  lot.
+- **Une capacité de déplacement qui n'évolue pas** (puissance 0) : « une
+  distance de 1 à P » ne lui offre aucune case, et elle ne se joue pas.
+  Aucun cas dans la démonstration ni dans le classeur réel au 12/10/2026.
+  Section « Cases de combat », ou le classeur.
+- **Les charges des consommables, les points d'historique, la recharge du
+  souffle et du lien, les effets de terrain d'une case** : hors du lot ;
+  rien n'en est calculé.
+
+**Pour le lot des objets, sorts et équipement** (lot à fixer, § 13) : ce
+qu'est un sort (le mot n'apparaît pas dans le Word) ; la grammaire des
+expressions : le créateur de personnage en calcule une (§ 15.2 : nombres,
+`{nom}`, `N`, + − × ÷, `X`, arrondi inférieur), que le Word ou `lisez_moi`
+devra confirmer ou étendre (parenthèses, signe).
 
 **Pour la progression du personnage** (lot à fixer) : l'articulation entre
 la montée de niveau (« Niveau » : un point à la puissance d'une capacité ou
@@ -1680,13 +2056,20 @@ maîtrise d'un objet.
 | **2 — Personnage** | créateur au niveau 1, fiche imprimable (recto : le modèle ; verso), vue lecture et vue fiche zoomable sur téléphone, fichier et lien vers le téléphone (§ 15) | rien ; § 12, lot 2, pour ce qu'il laisse vide |
 | **2 bis — Améliorations du créateur** | descriptions, boutons + et −, packs d'armure, qualité 2, tirage refait, modifier un personnage enregistré ; personnages en ligne (ticket, automate, chiffrés) ; mot de passe à 8 signes, sans casse ; E7 assoupli, A10 ; format 1 retiré (§ 15.8) | l'auteur : le jeton de dépôt, puis le changement du mot de passe |
 | **3 — Adversaires** | la feuille Adversaires du classeur des règles, son import et ses dix-sept codes de contrôle ; la résolution (types, multiplicateur, armure par zone, capacités, désavantage) ; la consultation des types et des adversaires, résolus ; la carte et l'impression d'une rencontre (§ 16) | l'auteur : republier la banque depuis le classeur à jour ; § 12, lot 3 |
-| — Éditeur d'adversaire (lot à fixer) | l'éditeur dans la page, l'assistant de calibrage, les prétirés, l'enregistrement d'une rencontre, le suivi des dégâts à l'écran | — |
-| 4 — Objets, sorts, équipement | créateur, « Copier comme lignes Excel » | § 12, lot 4 |
-| 5 — Finitions | fiche de jeu à compteurs, PDF sur téléphone, annulation d'une publication, code QR vers le téléphone | — |
+| **4 — Simulateur de combat** | groupe 1, le combat jouable : le signe invisible dans les noms, le classeur d'essai, le moteur du combat, l'enregistrement chiffré, l'écran ; groupe 2, les règles fines et la main du MJ : les interventions, la contre-attaque, le coup critique, le dé miroir, les passifs payants, la palette de modificateurs, les états, le clic droit, plusieurs cibles (§ 17) | l'auteur : l'arrêt d'essais entre les deux groupes ; § 12, lot 4 |
+| — Éditeur d'adversaire (lot à fixer) | l'éditeur dans la page, l'assistant de calibrage, les prétirés, l'enregistrement d'une rencontre | — |
+| — Progression du personnage (lot à fixer) | niveaux, expérience, historique | § 12 |
+| — Objets, sorts, équipement (lot à fixer) | créateur, « Copier comme lignes Excel » | § 12 |
+| — Finitions (lot à fixer) | fiche de jeu à compteurs, PDF sur téléphone, annulation d'une publication, code QR vers le téléphone, l'en-tête du téléphone | — |
 
 L'ordre des lots 2 à 4 a changé le 29/09/2026 (décision de l'auteur) : le
-personnage passe avant l'adversaire. La progression du personnage (niveaux,
-expérience, historique) viendra dans un lot à fixer.
+personnage passe avant l'adversaire. Il a changé de nouveau le 12/10/2026
+(mission du lot 4, validée par l'auteur) : **le lot 4 est le simulateur de
+combat**. « Le suivi des dégâts à l'écran », jusque-là rangé avec l'éditeur
+d'adversaire, en fait partie. Les lots qui suivent perdent leur numéro et
+se rangent ainsi, chacun « lot à fixer » : la progression du personnage
+(niveaux, expérience, historique), puis les objets, sorts et équipement,
+puis les finitions. L'éditeur d'adversaire reste sans date.
 
 **Le lot 1 est terminé** (29/09/2026, spécification 1.0). Ses critères :
 
@@ -1717,7 +2100,10 @@ les étapes (décision de l'auteur, 28/09/2026). Le groupe 3 a été redéfini
 par l'instruction du 28/09/2026 : revue de sécurité et corrections, sans
 rien publier ; l'étape H vient ensuite, faite par l'auteur. Une relecture à
 plusieurs agents est permise dans un cadre écrit dans `CLAUDE.md` (trois
-relecteurs au plus, une seule liste, l'agent principal corrige).
+relecteurs au plus, une seule liste, l'agent principal corrige). Depuis le
+29/09/2026, les agents sont « autant que nécessaire », pour le travail
+comme pour la relecture (décision de l'auteur, reportée dans `CLAUDE.md` au
+lot 4) : le compte rendu dit combien, à quoi, et ce qu'ils ont coûté.
 
 | Groupe | Étapes |
 |---|---|
@@ -1774,9 +2160,144 @@ pas dans la banque en place), puis les essais du compte rendu
 une rencontre imprimée dans Firefox et comparée à la maquette ; et les
 points du § 12.
 
+**Le lot 4 en est à la fin de son groupe 1** (12/10/2026, spécification
+1.4), selon la mission du 12/10/2026 (`plans/instruction_lot4.md`), validée
+par l'auteur avec la maquette du 11/10/2026 (`plans/maquette_simulateur.html`
+et ses deux rendus, hors dépôt). Il se fait **en deux groupes, chacun d'un
+seul tenant, avec un arrêt d'essais entre les deux** : le compte rendu du
+groupe 1 (`plans/compte_rendu_lot4_groupe1.md`) donne à l'auteur une liste
+d'essais, et le groupe 2 ne commence que sur sa parole ; si les essais
+demandent un ajustement, un complément à la mission
+(`plans/complement_lot4_groupe2.md`) l'écrit, et prime sur elle. La
+spécification passe en 1.4 à la fin du groupe 1, en 1.5 à la fin du
+groupe 2. Les étapes du groupe 1 :
+
+1. **le signe invisible** dans les noms, correction recommandée au lot 3
+   (§ 6.3, § 12) ;
+2. **le classeur d'essai** et la démonstration : ce qui manquait au
+   simulateur (§ 10.3) ; ces deux étapes, commit `40db3a0`, 458 contrôles ;
+3. **le moteur du combat**, sans page (§ 17.1 à § 17.6) ;
+4. **l'enregistrement** chiffré (§ 17.8) ;
+5. **l'écran** (§ 17.7), sans ce qui est au groupe 2 ; ces trois étapes,
+   commit `fda3a2a`, 1 392 contrôles. Elles ont suivi une cartographie du
+   dépôt, de la mission, du livret et du classeur ; des arbitrages de
+   l'agent principal ; le combat de référence fictif, composé puis calculé
+   à la main trois fois, avant le code (§ 17.10) ; un contrat d'écriture,
+   tiré de deux conceptions ; puis vingt lots d'écriture, deux lots ne
+   touchant jamais le même fichier, chacun rendant ce qu'il avait dû
+   préciser du contrat ;
+6. **les contrôles, les mises à l'épreuve et les mesures** : les contrôles
+   du moteur, de l'enregistrement et de l'écran sont dans le commit
+   `fda3a2a` ; le combat de référence fictif et le banc sur le classeur
+   réel, hors dépôt, sont mesurés (§ 17.10, § 17.11) ; les mises à
+   l'épreuve des étapes 3 à 5 et les mesures dans un navigateur ne sont
+   pas écrites dans cette spécification, et le § 17.11 dit lesquelles ;
+7. **la spécification 1.4** (§ 17, nouveau ; § 0, § 2, § 9, § 11, § 12
+   amendés) et `CLAUDE.md` ; une relecture de la spécification, onze
+   constats (§ 14) ; le compte rendu.
+
+Ce qui reste à l'auteur, à l'arrêt d'essais : la démonstration sur son
+téléphone ; sur son ordinateur, un combat réel avec deux de ses personnages
+en ligne et une rencontre de quatre adversaires posée d'un clic ; le début
+du combat de référence de la mission, rejoué à la main et comparé à la
+maquette ; un rechargement en plein combat ; « Copier » et « Télécharger » ;
+puis confirmer ou corriger les conventions du § 12, « Pour le lot 4 ».
+Rien de réel n'est publié par le lot : seul l'auteur publie.
+
 ---
 
 ## 14. Révisions
+
+**1.4 — 12/10/2026.** Lot 4, groupe 1 : le simulateur de combat, le combat
+jouable.
+
+- Décisions de l'auteur, par la mission du 12/10/2026 (§ 1, § 2, § 13) :
+  le lot 4 est le simulateur de combat, en deux groupes séparés par un
+  arrêt d'essais ; « le suivi des dégâts à l'écran » quitte l'éditeur
+  d'adversaire ; les lots suivants perdent leur numéro (la progression du
+  personnage, puis les objets, sorts et équipement, puis les finitions).
+  Le simulateur est assisté et se joue à la main, sans intelligence
+  artificielle ; ses conventions provisoires priment jusqu'à la réécriture
+  du livret ; vert pour les personnages, rouge pour les adversaires (§ 2).
+  Dans `CLAUDE.md` : les agents « autant que nécessaire » (29/09/2026), la
+  consommation au compte rendu sans relevé `/usage` (30/09/2026).
+- Étape 1, **le signe invisible** (commit `40db3a0`) : `js/banque/noms.js`
+  retire vingt et un signes de format ; la clé d'un nom les ignore, les
+  doublons (E3, E16, A16) comparent les noms exactement après ce retrait,
+  A1 le dit, les fiches comptent un doublon de même (§ 6.3, § 10.1,
+  § 16.6) ; aucun de ces signes ne s'écrit tel quel dans le dépôt ; ce que
+  la correction laisse (§ 12). 18 contrôles, tous vus échouer sur une
+  casse du code puis passer (49 casses, hors de OneDrive) ; un relecteur :
+  huit constats, dont un majeur (la moitié « exactement » de la règle
+  n'était gardée par aucun contrôle), tous corrigés.
+- Étape 2, **le classeur d'essai** (même commit) : les éléments
+  Intervention et Passif, Passif sur douze capacités, Intervention sur
+  deux, deux capacités de plus au bloc de base ; la banque et le
+  personnage de démonstration régénérés, le sel gardé ; aucun adversaire
+  n'en change (§ 10.3, § 15.7, § 16.7). 458 contrôles.
+- Étape 3, **le moteur du combat** (commit `fda3a2a` ; § 17, nouveau) : un
+  combat est une mise en place, puis une suite d'événements, dés compris ;
+  un noyau sans page, sans banque, sans hasard ni heure, dont une seule
+  porte, l'offre, dit ce qui est permis (§ 17.1) ; les protagonistes et
+  leur photographie (§ 17.2) ; les tours, les actions, la mort, la fin
+  (§ 17.3) ; la chaîne, l'avantage et le désavantage avec leurs sources, le
+  dé explosif, l'inversion (§ 17.4) ; l'attaque, la portée, la
+  localisation, les dégâts zone par zone, l'esquive (§ 17.5) ; les
+  capacités, les huit passifs câblés, les maîtrises, les rôles reconnus à
+  leur nom, ceux du vrai classeur par leur seule empreinte (§ 17.6) ; le
+  journal et ses gabarits (§ 17.9). Des modules existants, par ajouts
+  seulement : la règle de position des maîtrises, partagée ; ce que la
+  résolution rend de plus (§ 16.4) ; la rencontre préparée, lue sans rien
+  enregistrer (§ 16.6).
+- Étape 4, **l'enregistrement** (même commit) : le combat gardé sur
+  l'appareil, chiffré par la clé de table, dans une base à part, un combat
+  par mode ; une révision qui ne redescend jamais, et un second onglet qui
+  n'écrase rien ; ses cas d'échec et ce que dit la barre de titre (§ 7.2,
+  § 17.8).
+- Étape 5, **l'écran** `#/combat` (même commit) : la carte de 10 × 10
+  cases, les fiches vivantes, le panneau d'action, la préparation, le
+  journal à copier et à télécharger ; trois dispositions ; « Combat » dans
+  la navigation ; deux exceptions écrites au § 9 : les onze couleurs du
+  combat, et des cases de moins de 44 px sur un téléphone, chacune doublée
+  d'un bouton de 44 px (§ 9, § 17.7).
+- Étape 6, **les contrôles et les mesures** (§ 11, une ligne « Combat » ;
+  § 17.10, § 17.11) : 1 392 contrôles au commit `fda3a2a`, dont 934 neufs ;
+  le combat de référence fictif, calculé à la main trois fois avant le
+  code, sort du moteur mot pour mot, avec son état final ; le banc du
+  12/10/2026 sur le classeur réel, hors dépôt, rejoue le combat de
+  référence de la mission sans écart, et chaque rôle câblé y est reconnu
+  par son empreinte. Les mises à l'épreuve des étapes 3 à 5 et les
+  mesures dans un navigateur n'y sont pas : le § 17.11 dit lesquelles.
+- Étape 7, **la spécification** : le § 17, nouveau ; le § 0 dit
+  l'exception du combat à « le programme n'invente aucune règle », et
+  l'interdit 2 la règle des noms du lot ; § 2, § 9, § 11, § 12 et § 13
+  amendés.
+- Relecture de la spécification 1.4 : onze constats, dont trois majeurs.
+  Le § 0 démentait le lot (il disait de s'arrêter devant une règle
+  absente, quand le simulateur applique ses conventions) : l'exception y
+  est écrite. Une précision arrêtée en écrivant le moteur passait pour
+  acceptée par l'auteur : elle est à part (§ 12, point 45), et les
+  dix-neuf que l'auteur n'a pas vues sont dites telles. Le § 17.11
+  tenait lieu de mesures par un paragraphe d'attente : il dit maintenant
+  ce qui n'est pas mesuré, et plus aucun renvoi ne promet une mesure qui
+  n'existe pas. Huit mineurs, corrigés : le simulateur absent de « ce
+  qu'est ce programme », un compte de dés (48 événements
+  de dé, 50 lancers), le quinzième rôle, deux fonctions dites une, la
+  ligne des rôles absents, le « +k » sous 44 px, une phrase sur les
+  empreintes raccourcie, les phrases de la barre de titre hors mission.
+- Ce que le livret ne dit pas encore (§ 12) : un bloc « Pour le lot 4 —
+  simulateur de combat », les vingt-deux conventions provisoires de la
+  mission et vingt-trois précisions (quatre que la mission dit ailleurs,
+  dix-neuf arrêtées en écrivant le moteur, que l'auteur n'a pas vues),
+  chacune « à écrire dans le livret », et ce que le simulateur laisse à la
+  main ; les entrées des lots
+  2 et 3 que le simulateur tranche y renvoient ; l'ancien bloc du lot 4
+  devient « Pour le lot des objets, sorts et équipement ». La
+  contre-attaque se lit sur le jet de localisation : la formulation du § 16
+  s'y accorde.
+- Le code : `js/combat/` (dix-huit modules), `js/personnage/disponibles.js`,
+  cinq modules d'écran, `css/combat.css` (§ 3.2) ; aucune dépendance
+  (§ 10.2).
 
 **1.3 — 11/10/2026.** Lot 3 : les adversaires.
 
@@ -2578,6 +3099,8 @@ de la feuille « Adversaires » et ses contrôles ; la consultation des types
 et des adversaires, **résolus** ; l'impression d'une rencontre. Hors lot :
 l'éditeur d'adversaire dans la page, l'assistant de calibrage, les
 prétirés, l'enregistrement d'une rencontre, le suivi des dégâts à l'écran.
+Ce dernier est venu depuis, avec le simulateur de combat (lot 4, § 17), qui
+pose d'un clic la rencontre composée ici.
 
 **Préséance.** Le livret fait foi, mais il ne dit presque rien des
 adversaires : sa section « Caractéristiques d'un adversaire » tient en une
@@ -2587,9 +3110,15 @@ ne parle que des personnages (une seule arme équipée, deux pièces d'armure
 interdites sur une même zone), sa règle reste celle des personnages (§ 15),
 et celle d'ici vaut **pour les seuls adversaires**. Ce que le livret dit des
 adversaires est appliqué tel quel : une grille de localisation propre à
-chacun (« Jets de localisation »), un 1 qui provoque toujours une
-contre-attaque, l'attaque et la défense qui sont les difficultés des jets du
-joueur (« Asymétrie des rôles lors des combats »).
+chacun (« Jets de localisation »), **un 1 au jet de localisation**, qui
+provoque toujours une contre-attaque, l'attaque et la défense qui sont les
+difficultés des jets du joueur (« Asymétrie des rôles lors des combats »).
+Sur ce 1, le livret a deux formulations : « un 1 sur un jet d'attaque »
+(« Jets de localisation »), puis « un jet de localisation »
+(« Contre-attaque »). La grille des adversaires suit la seconde, depuis le
+lot 3 : c'est la face 1 du d20 de localisation qui est la contre-attaque
+(§ 16.3) ; le simulateur de combat la lit de même (§ 17.5), et le § 12
+demande d'accorder les deux sections (« Pour le lot 4 », point 12).
 
 **Pas de mot de passe du MJ** : les adversaires se lisent avec le mot de
 passe de table, comme le reste de la banque (décision de l'auteur).
@@ -2671,7 +3200,9 @@ héritée reste, et c'est dit (E14).
 **Localisation.** `Torse(2), Jambe gauche(12), …` donne la première face de
 chaque zone. Les zones se rangent par leur première face, et chacune couvre
 jusqu'à la face avant la suivante ; la dernière va jusqu'à 20. **La face 1
-est la contre-attaque**, posée d'office (livret, « Jets de localisation »).
+est la contre-attaque**, posée d'office : elle se lit sur le jet de
+localisation (livret, « Contre-attaque » ; « Jets de localisation » dit
+« sur un jet d'attaque », § 12).
 Le nombre de zones est libre, et chaque adversaire a sa grille. Une grille
 fautive (E10 : face hors de 2 à 20, deux zones sur une face, aucune zone
 sur la face 2) n'est pas rendue.
@@ -2767,6 +3298,34 @@ qui n'évolue pas est ignoré (A14).
   qu'écrite, et l'écran le dit.
 - **Une capacité d'arme sans arme** : sa description invoque `{degats}`, et
   rien de ce que porte l'adversaire ne les lui donne (A15).
+
+**Depuis le lot 4, pour le simulateur de combat** (§ 17), le même module
+rend davantage, par ajouts seulement : ce qu'il rendait au lot 3 est rendu
+à l'identique (mesuré sur 85 adversaires, la démonstration, les cas fautifs
+et des variantes), et le rapport d'anomalies ne gagne aucun constat.
+
+- **La règle de position des maîtrises est partagée** par trois fonctions
+  de `resolution.js`, que la résolution emploie et que la photographie d'un
+  personnage emploie aussi (§ 17.6) : le rang de maîtrise de chaque poids,
+  le plus haut de ceux qu'on possède (`rangsDeMaitrise`) ; la position
+  d'une capacité dans son bloc, toute entrée comptant dans l'indice, un
+  groupe au choix ou une entrée illisible compris (`positionDans`) ; et le
+  verdict : un bloc qui porte un poids dont la maîtrise n'atteint pas la
+  position gêne la capacité (`horsMaitrise`). Un bloc à deux poids demande
+  les deux maîtrises ; une maîtrise de rang 0 ne lève rien.
+- **Les armes de l'adversaire** (`armes`) : une par objet porté dont le
+  bloc est de type Arme ou Arme naturelle, dans l'ordre de l'équipement, la
+  même arme deux fois comprise ; pour chacune son poids, ses dégâts en
+  nombres, sa portée et son nombre de dés de localisation, lus dans ce que
+  le bloc transmet sans cible, à sa qualité. Le bouclier n'en est pas une.
+- **Pour chaque capacité** : les noms de ses éléments au rang, ceux de sa
+  variante puis ceux que lui transmet, en la visant, chaque bloc qui la
+  donne ; ce qu'elle reçoit de chaque objet qui lui donne des dégâts, en
+  nombres, parallèle à ce que la carte en écrit (dégâts, portée, dés de
+  localisation, désavantage, et laquelle des armes) ; et ce qu'elle porte
+  en propre, sans objet. Une portée absente, non calculée ou négative y
+  vaut 0 ; un nombre de dés de localisation absent ou inférieur à 1, 1
+  (§ 12).
 
 ### 16.5 La carte
 
@@ -2961,7 +3520,13 @@ les cartes sortent. Un adversaire incomplet ou en erreur s'imprime tel qu'il
 se résout, et l'écran le signale, avec un lien vers sa fiche. **La
 composition vit le temps de la visite** : dans la mémoire du module, jamais
 enregistrée (ni `localStorage`, ni IndexedDB, ni l'adresse), remise à zéro
-quand la banque change.
+quand la banque change. Depuis le lot 4, le simulateur de combat la lit
+pour la poser sur sa carte (« Placer la rencontre préparée », § 17.7), par
+une fonction qui ne change rien : `rencontrePreparee(banque)` rend les
+adversaires et leur nombre, dans l'ordre de la liste, et une liste vide
+pour une autre banque que celle de la rencontre, sans la vider. Le contrôle
+« rien n'est enregistré » la couvre. Les plafonds du combat sont ceux
+d'ici : douze exemplaires, soixante adversaires.
 
 **Le téléphone.** Une colonne. Tant que l'échelle n'est pas posée, c'est le
 cadre des cartes qui défile, jamais la page. Un nom fait d'un seul mot plus
@@ -3081,3 +3646,1489 @@ sa fenêtre et son imprimante, d'une rencontre réelle, comparée à la
 maquette (en décochant les en-têtes et pieds de page) ; les écrans sur son
 téléphone : le toucher et le zoom n'ont été qu'émulés, ni Safari ni Firefox
 pour Android n'ont été essayés.
+
+---
+
+## 17. Le simulateur de combat (lot 4)
+
+Ce paragraphe suit le § 16 pour ne rien renuméroter. Le lot 4 (mission du
+12/10/2026, validée par l'auteur avec la maquette du 11/10/2026,
+`plans/instruction_lot4.md`) se fait **en deux groupes**, séparés par un
+arrêt d'essais (§ 13). **Ce paragraphe décrit le groupe 1, le combat
+jouable** ; le § 17.12 dit ce que le groupe 2 ajoutera.
+
+**Ce qu'il est.** Un écran, `#/combat`, où l'on pose sur une carte de
+10 × 10 cases des personnages du site et des adversaires de la banque, puis
+où l'on joue leur combat : qui agit, quelle capacité, contre qui, les dés,
+la localisation, les dégâts, tour après tour. Le combat est gardé sur
+l'appareil, chiffré, et survit à un rechargement ; son journal se copie et
+se télécharge.
+
+- **Il est assisté.** Les règles générales du combat s'appliquent seules :
+  les tours et les actions, la chaîne des dés, l'avantage et le
+  désavantage, la portée, la localisation, l'armure, la résistance et le
+  corps, la mort. **L'effet propre d'une capacité**, que le classeur écrit
+  en texte libre, **s'applique à la main** : sa description s'affiche
+  toujours, et le groupe 1 donne pour cela des réglages simples (un
+  modificateur, des avantages, des dégâts fixés, une face décalée), que le
+  groupe 2 complétera d'une palette. Sont câblés, c'est-à-dire joués sans
+  qu'on dise comment : le bloc de base, les attaques, les maîtrises et huit
+  passifs (§ 17.6).
+- **Il se joue à la main.** Aucune intelligence artificielle :
+  l'utilisateur joue tous les protagonistes, adversaires compris, et lance
+  chaque dé d'un clic sur le dé.
+
+**Ce qu'il n'est pas** (mission, § 18) : il ne joue pas les adversaires ; il
+ne lit pas les effets des capacités ; il ne partage pas un combat entre
+deux appareils et n'ajoute pas de renforts après le lancement ; il ne
+connaît ni les effets de terrain d'une case, ni les charges des
+consommables, ni les points d'historique, ni la recharge du souffle et du
+lien ; il ne s'imprime pas ; il n'écrit rien dans le livret ni dans le
+classeur. Le désavantage des maîtrises reste absent de la fiche de
+personnage (§ 15) : il n'est calculé qu'ici.
+
+**Préséance.** Le livret fait foi, puis le classeur, puis la mission. Là
+où le livret se tait ou diffère, le simulateur applique **des conventions
+provisoires**, toutes inscrites au § 12 (« Pour le lot 4 — simulateur de
+combat »), « à écrire dans le livret » : elles priment jusqu'à sa
+réécriture. **Pour toute autre règle absente, rien n'est inventé** : le
+simulateur laisse la main au joueur, par une saisie ou un choix. Les règles
+d'interface (choisir qui joue, revenir avant le premier dé, poser les
+jetons, nommer court) ne sont pas des règles du jeu : elles sont ici, et
+non au § 12. Chaque règle de ce paragraphe cite la section du livret, le
+point du § 12 ou la décision qui la fonde.
+
+**Aucun nom du vrai classeur** n'entre dans le dépôt avec ce lot (interdit
+2) : ni bloc, ni capacité, ni type, ni adversaire, dans le code, les
+contrôles, ce document ou les messages de commit. Les exemples viennent de
+la démonstration (§ 15.7, § 16.7) : Aubépine Crèmebrûlée, le Chef de
+partie, le Marmiton de corvée. Les noms d'éléments et de paramètres du
+classeur (Intervention, Passif, Dégâts, Portée, Localisation multiple,
+Centré, `loc_multiple`) s'écrivent en clair, comme depuis le lot 1.
+
+### 17.1 Les modules
+
+**Un combat est une mise en place, puis une suite d'événements, et rien
+d'autre.** La mise en place dit qui est là, sur quelle case, et quel camp
+commence. Un événement est un choix du joueur ou un dé lancé, qui porte ses
+valeurs. Tout le reste — ce que vaut chacun, le geste en cours, le journal,
+ce qui est permis — se recalcule. C'est ce qui est gardé (§ 17.8), et c'est
+ce qui fait qu'un rechargement, un contrôle et le banc passent par le même
+chemin que l'écran.
+
+**Le noyau** (`js/combat/`) n'a ni page, ni banque, ni hasard, ni heure. Il
+n'importe que lui-même, `js/banque/noms.js` (la clé d'un nom) et
+`js/personnage/regles.js` (les neuf caractéristiques, le dé d'un jet), sans
+cycle ; un contrôle tient ce graphe (§ 11).
+
+| Module | Ce qu'il fait |
+|---|---|
+| `regles.js` | les constantes du combat, chacune avec sa source en commentaire : la carte, les plafonds, les deux actions d'un personnage, les trois réussites, la grille des personnages, les faces de contre-attaque, les libellés des difficultés du livret, les noms des éléments lus, les quinze rôles (les quatorze du tableau du § 17.6, et celui de l'attaque à mains nues, qui ne tient pas à un nom), les signes du journal, les bornes d'une saisie et d'une photographie ; la version des règles du rejeu |
+| `forme.js` | la forme de ce qui se garde : un événement, une photographie, un contenu entier ; chaque champ attendu, typé et borné, un champ inconnu refusé ; rien de ce qui se relit n'est cru |
+| `plateau.js` | les cases (« D4 »), la distance entre deux cases, les cases à portée, la case où un ajout se pose d'office. Dans le code, la carte du combat s'appelle « le plateau » : « carte » y désigne déjà la carte d'adversaire (§ 16.5) |
+| `noms.js` | le nom entier, le nom court, le jeton et les initiales de chaque protagoniste, calculés pour la liste entière (§ 17.2) |
+| `preparation.js` | la mise en place d'avant le lancement : ajouter, retirer, poser, régler qui commence ; les plafonds ; la fabrique des identifiants |
+| `jet.js` | la chaîne d'un jet : les réussites, l'avantage, le désavantage, le dé explosif ; il ne tire aucun dé, et ne garde aucun total (§ 17.4) |
+| `valeurs.js` | toute lecture d'un protagoniste et du geste en cours : ce qui bouge se lit dans l'état, ce qui ne bouge pas dans la photographie |
+| `circonstances.js` | de quoi ouvrir un jet : qui lance, quel dé, contre quoi, les modificateurs, les avantages et les désavantages, chacun avec sa source, dans un ordre écrit ; les passifs câblés d'une fiche |
+| `degats.js` | la lettre que valent des réussites, la zone que touche un d20, ce que perdent l'armure, la résistance et le corps, « dégrossir », l'esquive, la blessure, la mort (§ 17.5) |
+| `offre.js` | **la seule porte** : ce qui est permis à cet instant, et pourquoi le reste ne l'est pas |
+| `moteur.js` | le réducteur : d'un état et d'un événement, l'état suivant ; le rejeu d'un combat gardé |
+| `journal.js` | chaque ligne du journal, son en-tête, le nom du fichier, et ce que la région d'annonce dit après chaque dé (§ 17.9) |
+| `lecture.js` | les cinq vues que l'écran affiche : la barre, la carte, une fiche, le panneau d'action, la préparation |
+
+**Quatre règles tiennent le noyau** (ce que les contrôles en tiennent :
+§ 11, § 17.11) :
+
+- **`appliquer(etat, evenement)` est pure.** Elle ne lit ni l'heure, ni le
+  hasard, ni la banque, ni l'écran, ni la langue de l'appareil. Les dés et
+  l'heure du lancement sont dans les événements, les photographies dans la
+  mise en place. Elle ne modifie rien de ce qu'elle reçoit : elle rend un
+  état neuf, gelé, qui partage avec le précédent tout ce qui n'a pas
+  changé, si bien qu'un clic coûte autant au trois-centième événement qu'au
+  troisième.
+- **Une seule porte : l'offre.** Le moteur refuse tout événement qu'elle
+  n'admet pas ; les vues en tirent leurs boutons, leurs bornes et la raison
+  de chaque bouton inactif. Un bouton montré actif est donc un événement
+  que le moteur accepte : ni `offre.js` ni `lecture.js` n'importent le
+  moteur.
+- **L'écran n'écrit aucune règle et ne fait aucun calcul.** Chaque élément
+  d'une vue qu'on peut actionner porte sa commande (l'événement à émettre),
+  chaque bouton inactif sa raison, chaque saisie ses bornes.
+- **Un événement refusé rend l'état reçu, l'objet même**, et un refus :
+  « forme » (l'événement est mal fait), « hors_moment » (rien de tel ne
+  s'offre à cet instant), « hors_bornes » (la valeur n'est pas de celles
+  qui s'offrent) ou « interdit » (le bouton existe, il est inactif, et le
+  message est sa raison). Le moteur ne lève jamais, quel que soit ce qu'on
+  lui donne : un combat gardé est une donnée venue d'ailleurs.
+
+**Le bord** touche ce que le noyau ignore :
+
+| Module | Ce qu'il fait |
+|---|---|
+| `js/combat/des.js` | la source de dés de l'écran : `crypto.getRandomValues`, un tirage rejeté et refait au-delà du plus grand multiple du nombre de faces, pour qu'aucune face ne sorte plus souvent qu'une autre. Les contrôles et le banc lui substituent des dés imposés (`tests/outils/des_imposes.js`), que rien dans la page, ni adresse ni réglage, ne permet de lui substituer |
+| `js/combat/roles.js` | le seul tableau qui lie un rôle câblé à un nom (§ 17.6) |
+| `js/combat/photographie.js` | fige à l'ajout tout ce que le combat lira d'un protagoniste, et dit qui ne s'ajoute pas (§ 17.2) |
+| `js/personnage/disponibles.js` | les personnages qu'on peut ajouter, lus sans rien écrire sur l'appareil (§ 17.2) |
+| `js/combat/enregistrement.js` | le chiffrement du combat, sa base, la file des écritures, la révision (§ 17.8) |
+| `js/combat/seance.js` | le lien entre l'écran, le moteur et l'enregistrement : elle tient le combat du moment, passe chaque commande au moteur, donne chaque changement à garder, et rouvre un combat gardé |
+| `js/ecrans/combat.js` | l'écran, et **le seul module qui garde le combat en mémoire** d'une visite de l'adresse à l'autre |
+| `js/ecrans/combat_plateau.js`, `combat_fiches.js`, `combat_action.js`, `combat_preparation.js` | ses quatre parties, dont aucune n'importe le moteur : chacune montre la vue qu'on lui donne (§ 17.7) |
+
+**Les modules d'avant, par ajouts seulement.** `js/adversaire/resolution.js`
+rend les armes d'un adversaire et les éléments de ses capacités, et partage
+la règle de position des maîtrises (§ 16.4). `js/personnage/calcul.js` dit,
+pour chaque capacité d'une fiche, de quelles sources elle vient (un bloc,
+ou un objet et son rang dans l'équipement), les éléments d'une capacité à
+une puissance (ceux de sa variante, puis ceux que son bloc lui transmet en
+la visant), et les dégâts que dit une description à une puissance.
+`js/adversaire/carte.js` exporte l'écriture des types d'un adversaire
+(« Commis, Rôtisseur ×1,4 »). `js/ecrans/rencontre.js` laisse lire la
+rencontre préparée (§ 16.6). Ce que rendaient la résolution et la fiche au
+commit `40db3a0` est rendu à l'identique, les champs neufs mis à part :
+mesuré sur 85 adversaires et 7 fiches.
+
+### 17.2 Les protagonistes et la photographie
+
+**Un personnage** vient des personnages du site.
+
+- **Lesquels** (`js/personnage/disponibles.js`) : ceux de l'appareil qui
+  sont enregistrés, jamais un brouillon, et, en mode réel, ceux qui sont en
+  ligne (§ 15.8). Un personnage par identifiant ; sa version la plus
+  récente (`modifie_le`), et à égalité celle en ligne ; un personnage dont
+  l'appareil a demandé la suppression, envoyée ou non, n'apparaît pas. La
+  liste est triée par nom ; un personnage sans nom s'y appelle « Sans
+  nom ».
+- **En lecture seule.** L'écran Personnages rapproche l'appareil et le
+  site en rangeant au passage : il efface de l'appareil une copie que le
+  site a rattrapée (§ 15.8). Ouvrir la préparation d'un combat ne doit rien
+  changer à l'appareil : le module ne lit que la liste de l'étagère, ses
+  notes et les personnages en ligne, et n'appelle jamais ce rapprochement.
+  La règle est plus simple que celle de l'écran Personnages : une copie
+  plus ancienne que la version en ligne, qu'il montre à part, ne se propose
+  pas ici. Quand les personnages en ligne ne se lisent pas, la liste montre
+  ceux de l'appareil, avec les phrases de l'écran Personnages. En
+  démonstration, rien n'est lu en ligne.
+- **Ses valeurs** viennent de sa fiche (`calculerFiche`, § 15.2) : le dé
+  d'attaque de l'arme tenue, ou les mains nues ; le dé de défense, son type
+  et la mention des types mêlés ; l'armure des six zones, la résistance de
+  chacune, le corps, le souffle ; **deux actions** (livret, « Actions de
+  jeu » : « habituellement ») ; une jauge de lien par primordial lié, de la
+  taille de ses points de lien ; ses capacités, avec leur niveau.
+- **Ne s'ajoute pas**, et l'écran dit pourquoi : un personnage dont les
+  caractéristiques ne sont pas complètes ; un personnage dont l'arme tenue,
+  ou la défense, n'a pas de dé. Les mains nues, sans dé par construction,
+  n'empêchent rien, « Ce qui manque » non plus. Un personnage ne s'ajoute
+  qu'une fois : il se reconnaît à son identifiant, non à son nom.
+
+**Un adversaire** vient de la banque, **résolu** (§ 16.2) : son nombre
+d'actions, son souffle, son attaque, sa défense ; ses zones, leurs faces et
+leur armure, la résistance de chacune et le corps ; ses armes ; ses
+capacités, avec leur rang, leurs dégâts, leur portée, leur désavantage,
+leur coût au rang et leurs éléments.
+
+- **Ne s'ajoute pas** : un adversaire que la résolution dit incomplet
+  (plus large qu'E15 : une grille invalide, un type cassé, une attaque
+  illisible), avec la raison que le site donne déjà ; un adversaire
+  **sans nombre d'actions**. Avec zéro action écrit, il s'ajoute et ne joue
+  jamais ; sans souffle écrit, il a un souffle de 0, affiché « — » (§ 12,
+  point 32).
+- **Les exemplaires** d'un même adversaire se numérotent « n° 1 »,
+  « n° 2 »…, dans l'ordre d'ajout, dès qu'il y en a deux ; avant le
+  lancement, « Retirer » renumérote. Douze exemplaires au plus d'un
+  adversaire.
+- **Les plafonds du combat** : soixante adversaires et douze personnages,
+  ceux de la rencontre (§ 16.6 ; un contrôle les tient égaux). Un ajout qui
+  les dépasserait est refusé en entier, avec sa raison.
+
+**Une photographie.** Les valeurs se figent à l'ajout
+(`js/combat/photographie.js`) : **republier la banque ou modifier un
+personnage ne change pas un combat commencé.** Une photographie porte :
+
+- **les valeurs**, tout ce que lit le noyau, et lui seul : le nom, les
+  actions, le souffle, le corps ; les zones dans l'ordre du d20, chacune
+  avec ses faces, son armure et sa résistance ; la face de contre-attaque ;
+  les caractéristiques et le dé de défense d'un personnage, les deux
+  nombres d'un adversaire ; les armes ; le bouclier ; les jauges de lien ;
+  les passifs câblés ; les capacités. Le noyau n'y lit ensuite que ce qui
+  ne bouge pas : les nombres qui bougent sont recopiés dans l'état à
+  l'ouverture du combat ;
+- **par capacité** : son nom, tel que la banque le donne ; son rôle câblé,
+  reconnu ici et nulle part ailleurs (§ 17.6) ; son niveau (son rang, chez
+  un adversaire) ; le groupe sous lequel son bouton se range ; et **ses
+  façons**, une par manière de la jouer : pour un personnage, une par
+  puissance jouable ; pour un adversaire, une par arme qui la donne, à son
+  rang. Chaque façon fige le coût, la description évaluée, les éléments, ce
+  qu'ils disent (passive, intervention, attaque), les dégâts, la portée, le
+  nombre de dés de localisation et le désavantage de maîtrise ;
+- **la source**, telle que lue : le personnage entier ; ou la ligne de
+  l'adversaire, celles de ses types et sa résolution. Elle ne sert qu'à
+  « Fiche complète » (§ 17.7) : le noyau ne la lit jamais, et un contrôle
+  rejoue le combat de référence sans elle ;
+- **la date de la banque** (`publiee_le`), pour dire si elle a changé
+  depuis l'ajout ; et, pour un personnage, **des avertissements**, montrés
+  à la préparation (une portée, un nombre de dés ou des dégâts qui ne se
+  lisent pas : § 12, point 25).
+
+Les paramètres d'une capacité (`portee`, `loc_multiple`, `degats`) se
+lisent par `contexte()` (§ 15.2 : son bloc, un paramètre qui la vise, un
+élément propre), à la puissance jouée, **jamais par le nom d'un élément**.
+Une capacité d'un personnage que plusieurs origines donnent n'a qu'un
+bouton, sous la première qui la donne valablement (§ 12, points 19 et 31).
+
+**La même fonction juge une photographie quand elle se fabrique et quand
+elle se relit** (`validerPhoto`, `js/combat/forme.js`) : ce qui s'est
+ajouté à un combat se reprend toujours. Elle borne chaque champ : un nombre
+de 0 à 9 999 ; un texte d'une ligne (un nom, un titre, un libellé) de 200
+signes au plus, sans caractère de contrôle ; un texte à lignes (une
+description, un avertissement) de 4 000 signes au plus ; 200 capacités, 20
+façons par capacité, 40 armes, 19 zones, 20 jauges, 40 éléments par
+façon ; une grille qui couvre, sans trou ni chevauchement, toutes les faces
+du d20 hors celle de la contre-attaque. Ce qui les dépasse est un refus
+d'ajout, dit (« Ne s'ajoute pas : la description de … dépasse 4 000
+signes. »). À la photographie, un caractère de contrôle dans un texte d'une
+ligne devient une espace, puisque ce texte entrera au journal, qui tient
+une ligne par geste ; une description garde ses retours à la ligne.
+
+**Les noms** (`js/combat/noms.js`) sont des règles d'interface. Un nom est
+une donnée hostile : il n'est jamais interprété, seulement découpé.
+
+- **Le nom court** sert au journal et aux jetons de la carte. C'est le
+  premier mot du nom : ce qui précède le premier blanc ; ni un tiret ni une
+  apostrophe ne coupent. Un exemplaire numéroté y ajoute « n° k » au
+  journal (« Marmiton n° 1 ») et « k » sur un jeton (« Marmiton 1 »). Deux
+  protagonistes qui ne sont pas des exemplaires du même adversaire, et dont
+  les premiers mots ont la même clé (§ 6.3), gardent leur nom entier.
+- **Les initiales** servent aux pastilles des fiches et aux jetons du
+  téléphone : le premier signe du nom qui est une lettre ou un chiffre, en
+  majuscule, suivi du numéro d'exemplaire (« M1 ») ; « ? » faute d'un tel
+  signe. Tant que deux protagonistes différents ont les mêmes lettres,
+  chacun en prend une de plus ; un nom épuisé, ceux qui restent confondus
+  reçoivent une marque (prime, seconde…), dans l'ordre d'ajout.
+- **Le nom entier** figure partout ailleurs : le titre du panneau, les
+  boutons « Qui joue ? », les cibles, les fiches, et le titre de chaque
+  jeton.
+- Les noms se figent au lancement : le journal les a écrits.
+
+Deux personnages de même nom, ou un personnage et un adversaire de même
+nom, ont le même nom court et le même jeton : rien ne les distingue au
+journal, seules leurs initiales diffèrent. La mission ne prévoit pas ce
+cas.
+
+### 17.3 Le combat : la mise en place, les tours, les actions
+
+**La mise en place** (`js/combat/preparation.js`). Avant le lancement, on
+ajoute des personnages et des adversaires, on les pose, on les déplace, on
+les retire. Rien de cela n'est un événement ni n'entre au journal ; chaque
+changement se garde (§ 17.8).
+
+- **Où se pose un ajout, d'office** : un personnage sur la colonne A, à la
+  première ligne libre en partant de 1 ; un adversaire sur la colonne J, de
+  même, et les exemplaires d'un même adversaire sur la case du premier
+  d'entre eux ; une colonne pleine passe à sa voisine (B, puis C… ; I, puis
+  H…). Une case est libre quand personne n'y est ; ensuite, plusieurs
+  protagonistes tiennent sur une case.
+- **« Qui commence »** : les personnages par défaut (décision de l'auteur),
+  ou les adversaires.
+- **« Lancer le combat »** demande au moins un personnage et un adversaire.
+  Le lancement fige la mise en place et les noms, et porte l'heure locale
+  de l'appareil : c'est le seul endroit où une heure entre dans un combat.
+
+**Les événements.** Il y en a quinze, et tout ce qui se joue en est un :
+
+| Événement | Ce qu'il fait |
+|---|---|
+| `lancer` | lance le combat : la ligne du lancement, puis celle du premier tour |
+| `capacite` | ouvre un geste : tel protagoniste joue telle capacité, de telle façon. C'est lui qui dit qui joue : choisir un protagoniste n'est pas un événement |
+| `regler` | règle le geste avant qu'il soit payé : la puissance ou l'arme, le jet d'arme prêté et son arme, la cible, la case d'arrivée, les caractéristiques, la difficulté, X, la jauge de lien, le modificateur et les avantages à la main |
+| `revenir` | retire le geste : rien n'est dépensé |
+| `confirmer` | joue un geste sans jet, ou un déplacement : il paie, et le geste est fini |
+| `de` | donne ses valeurs au dé attendu ; le premier dé d'un geste le paie |
+| `relancer`, `garder` | devant un dé qui échoue, quand il reste une relance d'avantage |
+| `exploser` | devant un dé qui peut exploser |
+| `degats` | fixe les dégâts, à la fin du jet ; le dernier compte |
+| `decaler` | décale la face d'un dé de localisation |
+| `esquive` | le personnage visé paie une action et X points de souffle |
+| `appliquer` | applique les dégâts : le geste est fini |
+| `passer` | un protagoniste passe son tour |
+| `fin_de_tour` | finit le tour du camp qui joue |
+
+**Un geste a des moments** : il se prépare (tout se règle, rien n'est
+payé) ; son jet se lance ; l'attaque a touché, ses dégâts se fixent ; ses
+dés de localisation se lancent ; viennent les suites (décaler, esquiver),
+puis « Appliquer ». Un moment sans choix se passe de lui-même. Un geste
+dont rien n'est payé cède la place : jouer autre chose, passer ou finir le
+tour l'emportent, sans rien dépenser.
+
+**Les tours** (livret, « Tours de jeu » et « Temporalité »).
+
+- Dans un tour, chaque camp joue à son tour, en commençant par celui que
+  désigne le réglage. Le numéro du tour monte quand le camp qui a commencé
+  rejoue.
+- **Qui agit.** Dans le camp qui joue, l'utilisateur choisit qui agit, dans
+  l'ordre qu'il veut : tout vivant qui n'a pas joué. Il peut changer de
+  protagoniste entre deux actions (§ 12, point 16).
+- **Un protagoniste a joué** quand il n'a plus d'action, ou qu'il a passé
+  son tour.
+- **La fin du tour d'un camp.** Quand tous ses vivants ont joué, ce tour
+  finit de lui-même. « Fin de tour » le finit à tout moment, sauf au milieu
+  d'une action payée. Un camp qui commence sans pouvoir agir (des
+  adversaires sans action) voit son tour finir dès le lancement. Deux fins
+  de tour d'affilée au plus se font d'elles-mêmes : quand aucun des deux
+  camps ne peut agir, le combat attend « Fin de tour » (règle d'interface).
+- **Les actions retrouvées** (livret, « Actions de jeu »). À la fin du tour
+  d'un camp, ses vivants retrouvent toutes leurs actions. Pendant le tour
+  adverse, ils peuvent en dépenser en interventions : ce qu'ils y dépensent
+  leur manque à leur propre tour, puisque leurs actions ne remontent qu'à
+  la fin de celui-ci.
+
+**Les actions.**
+
+- **Ce qui coûte une action** : jouer une capacité (livret, « Capacités »),
+  sauf un passif, qui ne se joue pas ; une intervention.
+- **Ce qui ne coûte rien de plus** : le jet de défense, la localisation, et
+  les effets d'une capacité.
+- **Une capacité qui ne se joue pas** : son bouton est inactif et dit
+  pourquoi, la première raison qui tient : « absente de la banque » ;
+  « coût illisible dans la banque » ; « Plus d'action à ce tour. » ; « Pas
+  assez de souffle : 5 demandés, 3 restants. » ; « Pas assez de lien :
+  1 demandé, 0 restant. »
+- **Le paiement.** L'action, le souffle et le lien d'un geste se paient
+  d'un coup, au premier dé lancé, ou à la confirmation d'une capacité sans
+  jet. Jusque-là, « Revenir » annule le choix sans rien dépenser (règle
+  d'interface). Ce que le joueur a lu avant de lancer est ce qui
+  s'applique : les circonstances du jet se figent au même instant.
+
+**« Passer son tour »** est toujours proposé, par un bouton du simulateur :
+la capacité de la banque qui porte ce rôle (§ 17.6) n'a pas de bouton à
+elle. Passer ne coûte rien ; le protagoniste a joué (§ 12, point 35).
+
+**La mort** (§ 12, point 14, pour un adversaire). À 0 point de corps, un
+protagoniste meurt, à la fin du geste qui le tue. Il ne joue plus et ne se
+cible plus ; sa fiche dit « mort au tour N » ; son jeton est grisé et
+barré, et sa fiche se replie. Ses actions ne remontent plus.
+
+**La fin.** Quand un camp n'a plus de vivant, le combat est terminé :
+« Combat terminé : victoire des PJ. » (ou « … des adversaires. »). La ligne
+suit celle de la mort, sans « Fin du tour » : personne ne retrouve ses
+actions. On ne joue plus ; le journal se copie et se télécharge toujours.
+
+**Une borne.** Un combat tient 20 000 événements au plus : au-delà, le jeu
+refuse l'événement et dit d'en commencer un nouveau. C'est la borne de la
+relecture (§ 17.8) : sans elle, le combat se garderait, puis serait refusé
+en entier au rechargement suivant.
+
+### 17.4 Les jets
+
+**La chaîne** (livret, « Jets » ; `js/combat/jet.js`). Un dé est réussi si
+sa valeur, modificateurs compris, égale ou dépasse la difficulté. Une
+réussite fait lancer le dé suivant, jusqu'à trois réussites ; le premier
+échec arrête la chaîne. Chaque dé se lance d'un clic sur le dé, qui affiche
+son type (« d10 ») tant qu'il n'est pas lancé.
+
+**Le dé** est la somme de deux caractéristiques, ou le double d'une seule,
+arrondie au pair inférieur (§ 15.2).
+
+- **Attaque** : le dé de l'arme tenue, celui de la fiche (lourde, Force et
+  Précision ; agile, Agilité et Force ; précise, Précision et Agilité).
+- **Défense** : celui de l'armure portée, avec la règle des types mêlés et
+  le cas sans armure (§ 15.2). À égalité de dés, la fiche retient un type :
+  l'écran l'affiche (§ 12, point 30).
+- **Dé au choix** : une ou deux caractéristiques, choisies au moment du
+  jet. C'est le dé du jet de caractéristique, de l'attaque à mains nues
+  (§ 12, point 10), et d'une attaque que ne donnent ni l'arme tenue ni le
+  bloc de base (point 29).
+- **Jet de caractéristique** (livret, « Jets de caractéristique ») : la
+  difficulté se choisit de 2 à 10, avec les libellés du livret
+  (« Difficultés ») : extrêmement facile, très facile, facile, moyen,
+  compliqué, difficile, très difficile, extrêmement difficile, quasi
+  impossible.
+
+**Les modificateurs** s'ajoutent à la valeur de chaque dé de la chaîne
+(« 8 + 1 »). Ils entrent dans cet ordre, écrit dans le code
+(`js/combat/circonstances.js`) ; N est le niveau du passif (§ 17.6) :
+
+| # | Source | Quand | Valeur |
+|---|---|---|---|
+| 1 | le passif « bonus de Force » du lanceur | le jet mobilise la Force | +N |
+| 2 | « bonus d'Agilité » | il mobilise l'Agilité | +N |
+| 3 | « bonus de Précision » | il mobilise la Précision | +N |
+| 4 | « petit » | un jet de défense | +N |
+| 5 | « petit » | le jet mobilise la Force | −1 |
+| 6 | **les blessures** du lanceur (livret, « Ressources ») | k zones dont la résistance est à 0 | −k |
+| 7 | la main | un réglage, avant le premier dé | ±N, avec sa raison |
+
+Seul un personnage lance : les lignes 1 à 6 ne s'appliquent jamais à un
+adversaire (§ 12, point 14). Le −1 d'une blessure vaut pour les dés de la
+chaîne, pas pour le dé de localisation (point 13).
+
+**L'avantage et le désavantage** (livret, « Avantage et désavantage »). On
+compte les avantages et les désavantages du jet, chacun avec sa source. Ils
+s'annulent, et seule la différence reste.
+
+- **Avec k avantages**, le joueur a k relances pendant le jet. Quand un dé
+  échoue, il choisit de le relancer ou de le garder. La relance remplace le
+  dé, et la chaîne continue si elle réussit. Une relance est dépensée dès
+  qu'elle est choisie. Un dé relancé qui échoue encore se relance, tant
+  qu'il reste une relance : les relances ne se comptent pas par dé (lecture
+  retenue, à confirmer par l'auteur : § 17.9).
+- **Avec k désavantages**, chaque dé de la chaîne se lance k + 1 fois, et
+  l'on garde le pire (§ 12, point 3).
+- **Les sources**, dans cet ordre, écrit dans le code. « L'autre » est la
+  cible du personnage qui attaque, ou l'adversaire qui l'attaque :
+
+| # | De qui | Source | Quand | Donne au personnage qui lance |
+|---|---|---|---|---|
+| 1 | le lanceur | « seul sur sa case » | attaque ou défense au corps-à-corps, aucun allié vivant sur sa case | N avantages |
+| 2 | le lanceur | « en meute » | attaque, un allié vivant sur sa case | N avantages |
+| 3 | le lanceur | « esprit de corps » | défense, un allié vivant sur sa case | N avantages |
+| 4 | le lanceur | la maîtrise | son attaque, hors maîtrise (§ 17.6) | 1 désavantage |
+| 5 | le lanceur | les types d'armure mêlés | sa défense | 1 désavantage |
+| 6 | l'autre | « seul sur sa case » | au corps-à-corps, sans allié vivant sur sa case | N désavantages |
+| 7 | l'autre | « en meute » | il attaque, un allié vivant sur sa case | N désavantages |
+| 8 | l'autre | « esprit de corps » | il se défend, un allié vivant sur sa case | N désavantages |
+| 9 | l'autre | la maîtrise | son attaque, hors maîtrise | 1 avantage |
+| 10 | la main | un réglage, avant le premier dé | toujours | k avantages, ou k désavantages, avec sa raison |
+
+- **L'inversion** (règle de l'auteur du 11/10/2026 ; § 12, point 1) : les
+  lignes 6 à 9. Un avantage d'un adversaire devient un désavantage du
+  personnage dans le même jet, et inversement ; la source garde alors le
+  nom de l'adversaire. Mesuré sur la démonstration : un Marmiton de corvée
+  joue sa seconde capacité de spatule contre Aubépine, sur sa case ;
+  Aubépine a 1 avantage (ligne 1), 1 désavantage (ligne 5) et 1 avantage
+  (ligne 9), soit 1 avantage.
+- **Le corps-à-corps** : l'attaquant et la cible sur la même case.
+  **Un allié** : un protagoniste vivant du même camp, autre que soi (§ 12,
+  points 11 et 37).
+- **Un jet de caractéristique** n'a ni passif d'avantage ni maîtrise : seule
+  la main lui donne un avantage ou un désavantage.
+
+**Le dé explosif** (livret, « Dé explosif » ; § 12, points 5 et 36).
+
+- **Quand** : la face maximale du dé, modificateurs compris, reste sous la
+  difficulté, et le dé la montre.
+- **« Faire exploser »** relance le même dé et ajoute sa valeur brute : le
+  modificateur ne compte qu'une fois. Cela se répète tant que le dé montre
+  sa face maximale et que la somme reste sous la difficulté. Devant un dé
+  qui peut exploser, c'est la seule suite offerte.
+- Avec un désavantage, seul le dé gardé explose, et l'explosion se lance
+  une seule fois. Une relance d'avantage remplace le dé et sa somme.
+
+**L'asymétrie** (livret, « Asymétrie des rôles lors des combats »). Seuls
+les joueurs lancent des dés. Quand un personnage attaque, la difficulté est
+la défense de sa cible. Quand un adversaire attaque, le personnage visé
+lance sa défense contre l'attaque de l'adversaire. Un adversaire qui porte
+la capacité du jet de caractéristique la joue donc sans jet (§ 12,
+point 42).
+
+**À la main**, avant le premier dé : un modificateur, et des avantages ou
+des désavantages, chacun de −20 à +20, **avec sa raison**, obligatoire dès
+que la valeur n'est pas nulle (de 1 à 80 signes, sans caractère de
+contrôle ; l'écran propose le nom de la capacité). C'est le moteur qui
+vérifie la raison, pas l'écran : elle entre au journal et dans le fichier
+téléchargé.
+
+Le coup critique et le dé miroir sont au groupe 2 (§ 17.12).
+
+### 17.5 L'attaque, la localisation et les dégâts
+
+**Une attaque d'un personnage.**
+
+1. Il choisit une capacité d'attaque (§ 17.6), puis une cible vivante du
+   camp adverse, **à portée**.
+2. **Le jet d'attaque**, contre la défense de la cible. Avec 0 réussite,
+   c'est manqué. Sinon, les dégâts sont ceux du rang de ses réussites : A
+   pour 1, B pour 2, C pour 3 (livret, « Jets d'attaque »). À la fin de
+   cette étape, avant la localisation, le joueur peut fixer les dégâts
+   (plus bas).
+3. Viennent la localisation, l'esquive, puis les dégâts.
+
+**Une attaque d'un adversaire** suit la même suite : la capacité, puis la
+cible ; puis **le jet de défense du personnage**, contre l'attaque de
+l'adversaire (livret, « Jets de défense ») : 0 réussite, C ; 1 réussite,
+B ; 2 réussites, A ; 3 réussites, aucun dégât, et l'attaque n'a pas touché.
+
+**La portée** d'une capacité est son paramètre `portee`, à la puissance
+jouée ; absente, 0 (§ 12, point 2). La distance entre l'attaquant et la
+cible (une diagonale compte pour une case) ne la dépasse pas : 0, c'est la
+même case. Une cible hors de portée ne se choisit pas, et l'écran dit
+pourquoi (« hors de portée : 2 cases, portée 1 »).
+
+**La localisation** (livret, « Jets de localisation » ;
+`js/combat/degats.js`) se fait **dès qu'une attaque touche**, même sans
+dégâts : au moins une réussite pour un personnage qui attaque, moins de
+trois en défense pour un personnage attaqué.
+
+- **Combien de dés** : autant que le dit le paramètre `loc_multiple` de la
+  capacité, lu comme la portée ; 1 par défaut. Avec plusieurs dés, les
+  dégâts s'appliquent en entier à chaque zone, même deux fois à la même.
+- **Quelle grille** : sur un personnage, la sienne : tête 1, torse 2-11,
+  jambe gauche 12-13, jambe droite 14-15, bras gauche 16-17, bras droit
+  18-19 ; sur un adversaire, la sienne propre (§ 16.3).
+- **À la main** : décaler la face de ±N, avec sa raison (une capacité qui
+  fait viser), tant que ni l'esquive ni « Appliquer » n'ont été joués. La
+  face décalée reste sur une zone.
+- **La face de contre-attaque** (20 sur un personnage, 1 sur un
+  adversaire ; § 12, point 12) **annule toute l'attaque** et ses effets,
+  même parmi plusieurs dés. Elle se lit sur le dé brut : un décalage ne la
+  crée ni ne l'efface. Les dés de localisation restants ne se lancent pas,
+  et le geste est fini ; l'action et le coût de l'attaquant restent payés
+  (§ 12, point 41). Le groupe 1 l'écrit au journal ; le groupe 2 proposera
+  la contre-attaque.
+- Sans dégâts, aucune zone ne perd rien : le geste se finit quand même par
+  « Appliquer », un seul chemin.
+
+**L'esquive** est la seule intervention du groupe 1 (§ 12, points 8 et
+40). Elle est proposée au personnage qui va recevoir des dégâts, s'il porte
+la capacité de ce rôle, qu'il lui reste une action et du souffle, une seule
+fois par attaque : X points de souffle annulent X dégâts, X allant de 1 au
+plus petit de son souffle et du total des dégâts (la somme des dégâts de
+chaque zone touchée). Elle se paie tout de suite : une action, X de
+souffle. Avec plusieurs zones touchées, elle s'impute zone après zone, dans
+l'ordre des dés. Le souffle d'un adversaire n'annule rien.
+
+**Les dégâts** (livret, « Armure, résistance et corps »). Sur chaque zone
+touchée, dans l'ordre des dés :
+
+1. l'armure de la zone perd autant de points que les dégâts, jusqu'à 0 ;
+2. le reste passe à la résistance de la zone, jusqu'à 0 ;
+3. le reste passe au corps, qui n'est pas localisé. Ce qui dépasse 0 de
+   corps se perd.
+
+Une zone dont la résistance tombe à 0 est **une blessure** (livret,
+« Ressources ») : pour un personnage, −1 à ses jets par zone blessée,
+cumulés ; pour un adversaire, sans effet calculé (§ 12, point 14).
+
+**Fixer les dégâts**, à la fin de l'étape du jet. Les dégâts d'un geste
+sont une base et, au plus, une opération :
+
+- **une attaque** a les dégâts du rang de ses réussites. Le joueur peut les
+  ajuster : un nombre, de 0 à 999, et une raison (par défaut, le nom de la
+  capacité), qui vont au journal ;
+- **une capacité sans dégâts propres**, jouée avec un jet d'arme prêté
+  (§ 17.6), propose « Sans dégâts », par défaut, ou « Dégâts de l'arme »
+  (le rang de ses réussites) ; ils s'ajustent de même ;
+- **une attaque dont les dégâts ne se lisent pas** touche « sans dégâts »,
+  et le joueur les saisit (§ 12, point 43) ;
+- **des dégâts directs**, à la main, avec leur nombre et leur raison : ils
+  remplacent ceux du coup et passent à la résistance de la zone touchée (le
+  reste au corps), ou droit au corps, sans toucher l'armure (point 39) ;
+- **des dégâts de 0 ou moins** n'enlèvent rien ; la localisation se fait
+  quand même.
+
+L'étape « Dégâts » montre le détail, zone par zone, après l'esquive, et
+s'applique par « Appliquer », sans nouveau changement. Ce détail est
+calculé par la fonction même qui l'appliquera.
+
+### 17.6 Les capacités et les rôles câblés
+
+**Le mode assisté.** Toute capacité se joue, sauf un passif. Elle coûte une
+action, son souffle et son lien. Sa description s'affiche, évaluée à la
+puissance jouée (§ 15.2). Ce qu'elle fait de plus que les règles générales
+s'applique à la main.
+
+**Les attaques.**
+
+- **Est une attaque** une capacité qui n'est ni Intervention ni Passif, et
+  qui reçoit le paramètre `degats`, de son bloc ou d'un paramètre qui la
+  vise, ou porte l'élément Dégâts. Ses éléments sont ses éléments propres
+  et ceux que son bloc lui transmet en la visant ; Passif et Intervention
+  se lisent à la puissance jouée. Elle part sur le jet d'attaque de l'arme
+  qui la donne, avec ses dégâts.
+- **Toute autre capacité part « sans jet »**. Sa cible est facultative : un
+  vivant au choix, sans condition de portée, ou « Sans cible ». **Un bouton
+  « Jet d'attaque » lui prête le jet d'une arme** (§ 12, points 9 et 38) ;
+  il exige alors une cible adverse, à la portée de cette arme. Pour un
+  personnage, c'est l'arme tenue ; sans arme tenue, les mains nues. Un
+  adversaire choisit l'arme s'il en a plusieurs ; sans arme, le jet se fait
+  « sans arme », à portée 0, et les dégâts se saisissent à la main. Ce jet
+  prêté ne porte pas le désavantage de maîtrise.
+- **Pour un personnage, les objets qui donnent leurs capacités** (§ 12,
+  point 19) : les armes, les armures et le bouclier, seulement portés, et
+  une seule arme, la tenue ; les autres objets (consommables, équipements),
+  où qu'ils soient. Dans la démonstration, « Choc sourd » ne paraît donc
+  pas chez Aubépine : seul son rouleau, rangé au sac, le donne.
+- **Pour un adversaire**, une capacité que donnent plusieurs armes a un
+  bouton sous chacune ; deux armes de même nom se distinguent par « (2) ».
+  Une capacité citée sans arme est une attaque si elle a des dégâts propres
+  ou porte l'élément Dégâts (§ 12, point 43) : dans la démonstration, la
+  Frappe de la Mouette chapardeuse n'a ni l'un ni l'autre, et se joue sans
+  jet, ou par le jet prêté « sans arme ».
+- **Les interventions** se jouent aussi à son propre tour, comme toute
+  capacité.
+
+**Les coûts et la puissance** (§ 12, points 26 et 27).
+
+- **La puissance.** Un personnage la choisit de 1 au niveau de la capacité
+  (livret, « Capacités » : on joue sous son maximum pour économiser), parmi
+  les puissances qui ont une variante, par des boutons + et − ; une
+  capacité qui n'évolue pas se joue à la puissance 0, et ne porte pas
+  « [P] ». Son bouton porte d'office la plus haute puissance qu'il peut
+  payer (règle d'interface). Un adversaire joue au rang de la capacité.
+- **Le coût** se lit à la puissance jouée (§ 15.2 : « N » remplacé). X se
+  choisit au moment de jouer, de 0 à ce qui reste ; l'esquive a sa propre
+  borne (§ 17.5). Un coût négatif vaut 0.
+- **Le lien d'un personnage** se paie sur la jauge du primordial dont vient
+  la capacité, et sur elle seule ; pour une capacité qui ne vient pas d'un
+  primordial, sur une jauge au choix qui suffit. La jauge part pleine
+  (§ 12, point 17) ; une jauge de taille 0 ne s'affiche pas.
+- **Le coût en lien d'un adversaire** ne se paie pas, et le journal le dit
+  (§ 12, point 14).
+
+**Le bloc de base, câblé.** Le nom de chacune de ses capacités vient du
+tableau des rôles, plus bas.
+
+- **Le déplacement.** La puissance P se choisit comme ci-dessus ; le coût
+  s'évalue à P ; l'arrivée est une case située à une distance de 1 à P
+  (§ 12, point 2). Un adversaire ne se déplace que s'il a la capacité.
+  Dans la démonstration, le Chef de partie joue son Pas chassé au rang 2,
+  pour 1 de souffle, et va jusqu'à deux cases.
+- **Le jet de caractéristique** : § 17.4.
+- **L'attaque à mains nues.** C'est la capacité que vise le paramètre
+  `degats` du bloc de base (§ 15.2) : ce rôle-là ne tient pas à un nom. Ses
+  dégâts sont ceux de la puissance jouée, lus comme sur la fiche ; son dé
+  se fait d'une ou deux caractéristiques, choisies au moment du jet (§ 12,
+  points 10 et 28).
+- **L'esquive** : une intervention (§ 17.5).
+- **Passer son tour** : un bouton du simulateur (§ 17.3). **Le jet de
+  défense** : automatique, il n'a pas de bouton. **L'attente** : au
+  groupe 2 ; la capacité de ce rôle n'a pas de bouton au groupe 1.
+
+**Les passifs câblés** (proposition acceptée par l'auteur le 11/10/2026).
+Leur N est **le niveau de cette capacité** chez le personnage (§ 15.2), ou
+son rang chez l'adversaire. Le niveau du personnage n'entre dans aucun
+calcul (§ 12, point 24).
+
+| Rôle | Effet |
+|---|---|
+| bonus de Force | +N à chaque dé des jets qui mobilisent la Force |
+| bonus d'Agilité | +N à chaque dé des jets qui mobilisent l'Agilité |
+| bonus de Précision | +N à chaque dé des jets qui mobilisent la Précision |
+| petit | +N à chaque dé des jets de défense ; −1 à chaque dé des jets qui mobilisent la Force |
+| seul sur sa case | N avantages aux jets d'attaque et de défense au corps-à-corps, quand aucun allié vivant n'est sur sa case |
+| en meute | N avantages aux jets d'attaque, quand un allié vivant est sur sa case |
+| esprit de corps | N avantages aux jets de défense, quand un allié vivant est sur sa case |
+| dégrossir | à chaque attaque, N points de plus contre l'armure par réussite |
+| maîtrises | le désavantage du § 16.4, pour un personnage comme pour un adversaire |
+
+- **« Dégrossir »** (§ 12, points 33 et 34). Sur chaque zone touchée,
+  l'armure perd les dégâts plus N × réussites, jusqu'à 0. Ce qui passe à la
+  résistance reste « les dégâts moins l'armure d'avant le coup ». Exemples
+  tenus par un contrôle : armure 15, dégâts 13, +3 : l'armure tombe à 0, et
+  rien ne passe à la résistance ; armure 30, dégâts 13, +3 : 14. Chez un
+  adversaire qui attaque, ses réussites valent 3 moins celles de la défense
+  du personnage. Il vaut pour toute attaque, mains nues comprises, et pour
+  un jet prêté joué avec « Dégâts de l'arme » ; il compte les réussites du
+  jet, non un ajustement fait à la main ; il ne s'applique ni sans dégâts,
+  ni à des dégâts fixés à 0, ni à des dégâts directs, ni à un coup que
+  l'esquive a annulé.
+- **Les maîtrises** (§ 12, point 23). Une capacité d'un objet Lourde,
+  Agile ou Précise a 1 désavantage, sauf si une maîtrise de ce poids, de
+  rang N, couvre sa position dans le bloc. La maîtrise se reconnaît comme
+  au § 16.4 ; la règle de position est la fonction partagée de la
+  résolution. Pour un personnage, les capacités possédées sont celles qu'il
+  tient d'une origine valable au combat (§ 12, point 19), à leur niveau :
+  une maîtrise que seule une arme rangée au sac donnerait ne lève aucun
+  désavantage. La position se compte sur l'entrée simple ou sur l'option
+  **choisie** qui donne la capacité. Le désavantage est figé dans la
+  photographie, par façon. Dans la démonstration, Aubépine n'a que la
+  maîtrise de l'agile, et son couteau est précis : ses deux capacités de
+  couteau sont hors maîtrise.
+- **L'affichage.** Sur sa fiche, un passif conditionnel se dit actif ou
+  inactif, avec sa raison (« aucun allié sur sa case », « un allié sur sa
+  case »).
+- **Chez un adversaire** : les avantages et désavantages de ces passifs
+  passent au personnage, inversés (§ 17.4) ; les bonus et malus +N ne
+  s'appliquent pas à lui, et sa fiche le dit (« ne s'applique pas à un
+  adversaire »).
+
+**Les rôles et les noms** (`js/combat/roles.js`). Le simulateur reconnaît
+une capacité câblée **à son nom, et à lui seul** : l'élément Passif ne
+décide que de l'absence de bouton. Un seul module porte le tableau ; les
+noms se comparent par leur clé (§ 6.3). Le rôle se pose à la photographie,
+et le noyau ne lit ensuite que lui, jamais un nom.
+
+| Rôle | Démonstration | Ce que le simulateur en fait |
+|---|---|---|
+| déplacement | Pas chassé | mène à une case, à une distance de 1 à P |
+| jet de caractéristique | Goûter | un jet d'un dé au choix, contre une difficulté de 2 à 10 |
+| esquive | Pas de côté | l'intervention qui annule X dégâts pour X de souffle |
+| attendre | Guetter | rien au groupe 1 : pas de bouton (groupe 2) |
+| passer son tour | — | pas de bouton à elle : « Passer son tour » est un bouton du simulateur |
+| jet de défense | — | pas de bouton : la défense se lance d'elle-même quand un adversaire attaque |
+| bonus de Force | Costaud | passif : +N |
+| bonus d'Agilité | Vif | passif : +N |
+| bonus de Précision | — | passif : +N |
+| petit | — | passif : +N en défense, −1 en Force |
+| seul sur sa case | Solo du chef | passif : N avantages |
+| en meute | Brigade | passif : N avantages en attaque |
+| esprit de corps | — | passif : N avantages en défense |
+| dégrossir | Réduction | passif : +N contre l'armure par réussite |
+
+- **Les noms de la démonstration** sont fictifs, et s'écrivent en clair.
+  « — » : la démonstration n'a pas de capacité pour ce rôle ; les contrôles
+  le jouent sur des photographies écrites à la main.
+- **Les noms du vrai classeur se reconnaissent par leur empreinte** : le
+  SHA-256 de la clé du nom, en hexadécimal. Le tableau du code ne porte,
+  pour eux, que cette empreinte. Les quatorze empreintes se calculent hors
+  dépôt, d'après le tableau de la mission, avec la clé du moment : si la
+  clé d'un nom change (§ 6.3), elles changent toutes.
+- **Une façon de reconnaître par mode, jamais les deux** : en
+  démonstration, le nom ; en mode réel, l'empreinte. Un nom fictif ne câble
+  donc pas une capacité du vrai classeur qui le porterait par hasard, ni
+  l'inverse. Condenser chaque nom d'une banque demande une attente : elle
+  se paie une fois par banque ouverte, à l'ouverture de l'écran.
+- **Une empreinte n'est pas un secret.** Elle tient la règle « aucun nom du
+  vrai classeur dans le dépôt », rien de plus.
+- **« Câblés absents de la banque : … »** : la préparation dit en une ligne
+  les rôles que le mode attend et dont aucun nom n'est dans la banque (les
+  neuf de la démonstration, ou les quatorze du vrai classeur). **Un nom
+  changé dans le classeur se voit ainsi.** Sans rôle absent, la ligne ne
+  paraît pas : sur le vrai classeur, aucun ne manque (banc du 12/10/2026,
+  § 17.11).
+
+Le journal et l'écran écrivent **le nom que la banque donne** à la capacité
+qui porte un rôle (« Pas chassé », « Pas de côté », « Réduction »), jamais
+un nom écrit dans le code. Seuls « passe son tour », le bouton « Passer son
+tour » et les noms d'étapes (« Jet d'attaque »…) sont des textes du
+simulateur.
+
+### 17.7 L'écran
+
+**L'adresse et la navigation** : § 9. Le module de l'écran
+(`js/ecrans/combat.js`) garde le combat en mémoire, puisque chaque visite
+de l'adresse reconstruit la page ; « Oublier le mot de passe » l'efface
+(§ 7.2). L'ouverture demande trois attentes (les rôles câblés de la
+banque, la base de l'appareil, le combat gardé) : l'écran rend son titre et
+une attente tout de suite, puis se remplit ; une ouverture qui échoue donne
+un message, jamais une attente sans fin.
+
+**Il suit la maquette** du lot (`plans/maquette_simulateur.html`, faite le
+11/10/2026 à partir du vrai classeur, validée par l'auteur, et ses rendus à
+1 440 et 390 px ; hors dépôt). Elle montre l'écran du groupe 2 ; ce qui en
+change est dit plus bas.
+
+**Trois dispositions.** L'ordre du document est celui du téléphone
+(décision de l'auteur du 11/10/2026) : la carte, le panneau d'action (ou la
+préparation), les personnages, les adversaires, puis le journal. Les deux
+autres ne font que placer. Une largeur de plus, `--largeur-combat` (90rem),
+élargit la page pour cet écran seul. Les deux seuils s'écrivent en dur dans
+`css/combat.css`, comme celui d'`ecran.css` (§ 9).
+
+| Largeur | Disposition |
+|---|---|
+| moins de 56rem | une colonne, dans l'ordre du document |
+| de 56 à 80rem | la carte et le panneau d'action à gauche, les deux listes à droite ; le journal dessous |
+| 80rem et plus | celle de la maquette : les personnages, puis la carte et le panneau d'action, puis les adversaires ; le journal dessous, sur toute la largeur |
+
+**La barre de titre** : « Simulateur de combat » ; l'état (« Préparation »,
+« Tour 2 · camp des PJ », « Combat terminé ») ; l'état de l'enregistrement
+(§ 17.8) ; « Fin de tour », bouton principal pendant le combat, et
+« Nouveau combat ». Sur téléphone : « Fin de tour », et un menu « ⋯ » qui
+porte l'autre ; l'état de l'enregistrement reste visible sous le titre. Une
+ligne d'aide dessous, selon la phase.
+
+**La carte** (dans le code, le plateau) : 10 × 10 cases, colonnes A à J,
+lignes 1 à 10, et une légende dessous.
+
+- **Un jeton** est un rond vert (personnage) ou rouge (adversaire). À
+  partir de 56rem, le nom court est à côté ; en dessous, les initiales sont
+  dedans. Sa taille se mesure sur sa case, non sur une longueur fixe : la
+  feuille compte sur une case de quelque 24 px sur un petit téléphone à
+  70 px sur un grand écran, et ce qui dépasserait est coupé, jamais poussé
+  chez la voisine. Ces deux tailles sont l'attente écrite dans la feuille,
+  non une mesure : aucune case n'a encore été mesurée dans un navigateur
+  (§ 17.11).
+- **Une case montre trois jetons au plus**, deux sous 56rem. Au-delà,
+  « +k » ouvre la liste de la case, dans le panneau d'action ou, avant le
+  lancement, sous la préparation. Dans une case, celui qui joue vient
+  d'abord, puis la cible, puis l'ordre d'ajout.
+- **Les marques.** Celui qui joue, et sa case, sont entourés de l'accent.
+  La cible choisie est entourée d'un trait rouge discontinu. Un mort est
+  grisé et barré.
+- **Pendant un choix** de cible ou d'arrivée, les jetons et les cases
+  possibles sont marqués, les autres inactifs.
+- **Chaque jeton est un bouton nommé** : nom entier, camp, état, case
+  (« Aubépine Crèmebrûlée, personnage, joue, case D4 »). Une case qu'on
+  peut choisir l'est aussi. Jamais un bouton dans un bouton : le bouton
+  d'une case la couvre, sous ses jetons.
+- **Les cases font moins de 44 px sur un téléphone**, leurs jetons et le
+  « +k » d'une case pleine aussi : c'est admis, et chaque choix fait sur
+  la carte a son double en boutons de 44 px (§ 9).
+
+**La préparation** prend, avant le lancement, la place du panneau d'action.
+Elle porte : ajouter un personnage, pris dans la liste des personnages
+disponibles (§ 17.2), après une attente pour ceux qui sont en ligne ;
+ajouter un adversaire, avec son nombre d'exemplaires ; **« Placer la
+rencontre préparée »** ; « Qui commence » ; « Lancer le combat » ; la ligne
+des câblés absents (§ 17.6) ; les avertissements des photographies posées.
+Une option qui ne s'ajoute pas reste choisissable : c'est ainsi que sa
+raison se lit.
+
+- **Poser et déplacer**, par trois moyens qui mènent au même ordre : à la
+  souris, par glisser-déposer ; partout, en touchant le jeton, puis la
+  case ; ou par le champ « Case » de la fiche. Le glisser-déposer n'est
+  jamais le seul moyen : il n'existe ni au clavier ni au doigt.
+- **La rencontre préparée** est la composition que l'écran Rencontre tient
+  en mémoire pendant la visite (§ 16.6). Le bouton l'ajoute à la suite,
+  dans l'ordre de la liste, numérotation comprise. Si un plafond serait
+  dépassé, rien ne se pose, et le bouton dit pourquoi ; un adversaire qui
+  ne s'ajoute pas reste hors du combat, les autres se posent, et l'écran
+  dit lequel et pourquoi. Sans rencontre, le bouton est inactif :
+  « Composez d'abord une rencontre. »
+- Une banque sans adversaires : la préparation le dit, comme l'écran
+  Rencontre. Un combat gardé reste jouable : ses photographies se
+  suffisent.
+
+**Les fiches vivantes.** Une par protagoniste, dans la liste de son camp ;
+c'est un volet, que son nom déplie.
+
+- **L'en-tête** : la pastille d'initiales et le nom ; une ligne, l'espèce
+  et l'archétype d'un personnage (« Marmiton · Saucier »), les types d'un
+  adversaire écrits comme sur sa carte (« Commis, Rôtisseur ×1,4 »,
+  § 16.5) ; l'état (« joue », « a joué », « ciblé », « mort au tour 2 ») ;
+  les actions restantes, en pastilles.
+- **Le corps** : le souffle et le corps, en cases (au-delà de 30, en
+  nombres) ; **une table des zones** pour chaque protagoniste : les faces
+  du d20 et le nom de la zone (celui des personnages si elle est reconnue,
+  même à deux lettres près, sinon le nom écrit), l'armure, signalée dès
+  qu'elle baisse et en rouge à 0, la résistance en cases, la face de
+  contre-attaque en pied ; l'attaque et la défense : pour un personnage, le
+  dé et son modificateur, l'arme (son type, ses dégâts) et l'armure (son
+  type) ; pour un adversaire, les deux nombres et ses armes ; le bouclier,
+  « sans effet » (§ 12, point 18) ; le lien, par primordial ; les passifs
+  câblés, actifs ou inactifs avec leur raison.
+- **« Jouer »** choisit ce protagoniste ; le nom, lui, déplie le volet :
+  jamais un bouton dans le titre d'un volet. Choisir qui joue se fait aussi
+  par son jeton, ou par les boutons « Qui joue ? ».
+- **« Fiche complète »** ouvre un panneau dans l'écran, sous la barre de
+  titre, avec « Fermer ». Il reprend l'affichage existant : la vue lecture
+  du personnage (§ 15.5), la carte de l'adversaire (§ 16.5). Il les calcule
+  depuis la photographie, avec la banque ouverte : la fiche du personnage
+  photographié ; pour un adversaire, la résolution d'une banque d'appoint
+  qui porte sa ligne et celles de ses types, telles que photographiées. Si
+  la banque a changé depuis l'ajout, il le dit : « La banque a changé
+  depuis l'ajout : cette fiche suit la banque du jour. »
+- **Ouvertes ou repliées.** Sur un grand écran, les fiches sont ouvertes.
+  Sous 56rem, seule celle de qui joue l'est. Une fiche que la personne a
+  ouverte ou repliée elle-même garde cet état ; la mort du protagoniste la
+  replie.
+- **Avant le lancement**, chaque fiche porte le champ « Case » et un bouton
+  « Retirer ».
+
+**Le panneau d'action.**
+
+- **Sans protagoniste choisi** : « Qui joue ? », avec un bouton par
+  protagoniste du camp qui peut encore agir.
+- **Le titre** : « Aubépine Crèmebrûlée joue — 1 action sur 2,
+  souffle 10 ».
+- **Les étapes** : Capacité › Cible › le jet (« Jet d'attaque » pour un
+  personnage, « Jet de défense » quand un adversaire attaque) ›
+  Localisation › Interventions › Dégâts ; chacune est faite, en cours, ou à
+  venir. Une capacité sans jet : Capacité › Cible ; un déplacement :
+  Capacité › Arrivée ; un jet de caractéristique : Capacité › Jet de
+  caractéristique.
+- **Les capacités** sont groupées par origine, comme sur la maquette, dans
+  cet ordre : l'arme tenue, avec son poids (« Couteau d'office
+  (précise) ») ; l'archétype, l'espèce, le style, la constellation, le
+  primordial ; les autres objets ; les capacités de base, en dernier ; puis
+  « Passer son tour ». Pour un adversaire : une ligne par arme, avec les
+  capacités qu'elle donne, puis « Capacités ».
+- **Chaque bouton porte** : la puissance qui sera jouée (« Pas
+  chassé [1] ») ; les dégâts, pour une attaque seulement (3/8/20) ; le coût
+  à cette puissance, s'il n'est pas nul ; « désavantage », s'il y a lieu.
+  Inactif, il dit pourquoi : il garde le focus, et sa raison lui est liée.
+  Une ligne nomme les passifs, qui ne sont pas des boutons, et les
+  interventions, qui le sont à son propre tour.
+- **La cible** : un clic sur un jeton, ou un bouton par cible possible ;
+  sous la cible, « choisie sur la carte » ou « choisie ici ».
+- **Les dés**, dans cet ordre : le contexte (le jet, la capacité et la
+  cible ; le dé, ses modificateurs et la difficulté ; les avantages et les
+  désavantages, chacun avec sa source ; les réglages à la main, avant le
+  premier dé) ; la chaîne, puis le bilan ; les rangs de dégâts, le rang
+  atteint en évidence ; les choix du moment : relancer ou garder, faire
+  exploser, les dégâts à fixer, la face à décaler, l'esquive et combien,
+  « Revenir » avant le premier dé.
+- **Quand un adversaire attaque**, c'est le même panneau : sa capacité et
+  sa cible, puis le jet de défense du personnage.
+- **Un combat arrêté** par son enregistrement (§ 17.8) : un bloc prend la
+  place du panneau, avec la phrase de la barre et son bouton.
+
+**Le journal** est sous le reste, sur toute la largeur : les lignes du
+§ 17.9, la dernière visible. Sa hauteur est limitée, 24rem sur un grand
+écran, 18rem sur un téléphone, et il défile. « Copier » et « Télécharger »
+sont inactifs avant le lancement : le journal est vide.
+
+**Les lecteurs d'écran et le clavier.**
+
+- **Une seule région d'annonce**, polie : elle dit le résultat de chaque dé
+  (« 1er dé : 9, réussi. », « 2e dé : 4, échec. Relancer ou garder ? »), le
+  bilan d'un jet, un dé de localisation, la ligne d'un geste fini, un tour
+  qui change. Ni l'état de la barre ni celui de l'enregistrement ne sont
+  des régions : le second change deux fois par clic, et couvrirait
+  l'annonce du dé.
+- **Les états de l'enregistrement qui demandent un geste ou préviennent
+  d'une perte** passent une fois, à leur arrivée, par une zone d'avis, avec
+  leur bouton ; leur phrase reste ensuite dans la barre.
+- **Un bouton inactif garde le focus**, et sa raison lui est liée. Après
+  chaque geste, le focus va à la commande qui attend : le dé à lancer, le
+  choix du moment, « Appliquer ». Un dé lancé reste un bouton, pour relire
+  la chaîne au clavier, et son nom dit sa valeur et son état.
+- **Jamais la couleur seule** (§ 9) : un dé porte ✓ ou ✗, un jeton ses
+  initiales ou son nom, une armure entamée ses deux nombres.
+- L'écran ne redessine que ce dont la vue a changé : une saisie en cours et
+  le focus survivent au rendu que provoque la fin d'une écriture.
+
+**Les couleurs** vivent dans `css/jetons.css`, pour les deux thèmes
+(§ 9).
+
+| Jeton | Clair | Sombre |
+|---|---|---|
+| `--combat-pj` | #1e7a3c | #3fae62 |
+| `--combat-pj-doux` | #e2f2e7 | #163222 |
+| `--combat-pj-texte` | #1e7a3c | #9ee0b4 |
+| `--combat-adv` | #b3261e | #e66b61 |
+| `--combat-adv-doux` | #fbe3e1 | #3a1c1a |
+| `--combat-adv-texte` | #b3261e | #f2aaa3 |
+| `--combat-sur-jeton` (les initiales) | #ffffff | #0b1722 |
+| `--combat-mort` | #6b717b | #7d838d |
+| `--combat-reussite` | #1e7a3c | #5cc38a |
+| `--combat-echec` | #b3261e | #e8776e |
+| `--combat-alerte` | #8a5300 | #e6a85a |
+
+- Deux valeurs de la maquette changent, pour le contraste : en sombre, elle
+  met les initiales en blanc et le rouge à #e0574d.
+- Ce sont les seuls jetons neufs, avec `--largeur-combat` : le fond des
+  cases, des panneaux et des dés prend les jetons du site. « mort » est une
+  couleur de rond, trop pâle pour un texte sur le second fond : le texte
+  d'un mort est dans le second gris du site, barré.
+- `css/combat.css` entre dans le contrôle « des jetons seulement », hors
+  les largeurs des `@media` ; toute classe de l'écran commence par
+  `combat-`, tout jeton par `--combat-`, et aucun nom ne contient « carte »,
+  mot réservé à la carte d'adversaire (§ 16.5). **Le code n'écrit aucun
+  style** (§ 10.1).
+
+**Ce qui change par rapport à la maquette.**
+
+- Les couleurs sont celles du tableau. La cible porte un trait rouge
+  discontinu, non l'anneau plein ; les boutons que la maquette dessine sous
+  44 px grandissent.
+- **Au groupe 1**, il n'y a ni palette, ni « Intervenir… », ni menu du clic
+  droit : à leur place, les réglages à la main (§ 17.4, § 17.5). La
+  capacité d'attente n'apparaît pas.
+- **Le journal** suit les gabarits du § 17.9, et sa hauteur est limitée.
+  Une ligne s'écrit quand le geste est fini : la ligne « relance en
+  cours… » de la maquette n'existe pas.
+- **Les fiches** des adversaires ont toutes leur table des zones ; la
+  maquette en résume deux. Leurs types s'écrivent comme sur leur carte
+  (« ×2 »).
+- **Les boutons de capacité** : une attaque porte les dégâts de son arme,
+  une capacité sans dégâts propres n'en porte pas, le déplacement porte sa
+  puissance, sans coût quand il est nul. **Les étapes** nomment le jet.
+- **Sur téléphone**, une case montre deux jetons au plus, puis « +k » ; la
+  maquette en montre trois.
+- **Les interventions** sont des boutons à son propre tour ; la maquette
+  les nomme seulement.
+- **La préparation** prend la place du panneau d'action. Les ajouts se
+  posent d'office : la phrase d'aide de la maquette change.
+
+### 17.8 L'enregistrement
+
+**Chiffré par la clé de table** (`js/combat/enregistrement.js`), comme les
+personnages en ligne (§ 7.2, § 15.8) : le combat porte des valeurs de la
+banque, qui ne s'écrit jamais en clair sur un appareil.
+
+- **Le format** : `{ mode, format: 1, sel, iterations, iv, chiffre,
+  revision, enregistre_le }`. Le chiffrement est AES-GCM, avec la clé de
+  table et un vecteur neuf de 12 octets à chaque écriture ; la donnée
+  associée est `atelier-des-arpenteurs/combat/1/<mode>` ; le contenu est
+  compressé en deflate-raw ; le sel et le nombre d'itérations sont ceux de
+  la clé. C'est le modèle des personnages en ligne, sans ses deux gardes
+  (« enregistré », « mode réel ») : un combat se chiffre aussi en
+  démonstration, par la clé de la démonstration. Le clair est borné à
+  8 Mo, à l'écriture comme à la lecture : la borne des personnages, 64 Ko,
+  ne conviendrait pas (douze personnages et soixante adversaires approchent
+  0,7 Mo).
+- **Le lieu** : IndexedDB, base `atelier-des-arpenteurs-combat`, version 1,
+  entrepôt `combats`, le mode pour clé. Un combat par mode : la
+  démonstration ne touche jamais le combat réel. Jamais dans le coffre,
+  jamais dans `localStorage`. La base ne s'ouvre qu'à la première visite de
+  l'écran.
+- **Le contenu** : la version des règles, la révision, la mise en place
+  (les photographies, les cases, qui commence), puis la suite des
+  événements, dés compris. La révision y est répétée, dans le chiffré, et
+  comparée à celle de l'enveloppe : la donnée associée ne couvre que le
+  mode.
+- **L'état se recalcule en rejouant les événements** (`rejouer`), par le
+  chemin même du jeu. Un rechargement reprend le geste où il en était,
+  relance choisie comprise, **sans relancer un dé déjà lancé**. Ce qui
+  n'est pas un événement ne se garde pas : hors d'un geste, l'écran revient
+  à « Qui joue ? » ; d'où vient la cible choisie, une fiche ouverte, la
+  liste d'une case s'oublient.
+- **Rien de ce qui se relit n'est cru.** Avant tout rejeu, le contenu
+  déchiffré se valide (`js/combat/forme.js`) : ses clés, elles seules ; les
+  identifiants, les cases, les plafonds ; chaque photographie, par la
+  fonction qui l'a jugée à l'ajout (§ 17.2) ; chaque événement, 20 000 au
+  plus. Au rejeu, le premier événement refusé arrête tout : la suite n'est
+  jamais tronquée en silence. Un contenu refusé, ou un rejeu refusé, est
+  une donnée abîmée.
+- **La version des règles** est dans le contenu. Toute correction qui
+  change un nombre, un mot du journal ou un moment la fait monter ; un
+  combat d'une autre version ne se rejoue pas, et se dit. Elle vaut 1 ; le
+  groupe 2 la passera à 2.
+
+**Quand.** Après chaque événement, et après chaque changement de la
+préparation, dans **une file à une seule place** : jamais deux écritures à
+la fois. Une demande qui arrive pendant une écriture remplace celle qui
+attendait, puisque le contenu est cumulatif : une rafale de clics fait deux
+écritures, non dix. À l'ouverture de l'écran sans combat en mémoire (après
+un rechargement), le combat gardé se relit. La clé n'est copiée nulle
+part : elle se relit dans l'état de la page à chaque écriture.
+
+**La révision.** Chaque écriture l'augmente de 1. Elle se fait en une seule
+transaction, qui lit la révision gardée, la compare à celle qu'on attend,
+et n'écrit que si elles sont égales ; le chiffrement précède la
+transaction, qui ne survivrait pas à une attente. **Un onglet qui trouve
+une autre révision n'écrase rien** : il le dit, ne joue plus, et propose
+« Reprendre le combat le plus récent ». **La révision ne redescend
+jamais** : « Nouveau combat » n'efface pas l'enregistrement, il écrit un
+combat vide à la révision suivante. Une révision qui ne se lit pas vaut 0,
+pour la lecture comme pour l'écriture : une donnée abîmée jusque dans sa
+révision reste remplaçable.
+
+**Les cas, et ce que dit la barre de titre.** Les cinq premières phrases
+sont de la mission ; « … version plus récente … », « … autre version du
+simulateur … » et « Combat non gardé : … » ne le sont pas, et restent à
+confirmer par l'auteur.
+
+| Cas | La barre de titre | On joue ? |
+|---|---|---|
+| le combat est écrit | « Combat gardé sur cet appareil » | oui |
+| une écriture est en cours | « Enregistrement… » | oui |
+| pas d'IndexedDB, ou une ouverture de la base bloquée ou refusée ; une écriture qui échoue (quota, base fermée) ; un combat de plus de 8 Mo | « Ce navigateur ne garde pas le combat » | oui, en mémoire ; plus rien ne s'écrit |
+| un autre onglet a écrit : la révision gardée n'est pas celle qu'on attend | « Combat ouvert ailleurs », avec « Reprendre le combat le plus récent » | non, tant qu'on n'a pas repris ; le panneau d'action le dit |
+| à l'ouverture : un sel ou un nombre d'itérations qui ne sont pas ceux de la clé (le mot de passe de table a changé) ; ou une enveloppe malformée, un chiffré abîmé, un autre mode, un contenu qui ne se décompresse pas, ne se lit pas ou est refusé, une révision qui ne concorde pas, un rejeu refusé | « Le combat gardé ne se lit plus (mot de passe de table changé, ou donnée abîmée). », avec « Nouveau combat » | après « Nouveau combat », qui s'écrit toujours |
+| à l'ouverture : une enveloppe d'un format plus récent | « Ce combat vient d'une version plus récente de l'Atelier : rechargez la page. » | non ; rien ne s'écrit par-dessus |
+| à l'ouverture : un contenu d'une autre version des règles | « Ce combat a été commencé avec une autre version du simulateur : il ne se reprend pas. », avec « Nouveau combat » | après « Nouveau combat » |
+| la banque est ouverte sans clé (le mot de passe a changé pendant la visite) | la phrase « ne se lit plus » s'il y a un combat gardé, sinon « Combat non gardé : le mot de passe de table a changé. » | oui, en mémoire ; rien ne se lit ni ne s'écrit |
+
+Un format plus récent se reconnaît avant tout autre examen : le dire
+« abîmé » offrirait « Nouveau combat », qui l'écraserait. De même une autre
+version des règles, avant que la forme du contenu soit jugée : un contenu
+du groupe 2 peut porter une clé de plus, ce n'est pas une donnée abîmée.
+
+- **« Oublier le mot de passe »** (§ 7.2) efface le combat de la mémoire,
+  comme l'espace auteur. Le combat chiffré reste, illisible sans la clé.
+- **« Nouveau combat »** demande une confirmation dans la page (« Effacer
+  ce combat et son journal ? »), puis repart de zéro. Il est inactif quand
+  le combat est ouvert ailleurs, ou vient d'une version plus récente : rien
+  ne s'y écrirait.
+- **Les dés.** L'écran tire les siens par `crypto.getRandomValues`, sans
+  biais de modulo (§ 17.1). Les contrôles et le banc ont une source de dés
+  imposés, que l'écran n'expose pas.
+
+### 17.9 Le journal
+
+Il y a **une ligne par geste fini**, au présent, en texte simple
+(`js/combat/journal.js`). **Le texte est exact** : les contrôles et le banc
+le comparent mot pour mot, au signe près.
+
+- Une ligne est une fonction du geste fini, des noms figés au lancement et
+  des photographies : le geste garde le prix payé, le jet, ses sources,
+  l'avant et l'après de ce qu'il a changé. La même ligne sort donc en jeu
+  et au rejeu.
+- Rien ne vient de l'appareil : ni heure, ni langue, ni hasard.
+- Les signes (→, ✓, ✗, −, —, ·) sont donnés par leur code dans le code,
+  pour qu'aucun éditeur ne remplace l'un par son voisin ; **toute espace
+  est une espace ordinaire**, « n° 1 » et « 21 h 30 » compris.
+- Les noms (protagonistes, capacités, zones, armes, raisons) sont des
+  données hostiles, écrites telles quelles ; c'est l'écran qui en ôte les
+  signes qui commandent le sens de l'écriture (§ 10.1), sur le texte
+  entier, au moment de copier ou de télécharger.
+
+**Les gabarits de la mission**, illustrés par la démonstration.
+
+*Le cadre.*
+
+- Le lancement : « Combat lancé : 1 personnage contre 3 adversaires. Les PJ
+  commencent. » (« 2 personnages », « 1 adversaire » ; ou « Les adversaires
+  commencent. »).
+- Un tour : « — Tour 1 · camp des PJ — », « — Tour 1 · camp des
+  adversaires — ».
+- La fin d'un tour de camp : « Fin du tour des PJ : ils retrouvent leurs
+  actions. », de même pour les adversaires.
+- La fin : « Combat terminé : victoire des PJ. »
+
+*Les noms et les capacités.*
+
+- On écrit le nom court (§ 17.2). Une capacité qui évolue porte « [P] ».
+- **Entre parenthèses**, après la capacité, séparés par « , » : l'arme, si
+  plusieurs armes donnent la capacité ; puis le coût payé, s'il n'est pas
+  nul : « (4 souffle) », « (1 souffle, 1 lien) », « (Pinces de homard,
+  2 souffle) ». Pour un adversaire, après le coût et « ; » : « coût en lien
+  non payé : un adversaire n'a pas de lien ».
+- **La cible** : « contre » un adversaire du lanceur, « sur » un allié ou
+  sur lui-même. Sans cible, rien.
+
+*Les gestes.*
+
+- Un déplacement : « Aubépine : Pas chassé [1], C3 → D4. » ; payant :
+  « Chef : Pas chassé [2] (1 souffle), F6 → D4. »
+- Passer : « Marmiton n° 2 passe son tour. »
+- Une capacité sans jet : « Aubépine : Fournaise [1] (1 souffle,
+  1 lien). »
+- Un jet de caractéristique, sous le nom que la banque donne à la
+  capacité : « Aubépine : Goûter, d6−1 (Sens + Savoir sauvage) contre 6
+  (compliqué) → 5 explose, + 6 = 11 ✓, 5 explose, + 2 = 7 ✓, 2 ✗ :
+  2 réussites. » Sans réussite : « : aucune réussite. »
+- Une attaque à mains nues : « Aubépine : Taloche [1] contre Marmiton
+  n° 2. d8+1 (Force + Agilité) contre 5, 1 avantage → … »
+
+*Le jet.*
+
+- **Les sources d'avantage et de désavantage** : celle d'un passif, son
+  nom ; celle d'un désavantage de maîtrise, « {capacité} hors maîtrise » ;
+  celle qui vient de l'autre protagoniste, suivie de « de {nom court} » ;
+  celle qui vient de la main, « à la main : {raison} ».
+- **Quand le jet a des avantages et des désavantages**, une phrase vient
+  avant lui, et avant « lance sa défense » : « Son avantage (Solo du chef)
+  et son désavantage (Émincer hors maîtrise) s'annulent. » ; au pluriel :
+  « Ses 2 avantages (Solo du chef, Moulinet farineux hors maîtrise de
+  Marmiton n° 2) et son désavantage (types d'armure mêlés) laissent
+  1 avantage. »
+- **Le dé** : « d10+1 contre 5 ». Le modificateur est la somme nette :
+  « d6−1 » avec une blessure, « d10 » s'il est nul. Un modificateur à la
+  main se dit après la difficulté : « d8+2 contre 5 (+1 à la main :
+  Minutie) ». Le reste net d'avantages ou de désavantages suit, s'il n'est
+  pas nul : « , 1 avantage », « , 2 désavantages » ; celui qui vient de la
+  main y porte sa source : « , 1 avantage (à la main : Minutie) ».
+- **Les dés** : « → », puis les dés, valeurs modificateurs compris, chacun
+  suivi de ✓ ou ✗ : « 5 ✓, 9 ✓, 4 ✗ ». Une relance : « 4 ✗, relancé
+  6 ✓ ». Un dé à désavantage : « 9/3 → 3 ✗ ». Une explosion : « 5 explose,
+  + 6 = 11 ✓ » ; enchaînée : « 7 explose, + 6 explose, + 2 = 15 ✓ ».
+- **L'ordre des parenthèses** après la difficulté : le libellé, puis le
+  réglage à la main : « d8+2 (Sens + Parole) contre 6 (compliqué, +1 à la
+  main : Minutie) ».
+
+*Le bilan.*
+
+- D'une attaque : « : 2 réussites, B = 8 » ; « : aucune réussite,
+  manqué. »
+- D'une capacité sans dégâts : « : 1 réussite, touché ».
+- D'une défense : « Aubépine lance sa défense, d8+1 contre 5 → 5 ✓, 4 ✗ :
+  1 réussite, Aubépine reçoit B = 12. » ; « : aucune réussite, Aubépine
+  reçoit C = 19. » ; « : 3 réussites, aucun dégât. »
+- D'une défense contre une attaque sans arme, aux dégâts saisis : « … :
+  1 réussite, Aubépine reçoit 4 (à la main : Frappe). »
+- Des dégâts fixés à la main : « , ajusté à 20 (Émincer) ». Deux nombres
+  ne se confondent pas : après une lettre, les dégâts de ce rang, avant
+  toute opération ; après « ajusté à », le nombre saisi (« B = 8, ajusté à
+  20 (Émincer) »).
+- Les dégâts de l'arme prêtée : « , dégâts de l'arme : B = 8 ».
+- « Dégrossir » : « , +2 contre l'armure (Réduction) ».
+
+*La localisation.*
+
+- « Localisation d20 → 14 : jambe droite. » Avec plusieurs dés :
+  « Localisation 2 d20 → 6 : torse ; 13 : jambe gauche. »
+- La face de contre-attaque : « Localisation d20 → 20 : contre-attaque,
+  l'attaque est annulée. » ; parmi plusieurs dés : « Localisation 2 d20 →
+  6 : torse ; 20 : contre-attaque, l'attaque est annulée. »
+- Une face décalée : « Localisation d20 → 14, décalée à 12 (Minutie) :
+  jambe gauche. »
+- **Le nom de la zone** : celui des personnages si la zone est reconnue,
+  même à deux lettres près (« Jambre droite » s'écrit « jambe droite ») ;
+  sinon, le nom écrit. Minuscule initiale, sauf en tête de phrase.
+
+*Les suites.*
+
+- Une intervention : « Aubépine intervient : Pas de côté (1 action,
+  3 souffle), 12 → 9. » Sur plusieurs zones : « Aubépine intervient : Pas
+  de côté (1 action, 7 souffle), torse 5 → 0, jambe gauche 5 → 3. »
+- **Les dégâts appliqués** : seuls figurent ce qui change, la première
+  partie avec une majuscule. « Armure 10 → 1. » ; « Armure 5 → 0,
+  résistance 5 → 0, corps 10 → 0. » ; armure déjà nulle : « Résistance
+  5 → 0. » ; sur plusieurs zones : « Torse : armure 30 → 22. Jambe
+  gauche : armure 10 → 2. »
+- **Une blessure**, quand la résistance d'une zone tombe à 0 : d'un
+  personnage, « Blessure (jambe gauche) : −1 à ses jets. », puis « Blessure
+  (bras gauche) : −2 à ses jets. » ; d'un adversaire, « Blessure (jambe
+  droite), sans effet calculé. » ; rien, si le coup tue.
+- La mort : « Marmiton n° 1 meurt. »
+
+**Là où la mission permettait deux lectures**, le combat de référence
+(§ 17.10) en retient une, à confirmer par l'auteur :
+
+- un avantage ou un désavantage seul s'écrit « , 1 désavantage », sans sa
+  source ; les sources ne se nomment que dans la phrase d'annulation, ou
+  pour la main ;
+- un dé à désavantage s'écrit avec ses lancers, modificateurs compris, dans
+  l'ordre où ils tombent, puis le pire : « 7/10 → 7 ✓ » ;
+- dans la phrase des sources, celles du lanceur viennent d'abord, puis
+  celles qui viennent de l'autre protagoniste ;
+- « {capacité} hors maîtrise » s'écrit sans « [P] » ;
+- une explosion s'écrit avec sa première valeur modificateur compris, puis
+  les ajouts bruts ;
+- une relance refusée ne laisse pas de trace : le dé gardé s'écrit comme un
+  échec, « 5 ✗ » ;
+- avec deux avantages ou plus, un dé relancé qui échoue encore se relance,
+  tant qu'il reste une relance : « 3 ✗, relancé 4 ✗, relancé 7 ✓ ». La
+  mission dit « k relances pendant le jet », sans dire si un même dé en
+  reçoit plusieurs ; le combat de référence n'a jamais deux relances, et
+  c'est un contrôle du jet et un contrôle du journal qui tiennent cette
+  lecture ;
+- après un jet qui a touché, une face de contre-attaque laisse le bilan tel
+  quel (« Aubépine reçoit C = 19. »), et rien ne suit la phrase de la
+  localisation qui annule ;
+- le combat finit sans « Fin du tour » ;
+- une capacité que donnent l'arme tenue et une arme au sac ne porte pas le
+  nom de l'arme entre parenthèses : l'arme au sac ne donne rien ;
+- les caractéristiques d'un dé au choix s'écrivent dans l'ordre de la liste
+  des neuf (§ 15.2), non dans celui du choix ;
+- « Fin de tour », par le bouton, écrit la même ligne que la fin
+  automatique.
+
+**Les gabarits que la mission ne donne pas.** Un seul texte par cas ; ils
+ont été écrits avec le journal, un contrôle les tient, et **ils restent à
+confirmer par l'auteur**. Le combat de référence n'emploie que les deux
+premiers.
+
+| Cas | Texte |
+|---|---|
+| la source du désavantage des types d'armure mêlés | « types d'armure mêlés » |
+| une face de contre-attaque après un jet qui a touché | le bilan reste tel quel (lettre, ajustement, « dégrossir ») ; rien ne suit la phrase de la localisation |
+| un passif de niveau N > 1 dans la phrase des sources | cité une fois, compté N fois : « Ses 2 avantages (Solo du chef) et son désavantage (types d'armure mêlés) laissent 1 avantage. » |
+| la phrase des sources, quand il reste des désavantages | « Son avantage (…) et ses 2 désavantages (…, …) laissent 1 désavantage. » |
+| le net, quand la phrase des sources a déjà nommé la main | « , 1 avantage », sans redire la main |
+| le net, sans phrase des sources, quand la main n'en donne qu'une part | « , 2 avantages (dont 1 à la main : Minutie) » |
+| une seule caractéristique choisie | « d8 (Sens) contre … » |
+| une défense qui touche, sans dégâts ni nombre saisi | « 1 réussite, touché » ; « aucune réussite, touché » |
+| une défense contre un jet prêté, « Dégâts de l'arme » | « 1 réussite, touché, dégâts de l'arme : B = 12 » |
+| une attaque ou un jet prêté d'un personnage, sans dégâts, puis un nombre saisi | « 1 réussite, touché, ajusté à 4 (Fournaise) » |
+| une défense sans réussite contre une attaque aux dégâts saisis | « aucune réussite, Aubépine reçoit 4 (à la main : Frappe) » |
+| des dégâts directs, à la place de « , ajusté à … » | « , dégâts directs à la résistance : 4 (Frappe) » ; « , dégâts directs au corps : 4 (Frappe) » ; en défense sans dégâts propres, le nombre n'est dit qu'une fois : « 1 réussite, touché, dégâts directs à la résistance : 4 (Frappe) » |
+| le jet prêté d'un adversaire qui a plusieurs armes | le nom de l'arme prêtée entre en tête de la parenthèse : « (Pinces de homard, 2 souffle) » ; si la capacité a elle-même plusieurs armes, celle de la façon d'abord, puis l'arme prêtée si c'en est une autre |
+| un coût en lien non payé | seul dans sa parenthèse : « (coût en lien non payé : un adversaire n'a pas de lien) » ; après un coût, le point-virgule entre deux espaces, comme partout au journal : « (5 souffle ; coût en lien non payé : un adversaire n'a pas de lien) » |
+| l'esquive, dès que le geste a plusieurs dés de localisation | chaque coup qu'elle change porte sa zone, même s'il est seul : « Aubépine intervient : Pas de côté (1 action, 3 souffle), torse 12 → 9. » |
+| les dégâts sur plusieurs dés, dont certains ne changent rien | la forme « Torse : … » reste ; un coup sans changement ne s'écrit pas |
+| plusieurs blessures dans un même geste | une phrase par zone, dans l'ordre des dés : « Blessure (jambe gauche) : −1 à ses jets. Blessure (torse) : −2 à ses jets. » ; aucune si le geste tue |
+| la face de contre-attaque avant le dernier dé | « Localisation 3 d20 → 6 : torse ; 20 : contre-attaque, l'attaque est annulée. » : le nombre est celui des dés du geste, les dés écrits sont ceux qui ont été lancés |
+| deux armes de même nom chez un adversaire | « Spatule souple », « Spatule souple (2) » |
+| l'heure avant dix heures | « à 9 h 05 » ; le fichier : `combat-2026-10-12-09h05.txt` |
+
+Les phrases que dit la région d'annonce (§ 17.7) et quelques textes des
+vues (le bilan pendant la chaîne, les libellés des dégâts à fixer, les
+quatre lignes d'aide, les raisons hors mission) ne viennent pas non plus de
+la mission : le compte rendu du groupe les liste.
+
+**Le texte copié ou téléchargé** commence par cet en-tête, suivi d'une
+ligne vide :
+
+```
+Simulateur de combat — L'Atelier des Arpenteurs
+Combat lancé le 12/10/2026 à 21 h 30 (démonstration)
+Personnages : Aubépine Crèmebrûlée
+Adversaires : Chef de partie ; Marmiton de corvée n° 1 et n° 2
+```
+
+- La deuxième ligne ne finit par « (démonstration) » qu'en démonstration.
+  L'heure est l'heure locale du lancement, telle que l'appareil qui a lancé
+  l'a écrite : elle se découpe comme un texte, sans passer par une date,
+  qui dépendrait du fuseau de l'appareil qui relit.
+- Les personnages et les adversaires y portent leur nom entier ; un
+  adversaire y figure une fois, suivi des numéros de ses exemplaires
+  (« n° 1, n° 2 et n° 3 »).
+- **« Copier »** : le texte, en fins de ligne LF. Si le presse-papiers
+  refuse, le texte se sélectionne dans un champ, pour une copie à la main.
+- **« Télécharger »** : le fichier `combat-AAAA-MM-JJ-HHhMM.txt`, à la date
+  et à l'heure du lancement, en UTF-8 avec sa marque d'ordre des octets et
+  en fins de ligne CRLF, par `telecharger()` de `dom.js` (§ 10.1). Seuls
+  les chiffres d'une heure bien formée entrent dans le nom du fichier.
+
+### 17.10 La démonstration, le combat de référence et le banc
+
+**La démonstration** a reçu ce qui manquait au simulateur (§ 10.3, § 15.7,
+§ 16.7) : les éléments Intervention et Passif, et deux capacités du bloc de
+base, Pas de côté et Guetter. Aucune valeur d'un adversaire n'en change.
+Elle permet un combat complet : Aubépine contre le Chef de partie et deux
+Marmitons de corvée. Elle n'a ni paramètre `loc_multiple`, ni élément
+« Localisation multiple » ou « Centré », ni bloc de type État : ces cas, et
+les rôles qu'elle n'a pas (bonus de Précision, petit, esprit de corps), se
+contrôlent sur des banques fabriquées en mémoire et sur des photographies
+écrites à la main (`tests/outils/photographies_essai.js`).
+
+**Le combat de référence fictif** (`tests/outils/combat_reference.js`) est
+ce combat-là, dans la démonstration, sans en changer aucune valeur : le
+pendant fictif du combat de la maquette.
+
+- **Ses valeurs attendues ont été calculées à la main, d'après la mission,
+  avant le code** : composé une fois, puis recalculé deux fois sans voir le
+  résultat ; les trois calculs donnent les mêmes trente-six lignes, au
+  signe près, et le même état final. **Il est arrêté** : le fichier est une
+  transcription, que rien ne retouche d'après ce que rend le moteur. Un
+  écart est un défaut du moteur, ou une lecture à porter devant l'auteur.
+- **Son déroulé** : vingt-cinq étapes, dont sept fins automatiques de
+  tour, sur cinq tours ; 105 événements, dont 48 événements de dé (37 de
+  chaîne, 11 de localisation), qui portent 50 lancers : deux dés lancés
+  sous désavantage donnent chacun deux valeurs. Les dés sont donnés bruts,
+  dans l'ordre où ils tombent.
+- **Ce qu'il couvre** : les ajouts posés d'office (A1, J1, J2, J2), puis
+  déplacés ; un déplacement gratuit et un déplacement payant ; un avantage
+  et un désavantage de maîtrise qui s'annulent ; des dégâts fixés à la
+  main, et « dégrossir » ; une mort par l'armure, la résistance et le
+  corps ; un coup sur une zone sans armure d'un adversaire, et sa blessure
+  sans effet calculé ; deux coups sur une même zone d'Aubépine, le premier
+  vidant l'armure, le second la résistance, puis un jet d'Aubépine à −1 ;
+  une défense avec relance d'avantage, venue par inversion du désavantage
+  de maîtrise d'un Marmiton, et une défense à trois réussites ; une
+  esquive pendant le tour adverse, et l'action qui manque ensuite ; une
+  capacité sans dégâts jouée avec un jet d'attaque, et sa localisation ; un
+  dé explosif, deux fois ; un jet de caractéristique et une attaque à mains
+  nues ; une face de contre-attaque qui annule une attaque déjà payée ;
+  « Passer son tour », la fin automatique des tours, « Fin de tour » ; la
+  fin du combat.
+- **Son état final** : Aubépine en D4, 0 action sur 2, 2 de souffle sur
+  10, 0 de lien sur 1, 4 de corps sur 10, deux blessures ; les trois
+  adversaires morts, aux tours 2, 5 et 5.
+- **Un lecteur de scénario** (`tests/outils/scenario.js`) le traduit en
+  événements : un scénario s'écrit avec des noms et des dés tels qu'ils
+  tombent ; tous les dés d'une liste sont lancés, et aucun autre ; un dé de
+  trop, un dé qui manque ou un événement refusé arrête tout, en citant le
+  geste. Le même lecteur sert au banc.
+- **Il est retrouvé mot pour mot à chaque étage** : par le moteur, sur la
+  banque de démonstration publiée, avec ses cases d'office et son état
+  final ; par le journal seul, sur des gestes écrits à la main ; par la
+  séance, puis par l'écran, du premier clic au dernier, sur des dés
+  imposés.
+
+**Le banc sur le vrai classeur** : `node tests/banc_combat_reel.js
+<classeur> <scénario>`, hors de `node --test`, comme le banc du § 6.3.
+
+- **Le scénario** est le combat de référence de la mission, celui de la
+  maquette. Il porte des noms du classeur : il s'écrit en JSON dans
+  `plans/`, hors dépôt, et le banc lui-même n'en garde aucun.
+- **Le banc** importe le classeur ; dit les rôles câblés absents de la
+  banque, qui doivent être aucun ; photographie les personnages du scénario
+  et ses adversaires, et, pour ce seul contrôle, chaque adversaire complet
+  du classeur : un texte qui sortirait des bornes d'une photographie se
+  voit ainsi avant de se voir à l'écran ; rejoue le combat avec ses dés
+  imposés ; compare le journal, ligne à ligne, et l'état final à ceux du
+  scénario ; vérifie que le combat, tel qu'il serait gardé, se relit et se
+  rejoue à l'identique ; et, arrêté au moment que montre la maquette,
+  compare ce qu'il attend et ce qu'il montre.
+- **Un écart n'est pas un échec** : l'auteur a pu modifier son classeur
+  depuis que le scénario a été écrit. Le banc dit chaque écart, et les
+  valeurs de départ qui aident à l'expliquer ; il ne corrige rien. Il rend
+  1 seulement s'il ne peut pas jouer le combat, 2 s'il lui manque un
+  argument.
+
+### 17.11 Les mesures
+
+**Les contrôles.** 1 392 contrôles au commit `fda3a2a` (12/10/2026, deux
+processus, 168 secondes), aucun échec, dont 934 neufs depuis les étapes 1
+et 2 (458 au commit `40db3a0`). Chaque règle y est vue dans les deux sens,
+dans le contrôle même : le cas qui passe, et le cas refusé. Ce n'est pas
+la mise à l'épreuve « armé puis désarmé » du § 0, qui casse le code pour
+voir le contrôle échouer : celle des étapes 3 à 5 n'est pas écrite ici
+(plus bas).
+
+**Le combat de référence fictif** sort du moteur mot pour mot : ses
+trente-six lignes, son état final, ses cases d'office (§ 17.10).
+
+**Le rejeu**, sur ce combat : les 106 états intermédiaires rejoués égalent
+ceux tenus un événement à la fois ; sur ses 86 moments en plein geste,
+l'offre est la même après rejeu et après un passage par JSON, et le geste
+tient autant de dés que d'événements de dé. Au hasard (graine écrite, 200
+suites de 25 événements, bien et mal formés, parties d'un moment quelconque
+du combat) : 2 877 événements acceptés, 2 123 refusés (761 pour leur forme,
+1 211 hors du moment, 69 hors bornes, 82 interdits), les quinze types
+acceptés au moins une fois ; le moteur ne lève jamais, un refus rend l'état
+reçu, aucune ressource ne passe sous 0, et un événement fabriqué d'après
+l'offre n'est jamais refusé.
+
+**Le banc sur le classeur réel**, le 12/10/2026, hors dépôt : **aucun
+écart**. Les dix-neuf lignes du journal de la mission, mot pour mot ;
+l'état final ; le moment de la maquette (deux dés lancés, la relance à
+lancer, quinze lignes au journal, les six protagonistes comme attendu) ;
+aucun rôle câblé absent (quatorze noms reconnus par leur empreinte) ; les
+trois adversaires complets du classeur se photographient ; le combat gardé
+(63 événements, 57 Ko) se relit et se rejoue. Vu au passage : la capacité
+de déplacement y évolue, et aucun passif câblé n'y est au niveau 0, si bien
+que les deux cas laissés au § 12 (un passif câblé au niveau 0, point 45 ;
+un déplacement qui n'évolue pas) ne s'y présentent pas.
+
+**Aucun nom du vrai classeur** dans ce que le lot ajoute : les 139 noms du
+classeur ont été cherchés un à un avant le commit `fda3a2a` ; un nom entré
+par un exemple de la mission a été retiré de trois fichiers de contrôles.
+
+**Les modules d'avant** : ce que rendent la résolution et la fiche est
+inchangé, les champs neufs mis à part (85 adversaires, 7 fiches) ; la
+cellule forgée de cent trente mille objets que tient un contrôle du lot 3
+se résout dans le même temps (353 ms avant, 358 après, à froid).
+
+**Sous Node, hors navigateur**, à titre indicatif (un personnage et six
+adversaires) : rejouer 1 009 événements, 17 ms ; un dé qui finit un geste,
+puis le calcul de l'offre, moins de 0,5 ms, au centième événement comme au
+millième. Douze personnages et soixante adversaires approchent 0,7 Mo en
+clair, sous la borne de 8 Mo.
+
+**Ce que ce paragraphe ne porte pas**, parce qu'au commit `fda3a2a` rien
+n'en était mesuré : aucun chiffre plus haut ne vient d'un navigateur, et
+aucun contrôle des étapes 3 à 5 n'a été vu échouer sur un code cassé. La
+mission (§ 15) demande, pour la fin du groupe :
+
+- **les mises à l'épreuve** des contrôles neufs, armés puis désarmés, sur
+  une copie hors de OneDrive (§ 10.3) : combien de casses, combien vues ;
+- **dans un vrai navigateur**, sur le poste de l'auteur : rejouer 1 000
+  événements ; enregistrer un combat de 300 événements dans une IndexedDB
+  réelle ; le temps d'un clic à l'écran à jour sur un tel combat (cible :
+  moins de 100 ms) ; la taille d'une case et l'absence de débordement de
+  320 à 414 px, puis à 768, 1 024 et 1 440 px ;
+- **le regard sur la maquette**, à 1 440 et 390 px, dans Chromium et dans
+  Firefox, versions dites.
+
+Le glisser-déposer, le focus réel et les lecteurs d'écran, qu'un document
+simulé ne montre pas, restent à l'auteur, à l'arrêt d'essais (§ 13).
+
+### 17.12 Ce que le groupe 2 ajoutera
+
+Les règles fines et la main du MJ (mission, § 13 ; spécification 1.5). Il
+ne commence que sur la parole de l'auteur, après l'arrêt d'essais (§ 13).
+
+- **Les interventions** : une étape « Interventions » après chaque jet
+  d'une attaque, touchée ou non, qui propose les leurs au protagoniste
+  attaqué et à ses alliés vivants ; un bouton « Intervenir… », à tout
+  moment du tour adverse ; **attendre**, qui fait jouer une capacité en
+  intervention jusqu'au prochain tour du camp de son auteur.
+- **La contre-attaque** (livret, « Contre-attaque ») : après une face de
+  contre-attaque, si l'attaquant est à la portée de l'arme du défenseur,
+  pour une action.
+- **Le coup critique** (livret, « Coup critique ») : à trois réussites,
+  avec un avantage non dépensé, un quatrième dé, qui double les dégâts.
+- **Le dé miroir** (livret, « Dé miroir ») : « Inverser » un dé lancé.
+- **Les passifs payants**, qui coûtent du souffle ou du lien, en boutons
+  pendant les jets qu'ils visent.
+- **La palette** de modificateurs, à droite des dés, avec le texte de la
+  capacité jouée : sur les dés, la localisation, les dégâts (multiplier,
+  ajouter, annuler, reporter, toute la case, une attaque en plus, rendre),
+  la cible (défense, attaque, état, déplacement), chaque effet avec sa
+  source et sa durée.
+- **Les états** : ceux des blocs de type État de la banque, ou un état
+  libre, avec une durée.
+- **Le clic droit**, ou l'appui long sur téléphone, et un bouton
+  « Modifier… » pour le clavier : il ne change que le combat en cours, et
+  l'écrit au journal (modifier une valeur, changer l'équipement, un état,
+  déplacer sans action, retirer du combat).
+- **Plusieurs cibles**, avec un jet par cible.
+
+**Le groupe 1 tient déjà ses points d'accroche** : le geste en cours est le
+sommet d'une pile, qui recevra l'intervention ou la contre-attaque ; les
+dégâts sont une base et une suite d'opérations, où entreront multiplier,
+ajouter et reporter ; la victime est un paramètre du calcul des dégâts,
+jamais la cible du geste ; le prix d'un geste est un objet ; l'attaque et
+la défense d'un protagoniste se lisent chacune par une seule fonction
+(`attaqueDe`, `defenseDe`), qui rend déjà une valeur, sa base et la liste
+de ses écarts ; le jet garde ses dés
+place par place, sans aucun total. La version des règles passera à 2 : un
+combat du groupe 1 se dira alors « commencé avec une autre version », sans
+se rejouer.

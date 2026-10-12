@@ -50,13 +50,17 @@ export function premierMot(nom) {
  * - Le nom court est le premier mot. Deux protagonistes qui ne sont pas des
  *   exemplaires du même adversaire et dont les premiers mots se confondent
  *   (comparés par cle()) gardent leur nom entier.
- * - Le jeton est le nom court, où « n° k » devient « k ».
+ * - Le jeton est le nom court, où « n° k » devient « k ». Un nom peut finir
+ *   par un chiffre : si « Commis 1 » côtoie deux « Commis », ces deux-là
+ *   gardent « n° k » sur leur jeton, qui serait sinon celui de l'autre.
  * - Les initiales sont le premier signe du nom qui est une lettre ou un
  *   chiffre, en majuscule (« ? » faute d'un tel signe), puis le numéro
  *   d'exemplaire. Tant que deux protagonistes qui ne sont pas des exemplaires
- *   du même adversaire ont les mêmes lettres, chacun prend une lettre de plus
- *   de son nom ; quand un nom est épuisé, ceux qui restent confondus
- *   reçoivent une marque, dans l'ordre d'ajout.
+ *   du même adversaire ont les mêmes lettres, ou que leurs initiales
+ *   s'écriraient de même, numéro compris, chacun prend une lettre de plus de
+ *   son nom ; quand un nom est épuisé, ceux qui restent confondus reçoivent
+ *   une marque, dans l'ordre d'ajout. Deux protagonistes différents n'ont
+ *   donc jamais les mêmes initiales.
  */
 export function nommer(liste) {
   // Les exemplaires d'un même adversaire partagent tout sauf leur numéro :
@@ -99,10 +103,42 @@ export function nommer(liste) {
     for (const famille of groupe) famille.entier = true;
   }
 
+  // Ce qu'une famille écrit d'un texte : une fois sans numéro si elle n'a
+  // qu'un membre, sinon une fois par exemplaire, avec le sien.
+  const numerotes = (famille, ecrire) => (famille.membres > 1 ? Array.from({ length: famille.membres }, (_, rang) => ecrire(rang + 1)) : [ecrire(null)]);
+
   const lettres = (famille) => famille.signes.slice(0, famille.longueur).join("");
+  const initialesDe = (famille, exemplaire) => `${lettres(famille)}${famille.marque}${exemplaire ?? ""}`;
+
+  // Les familles que leurs initiales confondent. Les lettres seules les
+  // confondent déjà, quel que soit le numéro (« M » et « M1 » s'allongent en
+  // « Mi » et « Ma1 ») ; et un nom peut finir par un chiffre : « Commis 1 » à
+  // côté de deux « Commis » s'écrirait « Commis1 », comme le premier des
+  // deux. Deux familles se confondent donc quand elles ont les mêmes
+  // lettres, ou quand l'une de leurs initiales, numéro compris, est aussi
+  // celle de l'autre ; les groupes sont ceux que ces rencontres relient, de
+  // proche en proche.
+  const confonduesParLeursInitiales = () => {
+    const chef = new Map(familles.map((famille) => [famille, famille]));
+    const chefDe = (famille) => {
+      let courant = famille;
+      while (chef.get(courant) !== courant) courant = chef.get(courant);
+      return courant;
+    };
+    const premiere = new Map();
+    for (const famille of familles) {
+      const reperes = [`lettres:${lettres(famille)}`, ...numerotes(famille, (exemplaire) => `ecrit:${initialesDe(famille, exemplaire)}`)];
+      for (const repere of reperes) {
+        if (premiere.has(repere)) chef.set(chefDe(famille), chefDe(premiere.get(repere)));
+        else premiere.set(repere, famille);
+      }
+    }
+    return confondues(chefDe);
+  };
+
   for (;;) {
     let allonge = false;
-    for (const groupe of confondues(lettres)) {
+    for (const groupe of confonduesParLeursInitiales()) {
       for (const famille of groupe) {
         if (famille.longueur < famille.signes.length) {
           famille.longueur += 1;
@@ -112,22 +148,36 @@ export function nommer(liste) {
     }
     if (!allonge) break;
   }
-  for (const groupe of confondues(lettres)) {
+  // Une marque n'est ni une lettre ni un chiffre : posée entre les lettres et
+  // le numéro, elle sépare à coup sûr ceux qui restent confondus, entre eux
+  // comme de tous les autres.
+  for (const groupe of confonduesParLeursInitiales()) {
     groupe.forEach((famille, rang) => {
       famille.marque = marque(rang + 1);
     });
   }
 
+  // Le jeton d'un exemplaire écrit « k » pour « n° k ». Quand ce jeton serait
+  // aussi celui d'un autre protagoniste, les exemplaires de cet adversaire
+  // gardent tous « n° k ».
+  const base = (famille) => (famille.entier ? famille.nom : famille.mot);
+  const jetonBref = (famille, exemplaire) => (exemplaire === null ? base(famille) : `${base(famille)} ${exemplaire}`);
+  const porteurs = new Map();
+  for (const famille of familles) {
+    for (const jeton of numerotes(famille, (exemplaire) => jetonBref(famille, exemplaire))) porteurs.set(jeton, (porteurs.get(jeton) ?? 0) + 1);
+  }
+  const gardeSonNumero = (famille) => famille.membres > 1 && numerotes(famille, (exemplaire) => jetonBref(famille, exemplaire)).some((jeton) => porteurs.get(jeton) > 1);
+
   const noms = {};
   for (const { id, famille, rang } of membres) {
     const exemplaire = famille.membres > 1 ? rang : null;
-    const base = famille.entier ? famille.nom : famille.mot;
     const numero = exemplaire === null ? "" : ` n° ${exemplaire}`;
+    const court = `${base(famille)}${numero}`;
     noms[id] = {
       entier: `${famille.nom}${numero}`,
-      court: `${base}${numero}`,
-      jeton: exemplaire === null ? base : `${base} ${exemplaire}`,
-      initiales: `${lettres(famille)}${famille.marque}${exemplaire ?? ""}`,
+      court,
+      jeton: gardeSonNumero(famille) ? court : jetonBref(famille, exemplaire),
+      initiales: initialesDe(famille, exemplaire),
       exemplaire,
     };
   }

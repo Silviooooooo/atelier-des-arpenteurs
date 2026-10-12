@@ -52,8 +52,8 @@ function cases(valeur, max) {
  * pas les cases. Les espaces séparent les mots pour un lecteur d'écran ; la
  * mise en page les ignore.
  */
-function jauge(nom, valeur, max, ecrit = `${valeur}/${max}`) {
-  return el("div", { classe: "combat-jauge" }, el("span", {}, nom), " ", max <= CASES_MAX ? cases(valeur, max) : null, " ", el("span", {}, ecrit));
+function jauge(genre, nom, valeur, max, ecrit = `${valeur}/${max}`) {
+  return el("div", { classe: `combat-jauge combat-jauge-${genre}` }, el("span", {}, nom), " ", max <= CASES_MAX ? cases(valeur, max) : null, " ", el("span", {}, ecrit));
 }
 
 /** L'armure d'une zone : son maximum tant qu'elle est intacte, puis « 15/20 ». */
@@ -174,11 +174,17 @@ export function creer(actions) {
    * les mots, et la mise en page les ignore.
    */
   function faireResume(vue) {
+    // Sous le nom, une seule ligne : l'espèce et l'archétype (ou les types),
+    // puis l'état, qui s'y enchaîne comme sur la maquette. Sans l'un ni
+    // l'autre, la ligne ne s'écrit pas.
+    const sousLeNom = [
+      vue.sousTitre ? el("span", { classe: "combat-sous" }, vue.sousTitre) : null,
+      vue.statut ? el("span", { classe: "combat-statut" }, vue.statut) : null,
+    ].filter(Boolean);
     return [
       el("span", { classe: "combat-pastille", "aria-hidden": "true" }, vue.initiales),
       el("span", { classe: "combat-nom" }, vue.nom),
-      vue.sousTitre ? el("span", { classe: "combat-sous" }, vue.sousTitre) : null,
-      vue.statut ? el("span", { classe: "combat-statut" }, vue.statut) : null,
+      sousLeNom.length ? el("span", { classe: "combat-sous-ligne" }, sousLeNom.flatMap((partie, rang) => (rang === 0 ? [partie] : [" ", partie]))) : null,
       actionsRestantes(vue.actions),
     ]
       .filter(Boolean)
@@ -231,33 +237,48 @@ export function creer(actions) {
   }
 
   function faireCorps(fiche, vue) {
-    const nom = sansSensForce(vue.nom);
     const lignes = [...(vue.effets ?? []), ...vue.passifs];
     return [
-      vue.souffle.absent ? jauge("Souffle", 0, 0, SOUFFLE_ABSENT) : jauge("Souffle", vue.souffle.valeur, vue.souffle.max),
-      jauge("Corps", vue.corps.valeur, vue.corps.max),
+      vue.souffle.absent ? jauge("souffle", "Souffle", 0, 0, SOUFFLE_ABSENT) : jauge("souffle", "Souffle", vue.souffle.valeur, vue.souffle.max),
+      jauge("corps", "Corps", vue.corps.valeur, vue.corps.max),
       tableDesZones(vue.zones),
       el("p", { classe: "combat-contre" }, vue.contre),
       [vue.attaque, vue.defense, vue.bouclier].filter(Boolean).map((texte) => el("p", { classe: "combat-valeurs" }, texte)),
-      vue.liens.map((lien) => jauge(`Lien · ${sansSensForce(lien.nom)}`, lien.valeur, lien.max)),
+      vue.liens.map((lien) => jauge("lien", `Lien · ${sansSensForce(lien.nom)}`, lien.valeur, lien.max)),
       lignes.length ? el("ul", { classe: "combat-effets" }, lignes.map(ligneDEffet)) : null,
-      el(
-        "div",
-        { classe: "combat-ligne" },
-        vue.jouer
-          ? el("button", { type: "button", classe: "bouton", "data-repere": "jouer", "aria-label": `Jouer : ${nom}`, onclick: () => actions.executer(vue.jouer.commande, "panneau") }, "Jouer")
-          : null,
-        el(
-          "button",
-          { type: "button", classe: "bouton secondaire", "data-repere": "fiche-complete", "aria-label": `Fiche complète : ${nom}`, onclick: () => actions.ouvrirFiche(vue.id) },
-          "Fiche complète",
-        ),
-      ),
+      faireLesBoutons(fiche, vue),
       vue.avant ? faireAvant(fiche, vue) : null,
     ].flat().filter(Boolean);
   }
 
-  /** Refait une fiche si sa vue a changé. */
+  /** « Jouer », quand la fiche peut être choisie : toujours dans le corps, jamais dans l'en-tête. */
+  function boutonJouer(vue) {
+    if (!vue.jouer) return null;
+    return el("button", { type: "button", classe: "bouton", "data-repere": "jouer", "aria-label": `Jouer : ${sansSensForce(vue.nom)}`, onclick: () => actions.executer(vue.jouer.commande, "panneau") }, "Jouer");
+  }
+
+  /**
+   * La rangée des boutons : « Jouer », puis « Fiche complète ». La fiche en
+   * garde les nœuds : « Jouer » paraît et disparaît à chaque geste sur toutes
+   * les fiches du camp qui joue, sans que rien d'autre n'y change.
+   */
+  function faireLesBoutons(fiche, vue) {
+    fiche.complete = el(
+      "button",
+      { type: "button", classe: "bouton secondaire", "data-repere": "fiche-complete", "aria-label": `Fiche complète : ${sansSensForce(vue.nom)}`, onclick: () => actions.ouvrirFiche(vue.id) },
+      "Fiche complète",
+    );
+    fiche.boutons = el("div", { classe: "combat-ligne" }, boutonJouer(vue), fiche.complete);
+    return fiche.boutons;
+  }
+
+  /**
+   * Refait d'une fiche ce dont la vue a changé, et cela seul : son en-tête
+   * (l'état, les actions), son corps (les jauges, les zones, les valeurs), ou
+   * le seul bouton « Jouer ». Sans ce partage, la fin d'un geste refaisait en
+   * entier la fiche de chaque protagoniste du camp, pour un bouton (mesuré :
+   * douze à quatorze fiches sur quinze, plus de cent millisecondes au clic).
+   */
   function refaire(fiche, vue) {
     const texte = JSON.stringify(vue);
     if (texte === fiche.texte) return;
@@ -270,8 +291,24 @@ export function creer(actions) {
     fiche.morte = morte;
     fiche.joue = marques.includes("joue");
     fiche.noeud.className = [PREFIXE, ...marques].join(" ");
-    fiche.resume.replaceChildren(...faireResume(vue));
-    fiche.corps.replaceChildren(...faireCorps(fiche, vue));
+
+    const tete = JSON.stringify([vue.initiales, vue.nom, vue.sousTitre, vue.statut, vue.actions]);
+    if (tete !== fiche.texteDeTete) {
+      fiche.texteDeTete = tete;
+      fiche.resume.replaceChildren(...faireResume(vue));
+    }
+    // Le corps ne lit ni l'état, ni les marques, ni les actions : ce sont
+    // l'en-tête et les classes qui les montrent.
+    const corps = JSON.stringify({ ...vue, statut: undefined, marques: undefined, actions: undefined, jouer: undefined });
+    const jouer = JSON.stringify(vue.jouer ?? null);
+    if (corps !== fiche.texteDuCorps) {
+      fiche.texteDuCorps = corps;
+      fiche.texteDeJouer = jouer;
+      fiche.corps.replaceChildren(...faireCorps(fiche, vue));
+    } else if (jouer !== fiche.texteDeJouer) {
+      fiche.texteDeJouer = jouer;
+      fiche.boutons.replaceChildren(...[boutonJouer(vue), fiche.complete].filter(Boolean));
+    }
   }
 
   /** Ouvre ou replie le volet, à chaque rendu, que la fiche ait été refaite ou non. */

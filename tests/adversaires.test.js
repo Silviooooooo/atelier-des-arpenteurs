@@ -1263,3 +1263,43 @@ test("index — les adversaires qui utilisent un type, et un type retrouvé à l
   assert.deepEqual(lue.equipement.objets.map((o) => [o.nom, o.genre]), [["Spatule souple", "bloc"], ["Armure agile", "pack"]]);
   assert.deepEqual(lue.capacites.citees.map((c) => [c.nom, c.rang]), [["Maîtrise de l'agile", 1]]);
 });
+
+// ─── Mise à l'épreuve (lot 4) : ce que les casses du code n'avaient pas fait échouer ───
+
+test("combat — une arme ne tient ses valeurs que des paramètres sans cible de son bloc ; ceux qui visent une capacité restent à cette capacité", async () => {
+  const { de } = await feuille(
+    [["Écumeur", "Commis", _, _, _, _, _, "Écumoire lestée"]],
+    { blocs: [["Écumoire lestée", "Arme", "Frappe, Choc sourd", "{degats:1/2/3}, {portee:4}(Choc sourd), {loc_multiple:2}(Choc sourd)", "Portée et dés de localisation pour une seule capacité", "Arme"]] },
+  );
+  const ecumeur = de("Écumeur");
+  // L'arme ne transmet à toutes ni portée ni dé de localisation : la même case, un dé.
+  assert.deepEqual(ecumeur.armes, [{ nom: "Écumoire lestée", poids: null, degats: [1, 2, 3], portee: 0, locMultiple: 1 }]);
+  assert.deepEqual(capacite(ecumeur, "Frappe").parArme, [{ arme: 0, degats: [1, 2, 3], portee: 0, locMultiple: 1, desavantage: false }]);
+  assert.deepEqual(capacite(ecumeur, "Choc sourd").parArme, [{ arme: 0, degats: [1, 2, 3], portee: 4, locMultiple: 2, desavantage: false }]);
+});
+
+test("combat — une copie par exemplaire : deux armes, ou deux résolutions, ne partagent ni leur entrée ni leurs dégâts", async () => {
+  const { de } = await feuille([["Jongleur", "Commis", _, _, _, _, _, "Spatule souple, Spatule souple"]]);
+  const [une, autre] = de("Jongleur").armes;
+  assert.deepEqual(une, autre);
+  assert.notEqual(une, autre);
+  assert.notEqual(une.degats, autre.degats);
+  // Qui retouche l'une ne change ni l'autre, ni la résolution suivante.
+  une.degats[0] = 99;
+  une.portee = 7;
+  assert.deepEqual(autre, { nom: "Spatule souple", poids: "agile", degats: [5, 10, 15], portee: 0, locMultiple: 1 });
+  assert.deepEqual(de("Jongleur").armes, [autre, autre]);
+});
+
+test("combat — un élément que deux objets transmettent à la même capacité ne s'y écrit qu'une fois", async () => {
+  const { de } = await feuille(
+    [
+      ["Rétiaire", "Commis", _, _, _, _, _, "Filet lesté, Nasse lestée"],
+      ["Pêcheur", "Commis", _, _, _, _, _, "Nasse lestée"],
+    ],
+    { blocs: [...BLOCS_DU_COMBAT, ["Nasse lestée", "Arme, Intervention(Frappe), Passif(Frappe)", "Frappe", "{degats:1/1/1}", "Le même élément que le filet, et un autre", "Arme"]] },
+  );
+  assert.deepEqual(capacite(de("Pêcheur"), "Frappe").elements, ["Intervention", "Passif"]);
+  assert.deepEqual(capacite(de("Rétiaire"), "Frappe").elements, ["Intervention", "Passif"], "dans l'ordre de rencontre, sans doublon");
+  assert.equal(capacite(de("Rétiaire"), "Frappe").parArme.length, 2);
+});

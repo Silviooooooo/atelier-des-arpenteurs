@@ -3,10 +3,11 @@
 // reconnaissance d'une capacité par son nom, et la ligne des câblés absents.
 //
 // Tout se joue sur la banque de démonstration et sur de petites banques
-// fabriquées en mémoire. Aucun nom du vrai classeur n'est écrit ici : la
-// reconnaissance par empreinte se vérifie sur le banc, hors dépôt. Ce
-// fichier tient seulement que les empreintes ont la bonne forme et qu'aucun
-// nom de la démonstration ne les produit.
+// fabriquées en mémoire. Aucun nom du vrai classeur n'est écrit ici : que les
+// quatorze noms se reconnaissent se vérifie sur le banc, hors dépôt. Ce
+// fichier tient que les empreintes ont la bonne forme, qu'aucun nom de la
+// démonstration ne les produit, et que la reconnaissance par empreinte
+// marche, sur un tableau d'essai aux noms fictifs condensés à l'exécution.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -211,4 +212,90 @@ test("le module n'importe que la comparaison des noms et le condensat, et n'expo
   // Les seules suites de soixante-quatre chiffres hexadécimaux du module sont
   // les quatorze empreintes du tableau.
   assert.deepEqual(source.match(/[0-9a-f]{64}/gu), TABLE.map((entree) => entree.empreinte));
+});
+
+// ─── Mise à l'épreuve (lot 4) : ce que les casses du code n'avaient pas fait échouer ───
+
+test("les empreintes sont celles du tableau de la mission : leur condensat commun, calculé hors dépôt, ne bouge pas", () => {
+  // Les quatorze noms du vrai classeur ne s'écrivent pas ici. Hors dépôt, on a condensé cle() de chacun, d'après le
+  // tableau de la mission (§ 8.5), puis condensé les quatorze résultats joints par une virgule, dans l'ordre du
+  // tableau : un chiffre changé dans une empreinte, ou deux empreintes échangées, se voit ici.
+  assert.equal(condenser(TABLE.map((entree) => entree.empreinte).join(",")), "ca9f8b261570e8ac2f6de7536d997f51f4460e75ff4d4687ed532c446e122c7f");
+});
+
+test("un refus dit pourquoi, en français : le mode inconnu, la banque qui n'est pas ouverte", async () => {
+  for (const mode of ["Demo", "toString", undefined]) {
+    await assert.rejects(tableDesRoles(banqueDe("Vif"), mode), { name: "TypeError", message: `Mode inconnu : ${mode}` });
+  }
+  for (const banque of [undefined, null, "banque", 3]) {
+    await assert.rejects(tableDesRoles(banque, "demo"), { name: "TypeError", message: "La banque n'est pas ouverte." });
+  }
+});
+
+// Relecture de fin de groupe (lot 4) : en mode réel, aucun contrôle ne voyait
+// jamais une capacité reconnue, puisque aucun nom du vrai classeur ne s'écrit
+// ici. Le tableau se donne donc à tableDesRoles() : celui d'essai porte
+// l'empreinte de noms fictifs, condensée à l'exécution.
+const tableDEssai = () => [
+  { role: "deplacement", libelle: "déplacement", demo: null, empreinte: condenser(cle("Saut de carpe")) },
+  { role: "esquive", libelle: "esquive", demo: "Pas de côté", empreinte: condenser(cle("Volte-face")) },
+];
+
+test("en mode réel, une capacité se reconnaît par l'empreinte de sa clé, et par elle seule : vu sur un tableau d'essai", async () => {
+  const essai = tableDEssai();
+  const reel = await tableDesRoles(banqueDe("Saut de carpe", "Pas de côté", "Vif"), "reel", essai);
+  assert.deepEqual(enObjet(reel.parCle), { sautdecarpe: "deplacement" }, "le nom dont la clé a cette empreinte, même sans nom de démonstration");
+  assert.deepEqual(reel.absents, ["esquive"], "le nom de démonstration du même rôle ne câble rien en mode réel");
+  // Le nom se condense par sa clé : casse, accents, espaces et signe invisible n'y changent rien.
+  const ecarts = await tableDesRoles(banqueDe("  SAUT  de Cärpe ", `Volte${String.fromCodePoint(0x200b)}-face`), "reel", essai);
+  assert.deepEqual(enObjet(ecarts.parCle), { sautdecarpe: "deplacement", [cle("Volte-face")]: "esquive" });
+  assert.deepEqual(ecarts.absents, []);
+  assert.ok(Object.isFrozen(ecarts.absents));
+  // Une lettre de plus ou de moins, et ce n'est plus le nom ; un nom qui recopie l'empreinte non plus.
+  const voisins = await tableDesRoles(banqueDe("Saut de carpes", "Saut de carp", "Volte", essai[0].empreinte, `sha256:${essai[0].empreinte}`), "reel", essai);
+  assert.equal(voisins.parCle.size, 0);
+  assert.deepEqual(voisins.absents, ["déplacement", "esquive"]);
+
+  // Le même tableau, en démonstration : le nom en clair, jamais l'empreinte.
+  const demo = await tableDesRoles(banqueDe("Saut de carpe", "Volte-face", "Pas de côté"), "demo", essai);
+  assert.deepEqual(enObjet(demo.parCle), { pasdecote: "esquive" });
+  assert.deepEqual(demo.absents, [], "le rôle sans nom de démonstration n'y est pas attendu");
+  // L'empreinte de l'essai est bien le SHA-256 de la clé, en soixante-quatre chiffres : celle du vrai tableau a la même forme.
+  assert.match(essai[0].empreinte, /^[0-9a-f]{64}$/);
+  assert.equal(cle("Saut de carpe"), "sautdecarpe");
+});
+
+test("un tableau d'essai ne se mémorise pas, et ne change rien à ce que le jeu lit", async () => {
+  const banque = banqueDe("Saut de carpe", "Vif");
+  const essai = tableDEssai();
+  const avant = await tableDesRoles(banque, "reel");
+  assert.equal(avant.parCle.size, 0, "le vrai tableau ne connaît pas ce nom fictif");
+  const dEssai = await tableDesRoles(banque, "reel", essai);
+  assert.deepEqual(enObjet(dEssai.parCle), { sautdecarpe: "deplacement" });
+  assert.notEqual(await tableDesRoles(banque, "reel", essai), dEssai, "un autre objet à chaque appel");
+  assert.equal(await tableDesRoles(banque, "reel"), avant, "la mémoire du vrai tableau est intacte");
+  assert.equal(await tableDesRoles(banque, "reel", TABLE), avant, "TABLE donné en clair est le tableau du jeu");
+  assert.deepEqual(enObjet((await tableDesRoles(banque, "demo")).parCle), { vif: "bonus_agilite" });
+  // Un tableau qui n'en est pas un est refusé, en français.
+  for (const table of [null, "TABLE", {}, 3]) {
+    await assert.rejects(tableDesRoles(banque, "reel", table), { name: "TypeError", message: "Le tableau des rôles n'est pas une liste." });
+  }
+  await assert.doesNotReject(tableDesRoles(banque, "reel", []));
+  assert.deepEqual((await tableDesRoles(banque, "reel", [])).absents, []);
+});
+
+test("un échec ne se mémorise pas : la lecture suivante de la même banque réessaie", async () => {
+  // Une banque dont les capacités ne se lisent pas la première fois.
+  let lectures = 0;
+  const banque = {
+    get capacites() {
+      lectures += 1;
+      if (lectures === 1) throw new Error("pas encore lisible");
+      return [{ nom: "Vif" }];
+    },
+  };
+  await assert.rejects(tableDesRoles(banque, "demo"), /pas encore lisible/);
+  const seconde = await tableDesRoles(banque, "demo");
+  assert.deepEqual(enObjet(seconde.parCle), { vif: "bonus_agilite" });
+  assert.equal(await tableDesRoles(banque, "demo"), seconde, "la réussite, elle, se mémorise");
 });

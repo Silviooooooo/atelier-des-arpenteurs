@@ -526,6 +526,45 @@ test("le dé explosif : une relance remplace le dé et sa somme, et peut explose
   assert.equal(jet.attente, "de");
 });
 
+test("le dé explosif : il se répète sans limite de nombre, quatre fois de suite s'il le faut", () => {
+  // d4 contre 20 : 4, puis 4, 4, 4 (16, toujours sous 20), puis 4 : 20 réussit.
+  let jet = jouer(ouvrir({ faces: 4, difficulte: 20 }), [4]);
+  for (const [rang, sommeAttendue] of [8, 12, 16].entries()) {
+    assert.equal(jet.attente, "choix_explosion", `avant l'explosion ${rang + 1}`);
+    jet = jouer(jet, "exploser", [4]);
+    assert.equal(evaluerEssai(jet, jet.places[0].essais[0]).somme, sommeAttendue);
+  }
+  assert.equal(jet.attente, "choix_explosion", "16 reste sous 20, et le dé montre encore 4");
+  assert.deepEqual(choixDuJet(jet), ["exploser"]);
+  jet = jouer(jet, "exploser", [4]);
+  assert.deepEqual(jet.places[0].essais[0], { tirages: [4], explosions: [4, 4, 4, 4] });
+  assert.equal(reussites(jet), 1, "4 + 4 + 4 + 4 + 4 = 20 égale la difficulté");
+  assert.equal(jet.attente, "de");
+});
+
+test("le dé explosif : chaque relance peut exploser, et s'enchaîner, quel que soit son rang", () => {
+  // d4 contre 10, 2 avantages : le dé d'origine échoue, la première relance
+  // explose deux fois puis échoue, la seconde explose à son tour.
+  let jet = jouer(ouvrir({ faces: 4, difficulte: 10, avantages: 2 }), [1], "relancer", [4]);
+  assert.equal(jet.attente, "choix_explosion", "la première relance montre 4");
+  jet = jouer(jet, "exploser", [4]);
+  assert.equal(jet.attente, "choix_explosion", "4 + 4 = 8 reste sous 10 : la relance explose encore");
+  jet = jouer(jet, "exploser", [1]);
+  assert.equal(jet.attente, "choix_relance", "9 échoue, il reste une relance");
+  assert.equal(relancesRestantes(jet), 1);
+  jet = jouer(jet, "relancer", [4]);
+  assert.equal(jet.attente, "choix_explosion", "la seconde relance montre 4 : elle explose comme un autre dé");
+  assert.equal(evaluerEssai(jet, jet.places[0].essais[2]).somme, 4, "sa somme repart du dé");
+  jet = jouer(jet, "exploser", [4], "exploser", [3]);
+  assert.deepEqual(jet.places[0].essais, [
+    { tirages: [1], explosions: [] },
+    { tirages: [4], explosions: [4, 1] },
+    { tirages: [4], explosions: [4, 3] },
+  ]);
+  assert.equal(reussites(jet), 1, "4 + 4 + 3 = 11");
+  assert.equal(jet.attente, "de");
+});
+
 test("le dé explosif : après une explosion qui échoue sans relance, le jet est fini", () => {
   const jet = jouer(ouvrir({ faces: 6, difficulte: 9 }), [6], "exploser", [2]);
   assert.ok(jetFini(jet));

@@ -202,12 +202,18 @@ test("l'en-tête : la pastille, le nom entier, la ligne, l'état, les actions en
     const resume = ficheDe(partie, "pj1").querySelector("summary");
     assert.deepEqual(
       resume.children.map((enfant) => enfant.className),
-      ["combat-pastille", "combat-nom", "combat-sous", "combat-statut", "combat-actions"],
+      ["combat-pastille", "combat-nom", "combat-sous-ligne", "combat-actions"],
     );
     assert.equal(texteDe(resume.querySelector(".combat-pastille")), "A");
     assert.equal(texteDe(resume.querySelector(".combat-nom")), "Aubépine Crèmebrûlée");
     assert.equal(texteDe(resume.querySelector(".combat-sous")), "Marmiton · Saucier");
     assert.equal(texteDe(resume.querySelector(".combat-statut")), "joue");
+    // Sous le nom, une seule ligne : la ligne puis l'état, qui s'y enchaîne
+    // (vu dans un navigateur : rangé à part, à droite, l'état élargissait la
+    // colonne des actions et coupait en deux le nom d'un mort).
+    const sousLeNom = resume.querySelector(".combat-sous-ligne");
+    assert.deepEqual(sousLeNom.children.map((enfant) => enfant.className), ["combat-sous", "combat-statut"]);
+    assert.equal(texteDe(sousLeNom), "Marmiton · Saucier joue");
     const actions = resume.querySelector(".combat-actions");
     assert.deepEqual(actions.children.map((pion) => pion.className), ["combat-pion", "combat-pion vide"]);
     assert.equal(actions.getAttribute("role"), "img");
@@ -221,6 +227,9 @@ test("l'en-tête : la pastille, le nom entier, la ligne, l'état, les actions en
     assert.equal(texteDe(sobre.querySelector(".combat-nom")), "Marmiton de corvée n° 1");
     assert.equal(sobre.querySelector(".combat-actions").getAttribute("aria-label"), "1 action sur 1");
     assert.equal(texteDe(ficheDe(partie, "adv2").querySelector(".combat-sous")), "Commis, Rôtisseur ×1,4");
+    // Un état sans ligne : la ligne sous le nom ne porte que lui.
+    partie.rendre({ pj: [aubepine({ statut: "joue", marques: ["joue"] })], adv: [chef(), marmiton1({ sousTitre: "", statut: "a joué" })] }, { etroit: false });
+    assert.deepEqual(ficheDe(partie, "adv3").querySelector(".combat-sous-ligne").children.map((enfant) => enfant.className), ["combat-statut"]);
 
     // Le nom déplie le volet : jamais un bouton, un lien ni un champ dans un en-tête.
     for (const entete of partie.noeud.querySelectorAll("summary")) {
@@ -356,6 +365,17 @@ test("le lien : une jauge par primordial ; sans lien, aucune", () => {
   try {
     const jauges = [...ficheDe(partie, "pj1").querySelectorAll(".combat-jauge")];
     assert.deepEqual(jauges.map(texteDe), ["Souffle 3/10", "Corps 10/10", "Lien · Grand Four 1/2", "Lien · Vieux Levain 3/3"]);
+    // Chaque jauge dit son genre à la feuille : le souffle a sa couleur, et
+    // les trois se rangent de même (le nom, les cases, le nombre à droite).
+    assert.deepEqual(
+      jauges.map((jauge) => jauge.className),
+      ["combat-jauge combat-jauge-souffle", "combat-jauge combat-jauge-corps", "combat-jauge combat-jauge-lien", "combat-jauge combat-jauge-lien"],
+    );
+    for (const jauge of jauges) {
+      assert.equal(jauge.children[0].tagName, "SPAN", "le nom d'abord");
+      assert.equal(jauge.children.at(-1).tagName, "SPAN", "le nombre en dernier");
+      assert.equal(jauge.children.at(-1).className, "", "le nombre n'est pas une case");
+    }
     assert.deepEqual(casesDe(jauges[2]), { pleines: 1, vides: 1 });
     assert.deepEqual(casesDe(jauges[3]), { pleines: 3, vides: 0 });
     assert.deepEqual(textes(ficheDe(partie, "adv2"), ".combat-jauge"), ["Souffle 5/5", "Corps 10/10"]);
@@ -406,13 +426,16 @@ test("les effets en cours viennent avant les passifs, dans la même liste", () =
   }
 });
 
-test("« Jouer » n'existe que sur une fiche qu'on peut choisir, et rend sa commande ; il paraît quand seule la vue a changé", () => {
+test("« Jouer » n'existe que sur une fiche qu'on peut choisir, et rend sa commande ; il paraît et disparaît sans que le corps de la fiche soit refait", () => {
   const { partie, appels, retirer } = monter();
   try {
     // Le tour des PJ : aucune fiche d'adversaire ne propose de jouer.
     for (const id of ["pj1", "adv2", "adv3", "adv4"]) assert.equal(repere(ficheDe(partie, id), "jouer"), null, id);
     const corpsDe = (id) => ficheDe(partie, id).querySelector(".combat-fiche-corps");
     const avant = { adv2: corpsDe("adv2").children[0], adv4: corpsDe("adv4").children[0], pj1: corpsDe("pj1").children[0] };
+    const tableDuChef = ficheDe(partie, "adv2").querySelector("table");
+    const nomDuChef = ficheDe(partie, "adv2").querySelector(".combat-nom");
+    const completeDuChef = repere(ficheDe(partie, "adv2"), "fiche-complete");
 
     // La fin du tour : rien n'a changé chez les adversaires, sinon leur vue.
     const jouer = (id) => ({ commande: { choisir: id } });
@@ -427,9 +450,16 @@ test("« Jouer » n'existe que sur une fiche qu'on peut choisir, et rend sa comm
     assert.equal(repere(ficheDe(partie, "adv4"), "jouer"), null);
     assert.equal(corpsDe("adv4").children[0], avant.adv4, "vue inchangée : nœuds gardés");
     assert.equal(corpsDe("pj1").children[0], avant.pj1, "vue inchangée : nœuds gardés");
-    assert.notEqual(corpsDe("adv2").children[0], avant.adv2, "vue changée : fiche refaite");
-    // Le bouton est dans le corps, jamais dans l'en-tête.
+    // La fiche qui peut maintenant jouer ne gagne qu'un bouton : ni son
+    // en-tête, ni ses jauges, ni sa table ne sont refaits. À la fin de chaque
+    // geste, c'est le cas de toutes les fiches du camp qui joue.
+    assert.equal(corpsDe("adv2").children[0], avant.adv2, "seul « Jouer » a changé : le corps n'est pas refait");
+    assert.equal(ficheDe(partie, "adv2").querySelector("table"), tableDuChef);
+    assert.equal(ficheDe(partie, "adv2").querySelector(".combat-nom"), nomDuChef);
+    assert.equal(repere(ficheDe(partie, "adv2"), "fiche-complete"), completeDuChef);
+    // Le bouton est dans le corps, jamais dans l'en-tête, devant « Fiche complète ».
     assert.equal(bouton.parentNode.parentNode, corpsDe("adv2"));
+    assert.deepEqual(bouton.parentNode.children.map(texteDe), ["Jouer", "Fiche complète"]);
 
     assert.deepEqual(appels, []);
     bouton.click();
@@ -437,10 +467,45 @@ test("« Jouer » n'existe que sur une fiche qu'on peut choisir, et rend sa comm
     repere(ficheDe(partie, "adv3"), "jouer").click();
     assert.deepEqual(appels.at(-1), ["executer", { choisir: "adv3" }, "panneau"]);
 
-    // Il disparaît quand la fiche ne peut plus être choisie.
+    // Il disparaît quand la fiche ne peut plus être choisie, toujours sans rien refaire d'autre.
     partie.rendre({ pj: [aubepine()], adv: [chef(), marmiton1({ jouer: jouer("adv3") }), marmiton2()] }, { etroit: false });
     assert.equal(repere(ficheDe(partie, "adv2"), "jouer"), null);
     assert.ok(repere(ficheDe(partie, "adv3"), "jouer"));
+    assert.equal(corpsDe("adv2").children[0], avant.adv2);
+    assert.deepEqual(completeDuChef.parentNode.children.map(texteDe), ["Fiche complète"]);
+
+    // Une commande qui change sous le même bouton est bien celle qui part.
+    partie.rendre({ pj: [aubepine()], adv: [chef(), marmiton1({ jouer: { commande: { choisir: "autre" } } }), marmiton2()] }, { etroit: false });
+    repere(ficheDe(partie, "adv3"), "jouer").click();
+    assert.deepEqual(appels.at(-1), ["executer", { choisir: "autre" }, "panneau"]);
+  } finally {
+    retirer();
+  }
+});
+
+test("un état qui change seul (« a joué », les actions, une marque) ne refait que l'en-tête ; le corps garde ses nœuds", () => {
+  const { partie, retirer } = monter();
+  try {
+    const fiche = ficheDe(partie, "adv2");
+    const table = fiche.querySelector("table");
+    const jauge = fiche.querySelector(".combat-jauge");
+    const nom = fiche.querySelector(".combat-nom");
+    partie.rendre({ pj: [aubepine()], adv: [chef({ statut: "a joué", marques: [], actions: { reste: 0, max: 1 } }), marmiton1(), marmiton2()] }, { etroit: false });
+    assert.equal(texteDe(fiche.querySelector(".combat-statut")), "a joué");
+    assert.equal(fiche.querySelector(".combat-actions").getAttribute("aria-label"), "0 action sur 1");
+    assert.notEqual(fiche.querySelector(".combat-nom"), nom, "l'en-tête est refait");
+    assert.equal(fiche.querySelector("table"), table, "le corps ne l'est pas");
+    assert.equal(fiche.querySelector(".combat-jauge"), jauge);
+    // Une marque seule : ni l'en-tête ni le corps, la classe suffit.
+    const nomRefait = fiche.querySelector(".combat-nom");
+    partie.rendre({ pj: [aubepine()], adv: [chef({ statut: "a joué", marques: ["ciblee"], actions: { reste: 0, max: 1 } }), marmiton1(), marmiton2()] }, { etroit: false });
+    assert.equal(fiche.className, "combat-fiche ciblee");
+    assert.equal(fiche.querySelector(".combat-nom"), nomRefait);
+    assert.equal(fiche.querySelector("table"), table);
+    // Le corps qui change (elle perd du corps) se refait, lui.
+    partie.rendre({ pj: [aubepine()], adv: [chef({ statut: "a joué", marques: ["ciblee"], actions: { reste: 0, max: 1 }, corps: { valeur: 4, max: 10 } }), marmiton1(), marmiton2()] }, { etroit: false });
+    assert.notEqual(fiche.querySelector("table"), table);
+    assert.equal(texteDe(fiche.querySelectorAll(".combat-jauge")[1]), "Corps 4/10");
   } finally {
     retirer();
   }
@@ -612,6 +677,7 @@ test("à sa mort une fiche se replie, même ouverte par la personne ; rouverte e
     assert.equal(ouverte(morte), false);
     assert.equal(morte.className, "combat-fiche morte");
     assert.equal(texteDe(morte.querySelector(".combat-statut")), "mort au tour 2");
+    assert.equal(texteDe(morte.querySelector(".combat-sous-ligne")), "Commis, Rôtisseur ×1,4 mort au tour 2", "l'état suit la ligne, sous le nom");
     morte.declencher("toggle");
     // Elle reste repliée aux rendus suivants, sur un grand écran aussi.
     partie.rendre({ pj: [aubepine()], adv: [chef(), marmiton1(mort), marmiton2()] }, { etroit: false });

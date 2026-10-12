@@ -307,6 +307,11 @@ test("capaciteDe, faconDe : par indice ; ce qui n'existe pas est null", () => {
     assert.equal(capaciteDe(etat, "pj1", indice), null, `capacité ${String(indice)}`);
     assert.equal(faconDe(etat, gesteEssai({ capacite: pas, facon: indice })), null, `façon ${String(indice)}`);
   }
+  // La borne même : le premier indice après la fin n'est déjà plus personne.
+  const capacites = photoDe(etat, "pj1").capacites;
+  assert.equal(capaciteDe(etat, "pj1", capacites.length), null, "l'indice d'après la dernière capacité");
+  assert.equal(capaciteDe(etat, "pj1", capacites.length - 1), capacites[capacites.length - 1], "la dernière capacité, elle, existe");
+  assert.equal(faconDe(etat, gesteEssai({ capacite: pas, facon: capacites[pas].facons.length })), null, "l'indice d'après la dernière façon");
   assert.equal(faconDe(etat, gesteEssai({ capacite: 99 })), null);
   assert.equal(faconDe(etat, gesteEssai({ acteur: "adv9" })), null);
   assert.equal(faconDe(etat, null), null);
@@ -352,6 +357,16 @@ test("attaque : sans cible, ou contre quelqu'un de son camp, il manque une cible
   assert.deepEqual(attaqueDuPj(etat, { cible: "adv9" }), manque);
   assert.deepEqual(attaqueDeLAdversaire(etat, { cible: null }), manque);
   assert.equal(attaqueDuPj(etat).manque, undefined, "avec une cible adverse, rien ne manque");
+});
+
+test("attaque : contre quelqu'un de son camp, c'est la cible qui manque, avant tout choix de dé", () => {
+  // À mains nues, le dé reste à choisir : la phrase ne doit pas demander des
+  // caractéristiques pour une attaque qui n'a pas de cible adverse.
+  const etat = duel({ autres: [{ photo: brioche(), case: "D4" }] });
+  const taloche = (champs) => circonstances(etat, joue(etat, "pj1", "Taloche", champs));
+  assert.deepEqual(taloche({ cible: "pj3", caracteristiques: null }), { manque: "Choisissez une cible." }, "une alliée, sans caractéristique choisie");
+  assert.deepEqual(taloche({ cible: "pj1", caracteristiques: null }), { manque: "Choisissez une cible." }, "elle-même");
+  assert.deepEqual(taloche({ cible: "adv2", caracteristiques: null }), { manque: "Choisissez une ou deux caractéristiques." }, "contre un adversaire, il ne manque que le dé");
 });
 
 test("attaque à mains nues : le dé se fait d'une ou deux caractéristiques, choisies au moment du jet", () => {
@@ -732,6 +747,10 @@ test("source 3, esprit de corps (lanceur) : N avantages en défense, avec un all
   assert.deepEqual(attaqueDeLAdversaire(duel({ pj: coude() })).avantages, [], "sans allié");
   assert.deepEqual(attaqueDeLAdversaire(duel({ pj: coude(), autres: [alliee], retoucher: tuer("pj3") })).avantages, [], "une alliée morte ne compte pas");
   assert.deepEqual(attaqueDeLAdversaire(duel({ pj: coude(2), autres: [alliee] })).avantages, [{ ...COUDE, nombre: 2 }]);
+
+  const aDistance = duel({ pj: coude(), casePj: "C3", autres: [{ photo: brioche(), case: "C3" }] });
+  assert.deepEqual(attaqueDeLAdversaire(aDistance).avantages, [COUDE], "le corps-à-corps n'est pas demandé : l'alliée est sur sa case à lui");
+  assert.deepEqual(attaqueDeLAdversaire(duel({ pj: coude(), autres: [{ photo: brioche(), case: "E5" }] })).avantages, [], "une alliée ailleurs ne compte pas");
 });
 
 test("source 4, maîtrise (lanceur) : 1 désavantage à son attaque hors maîtrise, au nom de la capacité jouée", () => {
@@ -781,6 +800,7 @@ test("source 7, en meute (l'autre) : N désavantages du PJ quand l'adversaire at
   assert.deepEqual(attaqueDeLAdversaire(duel({ adv: brigade() })).desavantages, [], "sans allié");
   assert.deepEqual(attaqueDeLAdversaire(duel({ adv: brigade(), autres: [allie], retoucher: tuer("adv3") })).desavantages, [], "un allié mort ne compte pas");
   assert.deepEqual(attaqueDeLAdversaire(duel({ adv: brigade(), autres: [{ photo: brioche(), case: "D4" }] })).desavantages, [], "l'alliée du PJ n'est pas la sienne");
+  assert.deepEqual(attaqueDeLAdversaire(duel({ adv: brigade(), casePj: "C3", autres: [allie] })).desavantages, [BRIGADE_INVERSE], "il attaque de loin : le corps-à-corps n'est pas demandé");
 });
 
 test("source 8, esprit de corps (l'autre) : N désavantages du PJ quand l'adversaire se défend avec un allié sur sa case", () => {
@@ -792,6 +812,7 @@ test("source 8, esprit de corps (l'autre) : N désavantages du PJ quand l'advers
   assert.deepEqual(attaqueDeLAdversaire(serres).desavantages, [], "quand il attaque, rien");
   assert.deepEqual(attaqueDuPj(duel({ adv: coude(3) })).desavantages, [], "sans allié");
   assert.deepEqual(attaqueDuPj(duel({ adv: coude(3), autres: [allie], retoucher: tuer("adv3") })).desavantages, [], "un allié mort ne compte pas");
+  assert.deepEqual(attaqueDuPj(duel({ adv: coude(3), casePj: "C3", autres: [allie] })).desavantages, [COUDE_INVERSE], "attaqué de loin : le corps-à-corps n'est pas demandé");
 });
 
 test("source 9, maîtrise (l'autre) : son désavantage hors maîtrise devient 1 avantage du PJ", () => {
@@ -1128,6 +1149,50 @@ test("passifsDe dit « actif » ce que le jet applique, et « inactif » ce qu'i
       assert.equal(appliques.has(nom), actif, `${nom}, ${autres.length} alliée sur la case`);
     }
   }
+});
+
+// Relecture de fin de groupe (lot 4) : au niveau 0, la fiche disait « +0 en
+// force », « 0 avantage », actifs, quand le jet n'en applique rien.
+test("passifsDe : au niveau 0, un passif câblé se dit inactif, « niveau 0 », et non « +0 » ; « petit » ne garde que son −1 de Force", () => {
+  const alliee = { photo: brioche(), case: "D4" };
+  for (const autres of [[], [alliee]]) {
+    const etat = duel({ pj: tousLesPassifs(0), autres });
+    const rendus = passifsDe(etat, "pj1");
+    assert.deepEqual(rendus.map(({ role }) => role), ROLES_PASSIFS, "les huit restent sur la fiche");
+    const fiche = parRole(rendus);
+    for (const role of ROLES_PASSIFS.filter((un) => un !== "petit")) {
+      assert.deepEqual(Object.keys(fiche[role]), ["capacite", "nom", "role", "niveau", "effet", "actif", "raison"]);
+      assert.deepEqual([fiche[role].niveau, fiche[role].effet, fiche[role].actif, fiche[role].raison], [0, "sans effet", false, "niveau 0"], role);
+    }
+    assert.deepEqual([fiche.petit.effet, fiche.petit.actif, fiche.petit.raison], [`${SIGNES.moins}1 en force`, true, null], "le −1 de Force ne dépend pas du niveau");
+    for (const { effet, nom } of rendus) assert.doesNotMatch(effet, /(^|\D)0(\D|$)/, `${nom} : aucun « +0 », aucun « 0 avantage »`);
+
+    // La fiche dit ce que fait le jet : de ces huit passifs, il n'applique que le −1 de Force.
+    const tout = ["force", "agilite", "precision"];
+    const appliques = [
+      ...modificateursDe(etat, "pj1", { genre: "attaque", mobilisees: tout }),
+      ...modificateursDe(etat, "pj1", { genre: "defense", mobilisees: tout }),
+      ...attaqueDuPj(etat).avantages,
+      ...attaqueDeLAdversaire(etat).avantages,
+    ];
+    const MALUS = { genre: "passif", nom: "Demi-portion", valeur: -1 };
+    assert.deepEqual(appliques, [MALUS, MALUS], `${autres.length} alliée sur la case`);
+    for (const { nom, role, actif } of rendus) {
+      if (role !== "degrossir") assert.equal(appliques.some((applique) => applique.nom === nom), actif, nom);
+    }
+  }
+
+  // Chez un adversaire, de même : « niveau 0 » passe avant toute autre raison ; le −1 de « petit » ne s'applique pas à lui.
+  const adverse = parRole(passifsDe(duel({ adv: tousLesPassifs(0) }), "adv2"));
+  for (const role of ROLES_PASSIFS.filter((un) => un !== "petit")) assert.deepEqual([adverse[role].effet, adverse[role].raison], ["sans effet", "niveau 0"], role);
+  assert.deepEqual([adverse.petit.effet, adverse.petit.actif, adverse.petit.raison], [`${SIGNES.moins}1 en force`, false, "ne s'applique pas à un adversaire"]);
+  assert.deepEqual(attaqueDuPj(duel({ adv: tousLesPassifs(0) })).desavantages, [], "et rien ne passe au personnage, inversé");
+
+  // Le voisin : au niveau 1, les mêmes passifs disent leur effet, et jouent.
+  const unDePlus = parRole(passifsDe(duel({ pj: tousLesPassifs(1) }), "pj1"));
+  assert.deepEqual([unDePlus.bonus_force.effet, unDePlus.bonus_force.actif, unDePlus.bonus_force.raison], ["+1 en force", true, null]);
+  assert.deepEqual([unDePlus.degrossir.effet, unDePlus.degrossir.actif], ["+1 contre l'armure par réussite", true]);
+  assert.equal(unDePlus.petit.effet, `+1 en défense, ${SIGNES.moins}1 en force`);
 });
 
 test("référence : la fiche d'Aubépine, seule PJ, porte ses trois passifs actifs", () => {

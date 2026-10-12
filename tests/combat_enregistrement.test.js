@@ -5,7 +5,7 @@
 // La base est une IndexedDB simulée : c'est le vrai magasin qui est
 // contrôlé, pas son jumeau en mémoire. Les clés se fabriquent à l'exécution.
 
-import { test } from "node:test";
+import { test as controle } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { MOT_DE_PASSE_DEMO } from "../js/banque/chargement.js";
@@ -25,6 +25,19 @@ import {
 } from "../js/combat/enregistrement.js";
 import { fabriqueIndexedDB } from "./outils/indexeddb_simulee.js";
 import { simulerStockage } from "./outils/stockage_espion.js";
+
+// Une base, une transaction ou une file qui n'aboutit jamais ne doit pas
+// laisser un contrôle attendre sans fin (l'envoi passe par node --test) : au
+// bout de trente secondes, il échoue. Le fichier entier en prend vingt.
+const test = (titre, corps) => controle(titre, { timeout: 30_000 }, corps);
+// Et là où l'on sait qu'une casse ferait attendre, l'attente est bornée de près.
+function borner(promesse, quoi, delai = 5000) {
+  let minuterie;
+  const limite = new Promise((_, rejeter) => {
+    minuterie = setTimeout(() => rejeter(new Error(`${quoi} : rien après ${delai} ms`)), delai);
+  });
+  return Promise.race([promesse, limite]).finally(() => clearTimeout(minuterie));
+}
 
 const NOM_BASE = "atelier-des-arpenteurs-combat";
 const CHAMPS = ["mode", "format", "sel", "iterations", "iv", "chiffre", "revision", "enregistre_le"];
@@ -63,10 +76,10 @@ const texteGarde = async (fabrique, secret = SECRET, mode = "demo") => (await de
 async function poser(fabrique, valeur) {
   const ouverture = fabrique.open(NOM_BASE, 1);
   ouverture.onupgradeneeded = () => ouverture.result.createObjectStore("combats", { keyPath: "mode" });
-  const base = await new Promise((resoudre) => (ouverture.onsuccess = () => resoudre(ouverture.result)));
+  const base = await borner(new Promise((resoudre) => (ouverture.onsuccess = () => resoudre(ouverture.result))), "l'ouverture de la base d'essai");
   const t = base.transaction("combats", "readwrite");
   t.objectStore("combats").put(valeur);
-  await new Promise((resoudre) => (t.oncomplete = resoudre));
+  await borner(new Promise((resoudre) => (t.oncomplete = resoudre)), "l'écriture dans la base d'essai");
   base.close();
 }
 
@@ -351,7 +364,7 @@ test("magasin sur IndexedDB — une montée de version demandée ailleurs : la c
   const montee = fabrique.open(NOM_BASE, 2);
   let bloquee = false;
   montee.onblocked = () => (bloquee = true);
-  await new Promise((resoudre) => (montee.onsuccess = resoudre));
+  await borner(new Promise((resoudre) => (montee.onsuccess = resoudre)), "la montée de version");
   assert.equal(bloquee, false);
   // La connexion fermée ne lit plus : une promesse qui échoue, pas une exception en l'air.
   await assert.rejects(magasin.lire("demo"));
@@ -386,7 +399,7 @@ test("absence d'IndexedDB — le magasin se replie en mémoire : sans indexedDB,
     },
   };
   try {
-    assert.equal((await ouvrirMagasinCombat()).durable, false);
+    assert.equal((await borner(ouvrirMagasinCombat(), "l'ouverture bloquée")).durable, false);
   } finally {
     delete globalThis.indexedDB;
   }
@@ -486,6 +499,13 @@ test("mode à part — la démonstration et le mode réel gardent chacun leur co
 });
 
 // Un magasin qui compte ce qu'on lui demande, et qui peut traîner.
+// Attend qu'une lecture ou une écriture lente soit partie, sans attendre sans
+// fin : si elle ne part jamais, le contrôle échoue au lieu de tourner.
+async function unFeu(vu) {
+  for (const limite = Date.now() + 5000; vu.lacher.length === 0 && Date.now() < limite; ) await new Promise((resoudre) => setTimeout(resoudre, 1));
+  assert.ok(vu.lacher.length > 0, "la lecture ou l'écriture attendue n'est jamais partie");
+}
+
 function espionner(magasin, { lent = false } = {}) {
   const vu = { enCours: 0, ensemble: 0, ecritures: [], lectures: 0, lacher: [] };
   const attendreLeFeu = () => (lent ? new Promise((resoudre) => vu.lacher.push(resoudre)) : null);
@@ -830,7 +850,7 @@ test("écriture qui échoue — quota, combat trop gros, assemblage qui lève, b
     "l'assemblage ne rend pas un texte": () => () => ({ regles: 1 }),
     "la base s'est fermée": async (fabrique) => {
       const montee = fabrique.open(NOM_BASE, 2);
-      await new Promise((resoudre) => (montee.onsuccess = resoudre));
+      await borner(new Promise((resoudre) => (montee.onsuccess = resoudre)), "la montée de version");
       return assembler(["b"]);
     },
   };
@@ -920,14 +940,14 @@ test("oublier — pendant une lecture lente : le chargement parti avant l'oubli 
   const temoin = espionner(await onglet(fabrique), { lent: true });
   const sansOubli = gardienDe(temoin.magasin);
   const lecture = sansOubli.charger();
-  while (temoin.lacher.length === 0) await new Promise((resoudre) => setTimeout(resoudre, 1));
+  await unFeu(temoin);
   temoin.lacher.shift()();
   assert.deepEqual(await lecture, { texte: contenu(4, ["gardé"]), revision: 4 });
 
   const vu = espionner(await onglet(fabrique), { lent: true });
   const gardien = gardienDe(vu.magasin);
   const chargement = gardien.charger();
-  while (vu.lacher.length === 0) await new Promise((resoudre) => setTimeout(resoudre, 1));
+  await unFeu(vu);
   gardien.oublier();
   vu.lacher.shift()();
   const issue = await chargement;
@@ -936,13 +956,13 @@ test("oublier — pendant une lecture lente : le chargement parti avant l'oubli 
   assert.equal(issue.code, "sans_cle");
   // Le gardien a oublié la révision : il n'écrit plus.
   gardien.garder(assembler(["après l'oubli"]));
-  await gardien.repos();
+  await borner(gardien.repos(), "le repos du gardien après l'oubli");
   assert.equal(vu.ecritures.length, 0);
   assert.deepEqual(gardee(fabrique), avant, "le combat chiffré reste dans la base");
 
   // Le mot de passe ressaisi dans la même visite : le combat se relit.
   const reprise = gardien.charger();
-  while (vu.lacher.length === 0) await new Promise((resoudre) => setTimeout(resoudre, 1));
+  await unFeu(vu);
   vu.lacher.shift()();
   assert.deepEqual(await reprise, { texte: contenu(4, ["gardé"]), revision: 4 });
 });
@@ -983,18 +1003,18 @@ test("oublier — pendant une écriture lente : son issue n'est pas retenue, et 
   let lectures = 0;
   const gardien = gardienDe(vu.magasin, { secret: () => ((lectures += 1), SECRET) });
   const chargement = gardien.charger();
-  while (vu.lacher.length === 0) await new Promise((resoudre) => setTimeout(resoudre, 1));
+  await unFeu(vu);
   vu.lacher.shift()();
   await chargement;
   gardien.garder(assembler(["a"]));
-  while (vu.lacher.length === 0) await new Promise((resoudre) => setTimeout(resoudre, 1));
+  await unFeu(vu);
   // L'écriture est partie vers la base ; l'oubli arrive.
   gardien.oublier();
   const apresOubli = lectures;
   vu.lacher.shift()();
   await gardien.repos();
   gardien.garder(assembler(["a", "b"]));
-  await gardien.repos();
+  await borner(gardien.repos(), "le repos du gardien après l'oubli");
   assert.equal(lectures, apresOubli, "après l'oubli, la clé n'est plus demandée");
   assert.equal(vu.ecritures.length, 1);
   assert.deepEqual(gardien.annonces.at(-1), "garde");
@@ -1110,4 +1130,197 @@ test("rien en clair — le jumeau en mémoire ne tient, lui aussi, que du chiffr
   assert.deepEqual(Object.keys(garde), CHAMPS);
   assert.deepEqual(fuites(garde, valeurs), []);
   assert.deepEqual(JSON.parse((await dechiffrerCombat(garde, SECRET, { mode: "demo" })).texte).miseEnPlace.banque, BANQUE);
+});
+
+// ─── Ce que la mise à l'épreuve a montré sans contrôle ──────────────────────
+
+// Un magasin à la main : ses écritures attendent qu'on les lâche, et rendent
+// ce que « issues » leur dicte, dans l'ordre (une fonction lève ou répond ;
+// faute d'issue dictée, l'écriture va au fond). Le fond se remplace.
+function magasinTenu({ issues = [] } = {}) {
+  const tenu = { fond: magasinCombatMemoire(), lectures: 0, ecritures: [], lacher: [] };
+  return Object.assign(tenu, {
+    magasin: {
+      durable: true,
+      async lire(mode) {
+        tenu.lectures += 1;
+        return tenu.fond.lire(mode);
+      },
+      async ecrireSi(enregistrement, attendue) {
+        tenu.ecritures.push([enregistrement.revision, attendue]);
+        const dictee = issues.shift();
+        await new Promise((resoudre) => tenu.lacher.push(resoudre));
+        return dictee ? dictee() : tenu.fond.ecrireSi(enregistrement, attendue);
+      },
+    },
+  });
+}
+// Attend qu'une écriture soit partie vers le magasin, sans attendre sans fin.
+async function ecritureEnVol(tenu) {
+  await unFeu(tenu);
+  assert.equal(tenu.lacher.length, 1, "une écriture est en vol");
+}
+const laisserPasser = () => new Promise((resoudre) => setTimeout(resoudre, 20));
+
+test("oublier — pendant une écriture que la base refusera : le refus n'est pas retenu, « Combat ouvert ailleurs » ne paraît pas", async () => {
+  const refus = () => ({ ecrit: false, gardee: { revision: 9 } });
+
+  // Désarmé d'abord : sans oubli, le même refus dit « Combat ouvert ailleurs ».
+  const temoin = magasinTenu({ issues: [refus] });
+  const sansOubli = gardienDe(temoin.magasin);
+  await sansOubli.charger();
+  sansOubli.garder(assembler(["a"]));
+  await ecritureEnVol(temoin);
+  temoin.lacher.shift()();
+  await sansOubli.repos();
+  assert.equal(sansOubli.etat(), "ailleurs");
+
+  const tenu = magasinTenu({ issues: [refus] });
+  const gardien = gardienDe(tenu.magasin);
+  await gardien.charger();
+  gardien.garder(assembler(["a"]));
+  await ecritureEnVol(tenu);
+  gardien.oublier();
+  tenu.lacher.shift()();
+  await gardien.repos();
+  assert.equal(gardien.etat(), "garde");
+  assert.equal(gardien.phrase(), "Combat gardé sur cet appareil");
+  assert.equal(gardien.annonces.includes("ailleurs"), false, "l'issue d'une écriture partie avant l'oubli ne touche plus à rien");
+});
+
+test("écriture qui échoue — la demande qui attendait derrière elle ne part pas", async () => {
+  const tenu = magasinTenu({
+    issues: [
+      () => {
+        throw new Error("quota dépassé");
+      },
+    ],
+  });
+  const gardien = gardienDe(tenu.magasin);
+  await gardien.charger();
+  const assembles = [];
+  gardien.garder((revision) => (assembles.push("première"), contenu(revision, ["a"])));
+  await ecritureEnVol(tenu);
+  gardien.garder((revision) => (assembles.push("seconde"), contenu(revision, ["a", "b"])));
+  tenu.lacher.shift()();
+  // Si la seconde partait malgré tout, elle attendrait ici : on la lâche.
+  await laisserPasser();
+  for (const lacher of tenu.lacher.splice(0)) lacher();
+  await gardien.repos();
+  assert.deepEqual(assembles, ["première"], "après la panne, plus rien ne s'assemble");
+  assert.deepEqual(tenu.ecritures, [[1, 0]], "ni ne part vers la base");
+  assert.equal(gardien.etat(), "memoire");
+  assert.equal(await tenu.fond.lire("demo"), null);
+});
+
+test("charger — pendant une écriture en vol : la lecture attend qu'elle ait fini, et lit ce qu'elle a écrit", async () => {
+  const tenu = magasinTenu();
+  const gardien = gardienDe(tenu.magasin);
+  assert.deepEqual(await gardien.charger(), { vide: true });
+  assert.equal(tenu.lectures, 1);
+  gardien.garder(assembler(["a"]));
+  await ecritureEnVol(tenu);
+
+  const chargement = gardien.charger();
+  await laisserPasser();
+  assert.equal(tenu.lectures, 1, "la base n'est pas relue tant que l'écriture n'a pas fini");
+  tenu.lacher.shift()();
+  assert.deepEqual(await chargement, { texte: contenu(1, ["a"]), revision: 1 }, "le gardien relit sa propre écriture, pas la base d'avant elle");
+  assert.equal(tenu.lectures, 2);
+
+  // Il repart de la révision lue : sa propre écriture ne lui fait pas dire « ailleurs ».
+  gardien.garder(assembler(["a", "b"]));
+  await ecritureEnVol(tenu);
+  tenu.lacher.shift()();
+  await gardien.repos();
+  assert.equal(gardien.etat(), "garde");
+  assert.deepEqual(tenu.ecritures, [
+    [1, 0],
+    [2, 1],
+  ]);
+  assert.equal(revisionDe(await tenu.fond.lire("demo")), 2);
+});
+
+test("oublier — pendant la lecture lente d'une base vide : le chargement ne rend pas un combat vide, et rien ne s'écrit ensuite", async () => {
+  const fabrique = fabriqueIndexedDB();
+
+  // Désarmé d'abord : la même lecture lente, sans oubli, trouve la base vide.
+  const temoin = espionner(await onglet(fabrique), { lent: true });
+  const sansOubli = gardienDe(temoin.magasin);
+  const lecture = sansOubli.charger();
+  await unFeu(temoin);
+  temoin.lacher.shift()();
+  assert.deepEqual(await lecture, { vide: true });
+
+  const vu = espionner(await onglet(fabrique), { lent: true });
+  const gardien = gardienDe(vu.magasin);
+  const chargement = gardien.charger();
+  await unFeu(vu);
+  gardien.oublier();
+  vu.lacher.shift()();
+  const issue = await chargement;
+  assert.equal("vide" in issue, false, "l'écran ne commence pas un combat gardé après l'oubli");
+  assert.equal(issue.code, "sans_cle");
+  gardien.garder(assembler(["après l'oubli"]));
+  await laisserPasser();
+  for (const lacher of vu.lacher.splice(0)) lacher();
+  await gardien.repos();
+  assert.equal(vu.ecritures.length, 0);
+  assert.equal(gardee(fabrique), null, "la base reste vide");
+});
+
+test("charger — une base retrouvée vide : la révision connue retombe à 0, et le combat s'y garde de nouveau", async () => {
+  const tenu = magasinTenu();
+  const gardien = gardienDe(tenu.magasin);
+  await gardien.charger();
+  for (const evenements of [["a"], ["a", "b"]]) {
+    gardien.garder(assembler(evenements));
+    await ecritureEnVol(tenu);
+    tenu.lacher.shift()();
+    await gardien.repos();
+  }
+  assert.equal(revisionDe(await tenu.fond.lire("demo")), 2);
+
+  // Les données du site ont été effacées : la base ne garde plus rien.
+  tenu.fond = magasinCombatMemoire();
+  assert.deepEqual(await gardien.reprendre(), { vide: true });
+  assert.equal(gardien.etat(), "garde");
+  gardien.garder(assembler(["neuf"]));
+  await ecritureEnVol(tenu);
+  tenu.lacher.shift()();
+  await gardien.repos();
+  assert.equal(gardien.etat(), "garde", "rien de gardé : l'écriture attend la révision 0, et passe");
+  assert.deepEqual(tenu.ecritures.at(-1), [1, 0]);
+  assert.equal((await dechiffrerCombat(await tenu.fond.lire("demo"), SECRET, { mode: "demo" })).texte, contenu(1, ["neuf"]));
+});
+
+test("oublier — pendant le déchiffrement : le combat lu avant l'oubli ne revient pas en mémoire, et rien ne s'écrit ensuite", async () => {
+  const fabrique = fabriqueIndexedDB();
+  await poser(fabrique, await chiffrer(contenu(4, ["gardé"]), { revision: 4 }));
+  const avant = gardee(fabrique);
+  // Le gardien demande la clé juste après avoir lu la base, juste avant de
+  // déchiffrer : l'oubli se glisse là.
+  let oublierIci = false;
+  const vu = espionner(await onglet(fabrique));
+  const gardien = gardienDe(vu.magasin, {
+    secret: () => {
+      if (oublierIci) {
+        oublierIci = false;
+        gardien.oublier();
+      }
+      return SECRET;
+    },
+  });
+  // Désarmé d'abord : sans oubli, le même chargement rend le combat.
+  assert.deepEqual(await gardien.charger(), { texte: contenu(4, ["gardé"]), revision: 4 });
+
+  oublierIci = true;
+  const issue = await gardien.charger();
+  assert.equal(oublierIci, false, "l'oubli a bien eu lieu pendant le chargement");
+  assert.equal("texte" in issue, false, "le combat ne revient pas en mémoire");
+  assert.equal(issue.code, "sans_cle");
+  gardien.garder(assembler(["après l'oubli"]));
+  await gardien.repos();
+  assert.equal(vu.ecritures.length, 0);
+  assert.deepEqual(gardee(fabrique), avant, "le combat chiffré reste dans la base");
 });

@@ -552,3 +552,13 @@ test("combat — les dégâts que dit une description à une puissance : son cro
   const bavarde = { nom: "Taloche", variantes: [{ puissance: "N", cout_souffle: "", cout_lien: "", elements: [], description: "[N] fois : [N*{degats}], puis [{degats}]." }] };
   assert.deepEqual(degatsDecrits(INDEX, aubepine, base, bavarde, 2), [4, 8, 16]);
 });
+
+// ─── Mise à l'épreuve (lot 4) : ce que les casses du code n'avaient pas fait échouer ───
+
+test("combat — la cible d'un élément se résout comme un renvoi : écrite sans sa casse ni ses accents, elle désigne la même capacité", () => {
+  const bloc = { nom: "Bloc fabriqué", elements: [{ nom: "Collant", cible: "NEZ  fin" }, { nom: "Tranchant", cible: "gouter" }] };
+  assert.deepEqual(elementsDe(INDEX, bloc, INDEX.capacite("Nez fin"), 0), ["Passif", "Collant"]);
+  assert.deepEqual(elementsDe(INDEX, bloc, INDEX.capacite("Goûter"), 0), ["Tranchant"]);
+  // Une autre capacité n'en reçoit rien.
+  assert.deepEqual(elementsDe(INDEX, bloc, INDEX.capacite("Guetter"), 0), []);
+});

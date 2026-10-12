@@ -116,6 +116,19 @@ test("un ajout ne passe pas d'un camp à l'autre", () => {
   assert.deepEqual(ajouterAdversaires(vide, chefDePartieEssai()), { refus: "Ce n'est pas un adversaire." }, "une liste, non une photographie");
 });
 
+test("ce qui ne porte pas de valeurs n'est pas une photographie : l'ajout est refusé, sans lever", () => {
+  const vide = miseEnPlaceVide("demo");
+  for (const valeurs of [undefined, null, "Aubépine", 3]) {
+    assert.deepEqual(ajouterPersonnage(vide, { camp: "pj", valeurs }), { refus: "Ce n'est pas un personnage." }, String(valeurs));
+    assert.deepEqual(ajouterAdversaires(vide, [{ camp: "adv", valeurs }]), { refus: "Ce n'est pas un adversaire." }, String(valeurs));
+    assert.deepEqual(ajouterAdversaires(vide, [chefDePartieEssai(), { camp: "adv", valeurs }]), { refus: "Ce n'est pas un adversaire." }, String(valeurs));
+  }
+  for (const photo of [undefined, "pj", 3, []]) {
+    assert.deepEqual(ajouterPersonnage(vide, photo), { refus: "Ce n'est pas un personnage." });
+    assert.deepEqual(ajouterAdversaires(vide, [photo]), { refus: "Ce n'est pas un adversaire." });
+  }
+});
+
 test("ajouterAdversaires : une liste vide n'ajoute rien, sans refus", () => {
   const depart = ajouterPj(miseEnPlaceVide("demo"), aubepineEssai());
   const rendu = ajouterAdversaires(depart, []);
@@ -174,6 +187,41 @@ test("les adversaires ne comptent pas dans le plafond des personnages, ni l'inve
   for (let rang = 1; rang <= 12; rang += 1) mep = ajouterPj(mep, pj(rang));
   assert.equal(mep.protagonistes.length, 24);
   assert.equal(ajouterAdversaires(mep, plusieurs(chefDePartieEssai(), 12)).ids.length, 12);
+
+  // Relecture de fin de groupe (lot 4) : vingt-quatre adversaires et douze
+  // personnages restent sous soixante, de quelque façon qu'on les compte. Le
+  // combat plein que permet la mission, lui, ne passe que si chaque plafond
+  // ne compte que son camp : douze personnages, puis soixante adversaires.
+  let plein = miseEnPlaceVide("demo");
+  for (let rang = 1; rang <= 12; rang += 1) plein = ajouterPj(plein, pj(rang));
+  const cinq = ["Commis", "Plongeur", "Saucier", "Rôtisseur", "Garde-manger"].map(adversaire);
+  const soixante = ajouterAdversaires(plein, cinq.flatMap((photo) => plusieurs(photo, 12)));
+  assert.equal(soixante.refus, undefined, soixante.refus);
+  assert.equal(soixante.ids.length, 60);
+  assert.equal(soixante.miseEnPlace.protagonistes.length, 72);
+  // Chaque plafond tient encore, dans son camp.
+  assert.deepEqual(ajouterAdversaires(soixante.miseEnPlace, [adversaire("Écuyer tranchant")]), { refus: "60 adversaires au plus dans un combat." });
+  assert.deepEqual(ajouterPersonnage(soixante.miseEnPlace, pj(13)), { refus: "12 personnages au plus dans un combat." });
+  // Dans l'autre ordre aussi : soixante adversaires ne prennent la place d'aucun personnage.
+  let aRebours = ajouterTous(miseEnPlaceVide("demo"), cinq.flatMap((photo) => plusieurs(photo, 12)));
+  for (let rang = 1; rang <= 12; rang += 1) aRebours = ajouterPj(aRebours, pj(rang));
+  assert.equal(aRebours.protagonistes.length, 72);
+});
+
+test("un personnage qui porte le nom d'un adversaire n'en est pas un exemplaire : il ne compte pas parmi les douze", () => {
+  const marmiton = marmitonDeCorveeEssai();
+  const homonyme = pjEssai((valeurs) => {
+    valeurs.identifiant = "essai-homonyme";
+    valeurs.nom = marmiton.valeurs.nom;
+  });
+  const onze = ajouterTous(ajouterPj(miseEnPlaceVide("demo"), homonyme), plusieurs(marmiton, 11));
+  assert.equal(onze.protagonistes.filter((protagoniste) => protagoniste.photo.valeurs.nom === marmiton.valeurs.nom).length, 12, "douze protagonistes de ce nom, dont un personnage");
+  assert.equal(ajouterAdversaires(onze, [marmiton]).ids.length, 1, "le douzième exemplaire s'ajoute encore");
+  assert.deepEqual(ajouterAdversaires(onze, plusieurs(marmiton, 2)), { refus: "12 exemplaires au plus d'un même adversaire." }, "le treizième, non");
+  // Sans le personnage, les mêmes comptes : il n'y changeait rien.
+  const sans = ajouterTous(miseEnPlaceVide("demo"), plusieurs(marmiton, 11));
+  assert.equal(ajouterAdversaires(sans, [marmiton]).ids.length, 1);
+  assert.deepEqual(ajouterAdversaires(sans, plusieurs(marmiton, 2)), { refus: "12 exemplaires au plus d'un même adversaire." });
 });
 
 test("un personnage déjà présent le dit, même dans un combat plein", () => {
@@ -277,6 +325,23 @@ test("la pose d'office : le premier exemplaire retiré, c'est le premier encore 
 test("la pose d'office : un adversaire d'un autre nom ne rejoint personne", () => {
   const mep = ajouterTous(miseEnPlaceVide("demo"), [adversaire("Marmiton de corvée"), adversaire("Marmiton de corvee"), adversaire("Marmiton de corvée")]);
   assert.deepEqual(cases(mep), { adv1: "J1", adv2: "J2", adv3: "J1" }, "le même nom, exactement");
+});
+
+test("la pose d'office : un adversaire ne rejoint pas un PJ qui porte son nom", () => {
+  // Seuls les exemplaires d'un même adversaire partagent leur case : un PJ du
+  // même nom n'en est pas un, et l'adversaire se pose sur la colonne J.
+  const homonyme = pjEssai((valeurs) => {
+    valeurs.identifiant = "essai-personnage-homonyme";
+    valeurs.nom = "Marmiton de corvée";
+  });
+  let mep = ajouterPj(miseEnPlaceVide("demo"), homonyme);
+  mep = ajouterTous(mep, [adversaire("Marmiton de corvée")]);
+  assert.deepEqual(cases(mep), { pj1: "A1", adv2: "J1" });
+  // Le PJ déplacé, puis deux exemplaires de plus : ils rejoignent l'adversaire, non le PJ.
+  mep = poser(mep, "pj1", "D4").miseEnPlace;
+  mep = poser(mep, "adv2", "F6").miseEnPlace;
+  mep = ajouterTous(mep, [adversaire("Marmiton de corvée"), adversaire("Marmiton de corvée")]);
+  assert.deepEqual(cases(mep), { pj1: "D4", adv2: "F6", adv3: "F6", adv4: "F6" });
 });
 
 // ─── Retirer ────────────────────────────────────────────────────────────────

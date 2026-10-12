@@ -4,9 +4,10 @@
 // Ce module écrit tout ce que le simulateur dit d'un combat : les lignes du
 // cadre (lancement, tours, fin), la ligne de chaque geste, l'en-tête et le
 // texte que l'on copie ou télécharge, et la phrase que la région d'annonce
-// donne aux lecteurs d'écran après chaque dé. Il existe pour que ce texte
-// n'ait qu'une écriture : le moteur, le rejeu d'un combat gardé, les contrôles
-// et le banc le comparent mot pour mot, au signe près.
+// donne aux lecteurs d'écran après chaque dé, chaque esquive et chaque face
+// décalée. Il existe pour que ce texte n'ait qu'une écriture : le moteur, le
+// rejeu d'un combat gardé, les contrôles et le banc le comparent mot pour
+// mot, au signe près.
 //
 // Ce que cela impose :
 // - une ligne est une fonction du geste fini, des noms figés au lancement et
@@ -29,8 +30,9 @@
 //
 // Quelques textes ne viennent pas de l'auteur, qui n'a donné de gabarit que
 // pour les cas courants : la source « types d'armure mêlés », les dégâts
-// directs, le coût en lien non payé seul dans sa parenthèse, les phrases
-// d'annonce d'un dé qui peut exploser. Ils restent à lui faire confirmer.
+// directs, le coût en lien non payé seul dans sa parenthèse, une valeur de dé
+// passée sous zéro (« −1 ✗ »), les phrases d'annonce d'un dé qui peut
+// exploser. Ils restent à lui faire confirmer.
 
 import { CARACTERISTIQUES } from "../personnage/regles.js";
 import { degatsFixes, imputerEsquive, localiser, nombreDeD20, reussitesDeLAttaque } from "./degats.js";
@@ -53,6 +55,12 @@ const enumerer = (mots) => (mots.length < 2 ? mots.join("") : `${mots.slice(0, -
 
 // « +1 », « −1 » : le moins est celui de SIGNES, jamais le trait d'union.
 const signer = (nombre) => (nombre < 0 ? `${SIGNES.moins}${-nombre}` : `+${nombre}`);
+
+// Une valeur de dé, modificateur compris : « 7 », « 0 », « −1 ». Elle passe
+// sous zéro dès que les blessures pèsent plus que le dé, et porte alors le
+// même moins que le modificateur, jamais le trait d'union d'un nombre
+// converti tel quel.
+const ecrireValeur = (valeur) => (valeur < 0 ? `${SIGNES.moins}${-valeur}` : `${valeur}`);
 
 // La casse du premier signe seul, sans règle propre à une langue : le même
 // nom donne la même ligne sur tous les appareils.
@@ -206,22 +214,30 @@ export function ecrireDe(jet) {
  * compris : « 7 ✓ » ; une relance, « 4 ✗, relancé 7 ✓ » ; un dé à
  * désavantage, ses lancers dans l'ordre où ils tombent puis le pire,
  * « 8/4 → 4 ✗ » ; une explosion, « 7 explose, + 6 explose, + 2 = 15 ✓ », où
- * chaque ajout est brut (le modificateur ne compte qu'une fois).
+ * chaque ajout est brut (le modificateur ne compte qu'une fois). Une valeur
+ * passée sous zéro porte le moins de SIGNES : « 0/−1 → −1 ✗ », « −2 explose,
+ * + 1 = −1 ✗ ».
  */
 export function ecrirePlace(jet, place) {
   const modificateur = modificateurDe(jet);
   return place.essais
     .map((essai) => {
       const { premier, somme: total, reussi } = evaluerEssai(jet, essai);
-      const lancers = essai.tirages.length > 1 ? `${essai.tirages.map((tirage) => tirage + modificateur).join("/")} ${SIGNES.fleche} ` : "";
-      const explosions = essai.explosions.length > 0 ? ` explose, ${essai.explosions.map((ajout) => `+ ${ajout}`).join(" explose, ")} = ${total}` : "";
-      return `${lancers}${premier}${explosions} ${reussi ? SIGNES.reussi : SIGNES.echoue}`;
+      const lancers = essai.tirages.length > 1 ? `${essai.tirages.map((tirage) => ecrireValeur(tirage + modificateur)).join("/")} ${SIGNES.fleche} ` : "";
+      const explosions = essai.explosions.length > 0 ? ` explose, ${essai.explosions.map((ajout) => `+ ${ajout}`).join(" explose, ")} = ${ecrireValeur(total)}` : "";
+      return `${lancers}${ecrireValeur(premier)}${explosions} ${reussi ? SIGNES.reussi : SIGNES.echoue}`;
     })
     .join(", relancé ");
 }
 
 // Le nombre saisi à la main pour les dégâts, et sa raison ; null sans saisie.
 const ajustement = (geste) => (geste.degats?.operations ?? []).findLast((operation) => operation.op === "ajuster") ?? null;
+
+// Ce qui ouvre tout bilan : « aucune réussite », « 1 réussite », « 2 réussites ».
+function reussitesDuBilan(jet) {
+  const nombre = reussites(jet);
+  return nombre === 0 ? "aucune réussite" : compter(nombre, "réussite");
+}
 
 /**
  * Le bilan d'un jet, sans son point : « 2 réussites, B = 8, ajusté à 22
@@ -234,12 +250,11 @@ const ajustement = (geste) => (geste.degats?.operations ?? []).findLast((operati
  */
 export function ecrireBilan(etat, geste) {
   const { jet } = geste;
-  const nombre = reussites(jet);
-  const tete = nombre === 0 ? "aucune réussite" : compter(nombre, "réussite");
+  const tete = reussitesDuBilan(jet);
   if (jet.genre === "caracteristique") return tete;
 
   const enDefense = jet.genre === "defense";
-  if (reussitesDeLAttaque(jet.genre, nombre) === 0) return `${tete}, ${enDefense ? "aucun dégât" : "manqué"}`;
+  if (reussitesDeLAttaque(jet.genre, reussites(jet)) === 0) return `${tete}, ${enDefense ? "aucun dégât" : "manqué"}`;
 
   const fixes = degatsFixes(etat, geste);
   const saisie = ajustement(geste);
@@ -470,19 +485,32 @@ const ordinal = (place) => (place === 1 ? "1er" : `${place}e`);
 // Le dé qui vient de tomber dans la chaîne : « 1er dé : 9, réussi. » ; sous
 // désavantage, « 2e dé : 8 et 4, on garde 4, échec. » ; une explosion, « Le dé
 // explose : 6 plus 3, 9, réussi. » Les valeurs sont dites modificateur
-// compris, comme au journal.
+// compris, comme au journal, et une valeur passée sous zéro y porte le même
+// moins : « 1er dé : −1, échec. »
 function annoncerLeDe(jet) {
   const essai = dernier(dernier(jet.places).essais);
   const { premier, somme: total, reussi, explosible } = evaluerEssai(jet, essai);
   const question = jet.attente === "choix_relance" ? " Relancer ou garder ?" : "";
   if (essai.explosions.length > 0) {
     const issue = explosible ? "il peut encore exploser" : reussi ? "réussi" : "échec";
-    return `Le dé explose : ${[premier, ...essai.explosions].join(" plus ")}, ${total}, ${issue}.${question}`;
+    return `Le dé explose : ${[ecrireValeur(premier), ...essai.explosions].join(" plus ")}, ${ecrireValeur(total)}, ${issue}.${question}`;
   }
   const modificateur = modificateurDe(jet);
-  const valeurs = essai.tirages.length > 1 ? `${enumerer(essai.tirages.map((tirage) => `${tirage + modificateur}`))}, on garde ${premier}` : `${premier}`;
+  const valeurs = essai.tirages.length > 1 ? `${enumerer(essai.tirages.map((tirage) => ecrireValeur(tirage + modificateur)))}, on garde ${ecrireValeur(premier)}` : ecrireValeur(premier);
   const issue = explosible ? "il peut exploser" : reussi ? "réussi" : "échec";
   return `${ordinal(jet.places.length)} dé : ${valeurs}, ${issue}.${question}`;
+}
+
+// Le bilan que dit la fin d'une chaîne qui touche. C'est une phrase : elle
+// commence par une majuscule (« Aucune réussite, Aubépine reçoit C = 19. »).
+// Les dégâts se fixent après elle, à l'étape du bilan : elle dit ce que le
+// jet a décidé (les réussites, la lettre et ses dégâts), et rien de dégâts
+// qui ne sont pas fixés. Une attaque sans dégâts propres, tant qu'aucun
+// nombre n'est saisi, n'annonce donc que ses réussites : « touché » dirait
+// qu'elle n'en fait pas, alors qu'ils restent à saisir.
+function annoncerLeBilan(etat, geste) {
+  const aSaisir = degatsFixes(etat, geste).base === "aucun" && ajustement(geste) === null;
+  return `${majuscule(aSaisir ? reussitesDuBilan(geste.jet) : ecrireBilan(etat, geste))}.`;
 }
 
 /**
@@ -496,16 +524,28 @@ function annoncerLeDe(jet) {
  *   lignesEcrites pour ce qui se passe sans lui).
  *
  * Si l'événement a écrit des lignes (un geste fini, « passer », un tour qui
- * change, la fin du combat), ce sont elles, à la suite. Sinon, seuls un dé
- * lancé et un dé gardé parlent : le dé de la chaîne qui vient de tomber,
- * suivi du bilan quand il la finit ; le bilan seul pour un dé gardé ; un d20,
- * « Localisation : 12, jambe gauche. »
+ * change, la fin du combat), ce sont elles, à la suite. Sinon parlent :
+ * - un dé lancé et un dé gardé : le dé de la chaîne qui vient de tomber,
+ *   suivi du bilan quand il la finit ; le bilan seul pour un dé gardé ; un
+ *   d20, « Localisation : 12, jambe gauche. » ;
+ * - une esquive et une face décalée, qui changent ce que le coup fera avant
+ *   « Appliquer » : chacune se dit par la phrase que le journal en écrira,
+ *   celle de l'intervention (« Aubépine intervient : Pas de côté (1 action,
+ *   3 souffle), 12 → 9. ») et celle de la localisation (« Localisation d20 →
+ *   14, décalée à 12 (Minutie) : jambe gauche. »).
  */
 export function annonce(etat, geste, evenement, lignesAvant = null) {
   const lignes = lignesEcrites(etat, evenement, lignesAvant);
   if (lignes.length > 0) return lignes.map((ligne) => ligne.texte).join(" ");
   const jet = geste?.jet ?? null;
-  if (jet === null || (evenement.type !== "de" && evenement.type !== "garder")) return null;
+  if (jet === null) return null;
+
+  if (evenement.type === "esquive") {
+    const jouee = dernier(geste.interventions ?? []) ?? null;
+    return jouee === null ? null : ecrireIntervention(etat, geste, jouee);
+  }
+  if (evenement.type === "decaler") return ecrireLocalisation(etat, geste);
+  if (evenement.type !== "de" && evenement.type !== "garder") return null;
 
   // Dès qu'un d20 est lancé, la chaîne est finie : le dé de l'événement est
   // le dernier d20.
@@ -516,7 +556,7 @@ export function annonce(etat, geste, evenement, lignesAvant = null) {
   // manqué aurait fini le geste, et écrit sa ligne), le bilan suit donc.
   const phrases = [];
   if (evenement.type === "de" && jet.places.length > 0) phrases.push(annoncerLeDe(jet));
-  if (jetFini(jet)) phrases.push(`${ecrireBilan(etat, geste)}.`);
+  if (jetFini(jet)) phrases.push(annoncerLeBilan(etat, geste));
   return phrases.length === 0 ? null : phrases.join(" ");
 }
 

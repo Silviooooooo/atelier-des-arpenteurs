@@ -37,7 +37,7 @@ import { blessuresDe, gesteEnCours } from "../js/combat/valeurs.js";
 import { indexerCreation } from "../js/personnage/calcul.js";
 import { accepter, lirePersonnage } from "../js/personnage/format.js";
 import { ouvrirAvecMotDePasse } from "../js/securite/chiffrement.js";
-import { ecartsDeLArret, ecartsDeLEtat, ecartsDuJournal } from "./banc_combat_reel.js";
+import { ecartsDeLArret, ecartsDeLEtat, ecartsDuJournal, ecrireDepart } from "./banc_combat_reel.js";
 import { casesDOffice, etatAttendu, journalAttendu, scenario } from "./outils/combat_reference.js";
 import { versContenu } from "./outils/scenario.js";
 
@@ -81,6 +81,30 @@ test("la démonstration donne les trois photographies du combat, avec leur sourc
     assert.deepEqual(relue.photo, photo, `${nom} : passée par JSON, la photographie est la même`);
   }
   assert.deepEqual([PHOTOS["Aubépine Crèmebrûlée"].camp, PHOTOS["Chef de partie"].camp, PHOTOS["Marmiton de corvée"].camp], ["pj", "adv", "adv"]);
+});
+
+// Relecture de fin de groupe (lot 4) : le banc disait l'armure de chaque zone
+// sans ses faces. La localisation était alors la seule valeur d'un journal
+// qui ne se recalculait pas d'après sa sortie.
+test("le départ que dit le banc : chaque zone avec ses faces et son armure, dans l'ordre du d20", () => {
+  const zonesDe = (photo) => {
+    const lignes = ecrireDepart(photo).filter((ligne) => ligne.includes("zones, dans l'ordre du d20"));
+    assert.equal(lignes.length, 1, `${photo.valeurs.nom} : une ligne pour ses zones`);
+    return lignes[0];
+  };
+  const TETE = "      zones, dans l'ordre du d20 (faces : armure) : ";
+  assert.equal(zonesDe(PHOTOS["Aubépine Crèmebrûlée"]), `${TETE}tête 1 : 6, torse 2-11 : 30, jambe gauche 12-13 : 10, jambe droite 14-15 : 10, bras gauche 16-17 : 10, bras droit 18-19 : 10 ; face de contre-attaque : 20`);
+  assert.equal(zonesDe(PHOTOS["Chef de partie"]), `${TETE}torse 2-11 : 38, jambe gauche 12-13 : 0, jambe droite 14-15 : 0, bras gauche 16-17 : 19, bras droit 18-19 : 19, tête 20 : 6 ; face de contre-attaque : 1`);
+  // Une grille qui n'est pas celle des personnages : ses faces ne se devinent pas.
+  const homard = photographierAdversaire(ADVERSAIRES, "Homard furieux", { banque: BANQUE, roles: ROLES }).photo;
+  assert.equal(zonesDe(homard), `${TETE}corps 2-11 : 30, pince gauche 12-14 : 30, pince droite 15-17 : 30, tête 18-20 : 36 ; face de contre-attaque : 1`);
+
+  // La localisation se recalcule d'après cette ligne : chaque face du d20, hors celle de la contre-attaque, y est une fois.
+  for (const photo of [...Object.values(PHOTOS), homard]) {
+    const [zones] = zonesDe(photo).slice(TETE.length).split(" ; ");
+    const faces = [...zones.matchAll(/ (\d+)(?:-(\d+))? : \d+/g)].flatMap(([, debut, fin]) => Array.from({ length: Number(fin ?? debut) - Number(debut) + 1 }, (_, rang) => Number(debut) + rang));
+    assert.deepEqual(faces, Array.from({ length: 20 }, (_, rang) => rang + 1).filter((face) => face !== photo.valeurs.faceContre), photo.valeurs.nom);
+  }
 });
 
 test("aucun rôle câblé ne manque à la démonstration : la ligne des absents est vide, et elle sait ne pas l'être", async () => {
