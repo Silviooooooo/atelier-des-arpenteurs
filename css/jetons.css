@@ -6,10 +6,13 @@
    couleur d'accent ; un thème clair et un thème sombre, selon le réglage de
    l'appareil. Le texte contraste d'au moins 4,5:1 avec chacun de ses fonds,
    et les bordures des champs d'au moins 3:1 ; tests/site.test.js le mesure.
+   Le simulateur de combat (§ 17) est l'exception à la couleur unique : le
+   vert de ses personnages et le rouge de ses adversaires, plus bas.
 
    Seule exception, que CSS impose : une condition @media ne lit pas les
    variables. La largeur où la liste et la fiche se placent côte à côte
-   (56rem) est donc écrite dans ecran.css. */
+   (56rem) est donc écrite dans ecran.css, et les deux largeurs du simulateur
+   (56rem, 80rem) dans combat.css. */
 
 :root {
   color-scheme: light dark;
@@ -39,6 +42,7 @@
   --taille-case: 1.25rem;
   --opacite-inactif: 0.55;
   --largeur-page: 72rem;
+  --largeur-combat: 90rem;
   --largeur-lecture: 42rem;
   --largeur-liste: 22rem;
   --largeur-champ: 28rem;
@@ -54,6 +58,24 @@
   --accent: #1d5c8f;
   --texte-sur-accent: #ffffff;
   --accent-doux: #e3edf6;
+
+  /* Le simulateur de combat (§ 17) : vert pour les personnages, rouge pour
+     les adversaires, à la demande de l'auteur. Aucune de ces couleurs ne
+     porte seule une information : initiales, noms et signes la doublent.
+     Les « -texte » se lisent sur les « -doux » et sur les fonds ; les ronds
+     tiennent 3:1 sur le fond d'une case ; « mort » est une couleur de rond,
+     trop pâle pour un texte sur le second fond. */
+  --combat-pj: #1e7a3c;
+  --combat-pj-doux: #e2f2e7;
+  --combat-pj-texte: #1e7a3c;
+  --combat-adv: #b3261e;
+  --combat-adv-doux: #fbe3e1;
+  --combat-adv-texte: #b3261e;
+  --combat-sur-jeton: #ffffff;
+  --combat-mort: #6b717b;
+  --combat-reussite: #1e7a3c;
+  --combat-echec: #b3261e;
+  --combat-alerte: #8a5300;
 
   /* La fiche de personnage (§ 15.4) : les couleurs et les polices du modèle
      de fiche. Elle est du papier : elle garde ces couleurs dans le thème
@@ -115,5 +137,17 @@
     --accent: #7db4e3;
     --texte-sur-accent: #0b1722;
     --accent-doux: #1c2f40;
+
+    --combat-pj: #3fae62;
+    --combat-pj-doux: #163222;
+    --combat-pj-texte: #9ee0b4;
+    --combat-adv: #e66b61;
+    --combat-adv-doux: #3a1c1a;
+    --combat-adv-texte: #f2aaa3;
+    --combat-sur-jeton: #0b1722;
+    --combat-mort: #7d838d;
+    --combat-reussite: #5cc38a;
+    --combat-echec: #e8776e;
+    --combat-alerte: #e6a85a;
   }
 }

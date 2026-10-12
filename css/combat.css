@@ -1,0 +1,1212 @@
+/* Le simulateur de combat (SPECIFICATION.md, § 17 ; l'interface, § 9).
+
+   Cette feuille habille l'écran #/combat et lui seul : chaque règle commence
+   par une classe « combat », pour ne rien changer au reste du site. Elle
+   existe à part d'ecran.css parce que l'écran a ses propres dispositions et
+   ses deux couleurs de camp.
+
+   L'ordre du document est celui du téléphone : la carte, le panneau
+   d'action, les deux camps, le journal. Les deux autres dispositions ne font
+   que placer. Toutes les valeurs viennent de jetons.css ; seules les deux
+   largeurs des conditions @media (56rem, 80rem) sont écrites ici, car CSS
+   n'y lit pas de variable.
+
+   Dans le code, la carte de 10 × 10 cases s'appelle « le plateau » : le mot
+   « carte » désigne déjà la carte d'adversaire (§ 16.5). */
+
+#ecran:has(> .combat) {
+  max-width: var(--largeur-combat);
+}
+
+/* Toute cible fait 44 px (§ 9) ; les cases du plateau sont la seule
+   exception, plus bas, et chacun de leurs choix a son double ici. */
+.combat button,
+.combat select,
+.combat textarea,
+.combat input {
+  min-height: var(--cible-tactile);
+  font: inherit;
+}
+
+.combat button {
+  min-width: var(--cible-tactile);
+}
+
+.combat input[type="checkbox"],
+.combat input[type="radio"] {
+  width: var(--taille-case);
+  height: var(--taille-case);
+  min-height: 0;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.combat label {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espace-2);
+  min-height: var(--cible-tactile);
+}
+
+/* La barre de titre */
+
+.combat-barre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espace-2) var(--espace-3);
+}
+
+.combat-barre h1 {
+  margin: 0;
+}
+
+.combat-etat {
+  margin: 0;
+  padding: var(--espace-1) var(--espace-3);
+  border: var(--trait) solid var(--accent);
+  border-radius: var(--cible-tactile);
+  background: var(--accent-doux);
+  color: var(--accent);
+  font-size: var(--taille-petite);
+  font-weight: var(--graisse-forte);
+}
+
+/* L'état de l'enregistrement reste visible sur un téléphone, sur sa propre
+   ligne, sous le titre. */
+.combat-garde {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+.combat-commandes {
+  display: flex;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espace-2);
+}
+
+.combat-autres {
+  display: none;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  gap: var(--espace-2);
+}
+
+.combat-autres.ouvert {
+  display: flex;
+}
+
+.combat-aide {
+  margin: var(--espace-2) 0 var(--espace-3);
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+.combat-avis {
+  margin: var(--espace-3) 0;
+  padding: var(--espace-3);
+  border-left: var(--trait-epais) solid var(--combat-alerte);
+  background: var(--fond-2);
+}
+
+.combat-avis:empty,
+.combat-panneau:empty,
+.combat-case-liste:empty,
+.combat-copie:empty {
+  display: none;
+}
+
+/* Les cadres : le plateau, le panneau d'action, la préparation, le journal
+   et la fiche complète. */
+
+.combat-plateau,
+.combat-action,
+.combat-preparation,
+.combat-journal,
+.combat-panneau {
+  min-width: 0;
+  padding: var(--espace-2);
+  border: var(--trait) solid var(--separateur);
+  border-radius: var(--rayon);
+  background: var(--fond-2);
+}
+
+/* La fiche complète montre une carte d'adversaire, dont les dimensions sont
+   du papier : elle défile dans son cadre plutôt que d'élargir la page. */
+.combat-panneau {
+  margin: var(--espace-3) 0;
+  overflow-x: auto;
+}
+
+.combat-panneau h2 {
+  margin-top: 0;
+}
+
+.combat-panneau h2:focus {
+  outline: none;
+}
+
+/* Les trois dispositions */
+
+.combat-cadre {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--espace-3);
+}
+
+.combat-camps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--espace-3);
+  min-width: 0;
+}
+
+.combat-camp {
+  min-width: 0;
+}
+
+/* Le plateau */
+
+/* Onze colonnes et onze lignes : une bande de repères, puis dix cases. Les
+   pistes « minmax(0, 1fr) » et le rapport carré fixent la taille des cases :
+   rien de ce qu'une case contient ne peut l'agrandir. Le placement dense
+   range les cases sous les repères que le document les entremêle ou non. */
+.combat-grille {
+  display: grid;
+  grid-template-columns: var(--espace-4) repeat(10, minmax(0, 1fr));
+  grid-template-rows: var(--espace-4) repeat(10, minmax(0, 1fr));
+  grid-auto-flow: row dense;
+  gap: var(--trait);
+  aspect-ratio: 1 / 1;
+  max-width: calc(var(--largeur-page) * 2 / 3);
+  margin: 0 auto;
+}
+
+.combat-coord {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+  line-height: 1;
+}
+
+.combat-coord:nth-child(n + 12) {
+  grid-column: 1;
+}
+
+/* Une case est un conteneur de taille : ses jetons se mesurent sur elle
+   (unité cqi), et non sur une longueur fixe, parce qu'elle fait de 24 px sur
+   un petit téléphone à 70 px sur un grand écran. Ce qui dépasserait est
+   coupé, jamais poussé chez la voisine. */
+.combat-case {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: center;
+  align-items: center;
+  justify-items: center;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  container-type: size;
+  border: var(--trait) solid var(--separateur);
+  border-radius: calc(var(--rayon) / 2);
+  background: var(--fond);
+}
+
+.combat-case.active {
+  border-color: var(--accent);
+  background: var(--accent-doux);
+}
+
+.combat-case.possible {
+  border: var(--trait) dashed var(--accent);
+}
+
+.combat-case.inactive {
+  background: var(--fond-2);
+}
+
+/* Les cases font moins de 44 px sur un téléphone : c'est admis (§ 9). */
+.combat-grille button {
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  font: inherit;
+}
+
+/* Le focus se trace en dedans : en dehors, la case le couperait. */
+.combat-grille :focus-visible {
+  outline-width: calc(var(--trait) * 2);
+  outline-offset: calc(var(--trait) * -2);
+}
+
+/* Le bouton d'une case qu'on peut choisir la couvre, sous ses jetons :
+   jamais un bouton dans un bouton. */
+.combat-case-choix {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* Sous 56rem, un jeton est un rond qui porte ses initiales ; deux par case.
+   Sa bordure, transparente au repos, porte les marques sans rien déplacer. */
+.combat-jeton {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: var(--trait) solid transparent;
+  border-radius: var(--cible-tactile);
+  background: transparent;
+  color: var(--texte);
+  font-size: var(--taille-petite);
+  font-size: 22cqi;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.combat-jeton:only-child {
+  grid-column: 1 / -1;
+  width: 70%;
+  font-size: 32cqi;
+}
+
+.combat-jeton ~ .combat-jeton ~ .combat-jeton {
+  display: none;
+}
+
+.combat-rond {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 50%;
+  color: var(--combat-sur-jeton);
+  font-weight: var(--graisse-forte);
+}
+
+.combat-pj .combat-rond {
+  background: var(--combat-pj);
+}
+
+.combat-adv .combat-rond {
+  background: var(--combat-adv);
+}
+
+.combat-nom-court {
+  display: none;
+}
+
+/* Les marques. Qui joue : l'accent. La cible : un trait rouge discontinu,
+   en bordure et non en contour, qui est réservé au focus. */
+.combat-jeton.joue,
+.combat-jeton[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-doux);
+}
+
+.combat-jeton.cible {
+  padding: var(--trait);
+  border-style: dashed;
+  border-color: var(--combat-adv);
+}
+
+/* Pendant un choix, un jeton qu'on ne peut pas choisir est un rond creux :
+   aucune opacité, qui ferait tomber son contraste. */
+.combat-jeton.inactif {
+  cursor: default;
+}
+
+.combat-pj.inactif .combat-rond {
+  background: transparent;
+  box-shadow: inset 0 0 0 var(--trait) currentColor;
+  color: var(--combat-pj-texte);
+}
+
+.combat-adv.inactif .combat-rond {
+  background: transparent;
+  box-shadow: inset 0 0 0 var(--trait) currentColor;
+  color: var(--combat-adv-texte);
+}
+
+.combat-case.possible .combat-jeton.inactif {
+  pointer-events: none;
+}
+
+/* Un mort est grisé et barré : le rond d'un trait, le nom d'un autre. */
+.combat-jeton.mort .combat-rond {
+  background:
+    linear-gradient(to top right, transparent calc(50% - var(--trait)), var(--combat-sur-jeton) calc(50% - var(--trait)), var(--combat-sur-jeton) calc(50% + var(--trait)), transparent calc(50% + var(--trait))),
+    var(--combat-mort);
+  box-shadow: none;
+  color: var(--combat-sur-jeton);
+}
+
+.combat-jeton.mort .combat-initiales,
+.combat-jeton.mort .combat-nom-court {
+  text-decoration: line-through;
+}
+
+.combat-jeton.mort .combat-nom-court {
+  color: var(--texte-2);
+}
+
+/* « +k » : deux boutons dans le document, dont un seul se voit. Sous 56rem,
+   celui qui compte au-delà de deux jetons. */
+.combat-case-plus {
+  position: relative;
+  z-index: 1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--texte);
+  font-weight: var(--graisse-forte);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.combat-plus-etroit {
+  grid-column: 1 / -1;
+  font-size: var(--taille-petite);
+  font-size: min(var(--taille-petite), 38cqi);
+}
+
+.combat-plus-large {
+  display: none;
+}
+
+.combat-legende {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--espace-1) var(--espace-4);
+  margin: var(--espace-2) 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+.combat-legende li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espace-1);
+}
+
+.combat-legende .combat-rond {
+  flex: none;
+  width: var(--espace-3);
+  height: var(--espace-3);
+  border: var(--trait) solid transparent;
+}
+
+.combat-legende .joue .combat-rond {
+  border-color: var(--accent);
+  background: var(--accent-doux);
+}
+
+.combat-legende .cible .combat-rond {
+  border: var(--trait) dashed var(--combat-adv);
+  background: transparent;
+}
+
+.combat-legende .mort .combat-rond {
+  background:
+    linear-gradient(to top right, transparent calc(50% - var(--trait)), var(--combat-sur-jeton) calc(50% - var(--trait)), var(--combat-sur-jeton) calc(50% + var(--trait)), transparent calc(50% + var(--trait))),
+    var(--combat-mort);
+}
+
+/* Le panneau d'action et la préparation */
+
+.combat-qui {
+  margin: 0 0 var(--espace-2);
+  font-size: var(--taille-sous-titre);
+  overflow-wrap: anywhere;
+}
+
+.combat-etapes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espace-1);
+  margin: 0 0 var(--espace-3);
+  padding: 0;
+  list-style: none;
+  font-size: var(--taille-petite);
+}
+
+.combat-etapes li {
+  padding: var(--espace-1) var(--espace-3);
+  border: var(--trait) solid var(--separateur);
+  border-radius: var(--cible-tactile);
+  background: var(--fond);
+  color: var(--texte-2);
+}
+
+.combat-etapes li.fait {
+  color: var(--texte);
+}
+
+.combat-etapes li.fait::before {
+  content: "✓ ";
+  color: var(--combat-reussite);
+}
+
+.combat-etapes li.en-cours {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--texte-sur-accent);
+  font-weight: var(--graisse-forte);
+}
+
+.combat-groupe,
+.combat-cibles,
+.combat-choix,
+.combat-chaine,
+.combat-ligne {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espace-2);
+  margin: 0 0 var(--espace-2);
+}
+
+.combat-ligne {
+  align-items: flex-end;
+}
+
+.combat-ligne .champ,
+.combat-reglages .champ,
+.combat-fiche-corps .champ {
+  margin-bottom: 0;
+}
+
+.combat-groupe-titre {
+  flex: 0 0 100%;
+  margin: 0;
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+  font-weight: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Les boutons de choix du panneau : une capacité, une cible, un jeton de la
+   liste d'une case. */
+.combat-capacite,
+.combat-cibles button,
+.combat-case-liste button {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--espace-2);
+  max-width: 100%;
+  min-height: var(--cible-tactile);
+  padding: var(--espace-1) var(--espace-3);
+  border: var(--trait) solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--fond);
+  color: var(--texte);
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.combat-capacite[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-doux);
+  box-shadow: inset 0 0 0 var(--trait) var(--accent);
+  font-weight: var(--graisse-forte);
+}
+
+/* La cible choisie porte la même marque que sur le plateau. */
+.combat-cibles button[aria-pressed="true"] {
+  border: calc(var(--trait) * 2) dashed var(--combat-adv);
+  font-weight: var(--graisse-forte);
+}
+
+/* Un bouton inactif garde le focus et dit sa raison : il reste lisible. */
+.combat [aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+.combat-capacite[aria-disabled="true"],
+.combat-cibles button[aria-disabled="true"],
+.combat-case-liste button[aria-disabled="true"] {
+  border-style: dashed;
+  background: transparent;
+  color: var(--texte-2);
+}
+
+.combat-degats {
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+.combat-cout {
+  color: var(--accent);
+  font-size: var(--taille-petite);
+}
+
+.combat-desavantage {
+  padding: 0 var(--espace-1);
+  border: var(--trait) solid var(--combat-alerte);
+  border-radius: var(--rayon);
+  color: var(--combat-alerte);
+  font-size: var(--taille-petite);
+}
+
+.combat-passifs,
+.combat-origine {
+  margin: 0 0 var(--espace-2);
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+.combat-case-liste {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espace-2);
+  margin-top: var(--espace-3);
+  padding-top: var(--espace-3);
+  border-top: var(--trait) solid var(--separateur);
+}
+
+.combat-case-liste h3 {
+  flex: 0 0 100%;
+  margin: 0;
+}
+
+/* La seule région polie de l'écran : elle parle, le bilan visible montre.
+   Elle reste dans la page, hors de la vue, pour les lecteurs d'écran. */
+.combat-annonce {
+  position: absolute;
+  width: var(--trait);
+  height: var(--trait);
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Les dés */
+
+.combat-des {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--espace-3);
+  margin-top: var(--espace-3);
+  padding-top: var(--espace-3);
+  border-top: var(--trait) solid var(--separateur);
+}
+
+.combat-jet,
+.combat-reglages {
+  min-width: 0;
+}
+
+.combat-reglages {
+  padding-top: var(--espace-3);
+  border-top: var(--trait) solid var(--separateur);
+}
+
+.combat-contexte p,
+.combat-bilan {
+  margin: 0 0 var(--espace-1);
+  overflow-wrap: anywhere;
+}
+
+.combat-chaine {
+  margin: var(--espace-3) 0 var(--espace-2);
+}
+
+/* Un dé est un bouton plus grand qu'une cible : son titre, sa valeur, son
+   détail. Ses états ne tiennent pas à la couleur seule : le trait change, et
+   le signe ✓ ou ✗ est écrit dans le dé. */
+.combat-de {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--trait);
+  width: calc(var(--cible-tactile) + var(--espace-4));
+  height: calc(var(--cible-tactile) + var(--espace-4));
+  padding: 0;
+  border: calc(var(--trait) * 2) solid var(--bordure);
+  border-radius: calc(var(--rayon) * 2);
+  background: var(--fond);
+  color: var(--texte);
+  font-size: var(--taille-sous-titre);
+  font-weight: var(--graisse-forte);
+  line-height: 1;
+  cursor: default;
+}
+
+.combat-de-titre,
+.combat-de-detail {
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+  font-weight: normal;
+}
+
+.combat-de-valeur {
+  font-size: var(--taille-titre);
+}
+
+.combat-de.reussi {
+  border-color: var(--combat-reussite);
+  color: var(--combat-reussite);
+}
+
+.combat-de.echoue {
+  border-color: var(--combat-echec);
+  color: var(--combat-echec);
+}
+
+.combat-de.relance {
+  border-style: dashed;
+  color: var(--texte-2);
+}
+
+.combat-de.relance .combat-de-valeur {
+  text-decoration: line-through;
+}
+
+.combat-de.a-lancer {
+  border: calc(var(--trait) * 2) dashed var(--accent);
+  background: var(--accent-doux);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.combat-de.a-venir {
+  border-style: dotted;
+  color: var(--texte-2);
+}
+
+.combat-lettres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espace-1);
+  margin: var(--espace-2) 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--taille-petite);
+}
+
+.combat-lettres li {
+  padding: 0 var(--espace-2);
+  border: var(--trait) solid var(--bordure);
+  border-radius: var(--rayon);
+  color: var(--texte-2);
+}
+
+.combat-lettres li.atteinte {
+  border: calc(var(--trait) * 2) solid var(--combat-reussite);
+  color: var(--combat-reussite);
+  font-weight: var(--graisse-forte);
+}
+
+/* Les camps et leurs fiches vivantes */
+
+.combat-camp h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espace-2);
+  margin: var(--espace-1) 0 var(--espace-2);
+  font-size: var(--taille-petite);
+  text-transform: uppercase;
+}
+
+.combat-camp h2::before {
+  content: "";
+  flex: none;
+  width: var(--espace-3);
+  height: var(--espace-3);
+  border-radius: 50%;
+}
+
+.combat-camp-pj h2::before {
+  background: var(--combat-pj);
+}
+
+.combat-camp-adv h2::before {
+  background: var(--combat-adv);
+}
+
+.combat-compte {
+  color: var(--texte-2);
+  font-weight: normal;
+  text-transform: none;
+}
+
+.combat-fiche {
+  margin-bottom: var(--espace-2);
+  border: var(--trait) solid var(--separateur);
+  border-radius: var(--rayon);
+  background: var(--fond-2);
+}
+
+.combat-fiche.joue {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 var(--trait) var(--accent);
+}
+
+.combat-fiche.ciblee {
+  border: var(--trait) dashed var(--combat-adv);
+  box-shadow: inset 0 0 0 var(--trait) var(--combat-adv);
+}
+
+/* Le nom déplie le volet. Aucun bouton n'y loge : « Jouer » est dans le
+   corps de la fiche. */
+.combat-fiche summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "pastille nom actions repli"
+    "pastille sous statut repli";
+  align-items: center;
+  gap: 0 var(--espace-2);
+  min-height: var(--cible-tactile);
+  padding: var(--espace-2) var(--espace-3);
+  list-style: none;
+  cursor: pointer;
+}
+
+.combat-fiche summary::-webkit-details-marker {
+  display: none;
+}
+
+.combat-fiche summary::after {
+  content: "▸";
+  grid-area: repli;
+  color: var(--texte-2);
+}
+
+.combat-fiche[open] summary::after {
+  content: "▾";
+}
+
+.combat-pastille {
+  grid-area: pastille;
+  display: grid;
+  place-items: center;
+  min-width: var(--espace-5);
+  height: var(--espace-5);
+  padding: 0 var(--espace-1);
+  border-radius: var(--cible-tactile);
+  color: var(--combat-sur-jeton);
+  font-size: var(--taille-petite);
+  font-weight: var(--graisse-forte);
+  line-height: 1;
+}
+
+.combat-camp-pj .combat-pastille {
+  background: var(--combat-pj);
+}
+
+.combat-camp-adv .combat-pastille {
+  background: var(--combat-adv);
+}
+
+.combat-nom {
+  grid-area: nom;
+  font-weight: var(--graisse-forte);
+  overflow-wrap: anywhere;
+}
+
+.combat-sous {
+  grid-area: sous;
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+  overflow-wrap: anywhere;
+}
+
+.combat-statut {
+  grid-area: statut;
+  justify-self: end;
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+.combat-actions {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: var(--espace-1);
+}
+
+.combat-pion {
+  width: var(--espace-3);
+  height: var(--espace-3);
+  border: calc(var(--trait) * 2) solid var(--accent);
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.combat-pion.vide {
+  background: transparent;
+}
+
+/* Une fiche de mort porte encore de l'information : son texte passe au
+   second gris, barré, sans opacité. */
+.combat-fiche.morte .combat-nom {
+  color: var(--texte-2);
+  text-decoration: line-through;
+}
+
+.combat-fiche.morte .combat-pastille {
+  background: var(--combat-mort);
+}
+
+.combat-fiche-corps {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--espace-2);
+  padding: 0 var(--espace-3) var(--espace-3);
+}
+
+.combat-fiche-corps p,
+.combat-fiche-corps ul {
+  margin: 0;
+}
+
+.combat-jauge {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  align-self: stretch;
+  gap: var(--espace-1);
+  font-size: var(--taille-petite);
+}
+
+/* Une case de jauge : pleine, ou vide. Le nombre l'accompagne toujours. */
+.combat-point {
+  display: inline-block;
+  flex: none;
+  width: var(--espace-2);
+  height: var(--espace-3);
+  border: var(--trait) solid var(--bordure);
+  border-radius: calc(var(--rayon) / 2);
+  background: var(--texte-2);
+}
+
+.combat-point.vide {
+  background: transparent;
+}
+
+.combat-zones {
+  align-self: stretch;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--taille-petite);
+  font-variant-numeric: tabular-nums;
+}
+
+.combat-zones th,
+.combat-zones td {
+  padding: var(--espace-1) var(--espace-1) var(--espace-1) 0;
+  border-bottom: var(--trait) solid var(--separateur);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.combat-zones th {
+  color: var(--texte-2);
+  font-weight: normal;
+}
+
+.combat-zones .combat-point {
+  margin-right: var(--trait);
+}
+
+.combat-zones .abimee {
+  color: var(--combat-alerte);
+  font-weight: var(--graisse-forte);
+}
+
+.combat-zones .detruite {
+  color: var(--combat-echec);
+  font-weight: var(--graisse-forte);
+}
+
+.combat-contre {
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+.combat-valeurs {
+  font-size: var(--taille-petite);
+  overflow-wrap: anywhere;
+}
+
+.combat-effets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espace-1);
+  padding: 0;
+  list-style: none;
+  font-size: var(--taille-petite);
+}
+
+.combat-effets li {
+  padding: 0 var(--espace-2);
+  border: var(--trait) solid transparent;
+  border-radius: var(--rayon);
+  overflow-wrap: anywhere;
+}
+
+.combat-camp-pj .combat-effets li {
+  background: var(--combat-pj-doux);
+  color: var(--combat-pj-texte);
+}
+
+.combat-camp-adv .combat-effets li {
+  background: var(--combat-adv-doux);
+  color: var(--combat-adv-texte);
+}
+
+.combat-camp .combat-effets li.eteint {
+  border: var(--trait) dashed var(--bordure);
+  background: var(--fond);
+  color: var(--texte-2);
+}
+
+/* Le journal */
+
+.combat-journal {
+  margin-top: var(--espace-3);
+}
+
+.combat-journal-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espace-2);
+  margin-bottom: var(--espace-2);
+}
+
+.combat-journal-tete h2 {
+  margin: 0 auto 0 0;
+}
+
+/* Sa hauteur est limitée et il défile : 18rem sur un téléphone. */
+.combat-lignes {
+  max-height: calc(var(--espace-6) * 9);
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  list-style: none;
+  font-family: var(--police-chasse-fixe);
+  font-size: var(--taille-petite);
+}
+
+.combat-lignes li {
+  padding: var(--espace-1) 0;
+  border-bottom: var(--trait) solid var(--separateur);
+  overflow-wrap: anywhere;
+}
+
+.combat-lignes li.tour {
+  padding-top: var(--espace-2);
+  color: var(--accent);
+  font-weight: var(--graisse-forte);
+}
+
+.combat-lignes li.mort {
+  color: var(--combat-echec);
+  font-weight: var(--graisse-forte);
+}
+
+.combat-copie {
+  margin-top: var(--espace-2);
+}
+
+.combat-copie .champ {
+  max-width: none;
+  margin-bottom: 0;
+}
+
+/* De 56rem à 80rem : le plateau et le panneau d'action à gauche, les deux
+   camps à droite. Un jeton montre son nom court à côté de son rond ; trois
+   par case, le « +k » dans une colonne à part pour ne prendre aucune ligne. */
+@media (min-width: 56rem) {
+  .combat-garde {
+    flex: 0 1 auto;
+  }
+
+  .combat-commandes {
+    flex: 0 1 auto;
+    margin-left: auto;
+  }
+
+  .combat-plus-bouton {
+    display: none;
+  }
+
+  .combat-autres {
+    display: flex;
+    flex: 0 1 auto;
+  }
+
+  .combat-plateau,
+  .combat-action,
+  .combat-preparation,
+  .combat-journal,
+  .combat-panneau {
+    padding: var(--espace-3);
+  }
+
+  .combat-cadre {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "plateau camps"
+      "action camps";
+  }
+
+  .combat-plateau {
+    grid-area: plateau;
+  }
+
+  .combat-action,
+  .combat-preparation {
+    grid-area: action;
+  }
+
+  .combat-camps {
+    grid-area: camps;
+  }
+
+  .combat-grille {
+    grid-template-columns: var(--espace-5) repeat(10, minmax(0, 1fr));
+    grid-template-rows: var(--espace-5) repeat(10, minmax(0, 1fr));
+  }
+
+  .combat-case {
+    grid-template-columns: minmax(0, 1fr) auto;
+    justify-items: start;
+  }
+
+  .combat-jeton,
+  .combat-jeton:only-child,
+  .combat-jeton.cible {
+    grid-column: 1;
+    display: flex;
+    align-items: center;
+    gap: calc(var(--trait) * 2);
+    width: auto;
+    max-width: 100%;
+    padding: 0 var(--espace-1) 0 0;
+    border-width: calc(var(--trait) * 2);
+    font-size: var(--taille-petite);
+    font-size: min(var(--taille-petite), 20cqi);
+    line-height: var(--interligne-titre);
+  }
+
+  .combat-jeton ~ .combat-jeton ~ .combat-jeton {
+    display: flex;
+  }
+
+  .combat-jeton ~ .combat-jeton ~ .combat-jeton ~ .combat-jeton {
+    display: none;
+  }
+
+  .combat-grille .combat-rond {
+    flex: none;
+    width: var(--taille-petite);
+    width: min(var(--taille-petite), 20cqi);
+  }
+
+  .combat-grille .combat-initiales {
+    display: none;
+  }
+
+  .combat-nom-court {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .combat-plus-etroit {
+    display: none;
+  }
+
+  .combat-plus-large {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    display: block;
+    padding: 0 calc(var(--trait) * 2);
+    font-size: var(--taille-petite);
+    font-size: min(var(--taille-petite), 20cqi);
+  }
+
+  .combat-groupe-titre {
+    flex: 0 0 25%;
+  }
+
+  .combat-des {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+
+  .combat-reglages {
+    padding-top: 0;
+    padding-left: var(--espace-3);
+    border-top: 0;
+    border-left: var(--trait) solid var(--separateur);
+  }
+
+  .combat-de {
+    width: calc(var(--cible-tactile) + var(--espace-5));
+    height: calc(var(--cible-tactile) + var(--espace-5));
+  }
+
+  .combat-lignes {
+    max-height: calc(var(--espace-6) * 12);
+  }
+}
+
+/* 80rem et plus : la disposition de la maquette. Les personnages, puis le
+   plateau et le panneau d'action, puis les adversaires ; l'enveloppe des
+   deux camps s'efface pour que chacun prenne sa colonne. */
+@media (min-width: 80rem) {
+  .combat-cadre {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 5fr) minmax(0, 2fr);
+    grid-template-areas:
+      "pj plateau adv"
+      "pj action adv";
+  }
+
+  .combat-camps {
+    display: contents;
+  }
+
+  .combat-camp-pj {
+    grid-area: pj;
+  }
+
+  .combat-camp-adv {
+    grid-area: adv;
+  }
+}

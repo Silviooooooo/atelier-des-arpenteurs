@@ -8,8 +8,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { ecrireTypes } from "../js/adversaire/carte.js";
 import { estAucun, lireListe, lireLocalisation, lireNombreCellule, lireTypes, reconnaitreZone } from "../js/adversaire/notation.js";
-import { banqueSansAdversaires, ecrireQualite, indexerAdversaires, maitriseDe } from "../js/adversaire/resolution.js";
+import { banqueSansAdversaires, ecrireQualite, horsMaitrise, indexerAdversaires, maitriseDe, positionDans, rangsDeMaitrise } from "../js/adversaire/resolution.js";
 import { GRAVITES } from "../js/banque/controle.js";
 import { comparer } from "../js/banque/differences.js";
 import { importerFichier } from "../js/banque/importation.js";
@@ -540,6 +541,280 @@ test("désavantage — toute capacité issue d'un bloc Lourde, Agile ou Précise
   assert.deepEqual(de("Deux").capacites.flatMap((c) => c.desavantage), []);
 });
 
+// ─── La règle des maîtrises, partagée avec le simulateur de combat (§ 17) ────
+
+// Qui donne quoi dans un bloc : un adversaire reçoit les capacités simples
+// et l'option d'un choix qui n'en a qu'une ; un personnage, les simples et
+// les options qu'il a choisies.
+const donneAUnAdversaire = (nom) => (entree) => (entree.forme === "simple" ? entree.nom : entree.forme === "choix" && entree.options.length === 1 ? entree.options[0] : null) === nom;
+const donneAuPersonnage = (nom, choisies) => (entree) => (entree.forme === "simple" ? entree.nom === nom : (entree.options ?? []).some((option) => option === nom && choisies.includes(option)));
+
+test("maîtrises — le rang de chaque poids est le plus haut possédé ; une capacité absente, une autre capacité ou un rang illisible n'y comptent pas", () => {
+  const banque = (nom) => BANQUE.capacites.find((c) => c.nom === nom);
+  const rangs = rangsDeMaitrise([
+    { capacite: banque("Maîtrise de l'agile"), rang: 1 },
+    { capacite: banque("Maîtrise de l'agile"), rang: 2 },
+    { capacite: banque("Maîtrise du lourd"), rang: 0 },
+    { capacite: banque("Frappe"), rang: 3 },
+    { capacite: null, rang: 3 },
+  ]);
+  assert.ok(rangs instanceof Map);
+  assert.deepEqual([...rangs], [["agile", 2], ["lourde", 0]]);
+  // L'ordre des entrées ne compte pas : le plus haut, pas le dernier.
+  assert.deepEqual([...rangsDeMaitrise([{ capacite: banque("Maîtrise du précis"), rang: 3 }, { capacite: banque("Maîtrise du précis"), rang: 1 }])], [["precise", 3]]);
+  // Un rang qui n'est pas un entier (une capacité « à venir » d'un personnage) vaut 0, et n'efface pas un rang lu.
+  assert.deepEqual([...rangsDeMaitrise([{ capacite: banque("Maîtrise de l'agile"), rang: 2 }, { capacite: banque("Maîtrise de l'agile"), rang: null }, { capacite: banque("Maîtrise du lourd"), rang: undefined }])], [["agile", 2], ["lourde", 0]]);
+  // Un itérable convient aussi : resoudre() lui donne les valeurs d'une Map.
+  assert.deepEqual([...rangsDeMaitrise(new Map([["a", { capacite: banque("Maîtrise du lourd"), rang: 2 }]]).values())], [["lourde", 2]]);
+  assert.deepEqual([...rangsDeMaitrise([])], []);
+});
+
+test("maîtrises — hors maîtrise : le poids du bloc, la position atteinte ou non, un bloc à deux poids, un bloc sans poids, un rang 0", () => {
+  const bloc = (nom) => INDEX.index.bloc(nom);
+  const agile = (rang) => new Map([["agile", rang]]);
+  // La spatule est agile : la maîtrise de l'agile au rang 1 couvre la première position, pas la deuxième.
+  assert.deepEqual([1, 2, 3].map((position) => horsMaitrise(bloc("Spatule souple"), position, agile(1))), [false, true, true]);
+  assert.deepEqual([1, 2, 3].map((position) => horsMaitrise(bloc("Spatule souple"), position, agile(2))), [false, false, true]);
+  // Sans maîtrise, ou avec celle d'un autre poids : toujours.
+  assert.deepEqual([horsMaitrise(bloc("Spatule souple"), 1, new Map()), horsMaitrise(bloc("Spatule souple"), 1, new Map([["lourde", 3]]))], [true, true]);
+  // Un rang 0 ne lève rien : la première position est 1.
+  assert.equal(horsMaitrise(bloc("Spatule souple"), 1, agile(0)), true);
+  // Un bloc sans élément de poids (une arme naturelle) ne gêne jamais.
+  assert.deepEqual([1, 9].map((position) => horsMaitrise(bloc("Pinces de homard"), position, new Map())), [false, false]);
+  // Un bloc à deux poids demande les deux maîtrises.
+  const double = { elements: [{ nom: "Arme" }, { nom: "Agile" }, { nom: "lourde" }, { nom: "Précise", cible: "Frappe" }], capacites: [] };
+  assert.equal(horsMaitrise(double, 1, agile(3)), true, "l'agile seule");
+  assert.equal(horsMaitrise(double, 1, new Map([["lourde", 3]])), true, "le lourd seul");
+  assert.equal(horsMaitrise(double, 2, new Map([["agile", 3], ["lourde", 1]])), true, "le lourd n'atteint pas la position");
+  // L'élément Précise qui vise une capacité n'est pas un poids du bloc : la maîtrise du précis n'est pas demandée.
+  assert.equal(horsMaitrise(double, 2, new Map([["agile", 2], ["lourde", 2]])), false);
+  // Une capacité que le bloc ne donne pas n'a pas de position : aucun désavantage à lui prêter.
+  assert.equal(horsMaitrise(bloc("Spatule souple"), null, new Map()), false);
+});
+
+test("maîtrises — la position dans un bloc : l'indice de la première entrée qui donne la capacité, groupes et entrées illisibles comptés", async () => {
+  const { index, de } = await feuille(
+    [
+      ["Groupe 2", "Commis", _, _, _, _, _, "Batte à groupes", "//, Maîtrise de l'agile[2]"],
+      ["Groupe 3", "Commis", _, _, _, _, _, "Batte à groupes", "//, Maîtrise de l'agile[3]"],
+      ["Fêlé 2", "Commis", _, _, _, _, _, "Batte fêlée", "//, Maîtrise de l'agile[2]"],
+      ["Fêlé 3", "Commis", _, _, _, _, _, "Batte fêlée", "//, Maîtrise de l'agile[3]"],
+      ["Un poids", "Commis", _, _, _, _, _, "Batte double", "//, Maîtrise de l'agile[3]"],
+      ["Deux poids", "Commis", _, _, _, _, _, "Batte double", "//, Maîtrise de l'agile[3], Maîtrise du lourd[1]"],
+      ["Rang nul", "Commis", _, _, _, _, _, "Spatule souple", "//, Maîtrise figée de l'agile"],
+      ["Rang un", "Commis", _, _, _, _, _, "Spatule souple", "//, Maîtrise de l'agile"],
+    ],
+    {
+      blocs: [
+        ["Batte à groupes", "Arme, Agile", "( Goûter ), ( Recette secrète | Recette de grand-mère ), Frappe, Moulinet farineux", "{degats:1/2/3}", "Un choix à une option, un vrai groupe, puis deux capacités", "Arme"],
+        ["Batte fêlée", "Arme, Agile", "Frappe, Goûter | Taloche, Moulinet farineux", "{degats:1/2/3}", "E6 : la deuxième entrée ne se lit pas", "Arme"],
+        ["Batte double", "Arme, Agile, Lourde", "Frappe", "{degats:1/2/3}", "Deux poids", "Arme"],
+      ],
+      capacites: [["Maîtrise figée de l'agile", 0, _, _, "Maîtrise", "Une maîtrise qui n'évolue pas.", "Puissance 0 : rang 0"]],
+    },
+  );
+  const bloc = (nom) => index.index.bloc(nom);
+  // Les quatre formes d'une entrée : un choix à une option, un vrai groupe, une capacité simple, une entrée illisible.
+  assert.deepEqual(bloc("Batte à groupes").capacites.map((e) => e.forme), ["choix", "choix", "simple", "simple"]);
+  assert.deepEqual(bloc("Batte fêlée").capacites.map((e) => e.forme ?? "illisible"), ["simple", "illisible", "simple"]);
+  const position = (nomBloc, nom) => positionDans(bloc(nomBloc), donneAUnAdversaire(nom));
+  assert.deepEqual(["Goûter", "Frappe", "Moulinet farineux"].map((nom) => position("Batte à groupes", nom)), [1, 3, 4]);
+  assert.deepEqual(["Frappe", "Moulinet farineux"].map((nom) => position("Batte fêlée", nom)), [1, 3]);
+  // Personne ne choisit pour un adversaire : l'option d'un vrai groupe n'a pas de position chez lui ; un personnage qui l'a choisie l'a à la place du groupe.
+  assert.equal(position("Batte à groupes", "Recette secrète"), null);
+  assert.equal(positionDans(bloc("Batte à groupes"), donneAuPersonnage("Recette secrète", ["Recette secrète"])), 2);
+  assert.equal(positionDans(bloc("Batte à groupes"), donneAuPersonnage("Recette secrète", ["Recette de grand-mère"])), null);
+  assert.equal(positionDans(bloc("Batte à groupes"), donneAuPersonnage("Frappe", [])), 3);
+  // Le Saucier d'Aubépine : trois capacités, le style choisi en quatrième, la maîtrise choisie en cinquième.
+  const saucier = INDEX.index.bloc("Saucier");
+  assert.deepEqual(["Réduction", "Solo du chef", "Maîtrise de l'agile", "Brigade"].map((nom) => positionDans(saucier, donneAuPersonnage(nom, ["Solo du chef", "Maîtrise de l'agile"]))), [1, 4, 5, null]);
+  // Une capacité que le bloc donne deux fois prend sa première entrée ; un bloc sans liste n'a aucune position.
+  assert.equal(positionDans({ capacites: [{ forme: "simple", nom: "Goûter" }, { forme: "simple", nom: "Frappe" }, { forme: "simple", nom: "Frappe" }] }, donneAUnAdversaire("Frappe")), 2);
+  assert.deepEqual([positionDans({ capacites: [] }, () => true), positionDans({}, () => true), positionDans(null, () => true)], [null, null, null]);
+
+  // La résolution compte de même. Le groupe compte : Frappe est en troisième place, Moulinet farineux en quatrième.
+  const genees = (nom) => de(nom).capacites.filter((c) => c.desavantage.length).map((c) => c.nom);
+  assert.deepEqual([genees("Groupe 2"), genees("Groupe 3")], [["Frappe", "Moulinet farineux"], ["Moulinet farineux"]]);
+  // L'entrée illisible compte : Moulinet farineux est en troisième place, pas en deuxième.
+  assert.deepEqual([genees("Fêlé 2"), genees("Fêlé 3")], [["Moulinet farineux"], []]);
+  // Deux poids : la maîtrise de l'agile ne suffit pas, il faut aussi celle du lourd.
+  assert.deepEqual([genees("Un poids"), genees("Deux poids")], [["Frappe"], []]);
+  // Une maîtrise au rang 0 ne lève rien ; au rang 1, la première capacité.
+  assert.deepEqual(de("Rang nul").maitrises.map((m) => [m.nom, m.rang, m.type]), [["Maîtrise figée de l'agile", 0, "agile"]]);
+  assert.deepEqual([genees("Rang nul"), genees("Rang un")], [["Frappe", "Moulinet farineux"], ["Moulinet farineux"]]);
+});
+
+test("maîtrises — les trois fonctions redisent le désavantage de chaque capacité résolue, objet par objet", async () => {
+  const { index, de } = await feuille([
+    ["Mêlé", "Commis/Rôtisseur", _, _, _, _, _, "//, Rouleau de fonte, Rouleau à pâtisserie, Couteau d'office"],
+    ["Deux", "Commis", _, _, _, _, _, "Spatule souple, Pinces de homard", "//, Maîtrise de l'agile[2], Maîtrise du lourd"],
+  ]);
+  let couples = 0;
+  const verifier = (source, resolu) => {
+    const rangs = rangsDeMaitrise(resolu.maitrises.map((maitrise) => ({ capacite: source.capacite(maitrise.nom), rang: maitrise.rang })));
+    for (const c of resolu.capacites) {
+      for (const objet of new Set(c.origines.map((origine) => origine.objet).filter(Boolean))) {
+        const gene = horsMaitrise(source.bloc(objet), positionDans(source.bloc(objet), donneAUnAdversaire(c.nom)), rangs);
+        assert.equal(gene, c.desavantage.includes(objet), `${resolu.nom}, ${c.nom}, ${objet}`);
+        couples += 1;
+      }
+    }
+  };
+  for (const ligne of BANQUE.adversaires) verifier(INDEX.index, INDEX.resoudre(ligne));
+  for (const nom of ["Mêlé", "Deux"]) verifier(index.index, de(nom));
+  // La comparaison n'est pas vide, et voit les deux réponses.
+  assert.equal(couples, 20);
+  assert.deepEqual(de("Mêlé").capacites.map((c) => [c.nom, c.desavantage]), [
+    ["Frappe", ["Rouleau de fonte", "Couteau d'office"]],
+    ["Moulinet farineux", ["Spatule souple"]],
+    ["Choc sourd", ["Rouleau de fonte"]],
+    ["Coup de louche", []],
+    ["Sauce piquante", []],
+    ["Émincer", ["Couteau d'office"]],
+    ["Pas chassé", []],
+  ]);
+});
+
+// ─── Ce que la résolution rend de plus au simulateur de combat (§ 17) ───────
+
+// Des objets fabriqués pour ces contrôles, dans l'ordre des colonnes de la
+// feuille Blocs : une arme naturelle qui transmet un élément et des
+// paramètres à une capacité qu'elle vise, un objet qui donne des dégâts sans
+// être une arme, une arme aux valeurs hors bornes, une arme dont les dégâts
+// demandent des caractéristiques, une arme à deux poids.
+const BLOCS_DU_COMBAT = [
+  ["Filet lesté", "Arme, Intervention(Frappe)", "Frappe, Choc sourd", "{degats:2/4/6}, {portee:3}, {loc_multiple:2}, {loc_multiple:3}(Choc sourd), {portee:5}(Choc sourd)", "Portée et dés de localisation, pour le bloc et pour une capacité", "Arme naturelle"],
+  ["Gant clouté", _, "Frappe", "{degats:1/2/3}", "Des dégâts, sans être une arme", "Équipement"],
+  ["Louche tordue", "Arme", "Frappe", "{degats:1/2/3}, {portee:1-3}, {loc_multiple:0}", "Portée négative, aucun dé de localisation", "Arme"],
+  ["Pilon des forts", "Arme, Lourde", "Frappe", "{degats:{force}/{force}/{force}}", "Dégâts incalculables pour un adversaire", "Arme"],
+  ["Batte double", "Arme, Agile, Lourde", "Frappe", "{degats:1/2/3}", "Deux poids", "Arme"],
+];
+
+test("combat — les armes de l'adversaire : les objets de type Arme ou Arme naturelle, dans l'ordre de l'équipement, avec leur poids et leurs valeurs en nombres", async () => {
+  // Le pack d'armure ne donne aucune arme ; la qualité 2,8 du Chef de partie y est exacte (5/10/15 × 1,2666…).
+  assert.deepEqual(demo("Marmiton de corvée").armes, [{ nom: "Spatule souple", poids: "agile", degats: [5, 10, 15], portee: 0, locMultiple: 1 }]);
+  assert.deepEqual(demo("Chef de partie").armes, [{ nom: "Spatule souple", poids: "agile", degats: [6, 12, 19], portee: 0, locMultiple: 1 }]);
+  // Une arme naturelle, sans poids ; puis une arme précise, de portée 1. La carapace et la toque n'en sont pas.
+  assert.deepEqual(demo("Homard furieux").armes, [
+    { nom: "Pinces de homard", poids: null, degats: [4, 8, 12], portee: 0, locMultiple: 1 },
+    { nom: "Couteau d'office", poids: "precise", degats: [3, 8, 20], portee: 1, locMultiple: 1 },
+  ]);
+  assert.deepEqual([demo("Plongeur").armes, demo("Mouette chapardeuse").armes], [[], []]);
+
+  const { de } = await feuille(
+    [
+      ["Pêcheur", "Commis", _, _, _, _, _, "Filet lesté, Gant clouté, Couvercle de marmite, Filet lesté[5]"],
+      ["Plongeur", "Commis", _, _, _, _, _, "Louche tordue, Pilon des forts, Batte double"],
+    ],
+    { blocs: BLOCS_DU_COMBAT },
+  );
+  // La même arme deux fois : deux entrées, chacune à sa qualité (× 1 et × 2). Ni le gant, qui donne des dégâts sans être une arme, ni le bouclier.
+  assert.deepEqual(de("Pêcheur").armes, [
+    { nom: "Filet lesté", poids: null, degats: [2, 4, 6], portee: 3, locMultiple: 2 },
+    { nom: "Filet lesté", poids: null, degats: [4, 8, 12], portee: 3, locMultiple: 2 },
+  ]);
+  // Une portée négative vaut 0, un nombre de dés nul vaut 1 ; des dégâts qui ne se calculent pas sans caractéristiques sont absents ; deux poids n'en font aucun.
+  assert.deepEqual(de("Plongeur").armes, [
+    { nom: "Louche tordue", poids: null, degats: [1, 2, 3], portee: 0, locMultiple: 1 },
+    { nom: "Pilon des forts", poids: "lourde", degats: null, portee: 0, locMultiple: 1 },
+    { nom: "Batte double", poids: null, degats: [1, 2, 3], portee: 0, locMultiple: 1 },
+  ]);
+});
+
+test("combat — par capacité : ses valeurs par arme, en regard de celles de la carte, ce qu'elle porte en propre, et ses éléments au rang joué", async () => {
+  const marmiton = demo("Marmiton de corvée");
+  assert.deepEqual(capacite(marmiton, "Frappe").parArme, [{ arme: 0, degats: [5, 10, 15], portee: 0, locMultiple: 1, desavantage: false }]);
+  assert.deepEqual(capacite(marmiton, "Moulinet farineux").parArme, [{ arme: 0, degats: [5, 10, 15], portee: 0, locMultiple: 1, desavantage: true }]);
+  // Citée, sans objet : rien par arme, et rien en propre que les valeurs par défaut.
+  assert.deepEqual([capacite(marmiton, "Pas chassé").parArme, capacite(marmiton, "Pas chassé").propres], [[], { degats: null, portee: 0, locMultiple: 1 }]);
+  const homard = demo("Homard furieux");
+  assert.deepEqual(capacite(homard, "Frappe").parArme, [
+    { arme: 0, degats: [4, 8, 12], portee: 0, locMultiple: 1, desavantage: false },
+    { arme: 1, degats: [3, 8, 20], portee: 1, locMultiple: 1, desavantage: true },
+  ]);
+  assert.deepEqual(capacite(homard, "Émincer").parArme, [{ arme: 1, degats: [3, 8, 20], portee: 1, locMultiple: 1, desavantage: true }]);
+  // Les éléments : ceux de la capacité, lus dans la banque.
+  const mouette = demo("Mouette chapardeuse");
+  assert.deepEqual([capacite(mouette, "Nez fin").elements, capacite(mouette, "Frappe").elements, capacite(mouette, "Frappe").parArme], [["Passif"], [], []]);
+
+  const { de } = await feuille(
+    [
+      ["Pêcheur", "Commis", _, _, _, _, _, "Filet lesté, Gant clouté, Couvercle de marmite, Filet lesté[5]", "//, Morsure, Fournaise[2], Fournaise[3], Recette perdue, Nez fin"],
+      ["Braisier", "Commis", _, _, _, _, _, _, "Fournaise"],
+      ["Plongeur", "Commis", _, _, _, _, _, "Louche tordue, Pilon des forts, Batte double"],
+    ],
+    { blocs: BLOCS_DU_COMBAT, capacites: [["Morsure", 0, 1, _, "Dégâts[4/8/12]", "Mord pour {degats}.", "Dégâts propres"]] },
+  );
+  const pecheur = de("Pêcheur");
+  // Frappe : le filet, le gant (qui n'est pas une arme : arme null), le second filet. Les entrées de la carte ne changent pas.
+  assert.deepEqual(capacite(pecheur, "Frappe").armes, [
+    { nom: "Filet lesté", degats: "2/4/6", portee: 3, desavantage: false },
+    { nom: "Gant clouté", degats: "1/2/3", portee: null, desavantage: false },
+    { nom: "Filet lesté", degats: "4/8/12", portee: 3, desavantage: false },
+  ]);
+  assert.deepEqual(capacite(pecheur, "Frappe").parArme, [
+    { arme: 0, degats: [2, 4, 6], portee: 3, locMultiple: 2, desavantage: false },
+    { arme: null, degats: [1, 2, 3], portee: 0, locMultiple: 1, desavantage: false },
+    { arme: 1, degats: [4, 8, 12], portee: 3, locMultiple: 2, desavantage: false },
+  ]);
+  // Un paramètre qui vise la capacité prime sur celui du bloc : la portée et le nombre de dés de Choc sourd ne sont pas ceux de l'arme.
+  assert.deepEqual(capacite(pecheur, "Choc sourd").parArme, [
+    { arme: 0, degats: [2, 4, 6], portee: 5, locMultiple: 3, desavantage: false },
+    { arme: 1, degats: [4, 8, 12], portee: 5, locMultiple: 3, desavantage: false },
+  ]);
+  assert.deepEqual(pecheur.armes.map((arme) => [arme.portee, arme.locMultiple]), [[3, 2], [3, 2]]);
+  // Le bouclier donne « Se couvrir » sans dégâts : aucune entrée par arme.
+  assert.deepEqual([capacite(pecheur, "Se couvrir").armes, capacite(pecheur, "Se couvrir").parArme], [[], []]);
+  // Les éléments : l'élément que le filet transmet à Frappe en la visant, et à elle seule ; les éléments propres, sans leur valeur, au rang joué.
+  assert.deepEqual([capacite(pecheur, "Frappe").elements, capacite(pecheur, "Choc sourd").elements], [["Intervention"], []]);
+  assert.deepEqual([capacite(pecheur, "Morsure").elements, capacite(pecheur, "Nez fin").elements], [["Dégâts"], ["Passif"]]);
+  assert.deepEqual([capacite(pecheur, "Fournaise").rang, capacite(pecheur, "Fournaise").elements], [3, ["Portée"]]);
+  assert.deepEqual([capacite(de("Braisier"), "Fournaise").rang, capacite(de("Braisier"), "Fournaise").elements], [1, []]);
+  // En propre : les dégâts d'un élément Dégâts, sans qualité ; la portée d'un élément Portée, celle de la variante du rang.
+  assert.deepEqual(capacite(pecheur, "Morsure").propres, { degats: [4, 8, 12], portee: 0, locMultiple: 1 });
+  assert.deepEqual(capacite(pecheur, "Fournaise").propres, { degats: null, portee: 2, locMultiple: 1 });
+  assert.deepEqual(capacite(de("Braisier"), "Fournaise").propres, { degats: null, portee: 0, locMultiple: 1 });
+  // Les dégâts d'une arme ne sont pas ceux que la capacité porte en propre.
+  assert.deepEqual(capacite(pecheur, "Frappe").propres, { degats: null, portee: 0, locMultiple: 1 });
+  // Une capacité absente de la banque : rien.
+  const perdue = capacite(pecheur, "Recette perdue");
+  assert.deepEqual([perdue.absente, perdue.elements, perdue.parArme, perdue.propres], [true, [], [], null]);
+
+  // Bornées comme celles de l'arme : portée négative, nombre de dés nul. Le pilon, aux dégâts incalculables, gêne (lourd) sans figurer par arme.
+  const frappe = capacite(de("Plongeur"), "Frappe");
+  assert.deepEqual(frappe.parArme, [
+    { arme: 0, degats: [1, 2, 3], portee: 0, locMultiple: 1, desavantage: false },
+    { arme: 2, degats: [1, 2, 3], portee: 0, locMultiple: 1, desavantage: true },
+  ]);
+  assert.deepEqual(frappe.desavantage, ["Pilon des forts", "Batte double"]);
+
+  // Le parallèle, tenu pour tous : une entrée par arme pour une entrée de la carte, mêmes dégâts, même désavantage, même portée.
+  let entrees = 0;
+  for (const resolu of [...BANQUE.adversaires.map((ligne) => INDEX.resoudre(ligne)), pecheur, de("Plongeur"), de("Braisier")]) {
+    assert.deepEqual(JSON.parse(JSON.stringify(resolu)), resolu, `${resolu.nom} passe par JSON à l'identique`);
+    for (const c of resolu.capacites) {
+      assert.equal(c.parArme.length, c.armes.length, `${resolu.nom}, ${c.nom}`);
+      c.armes.forEach((arme, k) => {
+        const jumelle = c.parArme[k];
+        assert.equal(jumelle.degats.join("/"), arme.degats, `${resolu.nom}, ${c.nom}, ${arme.nom}`);
+        assert.deepEqual([jumelle.desavantage, jumelle.portee], [arme.desavantage, arme.portee ?? 0]);
+        // L'indice désigne bien l'objet qui donne ces dégâts ; un objet qui n'est pas une arme n'en a pas.
+        if (jumelle.arme !== null) assert.equal(resolu.armes[jumelle.arme].nom, arme.nom);
+        else assert.equal(resolu.armes.some((portee) => portee.nom === arme.nom), false);
+        entrees += 1;
+      });
+    }
+  }
+  assert.equal(entrees, 15);
+});
+
+test("combat — les types d'un adversaire s'écrivent comme sur sa carte ; sans type, rien", () => {
+  assert.equal(ecrireTypes(demo("Chef de partie")), "Commis, Rôtisseur ×1,4");
+  assert.equal(ecrireTypes(demo("Marmiton de corvée")), "Commis, Rôtisseur");
+  assert.deepEqual([ecrireTypes(demo("Homard furieux")), ecrireTypes(demo("Mouette chapardeuse"))], ["", ""]);
+  assert.equal(ecrireTypes({ types: [{ nom: "Commis", absent: false }], multiplicateur: "2" }), "Commis ×2");
+});
+
 // ─── Ce que la relecture du cœur a fait préciser ────────────────────────────
 
 test("rangs — le dernier écrit compte, même plus bas ; un rang cité vaut aussi pour une capacité que l'équipement donne ; le multiplicateur n'y touche pas", async () => {
@@ -701,7 +976,18 @@ test("démonstration — les ajouts du simulateur de combat ne changent aucun ad
   };
   const [aujourdhui, hier] = [resolus(BANQUE), resolus(avant)];
   assert.deepEqual(aujourdhui.map((r) => r.nom), ["Marmiton de corvée", "Chef de partie", "Plongeur", "Homard furieux", "Mouette chapardeuse"]);
-  for (const [i, resolu] of aujourdhui.entries()) assert.deepEqual(resolu, hier[i], resolu.nom);
+  // Un seul champ de la résolution dit les éléments d'une capacité (il est
+  // venu avec le simulateur, § 17) : c'est le seul que les ajouts peuvent
+  // changer, et il se compare à part, juste après. Tout le reste, champs
+  // neufs compris (les armes, les valeurs par arme et en propre), est égal.
+  const sansElements = (resolu) => ({ ...resolu, capacites: resolu.capacites.map(({ elements, ...reste }) => (assert.ok(Array.isArray(elements), "le champ écarté existe"), reste)) });
+  for (const [i, resolu] of aujourdhui.entries()) assert.deepEqual(sansElements(resolu), sansElements(hier[i]), resolu.nom);
+  // Les éléments : un seul écart, le Passif posé sur une capacité de la Mouette chapardeuse.
+  const elementsDesCapacites = (liste) => liste.flatMap((resolu) => resolu.capacites.map((c) => [resolu.nom, c.nom, c.elements]));
+  const [dits, ditsHier] = [elementsDesCapacites(aujourdhui), elementsDesCapacites(hier)];
+  assert.equal(dits.length, 12);
+  assert.deepEqual(dits.filter((ligne, i) => ligne[2].join() !== ditsHier[i][2].join()), [["Mouette chapardeuse", "Nez fin", ["Passif"]]]);
+  assert.deepEqual(ditsHier.filter((ligne) => ligne[2].length), []);
   // Les types se lisent de même, et la feuille porte les mêmes anomalies.
   const lus = (banque) => {
     const index = indexerAdversaires(banque);

@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { importerFichier } from "../js/banque/importation.js";
-import { calculerFiche, capacitesDuBloc, coutA, evolution, indexerCreation, qualiteDe, valeursParametre } from "../js/personnage/calcul.js";
+import { calculerFiche, capacitesDuBloc, coutA, degatsDecrits, elementsDe, evolution, indexerCreation, qualiteDe, valeursParametre } from "../js/personnage/calcul.js";
 import { entierInferieur, evaluer, fraction, lireNombre } from "../js/personnage/expressions.js";
 import { MESSAGE_BANQUE_SANS_TYPES, banqueUtilisable, manques, niveauxPermis, tirerConstellation, tirerIndice } from "../js/personnage/parcours.js";
 import { COUT_NIVEAU, ZONES, deDuJet } from "../js/personnage/regles.js";
@@ -437,4 +437,118 @@ test("places — le parcours signale une place fautive : une arme tenue qui n'en
   assert.ok(avec((p) => p.equipement.push({ nom: "Couvercle de marmite", choix: [], qualite: "2", place: "equipe" })).includes("Un seul bouclier s'équipe : rangez les autres dans le sac."));
   assert.ok(avec((p) => (p.equipement[1].place = "pack")).includes("« Rouleau de fonte » n'est pas une pièce d'armure : choisissez de nouveau le pack."));
   assert.deepEqual(avec(() => {}), []);
+});
+
+// ─── Ce que le simulateur de combat demande au calcul (§ 17) ────────────────
+
+test("combat — les sources d'une capacité : le rôle et le nom du bloc qui la donne, et le rang de l'objet dans l'équipement", () => {
+  const f = fiche();
+  const sources = (nom, de = f) => capacite(de, nom).sources;
+  assert.deepEqual(sources("Vif"), [{ role: "espece", nom: "Marmiton", rang: null }]);
+  assert.deepEqual(sources("Solo du chef"), [{ role: "archetype", nom: "Saucier", rang: null }]);
+  assert.deepEqual(sources("Fournaise"), [{ role: "primordial", nom: "Grand Four", rang: null }]);
+  assert.deepEqual(sources("Pas chassé"), [{ role: "base", nom: "Gestes de cuisine", rang: null }]);
+  // Frappe : le couteau tenu (rang 0) et le rouleau rangé au sac (rang 1). La fiche compte les deux ; le combat choisira.
+  assert.deepEqual(sources("Frappe"), [{ role: "equipement", nom: "Couteau d'office", rang: 0 }, { role: "equipement", nom: "Rouleau de fonte", rang: 1 }]);
+  assert.deepEqual(sources("Choc sourd"), [{ role: "equipement", nom: "Rouleau de fonte", rang: 1 }]);
+  assert.deepEqual(sources("Se couvrir"), [{ role: "equipement", nom: "Couvercle de marmite", rang: 7 }]);
+  assert.deepEqual(sources("Boire le bouillon"), [{ role: "equipement", nom: "Bouillon revigorant", rang: 8 }]);
+  // Les sources suivent les origines, une pour une, pour toute capacité ; ce sont des données simples, sans rien de la banque.
+  assert.equal(f.capacites.length, 19);
+  for (const c of f.capacites) assert.deepEqual(c.sources.map((s) => s.nom), c.origines, c.nom);
+  for (const c of f.capacites) for (const s of c.sources) assert.deepEqual(Object.keys(s), ["role", "nom", "rang"], c.nom);
+  // Le rang n'est donné qu'à un objet : c'est son indice dans l'équipement du personnage.
+  for (const c of f.capacites) for (const s of c.sources) assert.equal(s.rang === null, s.role !== "equipement", c.nom);
+  for (const c of f.capacites) for (const s of c.sources.filter((source) => source.rang !== null)) assert.equal(f.equipement[s.rang].nom, s.nom, c.nom);
+
+  // Deux objets de même nom : les origines les confondent, pas les rangs. Un objet disparu de la banque ne donne rien.
+  const deux = fiche((p) => p.equipement.push({ nom: "Objet disparu", choix: [], qualite: null, place: "sac" }, { nom: "Couteau d'office", choix: [], qualite: "3", place: "sac" }));
+  assert.deepEqual(capacite(deux, "Frappe").origines, ["Couteau d'office", "Rouleau de fonte", "Couteau d'office"]);
+  assert.deepEqual(sources("Frappe", deux).map((s) => s.rang), [0, 1, 10]);
+  assert.deepEqual(sources("Émincer", deux).map((s) => s.rang), [0, 10]);
+  assert.equal(deux.capacites.some((c) => c.sources.some((s) => s.nom === "Objet disparu")), false);
+
+  // Plusieurs rôles : dans l'ordre des rôles, l'archétype avant le bloc de base, le bloc de base avant l'équipement.
+  const modifiee = structuredClone(BANQUE);
+  modifiee.blocs.find((b) => b.nom === "Saucier").capacites.push({ forme: "simple", nom: "Frappe" });
+  modifiee.blocs.find((b) => b.nom === "Gestes de cuisine").capacites.push({ forme: "simple", nom: "Frappe" }, { forme: "simple", nom: "Émincer" });
+  const g = calculerFiche(modifiee, personnageEssai());
+  assert.deepEqual(sources("Frappe", g), [
+    { role: "archetype", nom: "Saucier", rang: null },
+    { role: "base", nom: "Gestes de cuisine", rang: null },
+    { role: "equipement", nom: "Couteau d'office", rang: 0 },
+    { role: "equipement", nom: "Rouleau de fonte", rang: 1 },
+  ]);
+  assert.deepEqual(sources("Émincer", g), [{ role: "base", nom: "Gestes de cuisine", rang: null }, { role: "equipement", nom: "Couteau d'office", rang: 0 }]);
+  // Une capacité « à venir » garde sa source.
+  const aVenir = fiche((p) => p.equipement.push({ nom: "Poêle en fonte", choix: [], qualite: null, place: "sac" }));
+  assert.deepEqual(sources("Omelette fantôme", aVenir), [{ role: "equipement", nom: "Poêle en fonte", rang: 9 }]);
+});
+
+test("combat — les éléments d'une capacité à une puissance : les siens, puis ceux que son bloc lui transmet en la visant, par leur nom, sans doublon", () => {
+  const elements = (nomBloc, nom, puissance) => elementsDe(INDEX, nomBloc === null ? null : INDEX.bloc(nomBloc), INDEX.capacite(nom), puissance);
+  // Le bloc de base vise Taloche, et elle seule.
+  assert.deepEqual(elements("Gestes de cuisine", "Taloche", 1), ["Dégâts"]);
+  assert.deepEqual(elements("Gestes de cuisine", "Pas chassé", 1), []);
+  // Sans bloc, ou par un autre bloc : rien ne lui est transmis.
+  assert.deepEqual([elements(null, "Taloche", 1), elements("Marmiton", "Taloche", 1)], [[], []]);
+  // Les éléments propres, dans l'ordre écrit ; un élément à valeur se dit par son nom seul.
+  assert.deepEqual(elements("Saucier", "Solo du chef", 1), ["Style de combat", "Passif"]);
+  assert.deepEqual(elements(null, "Jet de sel", 0), ["Distance"]);
+  // Ceux de la variante jouée : Fournaise n'a de portée qu'à partir de la puissance 2 ; sans variante à cette puissance, aucun.
+  assert.deepEqual([1, 2, 3, 0].map((puissance) => elements("Grand Four", "Fournaise", puissance)), [[], ["Portée"], ["Portée"], []]);
+  // Un élément du bloc sans cible vaut pour le bloc entier, pas pour la capacité : Lourde n'est pas un élément de Frappe.
+  assert.deepEqual(INDEX.bloc("Rouleau de fonte").elements.map((e) => [e.nom, e.cible ?? null]), [["Arme", null], ["Lourde", null]]);
+  assert.deepEqual(elements("Rouleau de fonte", "Frappe", 0), []);
+  // La cible se résout comme un renvoi, à la casse près ; un doublon à la casse près ne se répète pas ; l'ordre est celui de la rencontre.
+  const fabrique = {
+    nom: "Bloc fabriqué",
+    elements: [
+      { nom: "Tranchant", cible: "vif" },
+      { nom: "PASSIF", cible: "Vif" },
+      { nom: "Collant", cible: "Nez fin" },
+      { nom: "Lourde" },
+      { brut: "?" },
+      { nom: "Tranchant", cible: "Vif" },
+      { nom: "Épais", cible: "Capacité inconnue" },
+    ],
+  };
+  assert.deepEqual(elementsDe(INDEX, fabrique, INDEX.capacite("Vif"), 1), ["Passif", "Tranchant"]);
+  assert.deepEqual(elementsDe(INDEX, fabrique, INDEX.capacite("Nez fin"), 0), ["Passif", "Collant"]);
+  // Un élément propre illisible n'a pas de nom : il n'y est pas.
+  const fabriquee = { nom: "Capacité fabriquée", variantes: [{ puissance: "0", elements: [{ brut: "Tranchant[3" }, { nom: "Passif" }, { nom: "passif", valeur: "2" }] }] };
+  assert.deepEqual(elementsDe(INDEX, null, fabriquee, 0), ["Passif"]);
+});
+
+test("combat — les dégâts que dit une description à une puissance : son crochet qui invoque {degats}, évalué ; null sans un tel crochet ou sans valeur", () => {
+  const base = INDEX.bloc("Gestes de cuisine");
+  const taloche = INDEX.capacite("Taloche");
+  // Force 4 : le paramètre {force}*0,5/{force}/{force}*2 vaut 2/4/8, et la description dit [N*{degats}].
+  const aubepine = personnageEssai();
+  assert.deepEqual([1, 2, 3].map((puissance) => degatsDecrits(INDEX, aubepine, base, taloche, puissance)), [[2, 4, 8], [4, 8, 16], [6, 12, 24]]);
+  // La fiche à mains nues dit les mêmes, à son niveau : c'est le même calcul.
+  const forte = (p) => {
+    p.equipement[0].place = "sac";
+    p.caracteristiques.force = 5;
+    p.niveaux = [{ capacite: "Taloche", niveau: 2 }];
+  };
+  assert.deepEqual(degatsDecrits(INDEX, personnageEssai(forte), base, taloche, 2), [4, 10, 20]);
+  assert.deepEqual(fiche(forte).attaque.degats, [4, 10, 20]);
+  // Sans crochet qui invoque {degats} : Frappe les dit entre accolades, Pas chassé a un crochet sans eux.
+  assert.equal(degatsDecrits(INDEX, aubepine, INDEX.bloc("Couteau d'office"), INDEX.capacite("Frappe"), 0), null);
+  assert.equal(degatsDecrits(INDEX, aubepine, base, INDEX.capacite("Pas chassé"), 2), null);
+  // Sans le bloc qui donne le paramètre, sans caractéristiques, ou sans variante à cette puissance : rien ne se calcule.
+  assert.equal(degatsDecrits(INDEX, aubepine, null, taloche, 1), null);
+  assert.equal(degatsDecrits(INDEX, { caracteristiques: null }, base, taloche, 1), null);
+  assert.equal(degatsDecrits(INDEX, aubepine, base, INDEX.capacite("Fournaise"), 0), null);
+  // Ce qui ne se calcule pas s'avertit, comme dans la fiche ; ce qui se calcule, non.
+  const avertis = [];
+  const avertir = (genre, texte) => avertis.push([genre, texte]);
+  degatsDecrits(INDEX, aubepine, base, taloche, 1, avertir);
+  assert.deepEqual(avertis, []);
+  degatsDecrits(INDEX, { caracteristiques: null }, base, taloche, 1, avertir);
+  assert.deepEqual(avertis.map(([genre, texte]) => [genre, /^« Gestes de cuisine », paramètre .*gardé tel qu'écrit$/.test(texte)]), [["expression", true]]);
+  // De plusieurs crochets, le premier qui invoque {degats} : ni celui d'avant, ni celui d'après.
+  const bavarde = { nom: "Taloche", variantes: [{ puissance: "N", cout_souffle: "", cout_lien: "", elements: [], description: "[N] fois : [N*{degats}], puis [{degats}]." }] };
+  assert.deepEqual(degatsDecrits(INDEX, aubepine, base, bavarde, 2), [4, 8, 16]);
 });

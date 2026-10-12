@@ -48,7 +48,7 @@ test("routes — aller-retour des noms difficiles", () => {
   assert.deepEqual(lireRoute(adresseFiche("adversaires", "Dragon 🐉")), { ecran: "fiche", categorie: "adversaires", nom: "Dragon 🐉" });
 });
 
-test("routes — accueil, listes, anomalies, auteur, rencontre, et les adresses abîmées", () => {
+test("routes — accueil, listes, anomalies, auteur, rencontre, combat, et les adresses abîmées", () => {
   for (const adresse of ["", "#", "#/", null]) assert.deepEqual(lireRoute(adresse), { ecran: "accueil" });
   for (const categorie of Object.keys(CATEGORIES)) assert.deepEqual(lireRoute(adresseListe(categorie)), { ecran: "liste", categorie });
   assert.deepEqual([lireRoute("#/adversaires"), lireRoute("#/types")], [{ ecran: "liste", categorie: "adversaires" }, { ecran: "liste", categorie: "types" }]);
@@ -61,10 +61,14 @@ test("routes — accueil, listes, anomalies, auteur, rencontre, et les adresses 
   assert.equal(adresseAnomalies(), "#/anomalies");
   assert.deepEqual(lireRoute("#/auteur"), { ecran: "auteur" });
   assert.deepEqual(lireRoute("#/rencontre"), { ecran: "rencontre" });
+  // Le simulateur de combat (§ 17) : une seule adresse, qui ne porte rien du combat en cours.
+  assert.deepEqual(lireRoute("#/combat"), { ecran: "combat" });
+  assert.deepEqual(lireRoute("#combat"), { ecran: "combat" }, "sans la barre, comme les autres écrans");
+  const combats = ["#/combat/", "#/combat/2", "#/combat/demo", "#/combat/Chef%20de%20partie", "#/combats", "#/Combat", "#/combat%20", "#/ combat", "#/rencontre/combat", "#/combat?demo=1"];
   // Les noms d'Object.prototype ne sont ni des listes ni des fiches.
   const prototype = ["#/constructor", "#/__proto__", "#/__proto__/x", "#/toString", "#/hasOwnProperty", "#/valueOf/abc", "#/anomalies/constructor/3"];
   const adversaires = ["#/adversaire", "#/adversaire/", "#/adversaire/%E0%A4%A", "#/adversaires/Chef", "#/type/", "#/types/Commis", "#/rencontre/2", "#/rencontres", "#/anomalies/adversaires/3", "#/anomalies/Adversaires/-1"];
-  for (const abimee of ["#/bloc/%E0%A4%A", "#/bloc/", "#/sorts", "#/anomalies/Blocs/x", "#/anomalies/Inconnue/3", "#/auteur/cle", ...prototype, ...adversaires]) {
+  for (const abimee of ["#/bloc/%E0%A4%A", "#/bloc/", "#/sorts", "#/anomalies/Blocs/x", "#/anomalies/Inconnue/3", "#/auteur/cle", ...prototype, ...adversaires, ...combats]) {
     assert.equal(lireRoute(abimee).ecran, "introuvable", abimee);
   }
 });
@@ -77,6 +81,9 @@ test("routes — chaque écran marque son lien de la navigation ; les types marq
   );
   assert.deepEqual(["#/adversaires", "#/adversaire/Chef%20de%20partie", "#/types", "#/type/Commis"].map(marque), Array(4).fill("adversaires"));
   assert.equal(marque("#/rencontre"), "rencontre");
+  // Le combat a sa rubrique à lui (§ 17) : ni celle de la rencontre, ni celle des adversaires.
+  assert.equal(marque("#/combat"), "combat");
+  assert.equal(marque("#/combat/2"), "introuvable", "une adresse abîmée ne marque aucun lien");
   const id = "demo-aubepine-0000000001";
   assert.deepEqual(["#/personnages", `#/personnage/${id}`, `#/personnage/${id}/etape/3`, "#/recevoir/abc"].map(marque), Array(4).fill("personnages"));
   // La navigation de la page porte un lien par rubrique, et rien que des routes.
@@ -88,11 +95,15 @@ test("routes — chaque écran marque son lien de la navigation ; les types marq
     ["#/elements", "elements", "Éléments"],
     ["#/adversaires", "adversaires", "Adversaires"],
     ["#/rencontre", "rencontre", "Rencontre"],
+    ["#/combat", "combat", "Combat"],
     ["#/personnages", "personnages", "Personnages"],
     ["#/anomalies", "anomalies", "Anomalies"],
     ["#/auteur", "auteur", "Auteur"],
   ]);
   for (const [href, route] of liens) assert.equal(marque(href), route, href);
+  // Le motif ne lit qu'une forme : un lien écrit autrement manquerait à la liste, et se verrait.
+  assert.equal(page.match(/<a\b[^>]*data-route=/g).length, liens.length, "un lien de la navigation n'a pas la forme attendue");
+  assert.equal(liens.findIndex(([, route]) => route === "combat"), liens.findIndex(([, route]) => route === "rencontre") + 1, "« Combat » suit « Rencontre »");
 });
 
 test("recherche — sans casse ni accents, sur les noms et les descriptions", () => {

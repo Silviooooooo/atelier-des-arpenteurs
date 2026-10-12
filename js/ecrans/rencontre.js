@@ -66,6 +66,21 @@ export function ajouter(banque, nom) {
   return true;
 }
 
+/**
+ * La rencontre préparée, pour qui veut la poser ailleurs (le simulateur de
+ * combat, § 17) : [{ nom, nombre }], dans l'ordre de la liste, celui où ses
+ * cartes se suivent. Elle lit sans rien changer : interrogée pour une autre
+ * banque que celle de la rencontre, elle rend une liste vide et laisse la
+ * composition telle quelle. Un nom ajouté sans être dans la banque n'y
+ * figure pas, comme il n'a pas de carte.
+ */
+export function rencontrePreparee(banque) {
+  if (banqueDeLaRencontre !== banque) return [];
+  return listeDe(banque, "adversaires")
+    .filter(({ nom }) => composition.has(nom))
+    .map(({ nom }) => ({ nom, nombre: composition.get(nom) }));
+}
+
 function retirer(banque, nom) {
   const nombre = exemplaires(banque, nom);
   if (nombre === 0) return false;

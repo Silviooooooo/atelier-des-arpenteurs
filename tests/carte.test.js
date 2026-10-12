@@ -365,6 +365,9 @@ test("cartes — les cartes d'une rencontre, dans l'ordre, numérotées ; la lar
 const sansCommentaires = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 const CSS = sansCommentaires(lire("css/adversaire.css"));
 const JETONS = lire("css/jetons.css");
+// Les feuilles de l'interface et de la fiche, dont celle du simulateur de
+// combat (§ 17) : la carte ne leur prête ni ses classes, ni sa police.
+const AUTRES_FEUILLES = ["css/ecran.css", "css/personnage.css", "css/fiche.css", "css/combat.css"];
 
 // Les règles d'une feuille : { selecteur, corps, cadre }, où cadre est la
 // règle @media qui l'enveloppe, ou "". Une règle @font-face ou @page garde
@@ -434,10 +437,17 @@ test("adversaire.css — chaque règle commence par la carte ou par son conteneu
   // La seule règle qui sort de la carte : le fond de la page, à l'impression.
   assert.deepEqual(hors, [["@media print", "html:has(.cartes-adversaires)"], ["@media print", "body:has(.cartes-adversaires)"]]);
   const feuille = classesDe(lire("css/adversaire.css"));
-  for (const autre of ["css/ecran.css", "css/personnage.css", "css/fiche.css"]) {
+  for (const autre of AUTRES_FEUILLES) {
     const prises = classesDe(lire(autre));
+    assert.ok(prises.size > 0, `${autre} : aucune classe lue`);
     assert.deepEqual([...feuille].filter((classe) => prises.has(classe)), [], autre);
   }
+  // Le simulateur de combat (§ 17) montre des cartes dans son panneau « Fiche complète » : sa feuille ne les
+  // habille pas pour autant. Il appelle « plateau » sa propre carte, et aucune de ses classes ne porte « carte ».
+  assert.deepEqual([...classesDe(lire("css/combat.css"))].filter((classe) => /carte/.test(classe)), []);
+  // Le contrôle refuse : une feuille qui reprendrait une classe de la carte, sous un autre conteneur.
+  const intruse = classesDe(".combat-panneau .carte-nom { margin: 0; }\n.combat .rangee-armure,\n.combat-fiche { margin: 0; }");
+  assert.deepEqual([...feuille].filter((classe) => intruse.has(classe)).sort(), ["carte-nom", "rangee-armure"]);
   // Chaque classe que le code pose a sa règle, et chaque règle sert : les
   // adversaires de la démonstration, et un adversaire où tout figure.
   const complet = resoluEssai((r) => {
@@ -494,7 +504,9 @@ test("adversaire.css — EB Garamond : deux @font-face, la police variable et so
   // La police n'est nommée que par son jeton, sous la carte : elle ne se charge que pour elle.
   const familles = STYLES.flatMap((r) => (declarations(r.corps)["font-family"] ? [[r.selecteur, declarations(r.corps)["font-family"]]] : []));
   assert.deepEqual(familles, [[".carte-adversaire", "var(--police-carte)"]]);
-  for (const autre of ["css/ecran.css", "css/personnage.css", "css/fiche.css"]) assert.doesNotMatch(lire(autre), /police-carte|EB Garamond/, autre);
+  const empruntee = /police-carte|EB Garamond/;
+  for (const autre of AUTRES_FEUILLES) assert.doesNotMatch(lire(autre), empruntee, autre);
+  assert.match(".combat-panneau { font-family: var(--police-carte); }", empruntee, "l'emprunt par le jeton se verrait");
 });
 
 test("adversaire.css — l'impression : une page nommée A4 à marges, 190 mm, 4 mm entre les cartes, une carte jamais coupée ni masquée, les couleurs gardées, le zoom remis à 1", () => {
@@ -535,4 +547,33 @@ test("index.html — la feuille de la carte est liée, après celle de la fiche"
   assert.ok(liens.includes("css/adversaire.css"), "css/adversaire.css n'est pas liée");
   assert.ok(liens.indexOf("css/adversaire.css") > liens.indexOf("css/fiche.css"), "après css/fiche.css");
   assert.ok(liens.indexOf("css/jetons.css") === 0, "les jetons d'abord");
+});
+
+// Les feuilles que lie une page, dans l'ordre, et ce qui manque à cet ordre
+// pour le simulateur de combat (§ 17).
+function defautsDesFeuilles(page) {
+  const liens = [...page.matchAll(/<link rel="stylesheet" href="([^"]+)">/g)].map(([, href]) => href);
+  const defauts = [];
+  if (liens.filter((href) => href === "css/combat.css").length !== 1) defauts.push("css/combat.css n'est pas liée, une fois");
+  // Après l'interface, dont elle reprend les boutons et les champs ; après la fiche et la carte, que son panneau montre.
+  else if (liens.indexOf("css/combat.css") !== liens.length - 1) defauts.push("css/combat.css n'est pas la dernière");
+  if (liens.indexOf("css/jetons.css") !== 0) defauts.push("les jetons ne viennent pas d'abord");
+  if ((page.match(/<link\b[^>]*stylesheet/g) ?? []).length !== liens.length) defauts.push("une feuille est liée sous une autre forme");
+  return { liens, defauts };
+}
+
+test("index.html — la feuille du combat est liée, la dernière ; l'ordre des autres ne change pas", () => {
+  const page = lire("index.html");
+  const { liens, defauts } = defautsDesFeuilles(page);
+  assert.deepEqual(defauts, []);
+  assert.deepEqual(liens, ["css/jetons.css", "css/ecran.css", "css/personnage.css", "css/fiche.css", "css/adversaire.css", "css/combat.css"]);
+  const lien = '<link rel="stylesheet" href="css/combat.css">';
+  const fautive = (texte, motif) => {
+    assert.notEqual(texte, page);
+    assert.match(defautsDesFeuilles(texte).defauts.join("\n"), motif);
+  };
+  fautive(page.replace(/ *<link rel="stylesheet" href="css\/combat\.css">\r?\n/, ""), /n'est pas liée/);
+  fautive(page.replace(lien, `${lien}\n    ${lien}`), /n'est pas liée, une fois/);
+  fautive(page.replace(lien, "").replace('<link rel="stylesheet" href="css/jetons.css">', `${lien}\n    <link rel="stylesheet" href="css/jetons.css">`), /n'est pas la dernière\nles jetons ne viennent pas d'abord/);
+  fautive(page.replace(lien, '<link href="css/combat.css" rel="stylesheet">'), /n'est pas liée, une fois\nune feuille est liée sous une autre forme/);
 });

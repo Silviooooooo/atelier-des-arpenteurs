@@ -8,6 +8,12 @@
 // Le calcul est une fonction pure : la même banque et le même personnage
 // donnent la même fiche. Il ne lève pas d'exception sur une donnée
 // inattendue : il la signale dans les avertissements de la fiche.
+//
+// Le simulateur de combat (§ 17, lot 4) y prend trois choses de plus, sans
+// que rien de la fiche d'avant ne change : les sources de chaque capacité
+// (quel bloc la donne, et à quel rang de l'équipement, puisque seuls l'arme
+// tenue et ce qui est porté comptent au combat), ses éléments à une
+// puissance (elementsDe) et les dégâts que dit sa description (degatsDecrits).
 
 import { cle, repertoire } from "../banque/noms.js";
 import { typeDe } from "../banque/types.js";
@@ -308,6 +314,45 @@ export function decrire(texte, variables, caracteristiques, niveau) {
   return { texte: sortie, avertissements };
 }
 
+/**
+ * Les éléments d'une capacité à une puissance, par leur nom : ceux, propres,
+ * de sa variante à cette puissance, puis ceux que le bloc lui transmet en la
+ * visant (« Dégâts(Taloche) »), sans doublon, dans l'ordre de rencontre. Un
+ * élément sans cible vaut pour le bloc entier, pas pour la capacité : il n'y
+ * est pas. bloc peut être null (§ 17).
+ */
+export function elementsDe(index, bloc, capacite, puissance) {
+  const noms = [];
+  const vus = new Set();
+  const garder = (nom) => {
+    if (typeof nom !== "string" || vus.has(cle(nom))) return;
+    vus.add(cle(nom));
+    noms.push(nom);
+  };
+  for (const e of varianteA(capacite, puissance)?.elements ?? []) garder(e.nom);
+  // La cible se résout comme celle d'un paramètre (parametresPour).
+  for (const e of bloc?.elements ?? []) if (e.nom && e.cible && (index.capacite(e.cible)?.nom ?? e.cible) === capacite.nom) garder(e.nom);
+  return noms;
+}
+
+/**
+ * Les dégâts que dit la description d'une capacité à une puissance : son
+ * premier crochet qui invoque {degats} (« [N*{degats}] » dans le classeur),
+ * évalué avec les paramètres de son bloc ; un entier par rang, ou null sans
+ * un tel crochet, ou s'il ne se calcule pas. Le paramètre degats, lui, ne
+ * dépend pas de la puissance : c'est ici que N entre dans les dégâts (§ 17).
+ */
+export function degatsDecrits(index, personnage, bloc, capacite, puissance, avertir = () => {}) {
+  const description = varianteA(capacite, puissance)?.description ?? "";
+  const crochet = [...String(description).matchAll(/\[([^[\]]*)\]/g)]
+    .map(([, expression]) => expression)
+    .find((expression) => [...expression.matchAll(/\{([^{}]*)\}/g)].some(([, n]) => cle(n) === PARAMETRES.degats));
+  if (!crochet) return null;
+  const variables = contexte(index, personnage, bloc, null, capacite, puissance, avertir);
+  const valeurs = valeursCrochet(crochet, variables, personnage.caracteristiques, puissance);
+  return Array.isArray(valeurs) ? valeurs : null;
+}
+
 // Les capacités qu'un bloc donne : les simples, et les options choisies dans
 // ses groupes. ( a | b ) : exactement une ; [ a | b ] : zéro, une ou
 // plusieurs (lisez_moi, « Syntaxe »).
@@ -459,6 +504,10 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
       groupe,
       role,
       origines: entree.sources.map((s) => s.nom),
+      // Les mêmes, avec ce qu'il faut pour savoir laquelle compte au combat
+      // (§ 17) : rang est l'indice de l'objet dans l'équipement, null pour
+      // un bloc qui n'en vient pas. Deux objets de même nom se distinguent ainsi.
+      sources: entree.sources.map((s) => ({ role: s.role, nom: s.nom, rang: s.rang ?? null })),
       niveau: entree.capacite ? entree.niveau : null,
       niveauCreation: entree.evolution?.niveauCreation ?? null,
       niveauMax: entree.evolution?.niveauMax ?? null,
@@ -611,15 +660,8 @@ function mainsNues(index, personnage, capacites, avertir) {
     let degats = lu.valeurs ?? null;
     const possedee = capacite ? capacites.find((c) => !c.aVenir && c.nom === capacite.nom) : null;
     if (degats && possedee) {
-      const description = varianteA(capacite, possedee.niveau)?.description ?? "";
-      const crochet = [...description.matchAll(/\[([^[\]]*)\]/g)]
-        .map(([, expression]) => expression)
-        .find((expression) => [...expression.matchAll(/\{([^{}]*)\}/g)].some(([, n]) => cle(n) === PARAMETRES.degats));
-      if (crochet) {
-        const variables = contexte(index, personnage, bloc, null, capacite, possedee.niveau, avertir);
-        const valeurs = valeursCrochet(crochet, variables, personnage.caracteristiques, possedee.niveau);
-        if (Array.isArray(valeurs) && valeurs.length === degats.length) degats = valeurs;
-      }
+      const decrits = degatsDecrits(index, personnage, bloc, capacite, possedee.niveau, avertir);
+      if (decrits?.length === degats.length) degats = decrits;
     }
     return { mainsNues: true, nom, de: null, degats, degatsBruts: parametre.valeur, portee: "", qualite: { applicable: false, texte: "" } };
   }

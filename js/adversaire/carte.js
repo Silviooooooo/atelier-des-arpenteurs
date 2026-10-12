@@ -45,6 +45,17 @@ export function abregerZone(nom, faces) {
 /** Le multiplicateur d'un adversaire, tel qu'il se lit : « ×2 », « ×1,4 ». */
 export const ecrireMultiplicateur = (multiplicateur) => `×${multiplicateur}`;
 
+/**
+ * Les types d'un adversaire, tels que la carte les écrit : « Commis,
+ * Rôtisseur ×1,4 » ; rien pour un adversaire sans type. La fiche vivante du
+ * simulateur de combat les écrit de même (§ 17) : c'est pourquoi la phrase
+ * se fabrique ici, une seule fois.
+ */
+export function ecrireTypes(resolu) {
+  if (!resolu.types.length) return "";
+  return `${resolu.types.map((type) => type.nom).join(", ")}${resolu.multiplicateur ? ` ${ecrireMultiplicateur(resolu.multiplicateur)}` : ""}`;
+}
+
 /** Le coût d'une capacité sur la carte : « 5 souffle », « 1 souffle · 1 lien » ; rien quand elle ne coûte rien. */
 export function ecrireCout(cout) {
   const ecrit = coutEcrit(cout);
@@ -132,9 +143,7 @@ function bande(resolu) {
 // Un segment sans rien s'omet, avec son libellé ; null quand tous manquent.
 function resume(resolu) {
   const segments = [];
-  if (resolu.types.length) {
-    segments.push(["Types", `${resolu.types.map((type) => type.nom).join(", ")}${resolu.multiplicateur ? ` ${ecrireMultiplicateur(resolu.multiplicateur)}` : ""}`]);
-  }
+  if (resolu.types.length) segments.push(["Types", ecrireTypes(resolu)]);
   if (resolu.maitrises.length) {
     segments.push(["Maîtrises", entre(resolu.maitrises.map((maitrise) => [maitrise.nom, " ", el("span", { classe: "carte-rang" }, `[${maitrise.rang}]`)]), () => ", ")]);
   }

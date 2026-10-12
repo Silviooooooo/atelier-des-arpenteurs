@@ -1,5 +1,5 @@
 // Le démarrage et les routes de la page (SPECIFICATION.md, § 3.2, § 8.3,
-// § 9, § 15 et § 16.6).
+// § 9, § 15, § 16.6 et § 17).
 //
 // Lit le mode (démonstration avec ?demo=1), ouvre le coffre, télécharge la
 // banque et l'ouvre avec la clé gardée, sinon demande le mot de passe ; puis
@@ -8,14 +8,17 @@
 // existe. Les écrans des personnages ont besoin de la banque : un lien reçu
 // (#/recevoir/…) attend donc le mot de passe, puis s'ouvre. Les adversaires
 // et la rencontre se lisent avec ce même mot de passe de table : il n'y a
-// pas de mot de passe du meneur (§ 16). Une erreur inattendue s'affiche,
-// jamais une page blanche.
+// pas de mot de passe du meneur (§ 16). Le simulateur de combat (§ 17)
+// attend la banque comme eux, et ouvre lui-même son enregistrement, à sa
+// première visite : le démarrage n'attend rien de plus. Une erreur
+// inattendue s'affiche, jamais une page blanche.
 
 import { demanderStockageDurable, modeDe, ouvrirAvecCoffre, ouvrirParMotDePasse, telecharger } from "./banque/chargement.js";
 import { indexer } from "./banque/consultation.js";
 import { dateLisible } from "./banque/dates.js";
 import * as accueil from "./ecrans/accueil.js";
 import * as anomalies from "./ecrans/anomalies.js";
+import * as combat from "./ecrans/combat.js";
 import * as creation from "./ecrans/creation.js";
 import { el, titre } from "./ecrans/dom.js";
 import * as espaceAuteur from "./ecrans/espace_auteur.js";
@@ -114,6 +117,9 @@ const contexte = {
     await etat.coffre.oublierCle(etat.mode);
     // L'espace auteur ne garde aucune copie : son circuit en cours s'annule.
     espaceAuteur.oublier();
+    // Le combat en mémoire porte des valeurs de la banque : il part avec la
+    // clé. Son enregistrement chiffré reste, illisible sans elle (§ 17).
+    combat.oublier();
     Object.assign(etat, { banque: null, index: null, secret: null, depot: null, nouvelles: null, motDePasse: etat.chargement?.enveloppe ? "requis" : null });
     afficher();
   },
@@ -173,6 +179,7 @@ function ecran(route) {
   if (route.ecran === "creation") return creation.afficher(contexte, route);
   if (route.ecran === "recevoir") return reception.afficher(contexte, route);
   if (route.ecran === "rencontre") return rencontre.afficher(contexte);
+  if (route.ecran === "combat") return combat.afficher(contexte);
   return el("section", {}, titre("Page introuvable"), el("p", {}, "Cette adresse ne mène à aucun écran de l'Atelier."), el("p", { classe: "lien-retour" }, el("a", { href: "#/" }, "Retour à l'accueil")));
 }
 

@@ -13,6 +13,16 @@
 // coût et la description d'une capacité, la qualité, les fractions exactes,
 // vient de leur code, pas d'une copie.
 //
+// Une règle fait exception depuis le simulateur de combat (§ 17, lot 4) : le
+// désavantage des maîtrises vaut au combat pour un personnage comme pour un
+// adversaire. Elle se lit donc ici en trois fonctions exportées
+// (rangsDeMaitrise, horsMaitrise, positionDans), que la photographie d'un
+// personnage emploie comme la résolution, pour que les deux ne divergent
+// jamais. Le simulateur demande encore à la résolution ce qu'elle seule sait
+// calculer, la qualité exacte en main : les armes de l'adversaire et, par
+// capacité, ses éléments et ses valeurs en nombres. Ce sont des champs de
+// plus ; aucun de ceux d'avant ne change.
+//
 // La résolution est une fonction pure, et ne lève pas d'exception sur une
 // donnée inattendue : elle la signale dans ses constats. Un constat porte le
 // code du § 6.3 quand il en a un, et la ligne de la feuille où il se corrige.
@@ -20,7 +30,8 @@
 import { cle, repertoire } from "../banque/noms.js";
 import { parametresInvoques } from "../banque/notation.js";
 import { typeDe } from "../banque/types.js";
-import { contexte, coutA, decrire, evolution, indexerCreation, varianteA } from "../personnage/calcul.js";
+import { PARAMETRE_LOC } from "../combat/regles.js";
+import { contexte, coutA, decrire, elementsDe, evolution, indexerCreation, typeObjet, valeursParametre, varianteA } from "../personnage/calcul.js";
 import { entierInferieur, evaluer, fraction, lireNombre } from "../personnage/expressions.js";
 import { CORPS, ELEMENTS, PARAMETRES, RESISTANCE_PAR_ZONE, TYPES_OBJET, ZONES } from "../personnage/regles.js";
 import { citer, lireListe, lireLocalisation, lireNombreCellule, lireTypes, texteDe } from "./notation.js";
@@ -42,6 +53,15 @@ export const PACKS = { lourde: "Armure lourde", agile: "Armure agile", precise: 
 // Agile ou Précise dont son nom porte le mot.
 const MAITRISES_PAR_DEFAUT = ["Maîtrise du combat lourd", "Maîtrise du combat agile", "Maîtrise du combat précis"];
 const MOT_DE_MAITRISE = { lourde: "lourd", agile: "agile", precise: "precis" };
+
+// Le simulateur de combat (§ 17) lit la portée et le nombre de dés de
+// localisation en nombres : une portée absente, incalculable ou négative
+// vaut 0 (la même case), un nombre de dés absent, incalculable ou inférieur
+// à 1 vaut 1. Le paramètre loc_multiple n'a pas de nom dans les règles du
+// créateur : il se prend dans celles du combat, écrit une seule fois.
+const CLE_LOC = cle(PARAMETRE_LOC);
+const porteeLue = (valeurs) => Math.max(0, valeurs?.[0] ?? 0);
+const locMultipleLu = (valeurs) => Math.max(1, valeurs?.[0] ?? 1);
 
 const fois = (a, b) => fraction(a.n * b.n, a.d * b.d);
 const plus = (a, b) => fraction(a.n * b.d + b.n * a.d, a.d * b.d);
@@ -96,6 +116,46 @@ export function maitriseDe(capacite) {
   return { type: types.length === 1 ? types[0] : null };
 }
 
+/**
+ * Le rang de maîtrise de chaque poids d'objet : Map(lourde | agile | precise
+ * → rang), le plus haut de ceux qu'on possède. possedees : des { capacite,
+ * rang }, capacite étant celle de la banque, ou null si elle en est absente.
+ * Une maîtrise dont le nom ne dit pas son poids ne compte pour aucun.
+ */
+export function rangsDeMaitrise(possedees) {
+  const rangs = new Map();
+  for (const { capacite, rang } of possedees) {
+    const type = capacite ? maitriseDe(capacite)?.type : null;
+    if (type) rangs.set(type, Math.max(rangs.get(type) ?? 0, Number.isInteger(rang) ? rang : 0));
+  }
+  return rangs;
+}
+
+/**
+ * Vrai quand une capacité, à cette position de ce bloc, se joue avec un
+ * désavantage (éléments Lourde, Agile, Précise du classeur) : le bloc porte
+ * un poids dont la maîtrise n'atteint pas la position. Un bloc à deux poids
+ * demande les deux maîtrises ; un bloc sans poids ne gêne jamais ; une
+ * maîtrise de rang 0 ne lève rien, la première position étant 1.
+ */
+export function horsMaitrise(bloc, position, rangs) {
+  if (!Number.isInteger(position)) return false;
+  return Object.keys(TYPES_OBJET).some((code) => porte(bloc, TYPES_OBJET[code].element) && (rangs.get(code) ?? 0) < position);
+}
+
+/**
+ * La position d'une capacité dans un bloc : l'indice, plus un, de la première
+ * entrée de sa liste que donne(entree) accepte, ou null. Toute entrée compte
+ * dans l'indice, qu'elle donne ou non une capacité : un groupe au choix, une
+ * entrée illisible. Qui donne quoi dépend de qui porte le bloc (un adversaire
+ * ne choisit rien, un personnage a ses options choisies) : c'est donne qui
+ * le dit.
+ */
+export function positionDans(bloc, donne) {
+  const i = Array.isArray(bloc?.capacites) ? bloc.capacites.findIndex((entree) => donne(entree)) : -1;
+  return i === -1 ? null : i + 1;
+}
+
 // Les valeurs d'armure d'un bloc, en fractions : { ecrit, valeurs } ou
 // { ecrit, erreur } ; null sans paramètre armure. La barre sépare les
 // valeurs : une seule, six, ou autant que l'adversaire a de zones.
@@ -112,10 +172,12 @@ function armureDuBloc(bloc) {
 }
 
 /**
- * Un index des adversaires d'une banque : { types, adversaires, type(nom),
- * adversaire(nom), analyser(entree, genre), resoudre(adversaire),
- * utilisateurs(nomType) }. index : celui du créateur (noms résolus comme au
- * contrôle, § 6.3), refait si on ne le donne pas.
+ * Un index des adversaires d'une banque : { banque, index, types,
+ * adversaires, type(nom), analyser(entree, genre), resoudre(adversaire),
+ * utilisateurs(nomType) }. types et adversaires vont du nom exact à la
+ * ligne de la feuille, la première de ce nom : la ligne d'un adversaire se
+ * prend par adversaires.get(nom). index : celui du créateur (noms résolus
+ * comme au contrôle, § 6.3), refait si on ne le donne pas.
  */
 export function indexerAdversaires(banque, index = indexerCreation(banque)) {
   const types = premierParNom(banque.types_adversaires);
@@ -137,6 +199,39 @@ export function indexerAdversaires(banque, index = indexerCreation(banque)) {
   }
 
   const analyses = new Map();
+
+  // L'arme qu'est un bloc à une qualité, pour le simulateur de combat (§ 17) :
+  // { nom, poids, degats, portee, locMultiple }, lus dans ce que le bloc
+  // transmet sans cible ; null pour un bloc qui n'est ni Arme ni Arme
+  // naturelle. Lue une fois par bloc et par qualité : une cellule forgée de
+  // cent mille objets ne refait pas cent mille fois le même calcul.
+  const armesLues = new Map();
+  function armeDe(bloc, qualite) {
+    if (!armesLues.has(bloc)) {
+      const type = typeDe(bloc);
+      armesLues.set(bloc, type === "arme" || type === "arme_naturelle" ? new Map() : null);
+    }
+    const parQualite = armesLues.get(bloc);
+    if (!parQualite) return null;
+    const k = `${qualite.n}/${qualite.d}`;
+    if (!parQualite.has(k)) {
+      const transmis = (nom) => {
+        const parametre = bloc.parametres.find((p) => p.nom && !p.cible && cle(p.nom) === nom);
+        if (!parametre || typeof parametre.valeur !== "string") return null;
+        return valeursParametre(parametre.nom, parametre.valeur, { qualite: { q: qualite } }).valeurs ?? null;
+      };
+      parQualite.set(k, {
+        nom: bloc.nom,
+        poids: typeObjet(bloc).type ?? null,
+        degats: transmis(PARAMETRES.degats),
+        portee: porteeLue(transmis(PARAMETRES.portee)),
+        locMultiple: locMultipleLu(transmis(CLE_LOC)),
+      });
+    }
+    // Une copie par exemplaire : deux armes d'un adversaire ne partagent rien.
+    const lue = parQualite.get(k);
+    return { ...lue, degats: lue.degats ? [...lue.degats] : null };
+  }
 
   /**
    * Lit les cellules d'une ligne, type ou adversaire, et résout ses renvois.
@@ -474,7 +569,10 @@ export function indexerAdversaires(banque, index = indexerCreation(banque)) {
         const nom = seule ? donnee.options[0] : donnee.nom;
         const entree = entreeDe(nom, index.capacite(nom));
         // Les pièces viennent l'une après l'autre : une source de la même
-        // pièce ne peut être que la dernière ajoutée.
+        // pièce ne peut être que la dernière ajoutée. Seule la première
+        // entrée qui donne la capacité y entre : i + 1 est donc ce que rend
+        // positionDans() pour elle, sans reparcourir le bloc à chaque entrée
+        // (un bloc forgé de cent mille capacités coûterait leur carré).
         if (entree.sources.at(-1)?.piece !== piece) entree.sources.push({ piece, position: i + 1 });
       });
     }
@@ -490,9 +588,21 @@ export function indexerAdversaires(banque, index = indexerCreation(banque)) {
       entree.maitrise = entree.capacite ? maitriseDe(entree.capacite) : null;
     }
     // Le rang de maîtrise de chaque type d'objet, lourde, agile, précise.
-    const rangDeMaitrise = new Map();
-    for (const entree of possedees.values()) {
-      if (entree.maitrise?.type) rangDeMaitrise.set(entree.maitrise.type, Math.max(rangDeMaitrise.get(entree.maitrise.type) ?? 0, entree.rang));
+    const rangDeMaitrise = rangsDeMaitrise(possedees.values());
+
+    // Les armes de l'adversaire, pour le simulateur de combat (§ 17) : les
+    // objets de type Arme ou Arme naturelle, dans l'ordre de l'équipement,
+    // avec ce que leur bloc transmet sans cible. Les dégâts ne se calculent
+    // qu'ici, où la qualité est encore une fraction exacte : celle de
+    // l'équipement rendu est déjà arrondie pour le lecteur. Une arme portée
+    // deux fois y figure deux fois : elle se désigne par son indice.
+    const indiceDArme = new Map();
+    const armesPortees = [];
+    for (const piece of pieces) {
+      const arme = armeDe(piece.bloc, piece.qualite);
+      if (!arme) continue;
+      indiceDArme.set(piece, armesPortees.length);
+      armesPortees.push(arme);
     }
 
     const SANS_CARACTERISTIQUES = { caracteristiques: null };
@@ -501,7 +611,7 @@ export function indexerAdversaires(banque, index = indexerCreation(banque)) {
     for (const entree of possedees.values()) {
       const origines = [...entree.sources.map((s) => ({ objet: s.piece.bloc.nom })), ...entree.citations];
       if (!entree.capacite) {
-        capacites.push({ nom: entree.nom, absente: true, rang: null, armes: [], degats: "", cout: null, desavantage: [], descriptions: [], origines });
+        capacites.push({ nom: entree.nom, absente: true, rang: null, armes: [], degats: "", cout: null, desavantage: [], descriptions: [], origines, elements: [], parArme: [], propres: null });
         continue;
       }
       if (entree.maitrise) {
@@ -524,6 +634,9 @@ export function indexerAdversaires(banque, index = indexerCreation(banque)) {
         return { variables, texte: texte.texte };
       };
       const armes = [];
+      // Les mêmes entrées que armes, une pour une, en nombres : le combat
+      // calcule avec elles, la carte écrit les autres (§ 17).
+      const parArme = [];
       const descriptions = [];
       const desavantage = [];
       // Les dégâts sont donnés par un objet, ou par un élément propre de la
@@ -544,9 +657,18 @@ export function indexerAdversaires(banque, index = indexerCreation(banque)) {
           degatsIllisibles = true;
           signaler("E14", `${sujet} porte « ${citer(piece.bloc.nom)} », dont les dégâts, « ${citer(transmis.brut)} », ne se calculent pas à la qualité ${ecrireQualite(piece.qualite)}.`);
         }
-        const gene = Object.keys(TYPES_OBJET).some((code) => porte(piece.bloc, TYPES_OBJET[code].element) && (rangDeMaitrise.get(code) ?? 0) < position);
+        const gene = horsMaitrise(piece.bloc, position, rangDeMaitrise);
         if (gene) desavantage.push(piece.bloc.nom);
-        if (degats) armes.push({ nom: piece.bloc.nom, degats: degats.join("/"), portee: portee > 0 ? portee : null, desavantage: gene });
+        if (degats) {
+          armes.push({ nom: piece.bloc.nom, degats: degats.join("/"), portee: portee > 0 ? portee : null, desavantage: gene });
+          parArme.push({
+            arme: indiceDArme.get(piece) ?? null,
+            degats,
+            portee: porteeLue(variables.get(PARAMETRES.portee)?.valeurs),
+            locMultiple: locMultipleLu(variables.get(CLE_LOC)?.valeurs),
+            desavantage: gene,
+          });
+        }
         if (!descriptions.some((d) => d.texte === texte)) descriptions.push({ source: piece.bloc.nom, texte });
       }
       if (!entree.sources.length) {
@@ -563,6 +685,16 @@ export function indexerAdversaires(banque, index = indexerCreation(banque)) {
         if (invoqueDegats && !degatsDonnes && (texte.includes(`{${PARAMETRES.degats}}`) || texte.includes(`paramètre ${PARAMETRES.degats} `))) continue;
         signaler(null, `${sujet} : ${texte}.`);
       }
+      // Ses éléments au rang joué : les siens, et ceux que lui transmet
+      // chaque bloc qui la donne.
+      const elements = [];
+      for (const bloc of entree.sources.length ? new Set(entree.sources.map((source) => source.piece.bloc)) : [null]) {
+        for (const nom of elementsDe(index, bloc, entree.capacite, entree.rang)) if (!elements.some((e) => cle(e) === cle(nom))) elements.push(nom);
+      }
+      // Ce qu'elle porte en propre, sans aucun objet : la qualité n'y entre
+      // pas. Lu à part, sans avertir : ce qui ne s'y calcule pas est déjà
+      // dit par la description, et un constat de plus changerait le rapport.
+      const enPropre = contexte(index, SANS_CARACTERISTIQUES, null, null, entree.capacite, entree.rang);
       capacites.push({
         nom: entree.nom,
         absente: false,
@@ -576,6 +708,13 @@ export function indexerAdversaires(banque, index = indexerCreation(banque)) {
         desavantageEntier: desavantage.length > 0 && desavantage.length === entree.sources.length,
         descriptions,
         origines,
+        elements,
+        parArme,
+        propres: {
+          degats: enPropre.get(PARAMETRES.degats)?.valeurs ?? null,
+          portee: porteeLue(enPropre.get(PARAMETRES.portee)?.valeurs),
+          locMultiple: locMultipleLu(enPropre.get(CLE_LOC)?.valeurs),
+        },
       });
     }
 
@@ -607,6 +746,7 @@ export function indexerAdversaires(banque, index = indexerCreation(banque)) {
       attaque: nombre("attaque"),
       defense: nombre("defense"),
       equipement,
+      armes: armesPortees,
       maitrises,
       capacites,
       // D'où vient la dernière liste écrite sans « // », ou null : ce qui

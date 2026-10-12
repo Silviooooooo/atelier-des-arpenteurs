@@ -996,6 +996,67 @@ test("rencontre — rien n'est enregistré ; la composition repart de zéro quan
     }
   }));
 
+// Le simulateur de combat pose la rencontre préparée sur sa carte (§ 17) :
+// il la lit ici, et cette lecture ne doit rien changer ni rien garder.
+test("rencontre — la rencontre préparée se lit dans l'ordre de la liste, sans rien changer ni rien enregistrer ; pour une autre banque, une liste vide, et la composition reste", () =>
+  dansLeDocument(() => {
+    const stockage = simulerStockage();
+    try {
+      const contexte = contexteDe();
+      const { banque } = contexte.etat;
+      // Avant toute composition : rien.
+      assert.deepEqual(rencontre.rencontrePreparee(banque), []);
+      // Composée dans le désordre : l'ordre rendu est celui de la liste, pas celui des ajouts.
+      const ecran = ouvrir(contexte, "#/rencontre");
+      for (const nom of ["Plongeur", "Chef de partie", "Plongeur", "Marmiton de corvée"]) ligneDe(ecran, nom).plus.click();
+      const attendue = [
+        { nom: "Chef de partie", nombre: 1 },
+        { nom: "Marmiton de corvée", nombre: 1 },
+        { nom: "Plongeur", nombre: 2 },
+      ];
+      assert.deepEqual(rencontre.rencontrePreparee(banque), attendue);
+      // C'est l'ordre où ses cartes se suivent à l'écran, un exemplaire après l'autre.
+      assert.deepEqual(cartesDe(ecran), ["Chef de partie", "Marmiton de corvée", "Plongeur n° 1", "Plongeur n° 2"]);
+      assert.deepEqual(
+        rencontre.rencontrePreparee(banque).flatMap(({ nom, nombre }) => Array.from({ length: nombre }, (_v, i) => (nombre > 1 ? `${nom} n° ${i + 1}` : nom))),
+        cartesDe(ecran),
+      );
+
+      // Lire ne change rien : ni les nombres, ni les cartes ; et la liste rendue n'est pas celle du module.
+      const lue = rencontre.rencontrePreparee(banque);
+      lue[0].nombre = 9;
+      lue.pop();
+      assert.deepEqual(rencontre.rencontrePreparee(banque), attendue);
+      assert.deepEqual(["Chef de partie", "Marmiton de corvée", "Plongeur", "Homard furieux"].map((nom) => rencontre.exemplaires(banque, nom)), [1, 1, 2, 0]);
+      assert.deepEqual(textes(ecran, ".valeur-pas"), ["1", "0", "1", "0", "2"]);
+      assert.deepEqual(cartesDe(ecran), ["Chef de partie", "Marmiton de corvée", "Plongeur n° 1", "Plongeur n° 2"]);
+      // Rien n'est lu ni écrit sur l'appareil, aucune base n'est ouverte.
+      assert.deepEqual([stockage.lus, stockage.ecrits, stockage.ouvertures], [[], [], 0]);
+
+      // Un adversaire retiré jusqu'au dernier exemplaire n'y est plus.
+      ligneDe(ecran, "Chef de partie").moins.click();
+      ligneDe(ecran, "Plongeur").moins.click();
+      assert.deepEqual(rencontre.rencontrePreparee(banque), [{ nom: "Marmiton de corvée", nombre: 1 }, { nom: "Plongeur", nombre: 1 }]);
+      // Un nom ajouté sans être dans la banque compte dans la composition, mais n'a pas de carte : il n'est pas rendu.
+      assert.equal(rencontre.ajouter(banque, "Fantôme"), true);
+      assert.equal(rencontre.exemplaires(banque, "Fantôme"), 1);
+      assert.deepEqual(rencontre.rencontrePreparee(banque).map(({ nom }) => nom), ["Marmiton de corvée", "Plongeur"]);
+
+      // Une autre banque : une liste vide, et la rencontre de la première reste entière.
+      const autre = contexteDe().etat.banque;
+      assert.deepEqual(rencontre.rencontrePreparee(autre), []);
+      assert.deepEqual(rencontre.rencontrePreparee(banque).map(({ nom }) => nom), ["Marmiton de corvée", "Plongeur"]);
+      assert.equal(rencontre.exemplaires(banque, "Plongeur"), 1);
+      // Le témoin : compter les exemplaires pour l'autre banque, comme le fait l'écran, repart de zéro. La lecture, elle, ne l'a pas fait.
+      assert.equal(rencontre.exemplaires(autre, "Plongeur"), 0);
+      assert.deepEqual(rencontre.rencontrePreparee(banque), []);
+      assert.deepEqual(rencontre.rencontrePreparee(autre), []);
+      assert.deepEqual([stockage.lus, stockage.ecrits, stockage.ouvertures], [[], [], 0]);
+    } finally {
+      stockage.retirer();
+    }
+  }));
+
 test("rencontre — un adversaire incomplet ou en erreur s'imprime quand même, et l'écran le signale", async () => {
   const banque = await banqueAvec([["Nu"], ["Cassé", "Commis/Spectre"], ["Sain", "Commis", _, _, _, _, _, "aucun"]]);
   await dansLeDocument(() => {

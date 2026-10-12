@@ -1,8 +1,9 @@
 // Contrôles du site (SPECIFICATION.md, § 7, § 9, § 10.1 et § 11, domaine
 // « Site ») : la page et sa politique de sécurité, le graphe de ses modules,
 // le manifeste et les icônes de l'écran d'accueil, les jetons et leurs
-// contrastes, la banque de démonstration et le chargement. Les écrans
-// eux-mêmes s'essaient à la main, dans le navigateur.
+// contrastes, dont les onze couleurs du simulateur de combat (§ 17), la
+// banque de démonstration et le chargement. Les écrans eux-mêmes s'essaient
+// à la main, dans le navigateur.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -109,7 +110,7 @@ test("site — chaque fichier que la page appelle existe", () => {
   for (const appel of appels) assert.ok(existe(appel), appel);
 });
 
-test("site — le graphe des modules de la page se résout, et atteint les quinze écrans (§ 3.2)", () => {
+test("site — le graphe des modules de la page se résout, et atteint les seize écrans (§ 3.2)", () => {
   const vus = new Set();
   const aVoir = ["js/application.js"];
   while (aVoir.length) {
@@ -126,14 +127,21 @@ test("site — le graphe des modules de la page se résout, et atteint les quinz
     "accueil", "mot_de_passe", "liste", "fiche_bloc", "fiche_capacite", "fiche_element", "anomalies", "espace_auteur",
     "personnages", "creation", "reception", "fiche_personnage",
     "fiche_adversaire", "fiche_type", "rencontre",
+    "combat",
   ];
+  assert.equal(new Set(ecrans).size, 16);
   for (const ecran of ecrans) assert.ok(vus.has(`js/ecrans/${ecran}.js`), ecran);
   const modules = [
     "js/banque/chargement.js", "js/securite/coffre.js", "js/publication/github.js", "js/lecture/zip.js", "js/personnage/calcul.js", "js/personnage/stockage.js", "js/fiche/feuilles.js",
     "js/adversaire/resolution.js", "js/adversaire/carte.js", "js/adversaire/lecture.js", "js/ecrans/echelle.js",
+    // Le simulateur de combat (§ 17) : les quatre parties de son écran, son moteur, son enregistrement, ses dés.
+    "js/ecrans/combat_plateau.js", "js/ecrans/combat_fiches.js", "js/ecrans/combat_action.js", "js/ecrans/combat_preparation.js",
+    "js/combat/moteur.js", "js/combat/offre.js", "js/combat/lecture.js", "js/combat/journal.js", "js/combat/seance.js", "js/combat/enregistrement.js",
+    "js/combat/photographie.js", "js/combat/roles.js", "js/combat/des.js", "js/personnage/disponibles.js",
   ];
   for (const module of modules) assert.ok(vus.has(module), module);
-  // Tout module de js/ est dans le graphe : aucun fichier que la page n'appelle.
+  // L'écran du combat n'entre dans la page que par application.js, d'un import que ce parcours sait lire.
+  assert.match(lire("js/application.js"), /^import \* as combat from "\.\/ecrans\/combat\.js";\r?$/m);  // Tout module de js/ est dans le graphe : aucun fichier que la page n'appelle.
   const tous = readdirSync(new URL("js/", RACINE), { recursive: true }).map((chemin) => `js/${chemin.replaceAll("\\", "/")}`).filter((chemin) => chemin.endsWith(".js"));
   assert.deepEqual(tous.filter((chemin) => !vus.has(chemin)), ["js/veille.js"], "seule la veille vit hors du graphe (§ 9)");
 });
@@ -215,23 +223,105 @@ test("jetons — le texte contraste d'au moins 4,5:1, les bordures de 3:1, dans 
   }
 });
 
-test("jetons — ecran.css et personnage.css tirent toutes leurs valeurs de jetons.css ; aucune police téléchargée", () => {
-  const ecran = ["css/ecran.css", "css/personnage.css"].map(lire).join("\n").replace(/\/\*[\s\S]*?\*\//g, "");
-  const lignes = ecran.split("\n").filter((ligne) => !ligne.trim().startsWith("@media"));
-  for (const ligne of lignes) {
-    assert.doesNotMatch(ligne, /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|color-mix)\(/i, `couleur écrite en dur : ${ligne.trim()}`);
-    assert.doesNotMatch(ligne, /\d(?:px|rem|em|vh|vw|pt|ms|s)\b/, `valeur écrite en dur : ${ligne.trim()}`);
-    if (/font-family:/.test(ligne)) assert.match(ligne, /font-family:\s*var\(--/);
+// Les onze couleurs du simulateur de combat (§ 17), l'exception à la couleur
+// d'accent unique (§ 9). Trois fonds peuvent porter une case de la carte.
+const COULEURS_DU_COMBAT = ["combat-pj", "combat-pj-doux", "combat-pj-texte", "combat-adv", "combat-adv-doux", "combat-adv-texte", "combat-sur-jeton", "combat-mort", "combat-reussite", "combat-echec", "combat-alerte"];
+const FONDS_DE_CASE = ["fond", "fond-2", "accent-doux"];
+// Ce qui s'écrit, à 4,5:1 : [avant, fond].
+const TEXTES_DU_COMBAT = [
+  ...["combat-pj-texte", "combat-adv-texte", "combat-reussite", "combat-echec", "combat-alerte"].flatMap((avant) => FONDS_DE_CASE.map((fond) => [avant, fond])),
+  ["combat-pj-texte", "combat-pj-doux"],
+  ["combat-adv-texte", "combat-adv-doux"],
+  // Les initiales, dans le rond d'un personnage, d'un adversaire, d'un mort.
+  ["combat-sur-jeton", "combat-pj"],
+  ["combat-sur-jeton", "combat-adv"],
+  ["combat-sur-jeton", "combat-mort"],
+  // Le texte du site, posé sur les deux fonds doux.
+  ...["texte", "texte-2", "accent"].flatMap((avant) => ["combat-pj-doux", "combat-adv-doux"].map((fond) => [avant, fond])),
+];
+// Les ronds, à 3:1 sur le fond des cases.
+const RONDS_DU_COMBAT = ["combat-pj", "combat-adv", "combat-mort"].flatMap((avant) => FONDS_DE_CASE.map((fond) => [avant, fond]));
+
+// Les paires trop faibles d'une feuille de jetons, dans les deux thèmes : vide quand tout tient.
+function contrastesFaibles(css, paires, seuil) {
+  return ["clair", "sombre"].flatMap((theme) => {
+    const j = jetons(css, theme);
+    return paires.filter(([avant, fond]) => !(contraste(j[avant], j[fond]) >= seuil)).map(([avant, fond]) => `${theme} : --${avant} sur --${fond}, ${contraste(j[avant], j[fond]).toFixed(2)}:1`);
+  });
+}
+
+test("jetons — les onze couleurs du combat : le texte contraste d'au moins 4,5:1, les ronds de 3:1 sur le fond des cases, dans les deux thèmes (§ 17)", () => {
+  assert.equal(COULEURS_DU_COMBAT.length, 11);
+  assert.deepEqual(contrastesFaibles(JETONS, TEXTES_DU_COMBAT, 4.5), []);
+  assert.deepEqual(contrastesFaibles(JETONS, RONDS_DU_COMBAT, 3), []);
+  // Chacune des onze est mesurée, comme couleur ou comme fond.
+  const mesurees = new Set([...TEXTES_DU_COMBAT, ...RONDS_DU_COMBAT].flat());
+  assert.deepEqual(COULEURS_DU_COMBAT.filter((nom) => !mesurees.has(nom)), []);
+  // Ces onze-là, et aucune autre : une couleur ajoutée sans mesure se verrait.
+  for (const theme of ["clair", "sombre"]) {
+    assert.deepEqual(Object.keys(jetons(JETONS, theme)).filter((nom) => nom.startsWith("combat-")), COULEURS_DU_COMBAT, theme);
   }
+  // Le contrôle refuse : des initiales blanches sur le vert du thème sombre, un rouge trop pâle pour s'écrire sur le clair.
+  const blanches = contrastesFaibles(JETONS.replace("--combat-sur-jeton: #0b1722;", "--combat-sur-jeton: #ffffff;"), [["combat-sur-jeton", "combat-pj"]], 4.5);
+  assert.equal(blanches.length, 1, "le thème clair, lui, garde ses initiales blanches");
+  assert.match(blanches[0], /^sombre : --combat-sur-jeton sur --combat-pj, 2\.8\d:1$/);
+  assert.match(contrastesFaibles(JETONS.replace("--combat-echec: #b3261e;", "--combat-echec: #e8776e;"), TEXTES_DU_COMBAT, 4.5).join("\n"), /^clair : --combat-echec sur --fond, /);
+  assert.match(contrastesFaibles(JETONS.replace("--combat-mort: #7d838d;", "--combat-mort: #3a3f46;"), RONDS_DU_COMBAT, 3).join("\n"), /^sombre : --combat-mort sur --fond, /);
+  // Le gris d'un mort est une couleur de rond : écrit sur le second fond, il ne tiendrait pas 4,5:1. Il n'est donc pas un texte.
+  assert.equal(contrastesFaibles(JETONS, [["combat-mort", "fond-2"]], 4.5).length, 2);
+});
+
+// Les feuilles de l'interface : toute valeur y vient d'un jeton. Seule la
+// largeur d'une condition @media s'y écrit en dur (§ 9), une variable n'y
+// étant pas permise ; la carte d'adversaire et la fiche ont leurs contrôles.
+const FEUILLES_A_JETONS = ["css/ecran.css", "css/personnage.css", "css/combat.css"];
+
+// Ce qu'une feuille écrit en dur : vide quand tout vient de jetons.css.
+function valeursEnDur(css, definis) {
+  const texte = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const defauts = [];
+  for (const ligne of texte.split("\n").map((brute) => brute.trim()).filter((ligne) => !ligne.startsWith("@media"))) {
+    if (/#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|color-mix)\(/i.test(ligne)) defauts.push(`couleur écrite en dur : ${ligne}`);
+    if (/\d(?:px|rem|em|vh|vw|pt|ms|s)\b/.test(ligne)) defauts.push(`valeur écrite en dur : ${ligne}`);
+    if (/font-family:/.test(ligne) && !/font-family:\s*var\(--/.test(ligne)) defauts.push(`police écrite en dur : ${ligne}`);
+  }
+  for (const [, nom] of texte.matchAll(/var\(--([\w-]+)\)/g)) if (!definis.has(nom)) defauts.push(`--${nom} n'est pas défini dans jetons.css`);
+  if (/@font-face|@import|url\(/.test(texte)) defauts.push("police ou ressource téléchargée");
+  return defauts;
+}
+
+// Les jetons de couleur qui n'ont pas, dans le thème sombre, une valeur à eux.
+function sansValeurSombre(css, noms) {
+  const [clair, sombre] = [jetons(css, "clair"), jetons(css, "sombre")];
+  return noms.filter((nom) => !/^#[0-9a-f]{6}$/i.test(sombre[nom] ?? "") || sombre[nom] === clair[nom]);
+}
+
+test("jetons — ecran.css, personnage.css et combat.css tirent toutes leurs valeurs de jetons.css, hors les largeurs des @media ; aucune police téléchargée", () => {
   const definis = new Set(Object.keys(jetons(JETONS, "clair")));
-  for (const [, nom] of ecran.matchAll(/var\(--([\w-]+)\)/g)) assert.ok(definis.has(nom), `--${nom} n'est pas défini dans jetons.css`);
-  for (const css of [ecran, JETONS]) assert.doesNotMatch(css, /@font-face|@import|url\(/);
+  for (const feuille of FEUILLES_A_JETONS) assert.deepEqual(valeursEnDur(lire(feuille), definis), [], feuille);
+  assert.doesNotMatch(JETONS, /@font-face|@import|url\(/);
+  // La feuille du combat est bien lue : elle emploie ses jetons, et ses deux largeurs sont écrites là où elles sont permises.
+  const combat = lire("css/combat.css");
+  for (const nom of [...COULEURS_DU_COMBAT, "largeur-combat"]) assert.ok(combat.includes(`var(--${nom})`), `--${nom} ne sert pas dans css/combat.css`);
+  assert.deepEqual(combat.split("\n").map((ligne) => ligne.trim()).filter((ligne) => ligne.startsWith("@")), ["@media (min-width: 56rem) {", "@media (min-width: 80rem) {"]);
+  // Le contrôle refuse : chaque sorte de valeur en dur, et une largeur sortie de la ligne de son @media.
+  const refuse = (css, motif) => assert.match(valeursEnDur(css, definis).join("\n"), motif, css);
+  refuse(".combat-x { color: #1e7a3c; }", /^couleur écrite en dur/);
+  refuse(".combat-x { background: rgba(0, 0, 0, 0.5); }", /^couleur écrite en dur/);
+  refuse(".combat-x { max-width: 90rem; }", /^valeur écrite en dur/);
+  refuse(".combat-x { border: 1px solid var(--bordure); }", /^valeur écrite en dur/);
+  refuse(".combat-x { transition: opacity 0.2s; }", /^valeur écrite en dur/);
+  refuse(".combat-x { font-family: ui-monospace, monospace; }", /^police écrite en dur/);
+  refuse(".combat-x { width: var(--combat-inconnu); }", /^--combat-inconnu n'est pas défini/);
+  refuse('@import "autre.css";', /ressource téléchargée/);
+  refuse("@media\n  (min-width: 80rem) {\n  .combat-x { display: none; }\n}", /^valeur écrite en dur : \(min-width: 80rem\) \{/);
+  refuse("@container (min-width: 40rem) {\n  .combat-x { display: none; }\n}", /^valeur écrite en dur : @container/);
+  assert.deepEqual(valeursEnDur("@media (min-width: 56rem) {\n  .combat-x { max-width: var(--largeur-combat); width: 45%; flex: 1 1 0; }\n}", definis), []);
   // Les jetons de couleur ont une valeur dans chaque thème.
-  const sombre = jetons(JETONS, "sombre");
-  for (const nom of ["fond", "fond-2", "texte", "texte-2", "bordure", "separateur", "accent", "texte-sur-accent", "accent-doux"]) {
-    assert.match(sombre[nom], /^#[0-9a-f]{6}$/i, nom);
-    assert.notEqual(sombre[nom], jetons(JETONS, "clair")[nom], `--${nom} sans valeur sombre`);
-  }
+  const couleurs = ["fond", "fond-2", "texte", "texte-2", "bordure", "separateur", "accent", "texte-sur-accent", "accent-doux", ...COULEURS_DU_COMBAT];
+  assert.deepEqual(sansValeurSombre(JETONS, couleurs), []);
+  assert.deepEqual(sansValeurSombre(JETONS.replace(/\s*--combat-alerte: #e6a85a;/, ""), couleurs), ["combat-alerte"], "un jeton resté à sa valeur claire");
+  assert.deepEqual(sansValeurSombre(JETONS.replace("--combat-mort: #7d838d;", "--combat-mort: var(--bordure);"), couleurs), ["combat-mort"], "une valeur sombre qui ne se mesure pas");
 });
 
 test("démonstration — la banque se déchiffre avec le mot de passe public et vient du classeur d'essai", async () => {

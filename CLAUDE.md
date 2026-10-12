@@ -81,7 +81,8 @@ répond pas aux questions de règles en conversation.
 5. Choix faits seul (réversibles).
 6. Points à trancher, chacun avec une recommandation.
 7. Suite prévue.
-8. Consommation : laisser « relevé /usage : à compléter par l'auteur ».
+8. Consommation : les agents et leurs jetons, phase par phase ; sans relevé
+   `/usage` (décision de l'auteur, 30/09/2026).
 
 ## Économie
 
@@ -89,13 +90,14 @@ répond pas aux questions de règles en conversation.
 - Pendant le travail, ne lancer que les contrôles de l'étape ; la suite
   complète en fin d'étape.
 - Filtrer les sorties longues (`tail`, `grep`) plutôt que les lire entières.
-- Un seul agent pour le travail. Sous-agent pour dépouiller une sortie très
-  longue, ou pour relire dans le cadre suivant.
+- **Agents : autant que nécessaire** (décision de l'auteur, 29/09/2026),
+  pour le travail comme pour la relecture. Le compte rendu dit combien, à
+  quoi, et ce qu'ils ont coûté.
 - **Relecture par plusieurs agents** (décision de l'auteur, 28/09/2026) :
-  **autorisée**, dans ce cadre : à la fin d'un groupe (ou, dans ce groupe,
-  au début, comme revue de sécurité) ; **trois relecteurs au plus**, chacun
-  avec un angle distinct ; **une seule liste consolidée** ; c'est l'agent
-  principal qui corrige ; le compte rendu dit ce qu'ils ont trouvé.
+  à la fin d'un groupe (ou, dans ce groupe, au début, comme revue de
+  sécurité) ; chacun avec un angle distinct ; **une seule liste
+  consolidée** ; c'est l'agent principal qui corrige ou fait corriger ; le
+  compte rendu dit ce qu'ils ont trouvé.
 
 ## OneDrive
 

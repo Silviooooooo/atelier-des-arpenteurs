@@ -493,6 +493,49 @@ test("mot de passe — l'Atelier s'ouvre sans attendre la réponse sur le stocka
   assert.doesNotMatch(deverrouiller, /await demanderStockageDurable/);
 });
 
+// Ce qu'application.js doit au simulateur de combat (§ 17), lu dans son
+// texte : la page elle-même ne se charge pas ici. Rend la liste des défauts.
+function defautsDuCablageDuCombat(application) {
+  const defauts = [];
+  if (!/^import \* as combat from "\.\/ecrans\/combat\.js";\r?$/m.test(application)) defauts.push("l'écran n'est pas importé");
+  // L'écran attend la banque, comme les autres : sa ligne vient après celle du mot de passe. Il ne reçoit
+  // que le contexte : ses services (dés, magasin, horloge) gardent leurs valeurs par défaut.
+  const appels = [...application.matchAll(/combat\.afficher\(([^)]*)\)/g)];
+  const banque = application.indexOf("if (!etat.banque) return motDePasse.afficher(contexte);");
+  const route = application.indexOf('if (route.ecran === "combat") return combat.afficher(contexte);');
+  if (appels.length !== 1 || route < 0) defauts.push("la route « combat » n'affiche pas l'écran, une fois, avec le seul contexte");
+  else if (banque < 0 || route < banque) defauts.push("l'écran s'affiche sans attendre la banque");
+  // « Oublier le mot de passe » : juste après l'espace auteur, avant que l'état ne se vide.
+  if (!/async oublier\(\) \{[^}]*espaceAuteur\.oublier\(\);\s*(?:\/\/[^\n]*\s*)*combat\.oublier\(\);/.test(application)) defauts.push("« Oublier le mot de passe » n'efface pas le combat de la mémoire");
+  // Ni attente à lui que la veille surveillerait, ni enregistrement ouvert au démarrage.
+  for (const ligne of application.split("\n").filter((ligne) => /combat/i.test(ligne))) {
+    if (/Chargement de|data-chargement/.test(ligne)) defauts.push(`une attente du combat sous la veille : ${ligne.trim()}`);
+  }
+  if (/ouvrirMagasinCombat|combat\/enregistrement|combat\/seance/.test(application)) defauts.push("l'enregistrement du combat s'ouvre hors de son écran");
+  return defauts;
+}
+
+test("combat — application.js importe l'écran, l'affiche une fois la banque ouverte, et « Oublier le mot de passe » l'efface de la mémoire (§ 17)", () => {
+  const application = lire("js/application.js");
+  assert.deepEqual(defautsDuCablageDuCombat(application), []);
+  const fautive = (avant, apres, motif) => {
+    const texte = application.replace(avant, apres);
+    assert.notEqual(texte, application, String(avant));
+    assert.match(defautsDuCablageDuCombat(texte).join("\n"), motif, String(avant));
+  };
+  fautive('import * as combat from "./ecrans/combat.js";', 'const combat = await import("./ecrans/combat.js");', /n'est pas importé/);
+  fautive(/ *if \(route\.ecran === "combat"\) return combat\.afficher\(contexte\);\r?\n/, "", /n'affiche pas l'écran/);
+  fautive("combat.afficher(contexte)", "combat.afficher(contexte, { des })", /avec le seul contexte/);
+  // La ligne de la route, remontée avant celle du mot de passe.
+  fautive(/(  if \(!etat\.banque\) return motDePasse\.afficher\(contexte\);\r?\n)([\s\S]*?)(  if \(route\.ecran === "combat"\) return combat\.afficher\(contexte\);\r?\n)/, "$3$1$2", /sans attendre la banque/);
+  fautive(/\s*combat\.oublier\(\);/, "", /n'efface pas le combat/);
+  // L'appel, descendu après la remise à zéro de l'état : une accolade fermante le précède.
+  fautive(/(\s*combat\.oublier\(\);)(\s*Object\.assign\(etat, \{[^\n]*\n)/, "$2$1", /n'efface pas le combat/);
+  fautive(/(\s*espaceAuteur\.oublier\(\);)([\s\S]*?)(\s*combat\.oublier\(\);)/, "$3$2$1", /n'efface pas le combat/);
+  fautive('if (route.ecran === "combat") return', 'if (route.ecran === "combat" && !etat.secret) return el("p", { "data-chargement": true }, "Chargement du combat…");\n  if (route.ecran === "combat") return', /sous la veille/);
+  fautive('import * as combat from "./ecrans/combat.js";', 'import * as combat from "./ecrans/combat.js";\nimport { ouvrirMagasinCombat } from "./combat/enregistrement.js";', /hors de son écran/);
+});
+
 test("dom — aucun gestionnaire en texte, ni style, ni srcdoc ; une adresse est locale ou https (§ 10.1)", async () => {
   const retirer = installerDom();
   try {

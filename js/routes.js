@@ -1,4 +1,4 @@
-// Les adresses des écrans (SPECIFICATION.md, § 9, § 15.3 et § 16.6).
+// Les adresses des écrans (SPECIFICATION.md, § 9, § 15.3, § 16.6 et § 17).
 //
 // Chaque écran est une route après le « # » : une fiche a ainsi une adresse
 // qu'on peut envoyer à un joueur (#/capacite/Attaque%20de%20base). Le nom y
@@ -12,6 +12,10 @@
 //
 // Les adversaires (lot 3) : #/adversaires et #/adversaire/<nom>, #/types et
 // #/type/<nom> pour leurs types, #/rencontre pour les cartes à imprimer.
+//
+// Le simulateur de combat (lot 4) : #/combat, et rien après. Le combat en
+// cours ne se lit pas dans l'adresse : il vit dans son écran et sur
+// l'appareil (§ 17), si bien qu'un lien envoyé n'en montre rien.
 
 // Une catégorie de la consultation : une liste, et une fiche par nom. Sa clé
 // est son adresse ; la liste de la banque qu'elle montre se lit dans
@@ -63,6 +67,7 @@ export function lireRoute(adresse) {
   }
   if (tete === "recevoir" && reste.length === 1 && CODE.test(reste[0])) return { ecran: "recevoir", code: reste[0] };
   if (tete === "rencontre" && reste.length === 0) return { ecran: "rencontre" };
+  if (tete === "combat" && reste.length === 0) return { ecran: "combat" };
   return { ecran: "introuvable", adresse: chemin };
 }
 
