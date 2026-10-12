@@ -232,6 +232,12 @@ const fiche = (ecran, id) => {
   assert.ok(trouvee, `la fiche de ${id}`);
   return trouvee;
 };
+/** Ce qui suit la fiche avant le lancement, hors du volet : le groupe du champ « Case » et de « Retirer ». */
+const groupe = (ecran, id) => {
+  const trouve = tous(ecran, ".combat-fiche-avant").find((noeud) => noeud.getAttribute("data-fiche") === id);
+  assert.ok(trouve, `le groupe « Case » et « Retirer » de ${id}`);
+  return trouve;
+};
 const fiches = (ecran) => tous(ecran, "details").map((noeud) => [noeud.getAttribute("data-id"), texteDe(un(noeud, ".combat-nom"))]);
 const laCase = (ecran, nom) => {
   const trouvee = tous(ecran, ".combat-case").find((noeud) => noeud.getAttribute("data-case") === nom);
@@ -270,7 +276,7 @@ async function ajouterDesAdversaires(ecran, nom, nombre = 1) {
 
 /** Déplace un protagoniste par le champ « Case » de sa fiche. */
 function poserSur(ecran, id, nomDeCase) {
-  saisir(repere(fiche(ecran, id), "case"), nomDeCase, "change");
+  saisir(repere(groupe(ecran, id), "case"), nomDeCase, "change");
 }
 
 /** La mise en place du combat de référence, par les boutons de la préparation. */
@@ -459,7 +465,16 @@ dansUnePage("ouverture — afficher() rend son nœud tout de suite : le titre et
   assert.equal(tous(ecran, "[data-chargement]").length, 0);
   assert.equal(etatDuCombat(ecran), "Préparation");
   // L'ordre du document est celui du téléphone : la carte, la préparation, les camps, puis le journal.
-  assert.deepEqual(ecran.children.map((noeud) => noeud.className), ["combat-barre", "combat-aide", "combat-avis", "combat-panneau", "combat-cadre", "combat-journal"]);
+  assert.deepEqual(ecran.children.map((noeud) => noeud.className), ["combat-barre", "combat-aide", "combat-avis", "combat-panneau", "combat-cadre", "combat-journal", "combat-annonce"]);
+  // La région polie est là dès le premier rendu, vide : un lecteur d'écran la connaît avant qu'elle parle.
+  const region = un(ecran, "p.combat-annonce");
+  assert.deepEqual([region.getAttribute("aria-live"), region.parentNode, region.childNodes.length], ["polite", ecran, 0]);
+  // La barre, dans l'ordre du téléphone : l'état et les commandes sur une ligne, ce que « ⋯ » ouvre, puis l'enregistrement.
+  assert.deepEqual(barre(ecran).children.map((noeud) => noeud.className || noeud.tagName), ["H1", "combat-etat", "combat-commandes", "combat-autres", "combat-garde"]);
+  // Le journal est une région que son titre nomme.
+  const zoneDuJournal = un(ecran, "section.combat-journal");
+  assert.equal(texteDe(un(ecran, `#${zoneDuJournal.getAttribute("aria-labelledby")}`)), "Journal");
+  assert.equal(un(ecran, `#${zoneDuJournal.getAttribute("aria-labelledby")}`).tagName, "H2");
   assert.deepEqual(un(ecran, ".combat-cadre").children.map((noeud) => noeud.className), ["combat-plateau", "combat-preparation", "combat-camps"]);
   assert.equal(tous(ecran, ".combat-case").length, 100);
   assert.match(texteDe(un(ecran, "p.combat-aide")), /^Un protagoniste ajouté se pose d'office/);
@@ -493,7 +508,7 @@ dansUnePage("ouverture — un nœud qui a quitté la page n'est pas rempli ; la 
   assert.deepEqual(fiches(revenue), [["pj1", "Aubépine Crèmebrûlée"]]);
   assert.equal(lectures, 1, "la base n'est lue qu'à l'ouverture");
   // L'écran d'avant ne répond plus : seule la dernière visite joue.
-  await cliquer(repere(fiche(ecran, "pj1"), "retirer"));
+  await cliquer(repere(groupe(ecran, "pj1"), "retirer"));
   assert.deepEqual(fiches(revenue), [["pj1", "Aubépine Crèmebrûlée"]]);
 });
 
@@ -632,10 +647,10 @@ dansUnePage("préparation — ajouter, poser, retirer, qui commence, lancer : ch
   assert.deepEqual(jetons(ecran), { C3: ["Aubépine"], D4: ["Marmiton 1"], J1: ["Chef"], J2: ["Marmiton 2"] });
   poserSur(ecran, "adv4", "K11");
   assert.deepEqual(jetons(ecran).J2, ["Marmiton 2"]);
-  assert.equal(repere(fiche(ecran, "adv4"), "case").getAttribute("aria-invalid"), "true");
+  assert.equal(repere(groupe(ecran, "adv4"), "case").getAttribute("aria-invalid"), "true");
 
   // « Retirer » renumérote : le Marmiton qui reste n'a plus de numéro.
-  await cliquer(repere(fiche(ecran, "adv3"), "retirer"));
+  await cliquer(repere(groupe(ecran, "adv3"), "retirer"));
   assert.deepEqual(fiches(ecran), [
     ["pj1", "Aubépine Crèmebrûlée"],
     ["adv2", "Chef de partie"],
@@ -714,7 +729,7 @@ dansUnePage("préparation — la carte : toucher un jeton puis une case ; la lis
   assert.equal(aubepine.getAttribute("aria-pressed"), "true");
   await cliquer(un(laCase(ecran, "B2"), "button.combat-case-choix"));
   assert.deepEqual(jetons(ecran).B2, ["Aubépine"]);
-  assert.equal(repere(fiche(ecran, "pj1"), "case").value, "B2", "la fiche suit");
+  assert.equal(repere(groupe(ecran, "pj1"), "case").value, "B2", "la fiche suit");
   assert.equal(document.activeElement, jeton(ecran, "Aubépine Crèmebrûlée"), "l'écran ne déplace pas le focus après une pose venue de la carte");
 
   // Trois jetons sur J1 : le « +1 » du téléphone ouvre la liste de la case, sous la préparation.
@@ -780,7 +795,8 @@ dansUnePage("rencontre — vide, le bouton le dit ; préparée, elle se pose d'u
   const { ecran } = await ouvrirLEcran(page, { magasin: magasinCombatMemoire() });
   const placer = () => repere(ecran, "rencontre");
   assert.equal(inactif(placer()), true);
-  assert.equal(raisonDe(ecran, placer()), "Composez d'abord une rencontre.");
+  // Le texte de la mission (§ 10.7), tel quel : sans point final.
+  assert.equal(raisonDe(ecran, placer()), "Composez d'abord une rencontre");
   await cliquer(placer());
   assert.deepEqual(fiches(ecran), []);
 
@@ -850,6 +866,9 @@ dansUnePage("combat — le combat de référence, joué à l'écran du premier c
   const finDeTour = boutonDit(barre(ecran), "Fin de tour");
   assert.equal(finDeTour.hidden, false);
   assert.equal(inactif(finDeTour), false);
+  // Le bouton principal de la barre (mission § 10.3) : lui seul n'est pas « secondaire ».
+  assert.equal(finDeTour.className, "bouton");
+  assert.deepEqual(tous(barre(ecran), "button").filter((b) => b !== finDeTour).map((b) => b.className.split(" ").includes("secondaire")), [true, true]);
   // « Jouer » : sur la fiche du camp qui a la main, et sur elle seule.
   assert.deepEqual(tous(ecran, "[data-repere=jouer]").map((b) => b.getAttribute("aria-label")), ["Jouer : Aubépine Crèmebrûlée"]);
 
@@ -931,7 +950,17 @@ dansUnePage("combat — le combat de référence, joué à l'écran du premier c
   assert.equal(fiche(ecran, "adv4").hasAttribute("open"), true, "celle d'un vivant reste ouverte");
   assert.match(texteDe(fiche(ecran, "adv3")), /mort au tour 2/);
   assert.match(texteDe(un(ecran, ".combat-camp-adv h2")), /2 en vie sur 3/);
-  assert.deepEqual(tous(lignes, "li").filter((li) => li.className === "mort").map(texteDe), [journalAttendu[11]]);
+  // Au journal, seule la phrase de la mort est en évidence, pas la ligne entière : elle la finit, et la ligne se lit mot pour mot.
+  const mortes = tous(lignes, ".combat-mort");
+  assert.deepEqual(mortes.map((noeud) => [noeud.tagName, texteDe(noeud)]), [["SPAN", "Marmiton n° 1 meurt."]]);
+  assert.equal(texteDe(mortes[0].parentNode), journalAttendu[11]);
+  assert.equal(mortes[0].parentNode.childNodes.at(-1), mortes[0]);
+  assert.deepEqual(tous(lignes, "li").map((li) => li.className).filter((classe) => classe !== "" && classe !== "tour"), [], "aucune ligne n'est marquée en entier");
+  // La liste de la case : les morts viennent en dernier, comme sur la carte. Le Marmiton n° 1 a été ajouté avant le n° 2.
+  await cliquer(un(ecran, ".combat-plus-large"));
+  const listeDeD4 = un(un(ecran, ".combat-action"), ".combat-case-liste");
+  assert.deepEqual(tous(listeDeD4, "button").map(texteDe), ["Aubépine Crèmebrûlée", "Chef de partie", "Marmiton de corvée n° 2", "Marmiton de corvée n° 1", "Fermer"]);
+  await cliquer(boutonDit(listeDeD4, "Fermer"));
   assert.deepEqual(tous(lignes, "li").filter((li) => li.className === "tour").map(texteDe), ["— Tour 1 · camp des PJ —", "— Tour 1 · camp des adversaires —", "— Tour 2 · camp des PJ —"]);
 
   // La suite, jusqu'au dernier dé.
@@ -1010,11 +1039,16 @@ dansUnePage("combat — la cible : « choisie sur la carte », « choisie ici »
   assert.equal(titreDuPanneau(rechargee), "Aubépine Crèmebrûlée joue — 2 actions sur 2, souffle 10");
   assert.deepEqual(ciblesChoisies(rechargee), ["Marmiton de corvée n° 1"]);
   assert.deepEqual(originesDe(rechargee), [], "après un rechargement, rien ne dit d'où venait la cible");
-  // Le premier dé : le geste est payé, et ses cibles ne se montrent plus. La page se recharge là.
+  // Le premier dé : le geste est payé. La rangée « Cible : » reste montrée, avec la seule cible choisie, qui ne se change plus. La page se recharge là.
   await cliquer(deACliquer(rechargee));
   assert.deepEqual(debut.reste(), []);
   assert.equal(titreDuPanneau(rechargee), "Aubépine Crèmebrûlée joue — 1 action sur 2, souffle 10");
-  assert.equal(tous(corps(rechargee), ".combat-cibles").length, 0);
+  const pendantLeJet = tous(un(corps(rechargee), ".combat-cibles"), "button");
+  assert.deepEqual(pendantLeJet.map((b) => [texteDe(b), b.getAttribute("aria-pressed"), inactif(b)]), [["Marmiton de corvée n° 1", "true", true]]);
+  assert.equal(raisonDe(rechargee, pendantLeJet[0]), "Une action est en cours.");
+  await cliquer(pendantLeJet[0]);
+  assert.deepEqual(debut.reste(), []);
+  assert.equal(avis(rechargee).children.length, 0, "le bouton inactif ne demande rien");
   await attendre(() => garde(rechargee) === PHRASES_DE_GARDE.garde, "la fin de l'écriture");
 
   // La page neuve n'a que les dés qui restent à lancer : un dé déjà lancé qu'elle relancerait la ferait lever.
@@ -1122,8 +1156,11 @@ dansUnePage("combat — ce que le combat de référence ne joue pas : la puissan
   await cliquer(boutonDeCapacite(ecran, "Flambage [2]"));
   assert.equal(texteDe(boutonDeCapacite(ecran, "Flambage [2]")), "Flambage [2] 10 souffle");
   assert.match(texteDe(un(corps(ecran), ".combat-description")), /par 3\.$/);
-  await cliquer(boutonOu(corps(ecran), (b) => b.getAttribute("aria-label") === "Baisser la puissance", "« − »"));
+  await cliquer(boutonOu(corps(ecran), (b) => b.getAttribute("aria-label") === "Baisser la puissance (actuelle : 2)", "« − »"));
   assert.equal(texteDe(boutonDeCapacite(ecran, "Flambage [1]")), "Flambage [1] 5 souffle");
+  // Ce réglage ne fait pas avancer le geste : le focus reste sur le pas actionné, refait, dont le nom dit la puissance obtenue.
+  assert.equal(document.activeElement.getAttribute("aria-label"), "Baisser la puissance (actuelle : 1)");
+  assert.equal(document.activeElement.isConnected, true);
   assert.match(texteDe(un(corps(ecran), ".combat-description")), /par 2\.$/);
   // Une capacité sans jet : sa cible est facultative, et « Confirmer » la paie.
   assert.equal(boutonDit(corps(ecran), "Sans cible").getAttribute("aria-pressed"), "true");
@@ -1137,10 +1174,17 @@ dansUnePage("combat — ce que le combat de référence ne joue pas : la puissan
   await regler("Régler le modificateur", 2, "Inspiration");
   await regler("Régler les avantages", 1, "Minutie");
   const contexte = texteDe(un(corps(ecran), ".combat-contexte"));
-  assert.match(contexte, /Dé d10\+3 /);
-  assert.match(contexte, /\+2 \(à la main : Inspiration\)/);
+  // Le dé nu, puis chaque modificateur avec sa source, une seule fois : « d10+3 » devant eux se lisait d10+3+3.
+  assert.match(contexte, /Dé d10 \(Précision \d \+ Agilité \d\) \+1 \(Vif\) \+2 \(à la main : Inspiration\) · difficulté /);
+  assert.doesNotMatch(contexte, /d10\+/);
+  // Avant le premier dé, les réglages à la main viennent entre le contexte et la chaîne.
+  assert.deepEqual(un(corps(ecran), ".combat-des").children.map((bloc) => bloc.className), ["combat-contexte", "combat-reglages", "combat-jet", "combat-assiste"]);
   assert.match(contexte, /1 avantage · Avantages : Solo du chef, à la main : Minutie · Désavantages : Frappe hors maîtrise/);
   for (let lance = 0; lance < 3; lance += 1) await cliquer(deACliquer(ecran));
+  // Pendant le jet : plus de réglage, et la cible, choisie par son bouton, reste montrée avec son origine.
+  assert.deepEqual(un(corps(ecran), ".combat-des").children.map((bloc) => bloc.className), ["combat-contexte", "combat-jet", "combat-assiste"]);
+  assert.deepEqual(tous(un(corps(ecran), ".combat-cibles"), "button").map((b) => [texteDe(b), b.getAttribute("aria-pressed"), inactif(b)]), [["Marmiton de corvée", "true", true]]);
+  assert.deepEqual(tous(corps(ecran), ".combat-origine").map(texteDe), ["choisie ici"]);
   assert.match(texteDe(un(corps(ecran), "p.combat-bilan")), /^3 réussites, C = 20/);
 
   // Une raison que le moteur refuse (81 signes) : le refus se dit dans la zone d'avis, et rien ne change.
@@ -1322,6 +1366,9 @@ dansUnePage("téléphone — seule la fiche de qui joue est ouverte ; le menu «
   assert.deepEqual([plus.getAttribute("aria-expanded"), autres.className], ["false", "combat-autres"]);
   assert.deepEqual(tous(autres, "button").map(texteDe), ["Nouveau combat"]);
   assert.equal(boutonDit(barre(ecran), "Fin de tour").parentNode.className, "combat-commandes");
+  // L'état, puis « Fin de tour » et « ⋯ », ce que « ⋯ » ouvre, puis l'enregistrement : l'ordre du document est celui du téléphone.
+  assert.deepEqual(tous(un(barre(ecran), ".combat-commandes"), "button").map(texteDe), ["Fin de tour", "⋯"], "le menu n'est pas dans la rangée des commandes : l'ouvrir ne les déplace pas");
+  assert.deepEqual(barre(ecran).children.map((noeud) => noeud.className || noeud.tagName), ["H1", "combat-etat", "combat-commandes", "combat-autres", "combat-garde"]);
   await cliquer(plus);
   assert.deepEqual([plus.getAttribute("aria-expanded"), autres.className], ["true", "combat-autres ouvert"]);
   await cliquer(plus);
@@ -1365,6 +1412,9 @@ dansUnePage("journal — « Copier » et « Télécharger » : inactifs avant le
   assert.equal(presse.copies[0].includes("\r"), false, "le texte copié est en fins de ligne simples");
   assert.match(texteDe(un(zone, ".combat-copie")), /^Journal copié\.$/);
   assert.equal(tous(zone, "textarea").length, 0);
+  // Le focus reste sur « Copier » : la phrase se dit par la seule région polie, que le dé suivant remplacera.
+  assert.equal(annonce(ecran), "Journal copié.");
+  assert.equal(regions(ecran).filter(([noeud]) => noeud.getAttribute("aria-live") === "polite" || noeud.getAttribute("role") === "status").length, 1);
 
   await cliquer(telecharger);
   assert.deepEqual(telecharges, [["combat-2026-10-12-21h30.txt", `${MARQUE_D_ORDRE}${attendu.join("\r\n")}`, "text/plain;charset=utf-8"]]);
@@ -1373,9 +1423,11 @@ dansUnePage("journal — « Copier » et « Télécharger » : inactifs avant le
   // Le retour de la copie s'efface dès qu'une ligne s'ajoute au journal.
   await cliquer(boutonDeCapacite(ecran, "Pas chassé [1]"));
   assert.match(texteDe(un(zone, ".combat-copie")), /^Journal copié\.$/, "un geste en cours n'y touche pas");
+  assert.equal(annonce(ecran), "Journal copié.", "tant que le combat n'a rien à dire");
   await cliquer(boutonDit(un(corps(ecran), ".combat-arrivees"), "D4"));
   await cliquer(boutonDit(corps(ecran), "Confirmer"));
   assert.equal(un(zone, ".combat-copie").children.length, 0);
+  assert.match(annonce(ecran), /^Aubépine : Pas chassé \[1\], C3 → D4\./, "l'annonce suivante du combat la remplace");
 });
 
 dansUnePage("journal — le presse-papiers qui refuse, ou qui manque : le texte se sélectionne dans un champ, pour une copie à la main", async (page) => {
@@ -1446,6 +1498,74 @@ dansUnePage("un nom hostile reste du texte : à l'écran, dans le journal, et sa
   assert.equal(texteDe(tous(ecran, ".combat-panneau h2")[0]), `Fiche complète : ${VISIBLE}`);
 });
 
+dansUnePage("journal — la dernière ligne reste visible en revenant sur l'écran avec le combat en mémoire, quand la page ne pose le nœud qu'après l'avoir reçu", async (page) => {
+  const { ecran, contexte, services } = await ouvrirLEcran(page, { magasin: magasinCombatMemoire() });
+  await preparerLaReference(ecran);
+  await lancerLeCombat(ecran);
+  assert.equal(journal(ecran).length, 2);
+
+  // Une autre visite (retour d'une fiche de la banque) : le combat est en mémoire, afficher() monte l'écran tout de
+  // suite, et la page pose son nœud aussitôt après, dans le même tour, comme js/application.js. Hors de la page, un
+  // nœud n'a pas de mise en page : le défilement réglé pendant le montage n'a pas pris.
+  const revenue = page.afficher(contexte, services);
+  assert.equal(revenue.isConnected, false);
+  assert.equal(journal(revenue).length, 2);
+  document.body.replaceChildren(revenue);
+  // Ce que le navigateur donne une fois le nœud posé : une hauteur, et le journal à sa première ligne.
+  const lignes = un(revenue, "ol.combat-lignes");
+  lignes.scrollHeight = 960;
+  lignes.scrollTop = 0;
+  await laisserFiler();
+  assert.equal(lignes.scrollTop, 960, "le journal se rouvre sur sa dernière ligne");
+
+  // Une visite que la page ne pose jamais, ou qu'une autre a remplacée entre-temps, ne règle rien.
+  const jamaisPosee = page.afficher(contexte, services);
+  const delaissees = un(jamaisPosee, "ol.combat-lignes");
+  delaissees.scrollHeight = 960;
+  delaissees.scrollTop = 0;
+  await laisserFiler();
+  assert.equal(delaissees.scrollTop, 0);
+  const remplacee = page.afficher(contexte, services);
+  const derniere = page.afficher(contexte, services);
+  document.body.replaceChildren(remplacee, derniere);
+  for (const noeud of [remplacee, derniere]) Object.assign(un(noeud, "ol.combat-lignes"), { scrollHeight: 960, scrollTop: 0 });
+  await laisserFiler();
+  assert.deepEqual([un(remplacee, "ol.combat-lignes").scrollTop, un(derniere, "ol.combat-lignes").scrollTop], [0, 960], "seule la dernière visite suit le combat");
+});
+
+dansUnePage("enregistrement — la clé de table est relue à chaque écriture, jamais gardée : changée pendant la visite, l'écriture suivante la suit ; retirée, plus rien ne s'écrit", async (page) => {
+  const lieu = lieuSimule();
+  const { ecran, contexte } = await ouvrirLEcran(page, { magasin: await lieu.onglet() });
+  const finDeLEcriture = () => attendre(() => garde(ecran) !== PHRASES_DE_GARDE.ecriture, "la fin de l'écriture");
+  await ajouterLePersonnage(ecran, "Aubépine Crèmebrûlée");
+  await finDeLEcriture();
+  const premiere = await lieu.gardee();
+  assert.equal(premiere.sel, SECRET.sel);
+  assert.equal(JSON.parse((await lireLaBase(lieu, SECRET)).texte).miseEnPlace.protagonistes.length, 1);
+
+  // Le mot de passe de table change pendant la visite : l'état de la page porte une autre clé. C'est le même
+  // contexte que l'écran a reçu, comme dans la page ; l'écran n'est ni rouvert, ni prévenu.
+  assert.notEqual(AUTRE.sel, SECRET.sel);
+  contexte.etat.secret = AUTRE;
+  await ajouterDesAdversaires(ecran, "Plongeur", 1);
+  await finDeLEcriture();
+  assert.equal(garde(ecran), PHRASES_DE_GARDE.garde);
+  const seconde = await lieu.gardee();
+  assert.equal(seconde.revision, premiere.revision + 1);
+  assert.equal(seconde.sel, AUTRE.sel, "l'écriture suit la clé du moment");
+  assert.equal((await lireLaBase(lieu, SECRET)).code, "cle", "la clé d'avant ne le lit plus");
+  assert.equal(JSON.parse((await lireLaBase(lieu, AUTRE)).texte).miseEnPlace.protagonistes.length, 2);
+
+  // La clé quitte l'état de la page : rien ne s'écrit, la barre le dit, et le combat continue en mémoire.
+  contexte.etat.secret = null;
+  await ajouterDesAdversaires(ecran, "Plongeur", 1);
+  await attendre(() => garde(ecran) === PHRASES_DE_GARDE.sans_cle, "le refus d'écrire sans clé");
+  assert.equal(garde(ecran), "Combat non gardé : le mot de passe de table a changé.");
+  await laisserFiler(20);
+  assert.deepEqual(await lieu.gardee(), seconde, "l'enregistrement n'a pas bougé");
+  assert.equal(fiches(ecran).length, 3);
+});
+
 // ─── « Nouveau combat », « Fiche complète », « Oublier » ────────────────────
 
 dansUnePage("« Nouveau combat » — la confirmation dans la page ; « Annuler » ne touche à rien ; « Effacer » repart de zéro, à la révision suivante", async (page) => {
@@ -1456,7 +1576,7 @@ dansUnePage("« Nouveau combat » — la confirmation dans la page ; « Annuler 
   await attendre(() => garde(ecran) === PHRASES_DE_GARDE.garde, "la fin de l'écriture");
   const avant = await lireLaBase(lieu);
   assert.equal(JSON.parse(avant.texte).evenements.length, 1);
-  // La région d'annonce quitte la page avec le panneau d'action : on la tient ici pour la relire.
+  // La région d'annonce reste dans la page quand la préparation prend la place du panneau d'action : c'est le même nœud.
   const regionDAnnonce = un(ecran, "p.combat-annonce");
   assert.match(texteDe(regionDAnnonce), /^Combat lancé : 1 personnage contre 3 adversaires\./);
 
@@ -1490,7 +1610,11 @@ dansUnePage("« Nouveau combat » — la confirmation dans la page ; « Annuler 
   assert.deepEqual(jetons(ecran), {});
   assert.deepEqual(journal(ecran), []);
   assert.equal(texteDe(regionDAnnonce), "", "la région d'annonce ne redit rien du combat d'avant");
-  assert.equal(regionDAnnonce.isConnected, false);
+  assert.equal(un(ecran, "p.combat-annonce"), regionDAnnonce, "elle reste dans la page, vide, et reste la seule");
+  assert.equal(regionDAnnonce.parentNode, ecran);
+  // Le menu « ⋯ » se referme avec la question : sur un téléphone, « Nouveau combat » restait affiché sous la barre du combat neuf.
+  assert.deepEqual([un(barre(ecran), "button.combat-plus-bouton").getAttribute("aria-expanded"), autres.className], ["false", "combat-autres"]);
+  assert.deepEqual(tous(autres, "button").map(texteDe), ["Nouveau combat"]);
   assert.deepEqual(un(ecran, ".combat-cadre").children.map((noeud) => noeud.className), ["combat-plateau", "combat-preparation", "combat-camps"]);
   assert.equal(document.activeElement, un(ecran, "h1"));
   assert.equal(inactif(boutonDit(un(ecran, ".combat-journal"), "Copier")), true);
@@ -1505,6 +1629,7 @@ dansUnePage("« Nouveau combat » — la confirmation dans la page ; « Annuler 
   await ajouterDesAdversaires(ecran, "Plongeur", 1);
   await lancerLeCombat(ecran);
   assert.equal(annonce(ecran), "Combat lancé : 1 personnage contre 1 adversaire. Les PJ commencent. — Tour 1 · camp des PJ —");
+  assert.equal(un(ecran, "p.combat-annonce"), regionDAnnonce, "et c'est encore le même nœud qui le dit");
 });
 
 dansUnePage("« Fiche complète » — le personnage et l'adversaire, d'après leur photographie ; « Fermer » rend le focus ; la banque qui a changé se dit", async (page) => {
@@ -1534,18 +1659,31 @@ dansUnePage("« Fiche complète » — le personnage et l'adversaire, d'après l
   assert.equal(texteDe(tous(panneau, "h2")[0]), "Fiche complète : Marmiton de corvée n° 2");
   const carte = un(panneau, "article.carte-adversaire");
   assert.equal(texteDe(un(carte, ".carte-nom")), "Marmiton de corvée n° 2");
+  // Le cadre de la carte se mesure sur ce qui le contient : un nœud sans classe, donc sans remplissage, et non le panneau lui-même.
+  const cadreDeLaCarte = un(panneau, ".cadre-cartes");
+  assert.deepEqual([cadreDeLaCarte.parentNode.tagName, cadreDeLaCarte.parentNode.className, cadreDeLaCarte.parentNode.parentNode], ["DIV", "", panneau]);
   assert.equal(tous(panneau, ".lecture").length, 0);
   assert.doesNotMatch(texteDe(panneau), /La banque a changé/);
   // La banque d'appoint de cette carte n'est pas passée par l'écran Rencontre : sa composition est entière.
   assert.equal(rencontre.exemplaires(BANQUE, "Plongeur"), 1);
   // Retirer le protagoniste ferme sa fiche.
-  await cliquer(repere(fiche(ecran, "adv4"), "retirer"));
+  await cliquer(repere(groupe(ecran, "adv4"), "retirer"));
   assert.equal(panneau.children.length, 0);
   // Une fiche repliée : à « Fermer », c'est son en-tête qui reçoit le focus.
   await cliquer(repere(fiche(ecran, "adv2"), "fiche-complete"));
   fiche(ecran, "adv2").removeAttribute("open");
   await cliquer(boutonDit(panneau, "Fermer"));
   assert.equal(document.activeElement, un(fiche(ecran, "adv2"), "summary"));
+
+  // Le personnage a été retouché sur l'appareil depuis son ajout (un autre nom, la même clé) : la liste de la
+  // préparation le montre tel qu'il est aujourd'hui, mais sa fiche complète se calcule du personnage photographié.
+  const retouche = { ...AUBEPINE, identite: { ...AUBEPINE.identite, nom: "Aubépine Meringuée" } };
+  const { ecran: plusTard } = await ouvrirLEcran(page, { magasin, personnages: [retouche] });
+  assert.equal(tous(repere(plusTard, "personnage"), "option").some((option) => texteDe(option).startsWith("Aubépine Meringuée")), true, "l'appareil tient le personnage retouché");
+  assert.deepEqual(fiches(plusTard)[0], ["pj1", "Aubépine Crèmebrûlée"]);
+  await cliquer(repere(fiche(plusTard, "pj1"), "fiche-complete"));
+  assert.equal(texteDe(un(un(plusTard, "section.combat-panneau"), ".lecture-titre")), "Aubépine Crèmebrûlée", "le personnage photographié, pas celui que l'appareil tient aujourd'hui");
+  assert.doesNotMatch(texteDe(un(plusTard, "section.combat-panneau")), /Meringuée/);
 
   // La banque republiée, où le Chef de partie n'est plus : le combat ne bouge pas, sa carte se
   // calcule toujours de sa ligne photographiée, et la fiche dit qu'elle suit la banque du jour.
@@ -1636,7 +1774,9 @@ dansUnePage("enregistrement — « Enregistrement… » puis « Combat gardé su
     assert.equal(noeud.hasAttribute("role"), false);
     assert.equal(noeud.hasAttribute("aria-live"), false);
   }
-  assert.deepEqual(regions(ecran).map(([noeud]) => noeud.className), ["combat-avis"], "avant le lancement, la seule région est la zone d'avis");
+  // Avant le lancement, la zone d'avis, et déjà la région d'annonce des dés, vide : entrée dans la page avec le panneau, déjà pleine, sa première annonce pouvait ne pas être dite.
+  assert.deepEqual(regions(ecran).map(([noeud, texte]) => [noeud.className, texte]), [["combat-avis", ""], ["combat-annonce", ""]]);
+  const regionDesDes = un(ecran, "p.combat-annonce");
 
   for (const ajouter of [() => ajouterLePersonnage(ecran, "Aubépine Crèmebrûlée"), () => ajouterDesAdversaires(ecran, "Plongeur", 1), () => lancerLeCombat(ecran)]) {
     await ajouter();
@@ -1646,8 +1786,9 @@ dansUnePage("enregistrement — « Enregistrement… » puis « Combat gardé su
     assert.equal(garde(ecran), "Combat gardé sur cet appareil");
     assert.equal(avis(ecran).children.length, 0);
   }
-  // Le combat lancé, la région d'annonce des dés s'ajoute : c'est la seule région polie.
-  assert.deepEqual(regions(ecran).filter(([noeud]) => noeud.getAttribute("aria-live") === "polite" || noeud.getAttribute("role") === "status").map(([noeud]) => noeud.className), ["combat-annonce"]);
+  // Le combat lancé, c'est le même nœud qui parle : la seule région polie de l'écran.
+  assert.deepEqual(regions(ecran).filter(([noeud]) => noeud.getAttribute("aria-live") === "polite" || noeud.getAttribute("role") === "status").map(([noeud]) => noeud), [regionDesDes]);
+  assert.match(texteDe(regionDesDes), /^Combat lancé : 1 personnage contre 1 adversaire\./);
   // Chaque écriture a monté la révision.
   assert.equal((await lireLaBase(lieu)).revision >= 3, true);
 });
@@ -1781,11 +1922,25 @@ dansUnePage("enregistrement — « Combat ouvert ailleurs » : on ne joue plus, 
   assert.equal(inactif(fin), true);
   assert.equal(raisonDe(ecran, fin), "Combat ouvert ailleurs");
 
+  // La carte montre le combat sans rien offrir : aucun jeton ne porte de commande, aucun n'est écarté par un choix, aucune case ne se choisit.
+  const surLaCarte = tous(ecran, ".combat-jeton");
+  assert.equal(surLaCarte.length, 4);
+  for (const pose of surLaCarte) {
+    assert.equal(inactif(pose), true, pose.getAttribute("title"));
+    assert.equal(pose.className.split(" ").includes("inactif"), false, pose.getAttribute("title"));
+  }
+  assert.equal(tous(ecran, ".combat-case-choix").length, 0);
+  assert.equal(tous(ecran, ".combat-case").filter((noeud) => /possible|inactive/.test(noeud.className)).length, 0);
+  // Les fiches non plus : ni « Jouer », ni rien d'autre que « Fiche complète ».
+  assert.equal(tous(ecran, "[data-repere=jouer]").length, 0);
+  assert.deepEqual([...new Set(tous(un(ecran, ".combat-camps"), "button").map(texteDe))], ["Fiche complète"]);
+
   // On ne joue plus : un clic est refusé, rien ne change, rien ne s'écrit, et l'avis ne se redit pas.
   const dit = un(avis(ecran), "p");
   const avant = journal(ecran);
   await cliquer(fin);
   await cliquer(jeton(ecran, "Aubépine Crèmebrûlée"));
+  await cliquer(jeton(ecran, "Marmiton de corvée n° 1"));
   assert.deepEqual(journal(ecran), avant);
   assert.equal(un(avis(ecran), "p"), dit, "le même nœud : un lecteur d'écran ne l'entend qu'une fois");
   await laisserFiler(30);
@@ -1800,6 +1955,9 @@ dansUnePage("enregistrement — « Combat ouvert ailleurs » : on ne joue plus, 
   assert.equal(etatDuCombat(ecran), "Tour 1 · camp des adversaires");
   assert.equal(inactif(boutonDit(barre(ecran), "Nouveau combat")), false);
   assert.equal(inactif(boutonDit(barre(ecran), "Fin de tour")), false, "le combat repris, « Fin de tour » rejoue");
+  // La carte et les fiches offrent de nouveau : les adversaires, qui ont la main, se choisissent.
+  assert.deepEqual(tous(ecran, ".combat-jeton").filter((pose) => !inactif(pose)).map((pose) => pose.getAttribute("title")).sort(), ["Chef de partie", "Marmiton de corvée n° 1", "Marmiton de corvée n° 2"]);
+  assert.equal(tous(ecran, "[data-repere=jouer]").length, 3);
   await cliquer(boutonDit(corps(ecran), "Chef de partie"));
   assert.equal(titreDuPanneau(ecran), "Chef de partie joue — 1 action sur 1, souffle 7");
   // Et l'on écrit de nouveau : le geste suivant monte la révision de l'autre onglet.
@@ -1808,6 +1966,26 @@ dansUnePage("enregistrement — « Combat ouvert ailleurs » : on ne joue plus, 
   await attendre(() => garde(ecran) === PHRASES_DE_GARDE.garde, "l'écriture d'après la reprise");
   assert.equal(avis(ecran).children.length, 0);
   assert.equal((await lieu.gardee()).revision, gardee.revision + 1);
+
+  // Une seconde fois, sans geste ouvert : un troisième onglet reprend le combat et revient sur la Frappe du Chef ;
+  // ici, « Revenir » le découvre. Rien n'est en cours : sans le blocage, les deux Marmitons se choisiraient par leur
+  // jeton et par « Jouer ». Bloqués, ni la carte ni les fiches ne l'offrent.
+  const troisieme = creerGardien({ magasin: await lieu.onglet(), mode: "demo", secret: () => SECRET });
+  const tiers = creerSeance({ gardien: troisieme, des: desImposes([]), maintenant: SOIR, mode: "demo", accepter });
+  assert.deepEqual(await tiers.ouvrir(), { issue: "repris" });
+  assert.deepEqual(tiers.jouer({ type: "revenir" }), {});
+  await troisieme.repos();
+  await cliquer(boutonDit(corps(ecran), "Revenir"));
+  await attendre(() => garde(ecran) === "Combat ouvert ailleurs", "le second refus de l'écriture");
+  assert.equal(tous(ecran, ".combat-jeton").length, 4);
+  assert.deepEqual(tous(ecran, ".combat-jeton").filter((pose) => !inactif(pose)), [], "aucun jeton ne porte de commande");
+  assert.equal(tous(ecran, "[data-repere=jouer]").length, 0, "aucune fiche n'offre « Jouer »");
+  assert.deepEqual([...new Set(tous(un(ecran, ".combat-camps"), "button").map(texteDe))], ["Fiche complète"]);
+  // Repris, le combat offre de nouveau : le Chef joue encore, les deux Marmitons se choisissent.
+  await cliquer(boutonDit(un(ecran, ".combat-cadre").children[1], "Reprendre le combat le plus récent"));
+  await attendre(() => garde(ecran) === PHRASES_DE_GARDE.garde, "la seconde reprise");
+  assert.equal(tous(ecran, ".combat-jeton").filter((pose) => !inactif(pose)).length, 3);
+  assert.ok(tous(ecran, "[data-repere=jouer]").length >= 2);
 });
 
 dansUnePage("enregistrement — le mot de passe changé, la donnée abîmée : « ne se lit plus », puis « Nouveau combat »", async () => {

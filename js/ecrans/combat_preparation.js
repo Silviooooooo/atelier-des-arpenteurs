@@ -24,6 +24,8 @@ const ATTENTE = "Lecture des personnages en ligne…";
 const AUCUN_PERSONNAGE = "Aucun personnage enregistré à ajouter. Un personnage se crée et s'enregistre à l'écran ";
 const NE_S_AJOUTE_PAS = " (ne s'ajoute pas)";
 const SANS_CHOIX = "Choisissez d'abord dans la liste.";
+// Les blocs, dans l'ordre du document, et la classe de chacun.
+const CLASSES_DES_BLOCS = { personnages: "personnages", adversaires: "adversaires", rencontre: "rencontre", quiCommence: "commence", lancer: "lancer", notes: "notes" };
 
 /** Vrai quand « noeud » est « ancetre », ou l'un de ses descendants. */
 function estDans(noeud, ancetre) {
@@ -123,9 +125,11 @@ export function creer(actions) {
   // listes se refont quand leur vue change.
   const choix = { personnage: null, adversaire: null, nombre: "1" };
 
+  // Chaque bloc a sa classe : la feuille de style range « Qui commence » et
+  // « Lancer le combat » sur une rangée, comme la barre de la maquette.
   const blocs = {};
-  for (const nom of ["personnages", "adversaires", "rencontre", "quiCommence", "lancer", "notes"]) {
-    blocs[nom] = { noeud: el("div", { classe: `${PREFIXE}-bloc` }), texte: null };
+  for (const [nom, classe] of Object.entries(CLASSES_DES_BLOCS)) {
+    blocs[nom] = { noeud: el("div", { classe: `${PREFIXE}-bloc ${PREFIXE}-${classe}` }), texte: null };
   }
   const listeDeCase = el("div", { classe: "combat-case-liste" });
   const noeud = el(

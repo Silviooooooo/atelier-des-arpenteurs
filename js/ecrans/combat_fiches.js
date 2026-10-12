@@ -4,7 +4,9 @@
 // Une fiche par protagoniste, dans la liste de son camp : un volet que son
 // nom déplie, avec ce qui change pendant le combat (actions, souffle, corps,
 // armure et résistance de chaque zone, lien, passifs câblés) et les boutons
-// « Jouer » et « Fiche complète ». C'est l'une des quatre parties de l'écran
+// « Jouer » et « Fiche complète ». Avant le lancement, le champ « Case » et
+// « Retirer » suivent le volet, hors de lui : ils s'atteignent sans le
+// déplier, à toute largeur. C'est l'une des quatre parties de l'écran
 // du combat. Elle ne sait rien du jeu : elle montre les vues qu'on lui donne
 // (vueFiche, js/combat/lecture.js), où chaque texte arrive écrit et chaque
 // bouton avec sa commande, et elle rend la main à l'écran par « actions ».
@@ -75,7 +77,9 @@ function ligneDeZone(zone) {
     "tr",
     {},
     el("td", {}, zone.faces),
-    el("td", {}, nomDeZone(zone)),
+    // Le nom de la zone est l'en-tête de sa ligne : un lecteur d'écran le dit
+    // avec l'armure et la résistance.
+    el("th", { scope: "row" }, nomDeZone(zone)),
     el("td", { classe: etat }, ecrireArmure(zone.armure)),
     el(
       "td",
@@ -87,10 +91,11 @@ function ligneDeZone(zone) {
   );
 }
 
-function tableDesZones(zones) {
+/** La table des zones d'un protagoniste, qu'elle nomme : plusieurs fiches sont ouvertes à la fois. */
+function tableDesZones(zones, nom) {
   return el(
     "table",
-    { classe: "combat-zones" },
+    { classe: "combat-zones", "aria-label": `Zones : ${sansSensForce(nom)}` },
     el("thead", {}, el("tr", {}, ["d20", "Zone", "Armure", "Résistance"].map((titre) => el("th", { scope: "col" }, titre)))),
     el("tbody", {}, zones.map(ligneDeZone)),
   );
@@ -128,7 +133,7 @@ export function creer(actions) {
   // Les identifiants de la page ne se font jamais d'un identifiant de
   // protagoniste, qui est une donnée.
   let numero = 0;
-  /** id → { numero, noeud, resume, corps, texte, ecrit, choix, morte, joue } */
+  /** id → { numero, noeud, resume, corps, avant, texte, ecrit, choix, morte, joue } */
   const fiches = new Map();
 
   const camps = CAMPS.map(({ camp, titre, vide }) => {
@@ -163,8 +168,11 @@ export function creer(actions) {
 
   function creerFiche(id) {
     numero += 1;
-    const fiche = { numero, noeud: null, resume: el("summary"), corps: el("div", { classe: `${PREFIXE}-corps` }), texte: null, ecrit: false, choix: null, morte: false, joue: false };
+    const fiche = { numero, noeud: null, resume: el("summary"), corps: el("div", { classe: `${PREFIXE}-corps` }), avant: null, texte: null, ecrit: false, choix: null, morte: false, joue: false };
     fiche.noeud = el("details", { classe: PREFIXE, "data-id": id, ontoggle: () => releverLeGeste(fiche) }, fiche.resume, fiche.corps);
+    // Ce qui suit le volet avant le lancement : un groupe au nom du
+    // protagoniste, toujours visible, que le volet soit ouvert ou replié.
+    fiche.avant = el("div", { classe: `${PREFIXE}-avant`, role: "group", "data-fiche": id });
     return fiche;
   }
 
@@ -191,11 +199,16 @@ export function creer(actions) {
       .flatMap((partie) => [partie, " "]);
   }
 
-  /** Avant le lancement : la case du protagoniste, et de quoi le retirer. */
+  /**
+   * Avant le lancement : la case du protagoniste, et de quoi le retirer, sur
+   * une rangée. Sur un téléphone, où les fiches sont repliées tant que
+   * personne ne joue, le champ est le double de 44 px du plateau : il ne
+   * demande pas de déplier la fiche.
+   */
   function faireAvant(fiche, vue) {
     const { avant } = vue;
     const id = `${PREFIXE}-${fiche.numero}-case`;
-    const refus = el("p", { id: `${id}-refus`, classe: "secondaire-texte petit", hidden: true }, CASE_REFUSEE);
+    const refus = el("p", { id: `${id}-refus`, classe: "combat-refus", hidden: true }, CASE_REFUSEE);
     const champ = el("input", {
       type: "text",
       id,
@@ -225,7 +238,8 @@ export function creer(actions) {
       el(
         "div",
         { classe: "combat-ligne" },
-        el("div", {}, el("label", { for: id }, "Case"), champ),
+        el("label", { for: id }, "Case"),
+        champ,
         el(
           "button",
           { type: "button", classe: "bouton secondaire", "data-repere": "retirer", "aria-label": `Retirer : ${sansSensForce(vue.nom)}`, onclick: () => actions.executer(avant.retirer.commande, "panneau") },
@@ -241,13 +255,12 @@ export function creer(actions) {
     return [
       vue.souffle.absent ? jauge("souffle", "Souffle", 0, 0, SOUFFLE_ABSENT) : jauge("souffle", "Souffle", vue.souffle.valeur, vue.souffle.max),
       jauge("corps", "Corps", vue.corps.valeur, vue.corps.max),
-      tableDesZones(vue.zones),
+      tableDesZones(vue.zones, vue.nom),
       el("p", { classe: "combat-contre" }, vue.contre),
       [vue.attaque, vue.defense, vue.bouclier].filter(Boolean).map((texte) => el("p", { classe: "combat-valeurs" }, texte)),
       vue.liens.map((lien) => jauge("lien", `Lien · ${sansSensForce(lien.nom)}`, lien.valeur, lien.max)),
       lignes.length ? el("ul", { classe: "combat-effets" }, lignes.map(ligneDEffet)) : null,
       faireLesBoutons(fiche, vue),
-      vue.avant ? faireAvant(fiche, vue) : null,
     ].flat().filter(Boolean);
   }
 
@@ -298,8 +311,9 @@ export function creer(actions) {
       fiche.resume.replaceChildren(...faireResume(vue));
     }
     // Le corps ne lit ni l'état, ni les marques, ni les actions : ce sont
-    // l'en-tête et les classes qui les montrent.
-    const corps = JSON.stringify({ ...vue, statut: undefined, marques: undefined, actions: undefined, jouer: undefined });
+    // l'en-tête et les classes qui les montrent. Ni la case d'avant le
+    // lancement, qui a son groupe : un jeton déplacé ne refait pas la fiche.
+    const corps = JSON.stringify({ ...vue, statut: undefined, marques: undefined, actions: undefined, jouer: undefined, avant: undefined });
     const jouer = JSON.stringify(vue.jouer ?? null);
     if (corps !== fiche.texteDuCorps) {
       fiche.texteDuCorps = corps;
@@ -308,6 +322,16 @@ export function creer(actions) {
     } else if (jouer !== fiche.texteDeJouer) {
       fiche.texteDeJouer = jouer;
       fiche.boutons.replaceChildren(...[boutonJouer(vue), fiche.complete].filter(Boolean));
+    }
+    const avant = JSON.stringify(vue.avant ? [vue.avant, vue.nom] : null);
+    if (avant !== fiche.texteDAvant) {
+      fiche.texteDAvant = avant;
+      if (vue.avant) {
+        fiche.avant.setAttribute("aria-label", sansSensForce(vue.nom));
+        fiche.avant.replaceChildren(...faireAvant(fiche, vue));
+      } else {
+        fiche.avant.replaceChildren();
+      }
     }
   }
 
@@ -333,11 +357,16 @@ export function creer(actions) {
       deplier(fiche, etroit);
     }
     // Les fiches ne se reposent dans la liste que si la liste a changé : un
-    // nœud reposé perd le focus et le défilement.
-    const ordre = JSON.stringify(vues.map((vue) => vue.id));
+    // nœud reposé perd le focus et le défilement. Avant le lancement, chaque
+    // volet est suivi de son groupe « Case » et « Retirer ».
+    const ordre = JSON.stringify(vues.map((vue) => [vue.id, Boolean(vue.avant)]));
     if (ordre !== camp.ordre) {
       camp.ordre = ordre;
-      camp.noeud.replaceChildren(camp.tete, ...(vues.length ? vues.map((vue) => fiches.get(vue.id).noeud) : [camp.vide]));
+      const noeudsDe = (vue) => {
+        const fiche = fiches.get(vue.id);
+        return vue.avant ? [fiche.noeud, fiche.avant] : [fiche.noeud];
+      };
+      camp.noeud.replaceChildren(camp.tete, ...(vues.length ? vues.flatMap(noeudsDe) : [camp.vide]));
     }
     const morts = vues.filter((vue) => vue.marques.includes("morte")).length;
     const ecrit = vues.length === 0 ? "" : morts === 0 ? `· ${vues.length}` : `· ${vues.length - morts} en vie sur ${vues.length}`;
@@ -349,7 +378,7 @@ export function creer(actions) {
     const actif = globalThis.document?.activeElement;
     if (!actif || !estDans(actif, noeud)) return null;
     for (const [id, fiche] of fiches) {
-      if (estDans(actif, fiche.noeud)) return { actif, id, camp: camps.find((camp) => estDans(actif, camp.noeud)), repere: actif.getAttribute("data-repere") };
+      if (estDans(actif, fiche.noeud) || estDans(actif, fiche.avant)) return { actif, id, camp: camps.find((camp) => estDans(actif, camp.noeud)), repere: actif.getAttribute("data-repere") };
     }
     return null;
   }
@@ -372,7 +401,7 @@ export function creer(actions) {
       avant.camp?.tete.focus();
       return;
     }
-    const pareil = avant.repere ? fiche.corps.querySelector(`[data-repere=${avant.repere}]`) : null;
+    const pareil = avant.repere ? (fiche.corps.querySelector(`[data-repere=${avant.repere}]`) ?? fiche.avant.querySelector(`[data-repere=${avant.repere}]`)) : null;
     (pareil ?? fiche.resume).focus();
   }
 

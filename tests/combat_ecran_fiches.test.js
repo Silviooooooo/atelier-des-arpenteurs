@@ -132,6 +132,8 @@ function monter(vue = { pj: [aubepine()], adv: [chef(), marmiton1(), marmiton2()
 }
 
 const ficheDe = (partie, id) => partie.noeud.querySelector(`details[data-id=${id}]`);
+/** Ce qui suit le volet avant le lancement : le groupe du champ « Case » et de « Retirer ». */
+const groupeDe = (partie, id) => partie.noeud.querySelector(`[data-fiche=${id}]`);
 const ouverte = (fiche) => fiche.hasAttribute("open");
 const repere = (fiche, nom) => fiche.querySelector(`[data-repere=${nom}]`);
 const classesDe = (noeud) => noeud.className.split(/\s+/).filter(Boolean);
@@ -301,6 +303,14 @@ test("la table des zones : les faces, le nom abrégé, l'armure signalée dès q
     assert.deepEqual(textes(table, "thead th"), ["d20", "Zone", "Armure", "Résistance"]);
     for (const titre of table.querySelectorAll("thead th")) assert.equal(titre.getAttribute("scope"), "col");
     const lignes = [...table.querySelectorAll("tbody tr")];
+    // Le nom de la zone est l'en-tête de sa ligne : un lecteur d'écran le dit avec l'armure et la résistance.
+    for (const ligne of lignes) {
+      assert.deepEqual(ligne.children.map((cellule) => cellule.tagName), ["TD", "TH", "TD", "TD"]);
+      assert.equal(ligne.children[1].getAttribute("scope"), "row");
+    }
+    // La table porte le nom de son protagoniste : plusieurs fiches sont ouvertes à la fois.
+    assert.equal(table.getAttribute("aria-label"), "Zones : Aubépine Crèmebrûlée");
+    assert.equal(ficheDe(partie, "adv2").querySelector("table").getAttribute("aria-label"), "Zones : Chef de partie");
     assert.deepEqual(
       lignes.map((ligne) => ligne.children.slice(0, 3).map(texteDe)),
       [
@@ -709,37 +719,58 @@ test("une fiche fermée par la personne sur un grand écran se replie encore à 
   }
 });
 
-test("avant le lancement, chaque fiche porte le champ « Case » et « Retirer » ; après, ni l'un ni l'autre", () => {
-  const { partie, appels, retirer } = monter({ pj: [aubepine({ avant: avantDe("pj1", "A1") })], adv: [chef({ avant: avantDe("adv2", "J1") })] });
+test("avant le lancement, chaque fiche porte le champ « Case » et « Retirer », hors du volet : ils s'atteignent sans le déplier ; après, ni l'un ni l'autre", () => {
+  // Sur un téléphone, avant le lancement, personne ne joue : toutes les fiches sont repliées.
+  const { partie, appels, retirer } = monter({ pj: [aubepine({ avant: avantDe("pj1", "A1") })], adv: [chef({ avant: avantDe("adv2", "J1") })] }, { etroit: true });
   try {
     const fiche = ficheDe(partie, "pj1");
-    const champ = repere(fiche, "case");
+    assert.equal(ouverte(fiche), false);
+    // Le champ et le bouton ne sont pas dans le volet, qui les cacherait replié : ils le suivent, dans un groupe au nom du protagoniste.
+    assert.equal(fiche.querySelectorAll("input").length, 0);
+    assert.equal(repere(fiche, "retirer"), null);
+    const groupe = groupeDe(partie, "pj1");
+    assert.deepEqual([groupe.tagName, groupe.className, groupe.getAttribute("role"), groupe.getAttribute("aria-label")], ["DIV", "combat-fiche-avant", "group", "Aubépine Crèmebrûlée"]);
+    const camp = partie.noeud.querySelector(".combat-camp-pj");
+    assert.deepEqual(camp.children, [camp.querySelector("h2"), fiche, groupe], "le groupe suit son volet dans la liste du camp");
+    assert.deepEqual(partie.noeud.querySelector(".combat-camp-adv").children.map((enfant) => enfant.tagName), ["H2", "DETAILS", "DIV"]);
+    for (let ancetre = groupe; ancetre; ancetre = ancetre.parentNode) assert.notEqual(ancetre.tagName, "DETAILS", "jamais dans un volet");
+
+    const champ = repere(groupe, "case");
     assert.equal(champ.tagName, "INPUT");
     assert.equal(champ.className, "champ");
     assert.equal(champ.value, "A1");
-    const libelle = fiche.querySelector("label");
+    const libelle = groupe.querySelector("label");
     assert.equal(texteDe(libelle), "Case");
     assert.equal(libelle.getAttribute("for"), champ.id);
-    assert.equal(repere(ficheDe(partie, "adv2"), "case").value, "J1");
+    // Le champ et son bouton tiennent sur une rangée.
+    assert.equal(champ.parentNode.className, "combat-ligne");
+    assert.equal(repere(groupe, "retirer").parentNode, champ.parentNode);
+    assert.equal(repere(groupeDe(partie, "adv2"), "case").value, "J1");
+    assert.equal(groupeDe(partie, "adv2").getAttribute("aria-label"), "Chef de partie");
     // Deux champs, deux identifiants : aucun ne se fait de l'identifiant du protagoniste.
-    assert.notEqual(repere(ficheDe(partie, "adv2"), "case").id, champ.id);
+    assert.notEqual(repere(groupeDe(partie, "adv2"), "case").id, champ.id);
     assert.ok(!champ.id.includes("pj1"));
 
-    const bouton = repere(fiche, "retirer");
+    const bouton = repere(groupe, "retirer");
     assert.equal(texteDe(bouton), "Retirer");
     assert.equal(bouton.getAttribute("aria-label"), "Retirer : Aubépine Crèmebrûlée");
     bouton.click();
     assert.deepEqual(appels, [["executer", { preparer: { type: "retirer", id: "pj1" } }, "panneau"]]);
-    repere(ficheDe(partie, "adv2"), "retirer").click();
+    repere(groupeDe(partie, "adv2"), "retirer").click();
     assert.deepEqual(appels.at(-1), ["executer", { preparer: { type: "retirer", id: "adv2" } }, "panneau"]);
 
-    // Le combat lancé : la vue n'a plus « avant », la fiche non plus.
+    // Sur un grand écran aussi, un volet replié par la personne laisse le champ en vue.
+    partie.rendre({ pj: [aubepine({ avant: avantDe("pj1", "A1") })], adv: [chef({ avant: avantDe("adv2", "J1") })] }, { etroit: false });
+    basculer(ficheDe(partie, "adv2"));
+    assert.equal(ouverte(ficheDe(partie, "adv2")), false);
+    assert.equal(repere(groupeDe(partie, "adv2"), "case").isConnected, true);
+
+    // Le combat lancé : la vue n'a plus « avant », et le groupe quitte la page.
     partie.rendre({ pj: [aubepine()], adv: [chef()] }, { etroit: false });
-    for (const id of ["pj1", "adv2"]) {
-      assert.equal(repere(ficheDe(partie, id), "case"), null);
-      assert.equal(repere(ficheDe(partie, id), "retirer"), null);
-      assert.equal(ficheDe(partie, id).querySelectorAll("input").length, 0);
-    }
+    assert.equal(partie.noeud.querySelectorAll(".combat-fiche-avant").length, 0);
+    assert.equal(partie.noeud.querySelectorAll("input").length, 0);
+    assert.equal(partie.noeud.querySelectorAll("[data-repere=retirer]").length, 0);
+    for (const nom of ["pj", "adv"]) assert.deepEqual(partie.noeud.querySelector(`.combat-camp-${nom}`).children.map((enfant) => enfant.tagName), ["H2", "DETAILS"]);
   } finally {
     retirer();
   }
@@ -748,9 +779,10 @@ test("avant le lancement, chaque fiche porte le champ « Case » et « Retirer �
 test("le champ « Case » pose le protagoniste sur une case lue ; une saisie qui n'est pas une case ne part pas, et le dit", () => {
   const { partie, appels, retirer } = monter({ pj: [aubepine({ avant: avantDe("pj1", "A1") })], adv: [chef({ avant: avantDe("adv2", "J1") })] });
   try {
-    const champ = repere(ficheDe(partie, "pj1"), "case");
+    const champ = repere(groupeDe(partie, "pj1"), "case");
     const refus = partie.noeud.querySelector(`#${champ.getAttribute("aria-describedby")}`);
     assert.equal(texteDe(refus), "Une case s'écrit de A1 à J10.");
+    assert.equal(refus.parentNode, groupeDe(partie, "pj1"), "le refus est dans le groupe, hors du volet");
     assert.equal(refus.hidden, true);
 
     // La casse et les blancs de bord sont tolérés ; la case part telle que le plateau la nomme.
@@ -783,7 +815,7 @@ test("le champ « Case » pose le protagoniste sur une case lue ; une saisie qui
     assert.equal(champ.value, "A1");
 
     // Chaque champ pose son protagoniste, pas un autre.
-    saisir(repere(ficheDe(partie, "adv2"), "case"), "i9");
+    saisir(repere(groupeDe(partie, "adv2"), "case"), "i9");
     assert.deepEqual(appels.at(-1), ["executer", { preparer: { type: "poser", id: "adv2", case: "I9" } }, "panneau"]);
   } finally {
     retirer();
@@ -794,16 +826,19 @@ test("le champ « Case » suit la case du protagoniste, et une saisie en cours s
   const vue = (casePj, caseAdv = "J1") => ({ pj: [aubepine({ avant: avantDe("pj1", casePj) })], adv: [chef({ avant: avantDe("adv2", caseAdv) })] });
   const { partie, retirer } = monter(vue("A1"));
   try {
-    const champ = repere(ficheDe(partie, "pj1"), "case");
+    const champ = repere(groupeDe(partie, "pj1"), "case");
     champ.value = "zz";
-    // Le Chef est déplacé sur le plateau : la fiche d'Aubépine n'est pas refaite.
+    const tables = { pj1: ficheDe(partie, "pj1").querySelector("table"), adv2: ficheDe(partie, "adv2").querySelector("table") };
+    // Le Chef est déplacé sur le plateau : le groupe d'Aubépine n'est pas refait.
     partie.rendre(vue("A1", "H3"), { etroit: false });
-    assert.equal(repere(ficheDe(partie, "pj1"), "case"), champ);
+    assert.equal(repere(groupeDe(partie, "pj1"), "case"), champ);
     assert.equal(champ.value, "zz");
-    assert.equal(repere(ficheDe(partie, "adv2"), "case").value, "H3");
+    assert.equal(repere(groupeDe(partie, "adv2"), "case").value, "H3");
     // Aubépine est déplacée à son tour : son champ le montre.
     partie.rendre(vue("C3", "H3"), { etroit: false });
-    assert.equal(repere(ficheDe(partie, "pj1"), "case").value, "C3");
+    assert.equal(repere(groupeDe(partie, "pj1"), "case").value, "C3");
+    // Un jeton déplacé ne refait que son groupe : le corps des fiches garde ses nœuds.
+    for (const id of ["pj1", "adv2"]) assert.equal(ficheDe(partie, id).querySelector("table"), tables[id], id);
   } finally {
     retirer();
   }
@@ -854,14 +889,14 @@ test("le focus : il reste où il est quand rien ne change, suit le bouton de mê
   const { partie, retirer } = monter(vue("A1"));
   try {
     // Rien ne change : le champ garde le focus, et c'est le même nœud.
-    const champ = repere(ficheDe(partie, "pj1"), "case");
+    const champ = repere(groupeDe(partie, "pj1"), "case");
     champ.focus();
     partie.rendre(vue("A1"), { etroit: false });
     assert.equal(document.activeElement, champ);
 
-    // La fiche est refaite (la case a changé) : le focus passe au champ neuf.
+    // Le groupe est refait (la case a changé) : le focus passe au champ neuf.
     partie.rendre(vue("D4"), { etroit: false });
-    const neuf = repere(ficheDe(partie, "pj1"), "case");
+    const neuf = repere(groupeDe(partie, "pj1"), "case");
     assert.notEqual(neuf, champ);
     assert.equal(document.activeElement, neuf);
     assert.equal(neuf.isConnected, true);
@@ -874,11 +909,20 @@ test("le focus : il reste où il est quand rien ne change, suit le bouton de mê
 
     // « Retirer » : la fiche s'en va, le titre de son camp reçoit le focus.
     partie.rendre(vue("A1"), { etroit: false });
-    repere(ficheDe(partie, "adv2"), "retirer").focus();
+    repere(groupeDe(partie, "adv2"), "retirer").focus();
     partie.rendre(vue("A1", []), { etroit: false });
     const titre = partie.noeud.querySelector(".combat-camp-adv h2");
     assert.equal(document.activeElement, titre);
     assert.equal(titre.getAttribute("tabindex"), "-1");
+
+    // Le groupe « Case » s'en va (le combat se lance, ou l'on ne joue plus) pendant que son champ a le focus :
+    // l'en-tête de la fiche le reçoit, et non un champ qui a quitté la page.
+    partie.rendre(vue("A1"), { etroit: false });
+    repere(groupeDe(partie, "pj1"), "case").focus();
+    partie.rendre({ pj: [aubepine()], adv: [chef()] }, { etroit: false });
+    assert.equal(document.activeElement, ficheDe(partie, "pj1").querySelector("summary"));
+    assert.equal(document.activeElement.isConnected, true);
+    assert.equal(groupeDe(partie, "pj1"), null);
 
     // Un focus tenu hors des fiches n'est jamais pris.
     const ailleurs = document.createElement("button");
@@ -907,9 +951,15 @@ test("un nom hostile reste du texte : ni balise, ni sens d'écriture forcé, ni 
     assert.equal(fiche.querySelectorAll("b").length, 0);
     assert.equal(partie.noeud.querySelectorAll("i").length, 0);
     assert.equal(repere(fiche, "jouer").getAttribute("aria-label"), `Jouer : ${propre}`);
-    assert.equal(repere(fiche, "retirer").getAttribute("aria-label"), `Retirer : ${propre}`);
+    const groupe = partie.noeud.querySelector(".combat-camp-adv .combat-fiche-avant");
+    assert.equal(repere(groupe, "retirer").getAttribute("aria-label"), `Retirer : ${propre}`);
+    assert.equal(groupe.getAttribute("aria-label"), propre);
+    assert.equal(groupe.getAttribute("data-fiche"), 'x"] , [data-id="pj1');
     assert.equal(repere(fiche, "fiche-complete").getAttribute("aria-label"), `Fiche complète : ${propre}`);
+    assert.equal(fiche.querySelector("table").getAttribute("aria-label"), `Zones : ${propre}`);
     assert.ok(!partie.noeud.textContent.includes(force));
+    // Aucun attribut ne garde le signe : ni un nom accessible, ni un titre.
+    assert.deepEqual([...partie.noeud.descendants()].flatMap((noeud) => [...noeud.attributs].filter(([, valeur]) => valeur.includes(force)).map(([nom]) => `${noeud.tagName}@${nom}`)), []);
     assert.equal(texteDe(partie.noeud.querySelectorAll(".combat-jauge")[2]), "Lien · Grand Four 1/1");
     // L'identifiant repart tel quel dans la commande, et nulle part dans un identifiant de page.
     repere(fiche, "fiche-complete").click();

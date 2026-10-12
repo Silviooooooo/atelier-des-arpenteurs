@@ -266,7 +266,7 @@ test("appliquer ne lève jamais, quoi qu'on lui donne pour événement", () => {
 test("l'événement de trop : au dernier pas permis, tout événement est refusé, même mal fait", () => {
   const mep = miseEnPlaceEssai(surD4(AUBEPINE, MARMITON));
   const plein = etatEssai(mep, { retoucher: (etat) => (etat.pas = EVENEMENTS_MAX) });
-  const phrase = "Ce combat a atteint 20 000 événements : commencez-en un nouveau.";
+  const phrase = "Ce combat a atteint 5 000 événements : commencez-en un nouveau.";
   for (const evenement of [...Object.values(ECHANTILLONS), null, { type: "danser" }]) {
     const rendu = appliquer(plein, evenement);
     assert.equal(rendu.etat, plein);
@@ -279,6 +279,25 @@ test("l'événement de trop : au dernier pas permis, tout événement est refus�
   const dernierPas = jouer(presque, { type: "fin_de_tour" });
   assert.equal(dernierPas.pas, EVENEMENTS_MAX);
   refuse(dernierPas, { type: "fin_de_tour" }, "hors_bornes", phrase);
+});
+
+test("le combat le plus long se rejoue en entier, journal compris ; un événement de plus, et rien ne se rejoue", () => {
+  // Le genre d'événement qui écrit le plus : Aubépine et le Marmiton passent
+  // tour à tour, trois lignes chaque fois (la passe, la fin du tour, le tour).
+  const miseEnPlace = miseEnPlaceEssai(surD4(AUBEPINE, MARMITON));
+  const passes = (combien) => Array.from({ length: combien }, (_rien, rang) => ({ type: "passer", qui: rang % 2 === 0 ? "pj1" : "adv2" }));
+  const plein = { regles: REGLES, revision: 1, miseEnPlace, evenements: [LANCER, ...passes(EVENEMENTS_MAX - 1)] };
+  const { etat } = rejouer(plein);
+  assert.equal(etat.pas, EVENEMENTS_MAX);
+  assert.equal(etat.journal.length, 2 + 3 * (EVENEMENTS_MAX - 1));
+  assert.equal(etat.phase, "combat");
+  // Deux passes par tour : la dernière ligne dit le tour où l'on est arrivé.
+  assert.deepEqual(etat.tour, { numero: 1 + Math.floor((EVENEMENTS_MAX - 1) / 2), camp: EVENEMENTS_MAX % 2 === 1 ? "pj" : "adv" });
+  assert.equal(etat.journal.at(-1).genre, "tour");
+  assert.ok(Object.isFrozen(etat.journal));
+  // Un de plus : le rejeu s'arrête à lui, et le dit.
+  const deTrop = rejouer({ ...plein, evenements: [...plein.evenements, { type: "passer", qui: EVENEMENTS_MAX % 2 === 1 ? "pj1" : "adv2" }] });
+  assert.deepEqual(deTrop, { erreur: { pas: EVENEMENTS_MAX + 1, code: "hors_bornes", message: "Ce combat a atteint 5 000 événements : commencez-en un nouveau." } });
 });
 
 // ─── L'ouverture et le lancement ────────────────────────────────────────────
@@ -913,6 +932,50 @@ test("tout ce que rend appliquer est gelé, et rien de ce qu'elle reçoit n'est 
   assert.deepEqual(evenement, copie);
   assert.equal(Object.isFrozen(evenement), false);
   assert.equal(estGele(rendu), true);
+});
+
+test("le journal : une ligne de plus ne fait regarder aucune de celles qui la précèdent ; chaque ligne naît gelée, et la liste avec elle", () => {
+  // Des lignes qui comptent les regards qu'on leur porte : pour savoir si un
+  // objet est gelé, on lui demande s'il s'étend, puis ses champs. Regelé ou
+  // reparcouru à chaque événement, un journal de N lignes coûterait N regards
+  // par événement, et le rejeu d'un combat gardé le carré de sa longueur.
+  let regards = 0;
+  const compte = (piege) => (...arguments_) => {
+    regards += 1;
+    return Reflect[piege](...arguments_);
+  };
+  const pieges = Object.fromEntries(["isExtensible", "ownKeys", "getOwnPropertyDescriptor", "get", "has"].map((piege) => [piege, compte(piege)]));
+  const espionne = (ligne) => new Proxy(Object.freeze({ ...ligne }), pieges);
+  const etat = etatEssai(miseEnPlaceEssai(surD4(AUBEPINE, MARMITON)), {
+    retoucher(libre) {
+      libre.journal = [...libre.journal, ...Array.from({ length: 40 }, (_, rang) => ({ genre: "geste", texte: `Ligne ${rang + 1}.` }))].map(espionne);
+    },
+  });
+  assert.equal(etat.journal.length, 42);
+
+  regards = 0;
+  // Aubépine passe : sa ligne, puis la fin du tour et le tour suivant.
+  const suivant = jouer(etat, { type: "passer", qui: "pj1" });
+  assert.equal(regards, 0, "aucune ligne d'avant n'est regardée");
+  assert.equal(suivant.journal.length, 45);
+  assert.ok(Array.isArray(suivant.journal) && Object.getPrototypeOf(suivant.journal) === Array.prototype, "le journal reste une liste simple");
+  assert.ok(Object.isFrozen(suivant.journal));
+  for (const [rang, ligne] of etat.journal.entries()) assert.equal(suivant.journal[rang], ligne, "les lignes d'avant sont les mêmes objets");
+  const neuves = suivant.journal.slice(42);
+  assert.deepEqual(neuves.map((ligne) => ligne.genre), ["geste", "cadre", "tour"]);
+  for (const ligne of neuves) assert.ok(Object.isFrozen(ligne), `« ${ligne.texte} » est gelée`);
+  assert.equal(regards, 0, "ni par ce contrôle, jusqu'ici");
+  // Armé : le compteur voit bien un regard quand on en porte un.
+  assert.equal(Object.isFrozen(etat.journal[0]), true);
+  assert.ok(regards > 0);
+
+  // Une ligne de mort naît gelée elle aussi, avec sa marque, et celle de la fin du combat après elle.
+  const mortel = combat(surD4(AUBEPINE, MARMITON));
+  const auCorps = { type: "degats", base: "lettre", operations: [{ op: "ajuster", valeur: 10, raison: "Dernier service" }], nature: "corps" };
+  const fini = jouer(mortel, capacite(mortel, "pj1", "Frappe"), viser("adv2"), d8(8), d8(1), auCorps, d20(5), APPLIQUER);
+  assert.deepEqual(fini.journal.slice(-2).map((ligne) => [ligne.genre, ligne.mort === true]), [["geste", true], ["fin", false]]);
+  for (const ligne of fini.journal) assert.ok(Object.isFrozen(ligne), `« ${ligne.texte} » est gelée`);
+  assert.ok(Object.isFrozen(fini.journal));
 });
 
 test("l'annonce porte le pas de l'événement qui l'a dite ; un événement qui n'a rien à dire laisse celle d'avant, l'objet même", () => {

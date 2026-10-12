@@ -26,12 +26,37 @@ export const MOTIF_CASE = /^[A-J](?:10|[1-9])$/;
 
 // Décision de l'auteur : 12 PJ et 60 adversaires au plus dans un combat, 12
 // exemplaires au plus d'un même adversaire (les plafonds de l'écran
-// Rencontre, § 16.6). La borne des événements est celle de l'enregistrement :
-// au-delà, un combat gardé ne se relirait plus, donc le jeu la tient aussi.
+// Rencontre, § 16.6).
 export const PLAFOND_PJ = 12;
 export const PLAFOND_ADVERSAIRES = 60;
 export const PLAFOND_EXEMPLAIRES = 12;
-export const EVENEMENTS_MAX = 20000;
+
+// La borne des événements est celle de l'enregistrement : au-delà, un combat
+// gardé ne se relirait plus, donc le jeu la tient aussi. Elle borne surtout
+// l'ouverture de l'écran, qui rejoue tout le combat d'une traite : le nombre
+// est fixé d'après la mesure, pour que le pire contenu que la validation
+// accepte se rejoue en quelques secondes. Mesuré le 12/10/2026 sous Node 24,
+// poste chargé par deux navigateurs : 5 000 événements du genre le plus cher
+// (une capacité jouée par un protagoniste aux bornes de sa photographie) en
+// 4,7 s ; 5 000 du genre qui écrit le plus au journal en 0,3 s ; 5 000 du
+// moins cher en 0,02 s. Un combat ordinaire en compte de 100 à 3 000. La
+// borne était de 20 000 : le journal seul demandait alors 31 s, et une
+// photographie forgée, que rien ne bornait en tout, 30 ms par événement.
+export const EVENEMENTS_MAX = 5000;
+
+// Un identifiant de protagoniste est « pj » ou « adv », puis cinq chiffres au
+// plus (le motif de js/combat/forme.js). Le compteur qui les numérote ne
+// redescend jamais : arrivé là, plus personne ne s'ajoute à ce combat, car un
+// sixième chiffre ferait un protagoniste que le moteur refuserait à chaque
+// geste, et un combat qui ne se relirait plus.
+export const IDENTIFIANTS_MAX = 99999;
+
+// Un dé sous k désavantages nets se lance k + 1 fois (js/combat/jet.js) :
+// l'événement « de » porte alors k + 1 tirages. La main n'en règle que
+// BORNE_REGLAGE, et les passifs d'un adversaire quelques-uns : cent tirages
+// laissent 99 désavantages nets. Sans borne, un seul événement d'un combat
+// forgé portait des millions de valeurs, lues une à une avant tout refus.
+export const TIRAGES_MAX = 100;
 
 // Livret, « Actions de jeu » : un personnage a « habituellement » deux
 // actions par tour.
@@ -158,7 +183,26 @@ export const LONGUEUR_RAISON = 80;
 // Les bornes d'une photographie, vues à sa fabrication comme à sa relecture
 // (js/combat/forme.js) : « ligne » pour un texte d'une ligne, « texte » pour
 // un texte à lignes, « nombre » pour tout entier, « des » pour les d20 d'une
-// localisation, « faces » pour un dé ; les autres bornent une liste.
+// localisation, « faces » pour un dé ; les autres bornent une liste, hors
+// les trois dernières.
+//
+// « faconsEnTout » et « deplacements » bornent ce que coûte un événement
+// « capacite » : l'offre juge alors chaque façon de chaque capacité de celui
+// qui joue, et calcule pour chaque façon de déplacement les cases où elle
+// mène. Aux seules bornes des listes (200 capacités de 20 façons), une
+// photographie forgée coûtait de 4 à 30 millisecondes par événement à
+// rejouer (mesuré), quel que soit le nombre d'événements permis.
+// - « faconsEnTout » : les façons d'un protagoniste, toutes capacités
+//   confondues. Une capacité de personnage en a trois au plus (son niveau,
+//   NIVEAU_MAX de js/personnage/regles.js), et une photographie deux cents
+//   capacités : six cents.
+// - « deplacements » : les façons de ses capacités de déplacement, toutes
+//   ensemble. Il n'en a qu'une, donc vingt façons au plus.
+//
+// « source » : la source d'un adversaire (sa ligne, celles de ses types, sa
+// résolution), comptée en signes de son JSON. Elle ne sert qu'à « Fiche
+// complète », qui la recalcule en entier. La plus grosse du classeur réel en
+// compte 6 278, celle de la démonstration 5 529 (mesuré le 12/10/2026).
 export const BORNES_PHOTO = {
   ligne: 200,
   texte: 4000,
@@ -172,6 +216,9 @@ export const BORNES_PHOTO = {
   liens: 20,
   elements: 40,
   avertissements: 200,
+  faconsEnTout: 600,
+  deplacements: 20,
+  source: 200000,
 };
 
 // Les caractères de contrôle, et les deux séparateurs de ligne qu'Unicode

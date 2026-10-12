@@ -126,6 +126,26 @@ test("la préparation montre ce que la mission lui donne à porter", () => {
     assert.equal(groupe.getAttribute("aria-labelledby"), groupe.querySelector("span").id);
     assert.deepEqual([...groupe.querySelectorAll("button")].map(texteDe), ["Les PJ", "Les adversaires"]);
 
+    // Chaque bloc a sa classe, dans l'ordre du document : la feuille de style range « Qui commence » et « Lancer le
+    // combat » sur une rangée, comme la barre de la maquette, et donne sa ligne à l'intitulé sur un téléphone.
+    assert.deepEqual(
+      noeud.children.map((enfant) => enfant.className || enfant.tagName),
+      [
+        "H2",
+        "combat-preparation-bloc combat-preparation-personnages",
+        "combat-preparation-bloc combat-preparation-adversaires",
+        "combat-preparation-bloc combat-preparation-rencontre",
+        "combat-preparation-bloc combat-preparation-commence",
+        "combat-preparation-bloc combat-preparation-lancer",
+        "combat-preparation-bloc combat-preparation-notes",
+        "combat-case-liste",
+      ],
+    );
+    assert.equal(groupe.parentNode.className, "combat-preparation-bloc combat-preparation-commence");
+    assert.equal(groupe.className, "combat-ligne");
+    assert.equal(groupe.children[0].tagName, "SPAN", "l'intitulé est le premier enfant de sa rangée : c'est lui que la feuille met sur sa ligne");
+    assert.equal(repere(partie, "lancer").parentNode.parentNode.className, "combat-preparation-bloc combat-preparation-lancer");
+
     // Toute classe est du combat, ou une classe commune du site ; aucune ne
     // touche à la carte d'adversaire.
     const communes = ["champ", "bouton", "secondaire", "secondaire-texte", "petit", "message"];

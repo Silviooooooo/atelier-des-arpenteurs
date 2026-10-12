@@ -20,9 +20,16 @@
 // le sont déjà quand elles viennent du simulateur).
 
 import { caseDOffice, lireCase } from "./plateau.js";
-import { PLAFOND_ADVERSAIRES, PLAFOND_EXEMPLAIRES, PLAFOND_PJ, geler } from "./regles.js";
+import { IDENTIFIANTS_MAX, PLAFOND_ADVERSAIRES, PLAFOND_EXEMPLAIRES, PLAFOND_PJ, geler } from "./regles.js";
 
 const CAMPS = ["pj", "adv"];
+
+// Le compteur ne redescend jamais, et un identifiant n'a que cinq chiffres :
+// un combat où l'on aurait ajouté et retiré cent mille fois, ou dont le
+// compteur gardé a été forcé, ne reçoit plus personne. Sans ce refus, le
+// protagoniste ajouté ne jouerait aucun geste, et le combat gardé avec lui ne
+// se relirait plus.
+const IDENTIFIANTS_EPUISES = "Ce combat a épuisé ses identifiants : commencez-en un nouveau.";
 
 const estUnePhoto = (photo, camp) => photo !== null && typeof photo === "object" && photo.camp === camp && photo.valeurs !== null && typeof photo.valeurs === "object";
 
@@ -49,6 +56,7 @@ export function ajouterPersonnage(mep, photo) {
   if (presents.length >= PLAFOND_PJ) return refuser(`${PLAFOND_PJ} personnages au plus dans un combat.`);
   const nomDeCase = caseDOffice("pj", occupees(mep.protagonistes));
   if (nomDeCase === null) return refuser("Aucune case n'est libre sur la carte.");
+  if (mep.compteur >= IDENTIFIANTS_MAX) return refuser(IDENTIFIANTS_EPUISES);
   const compteur = mep.compteur + 1;
   const id = `pj${compteur}`;
   return { miseEnPlace: geler({ ...mep, compteur, protagonistes: [...mep.protagonistes, { id, camp: "pj", case: nomDeCase, photo }] }), id };
@@ -73,6 +81,8 @@ export function ajouterAdversaires(mep, photos) {
     exemplaires.set(nom, (exemplaires.get(nom) ?? 0) + 1);
     if (exemplaires.get(nom) > PLAFOND_EXEMPLAIRES) return refuser(`${PLAFOND_EXEMPLAIRES} exemplaires au plus d'un même adversaire.`);
   }
+  // Tout ou rien, ici aussi : s'il n'y a pas un identifiant pour chacun, aucun ne s'ajoute.
+  if (mep.compteur + photos.length > IDENTIFIANTS_MAX) return refuser(IDENTIFIANTS_EPUISES);
 
   const protagonistes = [...mep.protagonistes];
   const ids = [];

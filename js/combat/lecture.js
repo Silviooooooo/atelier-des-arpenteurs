@@ -4,7 +4,8 @@
 // Ce module fabrique, sans rien toucher de la page, les cinq vues que l'écran
 // affiche : la barre de titre, le plateau, la fiche vivante d'un
 // protagoniste, le panneau d'action et la préparation. Une vue est un objet
-// prêt à montrer : ses textes sont écrits, ses états nommés.
+// prêt à montrer : ses textes sont écrits, ses états nommés. Il dit aussi ce
+// qu'une ligne du journal met en évidence (vueLigne).
 //
 // Il existe pour que l'écran n'écrive aucune règle et ne fasse aucun calcul :
 // - chaque élément qu'on peut actionner porte sa « commande » : l'événement à
@@ -38,7 +39,7 @@ import { CARACTERISTIQUES, deDuJet } from "../personnage/regles.js";
 import { circonstances, modificateursDe, passifsDe } from "./circonstances.js";
 import { coupsDuGeste, degatsFixes, frapper, lettreDe, localiser } from "./degats.js";
 import { evaluerEssai, modificateurDe, netDe, ouvrirJet, relancesRestantes, reussites } from "./jet.js";
-import { ecrireBilan, ecrireDe, ecrireSource, ligneDeFin } from "./journal.js";
+import { ecrireBilan, ecrireMort, ecrireSource, ligneDeFin } from "./journal.js";
 import { acteurCourant, boutons, candidats, cibles, esquiveOfferte, faconsDe, offre } from "./offre.js";
 import { ajouterAdversaires, ajouterPersonnage, peutLancer } from "./preparation.js";
 import { DIFFICULTES, LETTRES, LONGUEUR_RAISON, PLAFOND_ADVERSAIRES, PLAFOND_EXEMPLAIRES, REUSSITES_MAX, SIGNES } from "./regles.js";
@@ -114,6 +115,34 @@ export function vueBarre(etat) {
   };
 }
 
+// ─── Le journal ─────────────────────────────────────────────────────────────
+
+/**
+ * Une ligne du journal, telle que l'écran la montre : { genre, texte, mort }.
+ * « mort » est la phrase de la mort (« Marmiton n° 1 meurt. »), la dernière de
+ * la ligne : l'écran la met seule en évidence, comme la maquette. « texte »
+ * est ce qui la précède, et les deux bout à bout redonnent la ligne, signe
+ * pour signe. Une ligne où personne ne meurt rend son texte entier, et
+ * « mort » nul.
+ *
+ * La forme d'une ligne dans l'état du combat ne change pas : la phrase se
+ * retrouve dans le texte. C'est celle que le journal écrit pour l'un des
+ * morts du combat, la plus longue si plusieurs finissent la ligne.
+ * Introuvable, c'est la ligne entière qui est mise en évidence.
+ */
+export function vueLigne(etat, ligne) {
+  const genre = ligne.genre ?? null;
+  if (ligne.mort !== true) return { genre, texte: ligne.texte, mort: null };
+  let phrase = null;
+  for (const id of etat.ordre) {
+    if (!present(courantDe(etat, id)?.mort)) continue;
+    const dite = ecrireMort(etat, { cible: id, resultat: { mort: true } });
+    if (dite !== null && ligne.texte.endsWith(dite) && (phrase === null || dite.length > phrase.length)) phrase = dite;
+  }
+  if (phrase === null) return { genre, texte: "", mort: ligne.texte };
+  return { genre, texte: ligne.texte.slice(0, ligne.texte.length - phrase.length), mort: phrase };
+}
+
 // ─── Le plateau ─────────────────────────────────────────────────────────────
 
 // Le geste qui se règle encore, tant qu'il attend une cible ou une arrivée :
@@ -141,6 +170,10 @@ function situationDe(etat, id, acteur) {
 }
 
 const DIT_SUR_LE_JETON = { mort: "mort", joue: "joue", cible: "ciblé", a_joue: "a joué" };
+
+// Le nom d'une case d'arrivée possible : le même sur la carte et sur son
+// double, le bouton du panneau d'action.
+const nomDArrivee = (nomDeCase) => `Case ${nomDeCase} : s'y déplacer`;
 
 /**
  * Le plateau : les seules cases qui portent un jeton ou qui se choisissent,
@@ -199,7 +232,7 @@ export function vuePlateau(etat, choisi) {
   }
   if (acteur !== null && courantDe(etat, acteur) !== null) laCase(courantDe(etat, acteur).case).active = true;
   if (enChoix?.champ === "arrivee") {
-    for (const nom of enChoix.options) laCase(nom).choix = { commande: regler("arrivee", nom), nom: `Case ${nom} : s'y déplacer` };
+    for (const nom of enChoix.options) laCase(nom).choix = { commande: regler("arrivee", nom), nom: nomDArrivee(nom) };
   }
   return { phase: etat.phase, cases, jetons };
 }
@@ -440,7 +473,9 @@ const DIFFICULTE_DITE = { attaque: "sa défense", defense: "son attaque" };
 
 // Le contexte du jet : qui lance quoi, contre quoi, avec quels modificateurs,
 // avantages et désavantages, chacun avec sa source. Avant le premier dé, il
-// porte aussi les deux réglages à la main.
+// porte aussi les deux réglages à la main. Le dé s'y écrit nu (« d8 ») : ses
+// modificateurs le suivent, chacun une fois, avec sa source. Écrit « d8+1 »
+// devant « +1 (Vif) », il se lisait d8+1+1.
 function contexteVu(etat, geste, capacite, facon, jet, offerts) {
   const cible = present(geste.cible) ? ` contre ${nomEntier(etat, geste.cible)}` : "";
   const titre = `${nomDuJet(etat, geste)} ${SIGNES.point} ${libelleDe(capacite, facon)}${cible}`;
@@ -462,7 +497,7 @@ function contexteVu(etat, geste, capacite, facon, jet, offerts) {
   const valeurs = photoDe(etat, jet.lanceur)?.caracteristiques ?? {};
   return {
     titre,
-    de: ecrireDe(jet),
+    de: `d${jet.faces}`,
     detail: jet.mobilisees.map((code) => `${nomDeCaracteristique(code)} ${valeurs[code] ?? "?"}`).join(" + "),
     modificateurs: jet.modificateurs.map(ecrireModificateur),
     difficulte: `${jet.difficulte}, ${jet.libelle ?? DIFFICULTE_DITE[jet.genre]}`,
@@ -511,11 +546,13 @@ function chaineVue(jet) {
   return entrees;
 }
 
-// Ce que dit le bilan pendant la chaîne, selon ce que le jet attend.
+// Ce que dit le bilan pendant la chaîne, selon ce que le jet attend. La
+// relance reprend la tête, comme sur la maquette : « 1 réussite pour
+// l'instant. Avantage dépensé : … ».
 const BILANS_DU_JET = {
   de: (jet, tete) => `${tete} Cliquez sur le d${jet.faces} pour lancer le ${RANGS[jet.places.length]}.`,
   choix_relance: (jet, tete) => `${tete} Le ${RANGS[jet.places.length - 1]} échoue : il reste ${compter(relancesRestantes(jet), "avantage")}.`,
-  de_relance: (jet) => `Avantage dépensé : cliquez sur le d${jet.faces} pour relancer le ${RANGS[jet.places.length - 1]}.`,
+  de_relance: (jet, tete) => `${tete} Avantage dépensé : cliquez sur le d${jet.faces} pour relancer le ${RANGS[jet.places.length - 1]}.`,
   choix_explosion: (jet) => `Le ${RANGS[jet.places.length - 1]} montre sa face maximale sans atteindre la difficulté : il peut exploser.`,
   de_explosion: (jet) => `Cliquez sur le d${jet.faces} pour faire exploser le ${RANGS[jet.places.length - 1]}.`,
 };
@@ -682,6 +719,19 @@ function caracteristiquesVues(etat, geste, offerts) {
   };
 }
 
+// Les cibles du geste. Tant qu'il se règle : celles qu'il pourrait viser,
+// possibles ou non, chacune avec sa raison. Une fois payé : la seule cible
+// choisie, enfoncée et inactive. La rangée « Cible : » reste ainsi montrée
+// pendant le jet, comme sur la maquette, sans rien offrir : le moteur
+// refuserait d'en changer.
+function ciblesVues(etat, geste) {
+  if (geste.moment === "preparation") {
+    return cibles(etat).map(({ id, possible, raison }) => ({ id, libelle: nomEntier(etat, id), choisie: geste.cible === id, actif: possible, raison, commande: regler("cible", id) }));
+  }
+  if (!present(geste.cible)) return [];
+  return [{ id: geste.cible, libelle: nomEntier(etat, geste.cible), choisie: true, actif: false, raison: ACTION_EN_COURS, commande: regler("cible", geste.cible) }];
+}
+
 const LIBELLES_DE_CHOIX = {
   relancer: (jet) => `Relancer le ${RANGS[jet.places.length - 1]}`,
   garder: () => "Garder ce dé",
@@ -707,9 +757,9 @@ function gesteVu(etat, geste, offerts) {
     puissance: puissanceVue(etat, geste, facon, offerts),
     jetPrete: jetPreteVu(etat, geste, offerts),
     armes: offert("arme_pretee") ? reglables.arme_pretee.options.map((rang) => ({ libelle: photo.armes[rang].libelle, choisie: geste.armePretee === rang, commande: regler("arme_pretee", rang) })) : null,
-    cibles: cibles(etat).map(({ id, possible, raison }) => ({ id, libelle: nomEntier(etat, id), choisie: geste.cible === id, actif: possible, raison, commande: regler("cible", id) })),
+    cibles: ciblesVues(etat, geste),
     sansCible: offert("cible") && reglables.cible.options.includes(null) ? { choisie: geste.cible === null, commande: regler("cible", null) } : null,
-    cases: offert("arrivee") ? reglables.arrivee.options.map((nom) => ({ case: nom, choisie: geste.arrivee === nom, commande: regler("arrivee", nom) })) : null,
+    cases: offert("arrivee") ? reglables.arrivee.options.map((nom) => ({ case: nom, nom: nomDArrivee(nom), choisie: geste.arrivee === nom, commande: regler("arrivee", nom) })) : null,
     caracteristiques: caracteristiquesVues(etat, geste, offerts),
     difficultes: offert("difficulte")
       ? Object.keys(DIFFICULTES)
@@ -802,7 +852,8 @@ export function vuePanneau(etat, choisi) {
 
 const LIBELLES_DE_CAMP = { pj: "Les PJ", adv: "Les adversaires" };
 const BANQUE_SANS_ADVERSAIRE = "Cette banque n'a aucun adversaire.";
-const RENCONTRE_VIDE = "Composez d'abord une rencontre.";
+// Le texte de la mission (§ 10.7), tel quel : sans point final.
+const RENCONTRE_VIDE = "Composez d'abord une rencontre";
 
 // De quoi demander à la préparation ce qu'elle refuserait, sans photographie :
 // elle ne lit d'un ajout que le camp, l'identifiant et le nom. Ses phrases de

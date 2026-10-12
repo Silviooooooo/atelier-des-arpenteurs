@@ -815,6 +815,75 @@ test("le combat lancé : plus rien ne se prend en main ni ne glisse", () => {
   }
 });
 
+test("quand on ne joue pas (un combat ouvert ailleurs), la carte montre le combat sans rien offrir : ni commande, ni case à choisir, ni jeton à prendre en main", () => {
+  // Pendant le choix d'une cible : Aubépine joue, le Marmiton n° 1 se cible, le Chef est hors de portée.
+  const enChoix = vueDe({ jetons: { pj1: { marque: "joue", inactif: true }, adv3: { choix: CIBLER("adv3") }, adv2: { inactif: true }, adv4: { inactif: true } }, cases: { D4: { active: true } } });
+  const { partie, appels, retirer } = monter(enChoix);
+  try {
+    const tous = () => [...partie.noeud.querySelectorAll(".combat-jeton")];
+    // On joue : la cible possible porte sa commande, les autres sont écartés.
+    assert.equal(inactif(jetonDe(partie, "adv3")), false);
+    assert.equal(classesDe(jetonDe(partie, "adv2")).includes("inactif"), true);
+
+    // L'écran dit qu'on ne joue plus : la même vue, mais plus rien ne s'offre.
+    partie.rendre(enChoix, { arrete: true });
+    assert.equal(tous().length, 4);
+    for (const jeton of tous()) {
+      assert.equal(inactif(jeton), true, jeton.getAttribute("title"));
+      assert.equal(classesDe(jeton).includes("inactif"), false, `${jeton.getAttribute("title")} : aucun choix n'est ouvert, rien n'est écarté`);
+      jeton.click();
+    }
+    assert.deepEqual(appels, [], "un clic que la séance refuserait ne s'offre pas");
+    // Ce que le combat montre reste montré : qui joue, sa case, les noms.
+    assert.equal(classesDe(jetonDe(partie, "pj1")).includes("joue"), true);
+    assert.equal(classesDe(caseDe(partie, "D4")).includes("active"), true);
+    assert.equal(jetonDe(partie, "adv3").getAttribute("aria-label"), enChoix.jetons.adv3.nom);
+    assert.equal(partie.noeud.querySelectorAll(".combat-case.inactive").length, 0);
+
+    // Qui joue ? : un candidat ne se choisit pas non plus par son jeton.
+    partie.rendre(vueDe({ jetons: { pj1: { choix: CHOISIR("pj1") } } }), { arrete: true });
+    assert.equal(inactif(jetonDe(partie, "pj1")), true);
+    jetonDe(partie, "pj1").click();
+    // Une case d'arrivée possible ne se choisit pas : la même vue l'offre quand on joue, et ne l'offre plus.
+    const enDeplacement = vueDe({ jetons: { pj1: { marque: "joue", inactif: true } }, cases: { C3: { choix: ARRIVER("C3") } } });
+    partie.rendre(enDeplacement, {});
+    assert.equal(partie.noeud.querySelectorAll(".combat-case-choix").length, 1);
+    assert.equal(classesDe(caseDe(partie, "C3")).includes("possible"), true);
+    partie.rendre(enDeplacement, { arrete: true });
+    assert.equal(partie.noeud.querySelectorAll(".combat-case-choix").length, 0);
+    assert.equal(partie.noeud.querySelectorAll(".combat-case.possible").length, 0);
+    // Avant le lancement : rien ne se prend en main, rien ne glisse.
+    partie.rendre(vueDe({ phase: "preparation" }), { arrete: true });
+    jetonDe(partie, "pj1").click();
+    assert.equal(partie.enMain(), null);
+    assert.equal(partie.prendre("pj1"), false);
+    assert.equal(partie.noeud.querySelectorAll("[draggable]").length, 0);
+    assert.equal(partie.noeud.querySelectorAll("[aria-pressed]").length, 0);
+    assert.equal(partie.noeud.querySelectorAll(".combat-case-choix").length, 0);
+    const depart = { evite: false };
+    jetonDe(partie, "pj1").declencher("dragstart", { preventDefault: () => (depart.evite = true) });
+    assert.equal(depart.evite, true, "un glisser forcé est refusé");
+    caseDe(partie, "C3").declencher("drop");
+    assert.deepEqual(appels, []);
+
+    // Un jeton tenu en main quand le blocage arrive est lâché.
+    partie.rendre(vueDe({ phase: "preparation" }), {});
+    jetonDe(partie, "pj1").click();
+    assert.equal(partie.enMain(), "pj1");
+    partie.rendre(vueDe({ phase: "preparation" }), { arrete: true });
+    assert.equal(partie.enMain(), null);
+
+    // Le combat repris : tout s'offre de nouveau.
+    partie.rendre(enChoix, { arrete: false });
+    assert.equal(inactif(jetonDe(partie, "adv3")), false);
+    assert.equal(classesDe(jetonDe(partie, "adv2")).includes("inactif"), true);
+    jetonDe(partie, "adv3").click();
+    assert.deepEqual(appels, [["executer", CIBLER("adv3").commande, "plateau"]]);
+  } finally {
+    retirer();
+  }
+});
+
 test("« prendre » : la liste « +k » de l'écran prend un jeton en main sans passer par la grille", () => {
   const places = { pj1: "D4", adv2: "D4", adv3: "D4", adv4: "D4", adv5: "D4" };
   const { partie, appels, retirer } = monter(null);

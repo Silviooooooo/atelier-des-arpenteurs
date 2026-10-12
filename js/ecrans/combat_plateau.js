@@ -15,6 +15,11 @@
 // à la partie des fiches). Le glisser-déposer n'est jamais le seul moyen : il
 // n'existe ni au clavier ni au doigt.
 //
+// Quand on ne joue pas (un combat ouvert ailleurs), l'écran le dit : la carte
+// montre alors le combat sans rien offrir. Aucun jeton ne porte de commande,
+// aucune case ne se choisit, rien ne se prend en main : un clic que la séance
+// refuserait ne s'offre pas.
+//
 // Ce qu'elle garde pour elle : le jeton « en main », le jeton qu'on fait
 // glisser, et le texte de ce que montre chaque case et chaque jeton.
 
@@ -71,7 +76,7 @@ function attribuer(noeud, nom, valeur) {
 }
 
 /**
- * La partie « plateau » de l'écran du combat : { noeud, rendre(vue),
+ * La partie « plateau » de l'écran du combat : { noeud, rendre(vue, ecran),
  * prendre(id), enMain() }.
  *
  * « actions » vient de l'écran : executer(commande, origine), toujours avec
@@ -81,6 +86,8 @@ function attribuer(noeud, nom, valeur) {
  */
 export function creer(actions) {
   let vue = null;
+  // Vrai quand on ne joue pas : la carte ne porte alors aucune commande.
+  let arrete = false;
   // Le jeton touché, qui attend sa case ; et celui qu'on fait glisser.
   let enMain = null;
   let glisse = null;
@@ -89,7 +96,7 @@ export function creer(actions) {
   const cases = new Map();
   const jetons = new Map();
 
-  const preparation = () => vue !== null && vue.phase === "preparation";
+  const preparation = () => vue !== null && vue.phase === "preparation" && !arrete;
 
   /**
    * Pose un jeton, avant le lancement. La main se vide d'abord : l'écran
@@ -204,8 +211,9 @@ export function creer(actions) {
     // Tant qu'un jeton est en main, les autres s'effacent : toucher une case
     // occupée y pose le jeton tenu, au lieu de changer de jeton.
     const ecarte = avant && enMain !== null && !tenu;
-    const inactif = v.inactif === true || ecarte;
-    const commande = !avant && !inactif && v.choix ? v.choix.commande : null;
+    // Quand on ne joue pas, aucun choix n'est ouvert : rien n'est écarté.
+    const inactif = !arrete && (v.inactif === true || ecarte);
+    const commande = !avant && !inactif && !arrete && v.choix ? v.choix.commande : null;
     return {
       camp: v.camp === "pj" ? "pj" : "adv",
       entier: String(v.entier),
@@ -320,7 +328,7 @@ export function creer(actions) {
     const caseTenue = enMain === null ? null : (caseDe.get(enMain) ?? null);
     // La vue marque les jetons qu'un choix écarte, pas les cases : une case
     // est écartée quand un choix est ouvert et qu'elle n'y offre rien.
-    const enChoix = !avant && (Object.values(vue.jetons).some((jeton) => jeton.inactif === true) || Object.values(vue.cases).some((c) => c.choix));
+    const enChoix = !avant && !arrete && (Object.values(vue.jetons).some((jeton) => jeton.inactif === true) || Object.values(vue.cases).some((c) => c.choix));
 
     const montres = new Set();
     for (const fiche of cases.values()) {
@@ -331,7 +339,7 @@ export function creer(actions) {
         if (enMain !== null && fiche.nom !== caseTenue) {
           choix = { nom: `Case ${fiche.nom} : y poser ${vue.jetons[enMain].entier}`, commande: { preparer: { type: "poser", id: enMain, case: fiche.nom } } };
         }
-      } else if (v && v.choix) {
+      } else if (v && v.choix && !arrete) {
         choix = { nom: String(v.choix.nom), commande: v.choix.commande };
       }
       const active = (v !== null && v.active === true) || (caseTenue !== null && fiche.nom === caseTenue);
@@ -374,11 +382,13 @@ export function creer(actions) {
   const noeud = el("section", { classe: "combat-plateau", "aria-label": TITRE }, tete, grille, legende);
 
   /**
-   * Montre la vue. Le second argument que l'écran passe à chaque partie (sa
-   * mémoire) n'est pas lu ici : le plateau tient lui-même ce qu'il a en main.
+   * Montre la vue. De la mémoire de l'écran, le plateau ne lit que
+   * « arrete » (on ne joue pas : rien ne s'offre) ; ce qu'il a en main, il le
+   * tient lui-même.
    */
-  function rendre(vueNeuve) {
+  function rendre(vueNeuve, ecran) {
     vue = vueNeuve;
+    arrete = ecran?.arrete === true;
     dessiner();
   }
 

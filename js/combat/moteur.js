@@ -121,10 +121,23 @@ export function ouvrirCombat(miseEnPlace) {
 // ─── Les retouches de l'état ────────────────────────────────────────────────
 //
 // Chacune rend un état neuf qui partage tout ce qu'elle ne change pas. Aucune
-// ne gèle : appliquer() gèle l'état une fois, à la fin.
+// ne gèle, hors le journal : appliquer() gèle l'état une fois, à la fin.
 
 const changer = (etat, id, champs) => ({ ...etat, protagonistes: { ...etat.protagonistes, [id]: { ...etat.protagonistes[id], ...champs } } });
-const ecrire = (etat, ...lignes) => ({ ...etat, journal: [...etat.journal, ...lignes] });
+
+// Ajoute des lignes au journal. Une ligne est gelée quand elle naît, et la
+// liste neuve l'est en surface, ici même : geler() ne redescend pas dans ce
+// qui est déjà gelé, et une ligne de plus ne fait donc regarder aucune de
+// celles qui la précèdent. Laissée à appliquer(), la liste neuve était
+// reparcourue ligne à ligne à chaque événement, et le rejeu d'un combat gardé
+// coûtait comme le carré de sa longueur. Les lignes d'avant sont celles d'un
+// état que le moteur a rendu : elles sont gelées. La recopie reste, une par
+// ajout ; elle s'écrit par étalement, que le moteur de JavaScript sait faire
+// vite sur une liste gelée (mesuré : dix fois plus vite que slice()).
+function ecrire(etat, ...lignes) {
+  return { ...etat, journal: Object.freeze([...etat.journal, ...lignes.map(geler)]) };
+}
+
 const poserLeGeste = (etat, geste) => ({ ...etat, pile: [...etat.pile.slice(0, -1), geste] });
 const retirerLeGeste = (etat) => ({ ...etat, pile: etat.pile.slice(0, -1) });
 

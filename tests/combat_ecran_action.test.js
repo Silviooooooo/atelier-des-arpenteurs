@@ -77,7 +77,7 @@ const gesteVu = (champs = {}) => ({
   jauges: null,
   contexte: {
     titre: "Jet d'attaque · Taloche [1] contre Marmiton de corvée n° 1",
-    de: "d8+1",
+    de: "d8",
     detail: "Force 4 + Agilité 5",
     modificateurs: ["+1 (Vif)"],
     difficulte: "5, sa défense",
@@ -139,24 +139,39 @@ const vueDuGeste = (champs, autres = {}) => vueAction({ geste: gesteVu({ context
 
 // ——— Les nœuds stables ———
 
-test("panneau d'action — une section nommée, son corps, la liste d'une case et la seule région polie, créés une fois", () => {
-  avecPanneau(({ noeud, rendre, listeDeCase }) => {
+test("panneau d'action — une section nommée, son corps et la liste d'une case ; la seule région polie, hors de la section, que l'écran pose dans la page ; créés une fois", () => {
+  avecPanneau(({ noeud, rendre, listeDeCase, annonce, dire }) => {
     assert.equal(noeud.tagName, "SECTION");
     assert.equal(noeud.className, "combat-action");
     assert.equal(noeud.getAttribute("aria-label"), "Action en cours");
-    assert.deepEqual(noeud.children.map((enfant) => enfant.className), ["combat-action-corps", "combat-case-liste", "combat-annonce"]);
+    assert.deepEqual(noeud.children.map((enfant) => enfant.className), ["combat-action-corps", "combat-case-liste"]);
     assert.equal(noeud.children[1], listeDeCase);
     assert.equal(listeDeCase.childNodes.length, 0, "la liste d'une case est vide : c'est l'écran qui la remplit");
+    // La région n'est pas dans la section : entrée dans la page avec le panneau, déjà pleine, sa première annonce pouvait ne pas être dite.
+    assert.equal(annonce.className, "combat-annonce");
+    assert.equal(annonce.parentNode, null, "c'est l'écran qui la pose dans la page, dès son premier rendu");
+    assert.equal(annonce.childNodes.length, 0, "vide tant que rien n'est à dire");
 
-    const [corps, , annonce] = noeud.children;
+    const [corps] = noeud.children;
     rendre(vueAction());
     rendre(vueAction({ titre: "Aubépine Crèmebrûlée joue — 0 action sur 2, souffle 10", annonce: { pas: 13, texte: "1er dé : 9, réussi." } }));
-    assert.deepEqual(noeud.children, [corps, listeDeCase, annonce], "les trois nœuds ne sont jamais refaits");
-    assert.equal(tous(noeud, "[aria-live]").length, 1);
+    assert.deepEqual(noeud.children, [corps, listeDeCase], "les nœuds de la section ne sont jamais refaits");
+    assert.equal(tous(noeud, "[aria-live]").length, 0, "aucune région dans la section");
     assert.equal(annonce.getAttribute("aria-live"), "polite");
     assert.equal(annonce.tagName, "P");
-    assert.equal(tous(noeud, "[role]").length, 0, "ni role=status ni role=alert dans le panneau");
+    assert.equal(annonce.textContent, "1er dé : 9, réussi.");
+    assert.deepEqual(tous(noeud, "[role]").map((n) => n.getAttribute("role")).filter((role) => role !== "group"), [], "ni role=status ni role=alert dans le panneau");
     assert.equal(listeDeCase.childNodes.length, 0, "un rendu ne touche pas la liste d'une case");
+
+    // Ce que l'écran a à dire lui-même passe par la même région ; l'annonce suivante du combat le remplace, la même ne le redit pas.
+    dire("Journal copié.");
+    assert.equal(annonce.textContent, "Journal copié.");
+    rendre(vueAction({ annonce: { pas: 13, texte: "1er dé : 9, réussi." } }));
+    assert.equal(annonce.textContent, "Journal copié.", "le même pas ne se redit pas");
+    rendre(vueAction({ annonce: { pas: 14, texte: "2e dé : 4, échec. Relancer ou garder ?" } }));
+    assert.equal(annonce.textContent, "2e dé : 4, échec. Relancer ou garder ?");
+    dire(`${String.fromCodePoint(0x202e)}Journal copié.`);
+    assert.equal(annonce.textContent, "Journal copié.", "sans signe qui commande le sens");
   });
 });
 
@@ -382,8 +397,9 @@ test("panneau d'action — la puissance : + et − émettent leur commande ; à 
     const ligne = noeud.querySelector(".combat-puissance");
     assert.equal(texteDe(ligne.querySelector(".combat-puissance-valeur")), "2");
     const [moins, plus] = tous(ligne, "button");
-    assert.equal(moins.getAttribute("aria-label"), "Baisser la puissance");
-    assert.equal(plus.getAttribute("aria-label"), "Monter la puissance");
+    // Le nom dit la puissance du moment : le bouton refait, c'est ce qu'un lecteur d'écran entend du pas fait.
+    assert.equal(moins.getAttribute("aria-label"), "Baisser la puissance (actuelle : 2)");
+    assert.equal(plus.getAttribute("aria-label"), "Monter la puissance (actuelle : 2)");
     assert.equal(plus.getAttribute("aria-disabled"), "true");
     assert.equal(texteDe(noeud.querySelector(`#${plus.getAttribute("aria-describedby")}`)), "il manque du souffle (2)");
     plus.click();
@@ -394,6 +410,74 @@ test("panneau d'action — la puissance : + et − émettent leur commande ; à 
     rendre(vueDuGeste({ puissance: null }));
     assert.equal(noeud.querySelector(".combat-puissance"), null);
   });
+});
+
+test("panneau d'action — un réglage qui ne fait pas avancer le geste garde le focus : la puissance, une caractéristique ; tout autre le rend à la commande qui attend", () => {
+  const retirer = installerDom();
+  try {
+    // L'écran redessine pendant « executer » : c'est là que le panneau apprend où poser le focus.
+    let suivante = null;
+    const panneau = creer({
+      executer: () => {
+        if (suivante !== null) panneau.rendre(suivante);
+      },
+      lancerLeDe: () => {},
+    });
+    globalThis.document.body.append(panneau.noeud);
+    const marques = () => tous(panneau.noeud, "[data-focus]").map((n) => n.getAttribute("data-focus"));
+    const options = [{ code: "force", nom: "Force", valeur: 4 }, { code: "agilite", nom: "Agilité", valeur: 5 }];
+    const avec = (choisies, valeur, autres = {}) =>
+      vueDuGeste(
+        {
+          puissance: { valeur, moins: { actif: true, commande: regler("facon", valeur - 2) }, plus: { actif: true, commande: regler("facon", valeur) } },
+          caracteristiques: { choisies, de: "d8", gabarit: { evenement: { type: "regler", champ: "caracteristiques" } }, options },
+          cibles: [{ id: "adv3", libelle: "Marmiton de corvée n° 1", choisie: false, actif: true, raison: null, commande: regler("cible", "adv3") }],
+        },
+        { focus: "cible:adv3", ...autres },
+      );
+    const caracteristique = (nom) => leBouton(panneau.noeud.querySelector(".combat-caracteristiques"), nom);
+    const pas = (rang) => tous(panneau.noeud, ".combat-puissance button")[rang];
+
+    panneau.rendre(avec(["force"], 2));
+    assert.deepEqual(marques(), ["cible:adv3"], "la commande qui attend, tant que rien n'est actionné");
+
+    // Une caractéristique de plus : la commande qui attend reste la cible, mais on y revient d'un geste.
+    suivante = avec(["force", "agilite"], 2);
+    caracteristique("Agilité").click();
+    assert.deepEqual(marques(), ["caracteristique:agilite"]);
+    assert.equal(caracteristique("Agilité").getAttribute("aria-pressed"), "true");
+    // Un rendu de plus, sans geste de la personne : le focus désigné redevient celui de la vue.
+    panneau.rendre(avec(["force"], 2));
+    assert.deepEqual(marques(), ["cible:adv3"]);
+
+    // La puissance : monter, puis baisser, sans quitter la rangée.
+    suivante = avec(["force"], 3);
+    pas(1).click();
+    assert.deepEqual(marques(), ["puissance:plus"]);
+    assert.equal(pas(1).getAttribute("aria-label"), "Monter la puissance (actuelle : 3)");
+    suivante = avec(["force"], 2);
+    pas(0).click();
+    assert.deepEqual(marques(), ["puissance:moins"]);
+
+    // Tout autre réglage rend le focus à la commande qui attend : choisir la cible mène au dé.
+    suivante = avec(["force"], 2, { focus: "caracteristique:force" });
+    leBouton(panneau.noeud.querySelector(".combat-cibles"), "Marmiton").click();
+    assert.deepEqual(marques(), ["caracteristique:force"], "la clé de la vue, non celle du bouton actionné");
+
+    // Refusé, l'écran ne redessine pas : rien ne bouge, et la clé ne passe pas au rendu suivant.
+    suivante = null;
+    pas(1).click();
+    assert.deepEqual(marques(), ["caracteristique:force"]);
+    panneau.rendre(avec(["agilite"], 2));
+    assert.deepEqual(marques(), ["cible:adv3"]);
+
+    // Le bouton actionné n'est plus dans le corps refait : la commande qui attend, comme toujours.
+    suivante = vueDuGeste({ cibles: [{ id: "adv3", libelle: "Marmiton de corvée n° 1", choisie: false, actif: true, raison: null, commande: regler("cible", "adv3") }] }, { focus: "cible:adv3" });
+    pas(1).click();
+    assert.deepEqual(marques(), ["cible:adv3"]);
+  } finally {
+    retirer();
+  }
 });
 
 test("panneau d'action — « Jet d'attaque » prête le jet d'une arme, qu'il nomme ; un adversaire à plusieurs armes choisit la sienne", () => {
@@ -469,6 +553,16 @@ test("panneau d'action — la cible : un bouton par cible possible ; « choisie 
     assert.equal(texteDe(noeud.querySelector(`#${chef.getAttribute("aria-describedby")}`)), "hors de portée");
     chef.click();
     assert.equal(appels.length, 1);
+
+    // Pendant le jet, la vue ne donne plus que la cible choisie, inactive : la rangée reste montrée, avec d'où vient le choix, et ne fait rien.
+    appels.length = 0;
+    rendre(vueDuGeste({ cibles: [{ id: "adv3", libelle: "Marmiton de corvée n° 1", choisie: true, actif: false, raison: "Une action est en cours.", commande: regler("cible", "adv3") }] }), { origineDeLaCible: "plateau" });
+    const [choisie] = tous(noeud, ".combat-cibles button");
+    assert.deepEqual([texteDe(choisie), choisie.getAttribute("aria-pressed"), choisie.getAttribute("aria-disabled")], ["Marmiton de corvée n° 1", "true", "true"]);
+    assert.equal(texteDe(noeud.querySelector(`#${choisie.getAttribute("aria-describedby")}`)), "Une action est en cours.");
+    assert.deepEqual(tous(noeud, ".combat-origine").map(texteDe), ["choisie sur la carte"]);
+    choisie.click();
+    assert.deepEqual(appels, []);
   });
 });
 
@@ -488,14 +582,58 @@ test("panneau d'action — une capacité sans jet offre « Sans cible » ; sans 
 
 test("panneau d'action — un déplacement : un bouton par case d'arrivée possible, la case choisie enfoncée", () => {
   avecPanneau(({ noeud, rendre, appels }) => {
-    rendre(vueDuGeste({ cases: [{ case: "C3", choisie: false, commande: regler("arrivee", "C3") }, { case: "D4", choisie: true, commande: regler("arrivee", "D4") }] }));
+    rendre(vueDuGeste({ cases: [{ case: "C3", nom: "Case C3 : s'y déplacer", choisie: false, commande: regler("arrivee", "C3") }, { case: "D4", nom: "Case D4 : s'y déplacer", choisie: true, commande: regler("arrivee", "D4") }] }));
     const cases = tous(noeud, ".combat-arrivees button");
     assert.deepEqual(cases.map((b) => [texteDe(b), b.getAttribute("aria-pressed")]), [["C3", "false"], ["D4", "true"]]);
+    // Le double se nomme comme la case de la carte : « C3 » seul ne disait pas quoi.
+    assert.deepEqual(cases.map((b) => b.getAttribute("aria-label")), ["Case C3 : s'y déplacer", "Case D4 : s'y déplacer"]);
     cases[0].click();
     assert.deepEqual(appels, [{ commande: regler("arrivee", "C3"), origine: "panneau" }]);
 
     rendre(vueDuGeste({ cases: null }));
     assert.equal(noeud.querySelector(".combat-arrivees"), null);
+    // Sans nom dans la vue, le bouton garde son texte pour nom.
+    rendre(vueDuGeste({ cases: [{ case: "C3", choisie: false, commande: regler("arrivee", "C3") }] }));
+    assert.equal(noeud.querySelector(".combat-arrivees button").hasAttribute("aria-label"), false);
+  });
+});
+
+test("panneau d'action — chaque rangée de choix est un groupe que son intitulé nomme", () => {
+  avecPanneau(({ noeud, rendre }) => {
+    const choix = (libelle) => ({ libelle, choisie: false, commande: regler("x", 0) });
+    rendre(
+      vueDuGeste({
+        armes: [choix("Spatule souple"), choix("Louche")],
+        cibles: [{ id: "adv3", libelle: "Marmiton de corvée n° 1", choisie: false, actif: true, raison: null, commande: regler("cible", "adv3") }],
+        cases: [{ case: "C3", nom: "Case C3 : s'y déplacer", choisie: false, commande: regler("arrivee", "C3") }],
+        caracteristiques: { choisies: [], de: null, gabarit: { evenement: { type: "regler", champ: "caracteristiques" } }, options: [{ code: "force", nom: "Force", valeur: 4 }] },
+        difficultes: [{ valeur: 5, libelle: "moyen", choisie: false, commande: regler("difficulte", 5) }],
+        jauges: [{ nom: "Grand Four", choisie: true, commande: regler("jauge", 0) }],
+        degats: { bases: [choix("Sans dégâts")], natures: [choix("Dégâts normaux")], saisie: null },
+      }),
+    );
+    const groupes = tous(noeud, "[role=group]");
+    assert.deepEqual(
+      groupes.map((groupe) => [groupe.className, texteDe(noeud.querySelector(`#${groupe.getAttribute("aria-labelledby")}`))]),
+      [
+        ["combat-ligne combat-armes", "Arme :"],
+        ["combat-cibles", "Cible :"],
+        ["combat-ligne combat-arrivees", "Arrivée :"],
+        ["combat-ligne combat-caracteristiques", "Caractéristiques, une ou deux :"],
+        ["combat-ligne combat-difficultes", "Difficulté :"],
+        ["combat-ligne combat-jauges", "Lien payé sur :"],
+        ["combat-ligne combat-degats-bases", "Dégâts :"],
+        ["combat-ligne combat-degats-natures", "Nature :"],
+      ],
+    );
+    for (const groupe of groupes) {
+      // L'intitulé est le premier enfant de sa rangée, et ses boutons le suivent.
+      assert.equal(groupe.children[0].id, groupe.getAttribute("aria-labelledby"), groupe.className);
+      assert.equal(groupe.children[0].tagName, "SPAN");
+      assert.ok(tous(groupe, "button").length > 0, groupe.className);
+    }
+    const ids = tous(noeud, "[id]").map((n) => n.id);
+    assert.equal(new Set(ids).size, ids.length, "aucun identifiant en double");
   });
 });
 
@@ -567,28 +705,49 @@ test("panneau d'action — X : la saisie porte ses bornes, émet le gabarit comp
     leBouton(noeud, "Régler X").click();
     assert.deepEqual(appels, [{ commande: { evenement: { type: "regler", champ: "x", valeur: 4 } }, origine: "panneau" }]);
 
-    // Hors des bornes, pas un entier, vide : rien ne part, et le champ le dit.
+    // Le message d'un refus est lié au champ, et vide tant que rien n'est refusé (une description cachée se lit quand même).
+    const refus = noeud.querySelector(`#${champ.getAttribute("aria-describedby")}`);
+    assert.equal(refus.tagName, "P");
+    assert.deepEqual([refus.hidden, refus.textContent], [true, ""]);
+    assert.equal(leBouton(noeud, "Régler X").parentNode.parentNode.children.indexOf(refus), leBouton(noeud, "Régler X").parentNode.parentNode.children.indexOf(champ.parentNode.parentNode) + 1, "il suit sa rangée");
+
+    // Hors des bornes, pas un entier, vide : rien ne part, le champ le dit, et le message dit ce qui est attendu.
     for (const refuse of ["6", "-1", "2,5", "1.5", "", "deux", "1e1"]) {
       appels.length = 0;
       champ.value = refuse;
+      globalThis.document.activeElement = null;
       leBouton(noeud, "Régler X").click();
       assert.deepEqual(appels, [], `« ${refuse} » ne part pas`);
       assert.equal(champ.getAttribute("aria-invalid"), "true");
+      assert.deepEqual([refus.hidden, refus.textContent], [false, "Un nombre entier de 0 à 5 est attendu."], `« ${refuse} »`);
+      assert.equal(globalThis.document.activeElement, champ, "le focus va au champ refusé");
     }
-    // Les bornes elles-mêmes passent, et le champ n'est plus marqué.
+    // Les bornes elles-mêmes passent, le champ n'est plus marqué, et le message se tait.
     for (const [texte, valeur] of [["0", 0], ["5", 5], [" 3 ", 3]]) {
       appels.length = 0;
+      champ.value = "9";
+      leBouton(noeud, "Régler X").click();
+      assert.equal(refus.hidden, false);
       champ.value = texte;
       leBouton(noeud, "Régler X").click();
       assert.deepEqual(appels, [{ commande: { evenement: { type: "regler", champ: "x", valeur } }, origine: "panneau" }]);
       assert.equal(champ.hasAttribute("aria-invalid"), false);
+      assert.deepEqual([refus.hidden, refus.textContent], [true, ""]);
     }
+    // Sans bornes dans la vue, le message ne les invente pas.
+    rendre(vueDuGeste({ x: { valeur: 2, gabarit: { evenement: { type: "regler", champ: "x" } } } }));
+    const sansBornes = noeud.querySelector("input[type=number]");
+    sansBornes.value = "deux";
+    leBouton(noeud, "Régler X").click();
+    assert.equal(noeud.querySelector(`#${sansBornes.getAttribute("aria-describedby")}`).textContent, "Un nombre entier est attendu.");
+    rendre(vueDuGeste({ x: { valeur: 2, min: 0, max: 5, gabarit: { evenement: { type: "regler", champ: "x" } } } }));
     // La touche Entrée vaut le bouton ; une autre touche, non.
+    const neuf = noeud.querySelector("input[type=number]");
     appels.length = 0;
-    champ.value = "1";
-    champ.declencher("keydown", { key: "a" });
+    neuf.value = "1";
+    neuf.declencher("keydown", { key: "a" });
     assert.deepEqual(appels, []);
-    champ.declencher("keydown", { key: "Enter" });
+    neuf.declencher("keydown", { key: "Enter" });
     assert.equal(appels.length, 1);
   });
 });
@@ -598,8 +757,12 @@ test("panneau d'action — X : la saisie porte ses bornes, émet le gabarit comp
 test("panneau d'action — le contexte : le jet, la capacité et la cible ; le dé, ses modificateurs et la difficulté ; les avantages et leurs sources", () => {
   avecPanneau(({ noeud, rendre }) => {
     rendre(vueAction());
-    const lignes = tous(noeud, ".combat-des .combat-jet .combat-contexte p").map(texteDe);
-    assert.deepEqual(lignes, ["Jet d'attaque · Taloche [1] contre Marmiton de corvée n° 1", "Dé d8+1 (Force 4 + Agilité 5) · +1 (Vif) · difficulté 5, sa défense", "1 avantage · Avantages : Solo du chef"]);
+    const lignes = tous(noeud, ".combat-des .combat-contexte p").map(texteDe);
+    // Le dé nu, puis son modificateur avec sa source, à sa suite et une seule fois, comme sur la maquette.
+    assert.deepEqual(lignes, ["Jet d'attaque · Taloche [1] contre Marmiton de corvée n° 1", "Dé d8 (Force 4 + Agilité 5) +1 (Vif) · difficulté 5, sa défense", "1 avantage · Avantages : Solo du chef"]);
+    // Plusieurs modificateurs se suivent, chacun avec sa source ; sans détail, ils suivent le dé.
+    rendre(vueAction({ geste: gesteVu({ contexte: { ...gesteVu().contexte, detail: null, modificateurs: ["+1 (Vif)", "−2 (blessures)", "+1 (à la main : Minutie)"] } }) }));
+    assert.equal(tous(noeud, ".combat-contexte p").map(texteDe)[1], "Dé d8 +1 (Vif) −2 (blessures) +1 (à la main : Minutie) · difficulté 5, sa défense");
 
     // Dans l'autre sens : des désavantages, pas d'avantage, pas de modificateur.
     rendre(vueAction({ geste: gesteVu({ contexte: { titre: "Jet de défense · Frappe de Marmiton de corvée n° 1", de: "d8", detail: null, modificateurs: [], difficulte: "5, son attaque", avantages: [], desavantages: ["types d'armure mêlés", "Blessure"], net: "2 désavantages", reglages: null } }) }));
@@ -621,9 +784,12 @@ test("panneau d'action — les réglages à la main, avant le premier dé : un n
     };
     rendre(vueAction({ geste: gesteVu({ contexte: { ...gesteVu().contexte, reglages } }) }));
     const aside = noeud.querySelector(".combat-des aside.combat-reglages");
-    // Le texte de la capacité sous son titre (celui de la maquette), puis les réglages sous le leur.
-    assert.deepEqual(tous(aside, "h3").map(texteDe), ["Effets de capacité (mode assisté)", "Réglages à la main"]);
-    assert.deepEqual(aside.children.slice(0, 3).map((enfant) => `${enfant.tagName} ${enfant.className}`), ["H3 ", "P combat-description", "H3 "]);
+    // Les réglages sous leur titre, qui nomme leur région ; le texte de la capacité a son bloc, sous le titre de la maquette.
+    assert.deepEqual(tous(aside, "h3").map(texteDe), ["Réglages à la main"]);
+    assert.equal(aside.getAttribute("aria-labelledby"), aside.querySelector("h3").id);
+    assert.ok(aside.querySelector("h3").id.length > 0);
+    assert.equal(aside.querySelector(".combat-description"), null);
+    assert.deepEqual(noeud.querySelector(".combat-des .combat-assiste").children.map((enfant) => `${enfant.tagName} ${enfant.className} ${texteDe(enfant)}`), ["H3  Effets de capacité (mode assisté)", "P combat-description Une taloche qui inflige 2/4/8."]);
     const [modificateur, avantages] = tous(aside, "input[type=number]");
     const [raisonDuModificateur, raisonDesAvantages] = tous(aside, "input[type=text]");
     assert.equal(texteDe(modificateur.parentNode), "Modificateur de chaque dé (de −20 à 20)");
@@ -637,39 +803,116 @@ test("panneau d'action — les réglages à la main, avant le premier dé : un n
     leBouton(aside, "Régler le modificateur").click();
     assert.deepEqual(appels, [{ commande: { evenement: { type: "regler", champ: "modificateur", valeur: -2, raison: "Inspiration" } }, origine: "panneau" }]);
 
-    // Une raison vide ne part jamais : avec un nombre non nul, rien ne s'émet.
+    // Une raison vide ne part jamais : avec un nombre non nul, rien ne s'émet, et le message, lié aux deux champs, dit pourquoi.
     appels.length = 0;
     raisonDuModificateur.value = "   ";
+    const refus = aside.querySelector(`#${raisonDuModificateur.getAttribute("aria-describedby")}`);
+    assert.equal(modificateur.getAttribute("aria-describedby"), raisonDuModificateur.getAttribute("aria-describedby"));
+    assert.notEqual(avantages.getAttribute("aria-describedby"), modificateur.getAttribute("aria-describedby"), "chaque saisie a son message");
+    assert.deepEqual([refus.hidden, refus.textContent], [true, ""]);
     leBouton(aside, "Régler le modificateur").click();
     assert.deepEqual(appels, []);
     assert.equal(raisonDuModificateur.getAttribute("aria-invalid"), "true");
+    assert.equal(modificateur.hasAttribute("aria-invalid"), false, "seul le champ fautif est marqué");
+    assert.deepEqual([refus.hidden, refus.textContent], [false, "Une raison est demandée."]);
+    assert.equal(globalThis.document.activeElement, raisonDuModificateur, "le focus va au champ refusé");
     // À zéro, le réglage s'efface sans raison : le champ « raison » n'est pas dans l'événement.
     modificateur.value = "0";
     leBouton(aside, "Régler le modificateur").click();
     assert.deepEqual(appels, [{ commande: { evenement: { type: "regler", champ: "modificateur", valeur: 0 } }, origine: "panneau" }]);
     assert.equal(Object.hasOwn(appels[0].commande.evenement, "raison"), false);
     assert.equal(raisonDuModificateur.hasAttribute("aria-invalid"), false);
+    assert.deepEqual([refus.hidden, refus.textContent], [true, ""], "le message se tait dès que la saisie part");
 
-    // Hors des bornes de la vue : rien.
+    // Hors des bornes de la vue : rien, et le message dit les bornes.
     appels.length = 0;
     avantages.value = "21";
     leBouton(aside, "Régler les avantages").click();
     assert.deepEqual(appels, []);
+    assert.equal(aside.querySelector(`#${avantages.getAttribute("aria-describedby")}`).textContent, "Un nombre entier de −20 à 20 est attendu.");
+    assert.equal(avantages.getAttribute("aria-invalid"), "true");
     avantages.value = "-20";
     leBouton(aside, "Régler les avantages").click();
     assert.deepEqual(appels, [{ commande: { evenement: { type: "regler", champ: "avantages", valeur: -20, raison: "Minutie" } }, origine: "panneau" }]);
 
-    // Après le premier dé, la vue n'offre plus de réglage : plus de champ.
+    // Après le premier dé, la vue n'offre plus de réglage : plus de région, plus de champ ; le texte de la capacité reste.
     rendre(vueAction());
-    assert.equal(tous(noeud, ".combat-reglages input").length, 0);
-    assert.equal(texteDe(noeud.querySelector(".combat-reglages .combat-description")), "Une taloche qui inflige 2/4/8.");
-    assert.deepEqual(tous(noeud, ".combat-reglages h3").map(texteDe), ["Effets de capacité (mode assisté)"]);
+    assert.equal(noeud.querySelector(".combat-reglages"), null);
+    assert.equal(tous(noeud, ".combat-des input").length, 0);
+    assert.equal(texteDe(noeud.querySelector(".combat-assiste .combat-description")), "Une taloche qui inflige 2/4/8.");
+    assert.deepEqual(tous(noeud, ".combat-des h3").map(texteDe), ["Effets de capacité (mode assisté)"]);
     // Des réglages sans description : leur seul titre.
     rendre(vueAction({ geste: gesteVu({ description: null, contexte: { ...gesteVu().contexte, reglages } }) }));
-    assert.deepEqual(tous(noeud, ".combat-reglages h3").map(texteDe), ["Réglages à la main"]);
-    // Sans description ni réglage, pas d'encart.
+    assert.deepEqual(tous(noeud, ".combat-des h3").map(texteDe), ["Réglages à la main"]);
+    assert.equal(noeud.querySelector(".combat-assiste"), null);
+    // Sans description ni réglage, ni l'un ni l'autre.
     rendre(vueAction({ geste: gesteVu({ description: null }) }));
     assert.equal(noeud.querySelector(".combat-reglages"), null);
+    assert.equal(noeud.querySelector(".combat-assiste"), null);
+  });
+});
+
+test("panneau d'action — l'ordre des blocs du jet : le contexte, les réglages à la main, la chaîne, le bilan, les rangs, les choix, les dégâts à fixer, la face à décaler, l'esquive, « Revenir » ; le texte de la capacité ferme le bloc", () => {
+  avecPanneau(({ noeud, rendre }) => {
+    const commande = { evenement: { type: "degats", base: "aucun", operations: [], nature: "normaux" } };
+    const complet = gesteVu({
+      contexte: {
+        ...gesteVu().contexte,
+        reglages: {
+          modificateur: { valeur: 0, raison: null, min: -20, max: 20, raisonParDefaut: "Taloche", gabarit: { evenement: { type: "regler", champ: "modificateur" } } },
+          avantages: { valeur: 0, raison: null, min: -20, max: 20, raisonParDefaut: "Taloche", gabarit: { evenement: { type: "regler", champ: "avantages" } } },
+        },
+      },
+      degats: {
+        bases: [{ libelle: "Sans dégâts", choisie: true, commande }],
+        natures: [{ libelle: "Dégâts normaux", choisie: true, commande }],
+        saisie: { valeur: null, raison: null, raisonParDefaut: "Taloche", min: 0, max: 999, gabarit: { evenement: { type: "degats", base: "aucun", nature: "normaux" } } },
+      },
+      localisation: [{ brut: 14, face: 14, zone: "jambe droite", decaler: { min: -13, max: 5, raisonParDefaut: "Taloche", gabarit: { evenement: { type: "decaler", de: 0 } } } }],
+      esquive: { libelle: "Pas de côté", min: 1, max: 6, gabarit: { evenement: { type: "esquive" } } },
+      detail: [{ zone: "Jambe droite", texte: "armure 10 → 1" }],
+      appliquer: { libelle: "Appliquer", commande: { evenement: { type: "appliquer" } } },
+      revenir: { commande: { evenement: { type: "revenir" } } },
+    });
+    rendre(vueAction({ geste: complet }));
+
+    // Un bloc se dit par sa balise et sa classe ; une rangée sans classe propre, par le texte de ses boutons.
+    const dit = (bloc) => {
+      const nom = `${bloc.tagName.toLowerCase()}${bloc.className ? `.${bloc.className.split(" ").at(-1)}` : ""}`;
+      return ["div.combat-ligne", "div.combat-choix"].includes(nom) ? `${nom} : ${tous(bloc, "button").map(texteDe).join(", ")}` : nom;
+    };
+    const des = noeud.querySelector(".combat-des");
+    // Le document suit la mission (§ 10.6), et c'est l'ordre du téléphone : les réglages viennent entre le contexte et la chaîne.
+    assert.deepEqual(des.children.map(dit), ["div.combat-contexte", "aside.combat-reglages", "div.combat-jet", "div.combat-assiste"]);
+    assert.deepEqual(des.querySelector(".combat-jet").children.map(dit), [
+      "div.combat-chaine",
+      "p.combat-bilan",
+      "ul.combat-lettres",
+      "div.combat-choix : Relancer le 2e dé, Garder ce dé",
+      "div.combat-degats-bases",
+      "div.combat-degats-natures",
+      "div.combat-ligne : Fixer les dégâts",
+      "p.combat-refus",
+      "div.combat-localisation",
+      "div.combat-ligne : Décaler",
+      "p.combat-refus",
+      "div.combat-ligne : Pas de côté",
+      "p.combat-refus",
+      "ul.combat-detail",
+      "div.combat-choix : Appliquer, Revenir",
+    ]);
+    // Dans la chaîne du jet : les dés, dans l'ordre de la vue.
+    assert.deepEqual(tous(des.querySelector(".combat-chaine"), ".combat-de-titre").map(texteDe), ["1er dé", "2e dé", "3e dé"]);
+    // Dans le contexte : le jet, la capacité et la cible ; le dé, ses modificateurs et la difficulté ; les avantages.
+    assert.deepEqual(tous(des, ".combat-contexte p").map((p) => texteDe(p).split(" ")[0]), ["Jet", "Dé", "1"]);
+    // Avant les dés, ce qui se règle ; le bloc des dés ferme le corps.
+    const corps = noeud.querySelector(".combat-action-corps");
+    assert.equal(corps.children.at(-1), des);
+    assert.ok(corps.children.indexOf(noeud.querySelector(".combat-cibles")) < corps.children.indexOf(des));
+
+    // Sans réglage ni contexte (une capacité sans jet) : le jet, puis le texte.
+    rendre(vueDuGeste({ description: "Un pas chassé.", revenir: { commande: { evenement: { type: "revenir" } } } }));
+    assert.deepEqual(noeud.querySelector(".combat-des").children.map(dit), ["div.combat-jet", "div.combat-assiste"]);
   });
 });
 
@@ -701,7 +944,7 @@ test("panneau d'action — la chaîne : un dé par entrée, son état en classe,
           ],
           aLancer: { faces: 8, combien: 1, libelle: "d8", motif: "relance" },
           choix: [],
-          bilan: "Avantage dépensé : cliquez sur le d8 pour relancer le 2e dé.",
+          bilan: "1 réussite pour l'instant. Avantage dépensé : cliquez sur le d8 pour relancer le 2e dé.",
         }),
         focus: "de",
       }),
@@ -859,13 +1102,16 @@ test("panneau d'action — la localisation : les d20 lancés, le d20 attendu à 
       ["14", "jambe droite", "Localisation : 14, jambe droite"],
       ["12", "jambe gauche", "Localisation : 12, dé 6, jambe gauche"],
     ]);
+    // Un dé décalé montre aussi ce qu'il a tiré : sa valeur est la face décalée.
+    assert.deepEqual(d20.map((de) => texteDe(de.querySelector(".combat-de-titre"))), ["d20", "d20 : 6"]);
     for (const de of d20) de.click();
     assert.deepEqual(appels, [], "un d20 lancé ne se relance pas");
 
     assert.equal(boutons(noeud, "Décaler").length, 1);
     const ligne = leBouton(noeud, "Décaler").parentNode;
     const nombre = ligne.querySelector("input[type=number]");
-    assert.equal(texteDe(nombre.parentNode), "Décaler le 14 (jambe droite) (de −13 à 5)");
+    // Le dé tiré, puis sa zone : sans équivoque.
+    assert.equal(texteDe(nombre.parentNode), "Décaler le dé 14 : jambe droite (de −13 à 5)");
     nombre.value = "-2";
     ligne.querySelector("input[type=text]").value = "Minutie";
     leBouton(noeud, "Décaler").click();
@@ -874,6 +1120,15 @@ test("panneau d'action — la localisation : les d20 lancés, le d20 attendu à 
     nombre.value = "6";
     leBouton(noeud, "Décaler").click();
     assert.deepEqual(appels, [], "la face décalée reste dans les bornes que donne la vue");
+
+    // Un dé déjà décalé, qui se décale encore : le dé tiré, la face qu'il vaut maintenant, la zone de cette face.
+    rendre(vueAction({ geste: gesteVu({ choix: [], localisation: [{ brut: 14, face: 16, zone: "bras gauche", decaler: { valeur: 2, raison: "Minutie", min: -13, max: 5, raisonParDefaut: "Taloche", gabarit: { evenement: { type: "decaler", de: 0 } } } }] }) }));
+    const decale = leBouton(noeud, "Décaler").parentNode.querySelector("input[type=number]");
+    assert.equal(texteDe(decale.parentNode), "Décaler le dé 14 : face 16, bras gauche (de −13 à 5)");
+    assert.equal(decale.value, "2");
+    // Sans zone dans la vue : le dé seul.
+    rendre(vueAction({ geste: gesteVu({ choix: [], localisation: [{ brut: 14, face: 14, zone: null, decaler: { min: -13, max: 5, raisonParDefaut: "Taloche", gabarit: { evenement: { type: "decaler", de: 0 } } } }] }) }));
+    assert.equal(texteDe(leBouton(noeud, "Décaler").parentNode.querySelector("input[type=number]").parentNode), "Décaler le dé 14 (de −13 à 5)");
 
     rendre(vueAction({ geste: gesteVu({ localisation: null }) }));
     assert.equal(noeud.querySelector(".combat-localisation"), null);
@@ -940,8 +1195,7 @@ test("panneau d'action — « Confirmer » d'une capacité sans jet, inactif tan
 // ——— L'annonce, le focus, les rendus ———
 
 test("panneau d'action — l'annonce s'écrit quand son pas change, et alors seulement", () => {
-  avecPanneau(({ noeud, rendre }) => {
-    const annonce = noeud.querySelector(".combat-annonce");
+  avecPanneau(({ noeud, rendre, annonce }) => {
     assert.equal(annonce.childNodes.length, 0);
     rendre(vueAction());
     assert.equal(annonce.textContent, "2e dé : 4, échec. Relancer ou garder ?");
@@ -965,7 +1219,7 @@ test("panneau d'action — l'annonce s'écrit quand son pas change, et alors seu
 
     // Le bilan visible n'est pas dans la région, et la région n'est pas dans le corps refait.
     assert.equal(annonce.querySelector(".combat-bilan"), null);
-    assert.equal(noeud.querySelector(".combat-action-corps").querySelector(".combat-annonce"), null);
+    assert.equal(noeud.querySelector(".combat-annonce"), null, "ni dans le corps refait, ni dans la section");
   });
 });
 
@@ -1058,8 +1312,8 @@ test("panneau d'action — deux panneaux ne se mêlent pas ; un geste absent ne 
 
 // ——— Les données hostiles, et le texte du module ———
 
-test("panneau d'action — un nom hostile reste du texte ; un signe qui renverse l'écriture ne s'affiche pas", () => {
-  avecPanneau(({ noeud, rendre }) => {
+test("panneau d'action — un nom hostile reste du texte ; un signe qui renverse l'écriture ne s'affiche pas, et n'entre dans aucun attribut", () => {
+  avecPanneau(({ noeud, rendre, annonce }) => {
     const balise = "<img src=x onerror=alert(1)>";
     const renverse = String.fromCodePoint(0x202e);
     rendre(
@@ -1067,7 +1321,15 @@ test("panneau d'action — un nom hostile reste du texte ; un signe qui renverse
         titre: `${balise} joue — 1 action sur 2, souffle 10`,
         groupes: [{ titre: balise, boutons: [boutonVu({ libelle: `${renverse}Taloche`, raison: balise, actif: false })] }],
         mentions: { passifs: balise, interventions: null },
-        geste: gesteVu({ description: balise, bilan: balise, cibles: [{ id: "adv3", libelle: balise, choisie: false, actif: true, raison: null, commande: regler("cible", "adv3") }] }),
+        geste: gesteVu({
+          description: balise,
+          bilan: balise,
+          cibles: [{ id: "adv3", libelle: balise, choisie: false, actif: true, raison: null, commande: regler("cible", "adv3") }],
+          // Un nom de zone vient de la banque : il entre dans le nom accessible du d20, et dans celui de sa saisie.
+          localisation: [{ brut: 5, face: 7, zone: `${renverse}eton`, decaler: { min: -4, max: 14, raisonParDefaut: "Taloche", gabarit: { evenement: { type: "decaler", de: 0 } } } }],
+          cases: [{ case: "C3", nom: `Case C3 : ${renverse}s'y déplacer`, choisie: false, commande: regler("arrivee", "C3") }],
+          puissance: { valeur: `${renverse}2`, moins: { actif: true, commande: regler("facon", 0) }, plus: { actif: true, commande: regler("facon", 2) } },
+        }),
         annonce: { pas: 1, texte: `${renverse}${balise}` },
       }),
     );
@@ -1077,8 +1339,15 @@ test("panneau d'action — un nom hostile reste du texte ; un signe qui renverse
     assert.equal(texteDe(noeud.querySelector(".combat-groupe-titre")), balise);
     assert.equal(texteDe(noeud.querySelector(".combat-cibles button")), balise);
     assert.equal(noeud.textContent.includes(renverse), false);
-    assert.equal(noeud.querySelector(".combat-annonce").textContent, balise);
+    assert.equal(annonce.textContent, balise);
     assert.equal(texteDe(leBouton(noeud, "Taloche").querySelector("span")), "Taloche");
+    // Aucun attribut d'aucun nœud ne garde le signe : ni le nom du d20, ni celui d'une case d'arrivée, ni celui d'un pas de la puissance.
+    const d20 = noeud.querySelector(".combat-localisation button.combat-de");
+    assert.equal(d20.getAttribute("aria-label"), "Localisation : 7, dé 5, eton");
+    assert.equal(noeud.querySelector(".combat-arrivees button").getAttribute("aria-label"), "Case C3 : s'y déplacer");
+    assert.equal(tous(noeud, ".combat-puissance button")[0].getAttribute("aria-label"), "Baisser la puissance (actuelle : 2)");
+    const signes = [noeud, ...noeud.descendants()].flatMap((n) => [...n.attributs].filter(([, valeur]) => valeur.includes(renverse)).map(([nom]) => `${n.tagName}@${nom}`));
+    assert.deepEqual(signes, []);
   });
 });
 

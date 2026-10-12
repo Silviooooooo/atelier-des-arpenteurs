@@ -15,10 +15,13 @@
 //
 // Trois nœuds sont créés une fois et ne sont jamais refaits : la section, la
 // liste d'une case (« +k », que remplit l'écran) et la région d'annonce,
-// seule région polie de l'écran, pour les lecteurs d'écran. Le corps, lui,
-// est refait en entier dès que la vue change, et seulement alors : un rendu
-// de plus (l'enregistrement qui finit) ne doit ni effacer une saisie en
-// cours, ni déplacer le focus.
+// seule région polie de l'écran, pour les lecteurs d'écran. La région n'est
+// pas dans la section : l'écran la pose dans la page dès son premier rendu,
+// vide, pour qu'un lecteur d'écran la connaisse avant qu'elle parle ; entrée
+// dans la page avec le panneau, déjà pleine, sa première annonce pouvait ne
+// pas être dite. Le corps, lui, est refait en entier dès que la vue change,
+// et seulement alors : un rendu de plus (l'enregistrement qui finit) ne doit
+// ni effacer une saisie en cours, ni déplacer le focus.
 
 import { el, enumerer, sansSensForce } from "./dom.js";
 
@@ -45,6 +48,10 @@ const TITRE_DE_LA_DESCRIPTION = "Effets de capacité (mode assisté)";
 // « Aubépine Crèmebrûlée joue — 1 action sur 2, souffle 10 ».
 const TIRET_DU_TITRE = " — ";
 
+// Ce que dit une saisie refusée : ces textes ne viennent pas de l'auteur, et
+// restent à lui faire confirmer.
+const RAISON_REFUSEE = "Une raison est demandée.";
+
 const present = (valeur) => valeur !== null && valeur !== undefined;
 
 /** Un nombre tel qu'il s'écrit dans une phrase : « −3 », « 5 ». */
@@ -53,6 +60,12 @@ const ecrireNombre = (n) => (n < 0 ? `${SIGNE_MOINS}${Math.abs(n)}` : String(n))
 /** Les bornes d'une saisie, en clair : « de 0 à 5 » ; rien si la vue n'en donne pas. */
 function ecrireBornes(saisie) {
   return typeof saisie.min === "number" && typeof saisie.max === "number" ? ` (de ${ecrireNombre(saisie.min)} à ${ecrireNombre(saisie.max)})` : "";
+}
+
+/** Ce que dit un nombre refusé : « Un nombre entier de 0 à 5 est attendu. » */
+function nombreRefuse(saisie) {
+  const bornes = typeof saisie.min === "number" && typeof saisie.max === "number" ? ` de ${ecrireNombre(saisie.min)} à ${ecrireNombre(saisie.max)}` : "";
+  return `Un nombre entier${bornes} est attendu.`;
 }
 
 /**
@@ -91,11 +104,22 @@ function marquer(r, noeud, cle) {
 }
 
 /**
+ * Le nom accessible d'un bouton ou d'un dé. Il peut porter un nom venu de la
+ * banque (une zone, une arme) : comme tout texte montré, il perd les signes
+ * qui commandent le sens de l'écriture.
+ */
+const nomAccessible = (etiquette) => (present(etiquette) ? sansSensForce(etiquette) : null);
+
+/**
  * Un bouton qui émet sa commande. Inactif, il garde le focus (aria-disabled,
  * jamais disabled), ne fait rien, et sa raison, écrite à côté de lui, lui
  * est liée. Rend le bouton, puis sa raison s'il en a une.
+ *
+ * « surPlace » : un réglage qui ne fait pas avancer le geste (la puissance,
+ * une caractéristique sur deux). Le corps refait, le focus revient au bouton
+ * de même clé, et non à la commande qui attend : on y revient d'un geste.
  */
-function bouton(r, { cle = null, classe, contenu, commande = null, actif = true, raison = null, presse, etiquette = null }) {
+function bouton(r, { cle = null, classe, contenu, commande = null, actif = true, raison = null, presse, etiquette = null, surPlace = false }) {
   const inactif = actif === false;
   const idRaison = inactif && raison ? `combat-action-raison-${(r.compteur += 1)}` : null;
   const noeud = el(
@@ -106,9 +130,19 @@ function bouton(r, { cle = null, classe, contenu, commande = null, actif = true,
       "aria-pressed": presse === undefined ? null : String(Boolean(presse)),
       "aria-disabled": inactif ? "true" : null,
       "aria-describedby": idRaison,
-      "aria-label": etiquette,
+      "aria-label": nomAccessible(etiquette),
       onclick: () => {
-        if (!inactif && commande) r.actions.executer(commande, ORIGINE);
+        if (inactif || !commande) return;
+        if (!surPlace || !present(cle)) {
+          r.actions.executer(commande, ORIGINE);
+          return;
+        }
+        r.garder(cle);
+        try {
+          r.actions.executer(commande, ORIGINE);
+        } finally {
+          r.garder(null);
+        }
       },
     },
     contenu,
@@ -122,33 +156,56 @@ function bouton(r, { cle = null, classe, contenu, commande = null, actif = true,
  * qui émet le gabarit complété. Une raison vide ne part jamais : sans elle,
  * seul un nombre nul s'émet (il efface le réglage), sauf pour des dégâts,
  * dont l'opération exige toujours la sienne.
+ *
+ * Une saisie refusée ne part pas, et le dit : le champ fautif est marqué
+ * (aria-invalid, que la feuille de style montre), une phrase liée aux deux
+ * champs dit ce qui est attendu, et le focus va au champ. Tant que rien
+ * n'est refusé, la phrase est vide : un lecteur d'écran lit la description
+ * d'un champ même quand elle est cachée. Rend la rangée, puis la phrase.
  */
 function saisie(r, { cle, libelle, donnee, action, defaut = "" }) {
-  const nombre = el("input", { type: "number", classe: "champ", step: "1", min: present(donnee.min) ? donnee.min : null, max: present(donnee.max) ? donnee.max : null });
+  const idRefus = `combat-action-refus-${(r.compteur += 1)}`;
+  const refus = el("p", { id: idRefus, classe: "combat-refus", hidden: true });
+  const nombre = el("input", {
+    type: "number",
+    classe: "champ",
+    step: "1",
+    min: present(donnee.min) ? donnee.min : null,
+    max: present(donnee.max) ? donnee.max : null,
+    "aria-describedby": idRefus,
+  });
   nombre.value = String(donnee.valeur ?? defaut);
   marquer(r, nombre, cle);
   const veutUneRaison = Object.hasOwn(donnee, "raisonParDefaut") || Object.hasOwn(donnee, "raison");
-  const raison = veutUneRaison ? el("input", { type: "text", classe: "champ" }) : null;
+  const raison = veutUneRaison ? el("input", { type: "text", classe: "champ", "aria-describedby": idRefus }) : null;
   if (raison) raison.value = String(donnee.raison ?? donnee.raisonParDefaut ?? "");
 
+  const refuser = (champ, phrase) => {
+    champ.setAttribute("aria-invalid", "true");
+    refus.replaceChildren(phrase);
+    refus.hidden = false;
+    champ.focus();
+  };
   const emettre = () => {
+    nombre.removeAttribute("aria-invalid");
+    raison?.removeAttribute("aria-invalid");
+    refus.replaceChildren();
+    refus.hidden = true;
     const valeur = lireEntier(nombre.value, donnee.min, donnee.max);
     if (valeur === null) {
-      nombre.setAttribute("aria-invalid", "true");
+      refuser(nombre, nombreRefuse(donnee));
       return;
     }
-    nombre.removeAttribute("aria-invalid");
     let dite = null;
     if (raison) {
       dite = raison.value.trim();
       if (dite === "") {
         if (valeur !== 0 || donnee.gabarit?.evenement?.type === "degats") {
-          raison.setAttribute("aria-invalid", "true");
+          refuser(raison, RAISON_REFUSEE);
           return;
         }
         dite = null;
       }
-      raison.removeAttribute("aria-invalid");
     }
     const commande = completer(donnee.gabarit, valeur, dite);
     if (commande) r.actions.executer(commande, ORIGINE);
@@ -161,18 +218,26 @@ function saisie(r, { cle, libelle, donnee, action, defaut = "" }) {
   nombre.addEventListener("keydown", auClavier);
   raison?.addEventListener("keydown", auClavier);
 
-  return el(
-    "div",
-    { classe: "combat-ligne" },
-    el("label", {}, `${libelle}${ecrireBornes(donnee)}`, nombre),
-    raison ? el("label", {}, "Raison", raison) : null,
-    el("button", { type: "button", classe: "bouton secondaire", onclick: emettre }, action),
-  );
+  return [
+    el(
+      "div",
+      { classe: "combat-ligne" },
+      el("label", {}, `${libelle}${ecrireBornes(donnee)}`, nombre),
+      raison ? el("label", {}, "Raison", raison) : null,
+      el("button", { type: "button", classe: "bouton secondaire", onclick: emettre }, action),
+    ),
+    refus,
+  ];
 }
 
-/** Une rangée de choix : son intitulé, puis un bouton par option. */
-function rangee(classe, intitule, ...boutons) {
-  return el("div", { classe }, el("span", {}, intitule), boutons);
+/**
+ * Une rangée de choix : son intitulé, puis un bouton par option. C'est un
+ * groupe, que son intitulé nomme : un lecteur d'écran dit « Arrivée : » en
+ * entrant dans la rangée, et non une suite de boutons sans objet.
+ */
+function rangee(r, classe, intitule, ...boutons) {
+  const id = `combat-action-rangee-${(r.compteur += 1)}`;
+  return el("div", { classe, role: "group", "aria-labelledby": id }, el("span", { id }, intitule), boutons);
 }
 
 // ——— Les capacités ———
@@ -225,14 +290,20 @@ function mentions(vue) {
 
 // ——— Le geste, avant les dés ———
 
+/**
+ * La puissance : ses deux pas gardent le focus, pour monter ou baisser
+ * plusieurs fois de suite. Leur nom dit la puissance du moment : le bouton
+ * refait, c'est ce qu'un lecteur d'écran entend du pas qui vient d'être fait.
+ */
 function puissance(r, p) {
+  const actuelle = present(p.valeur) ? ` (actuelle : ${p.valeur})` : "";
   return el(
     "div",
     { classe: "combat-ligne combat-puissance" },
     el("span", {}, "Puissance"),
-    bouton(r, { cle: "puissance:moins", classe: "bouton secondaire bouton-pas", etiquette: "Baisser la puissance", actif: p.moins?.actif, raison: p.moins?.raison, commande: p.moins?.commande, contenu: SIGNE_MOINS }),
+    bouton(r, { cle: "puissance:moins", classe: "bouton secondaire bouton-pas", etiquette: `Baisser la puissance${actuelle}`, actif: p.moins?.actif, raison: p.moins?.raison, commande: p.moins?.commande, contenu: SIGNE_MOINS, surPlace: true }),
     el("span", { classe: "combat-puissance-valeur" }, p.valeur),
-    bouton(r, { cle: "puissance:plus", classe: "bouton secondaire bouton-pas", etiquette: "Monter la puissance", actif: p.plus?.actif, raison: p.plus?.raison, commande: p.plus?.commande, contenu: "+" }),
+    bouton(r, { cle: "puissance:plus", classe: "bouton secondaire bouton-pas", etiquette: `Monter la puissance${actuelle}`, actif: p.plus?.actif, raison: p.plus?.raison, commande: p.plus?.commande, contenu: "+", surPlace: true }),
   );
 }
 
@@ -246,6 +317,7 @@ function jetPrete(r, j) {
 
 function armes(r, liste) {
   return rangee(
+    r,
     "combat-ligne combat-armes",
     "Arme :",
     liste.map((arme, i) => bouton(r, { cle: `arme:${i}`, classe: "combat-capacite", presse: Boolean(arme.choisie), commande: arme.commande, contenu: arme.libelle })),
@@ -257,6 +329,7 @@ function cibles(r, geste) {
   if (liste.length === 0 && !geste.sansCible) return null;
   const origine = TEXTE_ORIGINE[r.origine] ?? null;
   return rangee(
+    r,
     "combat-cibles",
     "Cible :",
     liste.map((cible) => [
@@ -267,11 +340,17 @@ function cibles(r, geste) {
   );
 }
 
+/**
+ * Les cases d'arrivée : les doubles, en boutons de 44 px, des cases de la
+ * carte. Chacun porte le nom que la vue donne à sa case (« Case G2 : s'y
+ * déplacer »), le même que sur la carte ; « G2 » seul ne disait pas quoi.
+ */
 function cases(r, liste) {
   return rangee(
+    r,
     "combat-ligne combat-arrivees",
     "Arrivée :",
-    liste.map((c) => bouton(r, { cle: `case:${c.case}`, classe: "combat-capacite", presse: Boolean(c.choisie), commande: c.commande, contenu: c.case })),
+    liste.map((c) => bouton(r, { cle: `case:${c.case}`, classe: "combat-capacite", presse: Boolean(c.choisie), commande: c.commande, contenu: c.case, etiquette: c.nom ?? null })),
   );
 }
 
@@ -287,6 +366,7 @@ function caracteristiques(r, c) {
     return choisies.length < 2 ? [...choisies, code] : [code];
   };
   return rangee(
+    r,
     "combat-ligne combat-caracteristiques",
     present(c.de) ? ["Caractéristiques, une ou deux (dé : ", el("b", {}, c.de), ") :"] : "Caractéristiques, une ou deux :",
     (c.options ?? []).map((option) => {
@@ -297,6 +377,7 @@ function caracteristiques(r, c) {
         presse: choisies.includes(option.code),
         commande: valeur && c.gabarit?.evenement ? { evenement: { ...c.gabarit.evenement, valeur } } : null,
         contenu: present(option.valeur) ? `${option.nom} ${option.valeur}` : option.nom,
+        surPlace: true,
       });
     }),
   );
@@ -304,6 +385,7 @@ function caracteristiques(r, c) {
 
 function difficultes(r, liste) {
   return rangee(
+    r,
     "combat-ligne combat-difficultes",
     "Difficulté :",
     liste.map((d) => bouton(r, { cle: `difficulte:${d.valeur}`, classe: "combat-capacite", presse: Boolean(d.choisie), commande: d.commande, contenu: present(d.libelle) ? `${d.valeur} (${d.libelle})` : d.valeur })),
@@ -312,6 +394,7 @@ function difficultes(r, liste) {
 
 function jauges(r, liste) {
   return rangee(
+    r,
     "combat-ligne combat-jauges",
     "Lien payé sur :",
     liste.map((jauge, i) => bouton(r, { cle: `jauge:${i}`, classe: "combat-capacite", presse: Boolean(jauge.choisie), commande: jauge.commande, contenu: jauge.nom })),
@@ -323,9 +406,13 @@ function jauges(r, liste) {
 function contexte(c) {
   const lignes = [];
   if (present(c.titre)) lignes.push(el("p", {}, el("b", {}, c.titre)));
+  // Le dé nu, puis ses modificateurs, chacun avec sa source, à sa suite et
+  // sans séparateur, comme sur la maquette : « Dé d8 (Force 4 + Agilité 5)
+  // +1 (Vif) ».
   const jet = [];
-  if (present(c.de)) jet.push(["Dé ", el("b", {}, c.de), present(c.detail) ? ` (${c.detail})` : null]);
-  for (const modificateur of c.modificateurs ?? []) jet.push(modificateur);
+  const modificateurs = c.modificateurs ?? [];
+  if (present(c.de)) jet.push(["Dé ", el("b", {}, c.de), present(c.detail) ? ` (${c.detail})` : null, modificateurs.map((modificateur) => ` ${modificateur}`)]);
+  else for (const modificateur of modificateurs) jet.push(modificateur);
   if (present(c.difficulte)) jet.push(["difficulté ", el("b", {}, c.difficulte)]);
   if (jet.length) lignes.push(el("p", {}, enumerer(jet, " · ")));
   const sources = [];
@@ -343,7 +430,7 @@ function de(r, { titre, valeur, detail, classe, etiquette, aLancer }) {
     {
       type: "button",
       classe: classe ? `combat-de ${classe}` : "combat-de",
-      "aria-label": etiquette,
+      "aria-label": nomAccessible(etiquette),
       "aria-disabled": aLancer ? null : "true",
       onclick: () => {
         if (aLancer) r.actions.lancerLeDe();
@@ -388,10 +475,23 @@ function lettres(liste) {
 
 function degats(r, d) {
   const noeuds = [];
-  if (d.bases?.length) noeuds.push(rangee("combat-ligne combat-degats-bases", "Dégâts :", d.bases.map((base, i) => bouton(r, { cle: `degats:base:${i}`, classe: "combat-capacite", presse: Boolean(base.choisie), commande: base.commande, contenu: base.libelle }))));
-  if (d.natures?.length) noeuds.push(rangee("combat-ligne combat-degats-natures", "Nature :", d.natures.map((nature, i) => bouton(r, { cle: `degats:nature:${i}`, classe: "combat-capacite", presse: Boolean(nature.choisie), commande: nature.commande, contenu: nature.libelle }))));
+  if (d.bases?.length) noeuds.push(rangee(r, "combat-ligne combat-degats-bases", "Dégâts :", d.bases.map((base, i) => bouton(r, { cle: `degats:base:${i}`, classe: "combat-capacite", presse: Boolean(base.choisie), commande: base.commande, contenu: base.libelle }))));
+  if (d.natures?.length) noeuds.push(rangee(r, "combat-ligne combat-degats-natures", "Nature :", d.natures.map((nature, i) => bouton(r, { cle: `degats:nature:${i}`, classe: "combat-capacite", presse: Boolean(nature.choisie), commande: nature.commande, contenu: nature.libelle }))));
   if (d.saisie) noeuds.push(saisie(r, { cle: "degats:saisie", libelle: "Dégâts à la main", donnee: d.saisie, action: "Fixer les dégâts" }));
   return noeuds;
+}
+
+/**
+ * Ce que décale une saisie, sans équivoque : le dé tiré, puis, s'il a déjà
+ * été décalé, la face qu'il vaut maintenant, puis la zone de cette face.
+ * « Décaler le dé 14 : jambe gauche », « Décaler le dé 14 : face 16, bras
+ * gauche ». Écrit « Décaler le 14 (bras gauche) », un dé déjà décalé se
+ * lisait comme si le 14 tombait sur le bras.
+ */
+function libelleDuDecalage(coup) {
+  const face = coup.face ?? coup.brut;
+  const lu = [present(face) && face !== coup.brut ? `face ${face}` : null, coup.zone].filter(present).join(", ");
+  return `Décaler le dé ${coup.brut}${lu === "" ? "" : ` : ${lu}`}`;
 }
 
 /** Les d20 lancés, celui qu'on attend, puis le décalage de chaque face qui peut l'être. */
@@ -400,13 +500,13 @@ function localisation(r, geste, d20Attendu) {
   if (liste.length === 0 && !d20Attendu) return [];
   const des = liste.map((coup) => {
     const face = coup.face ?? coup.brut;
-    const dite = [face, present(coup.brut) && coup.brut !== face ? `dé ${coup.brut}` : null, coup.zone].filter(present).join(", ");
-    return de(r, { titre: "d20", valeur: face, detail: coup.zone ?? null, classe: "", etiquette: `Localisation : ${dite}`, aLancer: false });
+    const decale = present(coup.brut) && coup.brut !== face;
+    const dite = [face, decale ? `dé ${coup.brut}` : null, coup.zone].filter(present).join(", ");
+    // Un dé décalé montre aussi ce qu'il a tiré : sa valeur est la face décalée.
+    return de(r, { titre: decale ? `d20 : ${coup.brut}` : "d20", valeur: face, detail: coup.zone ?? null, classe: "", etiquette: `Localisation : ${dite}`, aLancer: false });
   });
   if (d20Attendu) des.push(deALancer(r, "Localisation", geste.aLancer));
-  const decalages = liste.map((coup, i) =>
-    coup.decaler ? saisie(r, { cle: `decaler:${i}`, libelle: `Décaler le ${coup.brut}${present(coup.zone) ? ` (${coup.zone})` : ""}`, donnee: coup.decaler, action: "Décaler" }) : null,
-  );
+  const decalages = liste.map((coup, i) => (coup.decaler ? saisie(r, { cle: `decaler:${i}`, libelle: libelleDuDecalage(coup), donnee: coup.decaler, action: "Décaler" }) : null));
   return [el("div", { classe: "combat-chaine combat-localisation" }, des), decalages];
 }
 
@@ -414,12 +514,19 @@ function detail(liste) {
   return el("ul", { classe: "combat-detail" }, liste.map((ligne) => el("li", {}, present(ligne.zone) ? `${ligne.zone} : ${ligne.texte}` : ligne.texte)));
 }
 
+/**
+ * Les réglages à la main, avant le premier dé : une région que son titre
+ * nomme, posée dans le document entre le contexte et la chaîne.
+ */
 function reglages(r, reglagesVus) {
-  return [
-    el("h3", {}, "Réglages à la main"),
+  const id = `combat-action-reglages-${(r.compteur += 1)}`;
+  return el(
+    "aside",
+    { classe: "combat-reglages", "aria-labelledby": id },
+    el("h3", { id }, "Réglages à la main"),
     reglagesVus.modificateur ? saisie(r, { cle: "reglage:modificateur", libelle: "Modificateur de chaque dé", donnee: reglagesVus.modificateur, action: "Régler le modificateur", defaut: 0 }) : null,
     reglagesVus.avantages ? saisie(r, { cle: "reglage:avantages", libelle: `Avantages (+) ou désavantages (${SIGNE_MOINS})`, donnee: reglagesVus.avantages, action: "Régler les avantages", defaut: 0 }) : null,
-  ];
+  );
 }
 
 function gesteVu(r, geste) {
@@ -434,10 +541,15 @@ function gesteVu(r, geste) {
     geste.revenir ? bouton(r, { cle: "revenir", classe: "bouton secondaire", commande: geste.revenir.commande, contenu: "Revenir" }) : null,
   ].filter(present);
 
+  // L'ordre du document est celui de la mission (§ 10.6), qui est aussi celui
+  // du téléphone : le contexte ; les réglages à la main, qui n'existent
+  // qu'avant le premier dé ; puis la chaîne, le bilan, les rangs, les choix
+  // du moment, les dégâts à fixer, la face à décaler, l'esquive, « Revenir ».
+  // Le texte de la capacité ferme le bloc. À partir de 56rem, la feuille de
+  // style range les réglages et ce texte à droite des dés.
   const jet = el(
     "div",
     { classe: "combat-jet" },
-    geste.contexte ? contexte(geste.contexte) : null,
     chaine(r, geste, dansLaChaine),
     present(geste.bilan) && geste.bilan !== "" ? el("p", { classe: "combat-bilan" }, geste.bilan) : null,
     geste.lettres?.length ? lettres(geste.lettres) : null,
@@ -451,10 +563,8 @@ function gesteVu(r, geste) {
 
   // Le texte de la capacité se montre toujours (mode assisté) : c'est au
   // joueur d'en appliquer l'effet. Son titre est celui de la maquette.
-  const aCote = [
-    present(geste.description) && geste.description !== "" ? [el("h3", {}, TITRE_DE_LA_DESCRIPTION), el("p", { classe: "combat-description" }, geste.description)] : null,
-    geste.contexte?.reglages ? reglages(r, geste.contexte.reglages) : null,
-  ].filter(present);
+  const assiste =
+    present(geste.description) && geste.description !== "" ? el("div", { classe: "combat-assiste" }, el("h3", {}, TITRE_DE_LA_DESCRIPTION), el("p", { classe: "combat-description" }, geste.description)) : null;
 
   return [
     geste.puissance ? puissance(r, geste.puissance) : null,
@@ -466,7 +576,7 @@ function gesteVu(r, geste) {
     geste.difficultes?.length ? difficultes(r, geste.difficultes) : null,
     geste.x ? saisie(r, { cle: "x", libelle: "X", donnee: geste.x, action: "Régler X", defaut: 0 }) : null,
     geste.jauges?.length ? jauges(r, geste.jauges) : null,
-    el("div", { classe: "combat-des" }, jet, aCote.length ? el("aside", { classe: "combat-reglages" }, aCote) : null),
+    el("div", { classe: "combat-des" }, geste.contexte ? contexte(geste.contexte) : null, geste.contexte?.reglages ? reglages(r, geste.contexte.reglages) : null, jet, assiste),
   ];
 }
 
@@ -510,17 +620,22 @@ function composer(r, vue) {
 
 /**
  * Le panneau d'action. `actions` : { executer(commande, origine), lancerLeDe() }.
- * Rend { noeud, rendre(vue, ecran), listeDeCase } ; `ecran.origineDeLaCible`
- * vaut "plateau", "panneau" ou rien. `rendre` dit vrai quand il a refait le
- * corps : l'écran ne repose le focus (sur [data-focus]) que dans ce cas.
+ * Rend { noeud, rendre(vue, ecran), listeDeCase, annonce, dire(texte) } ;
+ * `ecran.origineDeLaCible` vaut "plateau", "panneau" ou rien. `rendre` dit
+ * vrai quand il a refait le corps : l'écran ne repose le focus (sur
+ * [data-focus]) que dans ce cas. `annonce` est la région polie, que l'écran
+ * pose dans la page ; `dire` y écrit ce que l'écran a à dire lui-même
+ * (« Journal copié. »), et l'annonce suivante du combat le remplace.
  */
 export function creer(actions) {
   const corps = el("div", { classe: "combat-action-corps" });
   const listeDeCase = el("div", { classe: "combat-case-liste" });
   const annonce = el("p", { classe: "combat-annonce", "aria-live": "polite" });
-  const noeud = el("section", { classe: "combat-action", "aria-label": "Action en cours" }, corps, listeDeCase, annonce);
+  const noeud = el("section", { classe: "combat-action", "aria-label": "Action en cours" }, corps, listeDeCase);
   let rendue = null;
   let pasAnnonce = null;
+  // La clé du réglage qui garde le focus, le temps que l'écran redessine.
+  let gardee = null;
 
   // Un lecteur d'écran redit ce qui change dans la région : elle ne change
   // donc que lorsque le pas de l'annonce change, jamais à chaque rendu.
@@ -541,9 +656,25 @@ export function creer(actions) {
     const signature = JSON.stringify([{ ...vue, annonce: undefined }, origine]);
     if (signature === rendue) return false;
     rendue = signature;
-    corps.replaceChildren(...composer({ actions, focus: vue.focus ?? null, pose: false, compteur: 0, origine }, vue));
+    const garder = (cle) => {
+      gardee = cle;
+    };
+    const contexteDe = (focus) => ({ actions, garder, focus, pose: false, compteur: 0, origine });
+    let r = contexteDe(gardee ?? vue.focus ?? null);
+    let noeuds = composer(r, vue);
+    // Le bouton gardé n'est plus dans le corps refait : le focus va, comme
+    // toujours, à la commande qui attend.
+    if (gardee !== null && !r.pose) {
+      r = contexteDe(vue.focus ?? null);
+      noeuds = composer(r, vue);
+    }
+    corps.replaceChildren(...noeuds);
     return true;
   }
 
-  return { noeud, rendre, listeDeCase };
+  function dire(texte) {
+    annonce.replaceChildren(sansSensForce(texte ?? ""));
+  }
+
+  return { noeud, rendre, listeDeCase, annonce, dire };
 }

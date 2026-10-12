@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs";
 import { sourceAleatoire } from "../js/combat/des.js";
 import { nommer } from "../js/combat/noms.js";
 import { ajouterAdversaires, ajouterPersonnage, miseEnPlaceVide, peutLancer, poser, reglerQuiCommence, retirer } from "../js/combat/preparation.js";
-import { PLAFOND_ADVERSAIRES, PLAFOND_EXEMPLAIRES, PLAFOND_PJ } from "../js/combat/regles.js";
+import { IDENTIFIANTS_MAX, PLAFOND_ADVERSAIRES, PLAFOND_EXEMPLAIRES, PLAFOND_PJ } from "../js/combat/regles.js";
 import * as rencontre from "../js/ecrans/rencontre.js";
 import { desImposes } from "./outils/des_imposes.js";
 import { adversaireEssai, aubepineEssai, chefDePartieEssai, marmitonDeCorveeEssai, miseEnPlaceEssai, pjEssai } from "./outils/photographies_essai.js";
@@ -268,6 +268,40 @@ test("tout ou rien : un plafond dépassé, et aucun adversaire de la liste ne s'
   assert.equal(depart.compteur, 11);
   // Les mêmes, moins celui de trop, passent ensemble.
   assert.deepEqual(ajouterAdversaires(depart, [chef, marmiton]).ids, ["adv12", "adv13"]);
+});
+
+test("les identifiants s'épuisent : au dernier que sa forme permet, plus personne ne s'ajoute, et la phrase le dit", () => {
+  const phrase = "Ce combat a épuisé ses identifiants : commencez-en un nouveau.";
+  assert.equal(IDENTIFIANTS_MAX, 99999);
+  const marmiton = marmitonDeCorveeEssai();
+  // Un combat dont le compteur gardé touche à sa borne : celui qu'un contenu forgé donnerait.
+  const au = (compteur) => ({ ...ajouterPj(miseEnPlaceVide("demo"), aubepineEssai()), compteur });
+
+  // Il reste un identifiant : il se donne, à un adversaire comme à un personnage.
+  const presque = au(IDENTIFIANTS_MAX - 1);
+  const dernier = ajouterAdversaires(presque, [marmiton]);
+  assert.deepEqual(dernier.ids, ["adv99999"]);
+  assert.equal(dernier.miseEnPlace.compteur, IDENTIFIANTS_MAX);
+  assert.equal(ajouterPersonnage(presque, pj(2)).id, "pj99999");
+  // Tout ou rien : deux adversaires pour un seul identifiant, et aucun ne s'ajoute.
+  assert.deepEqual(ajouterAdversaires(presque, [marmiton, marmiton]), { refus: phrase });
+  assert.equal(presque.protagonistes.length, 1);
+
+  // Il n'en reste plus : ni adversaire, ni personnage. Aucun identifiant à six chiffres ne naît.
+  const epuise = dernier.miseEnPlace;
+  assert.deepEqual(ajouterAdversaires(epuise, [marmiton]), { refus: phrase });
+  assert.deepEqual(ajouterPersonnage(epuise, pj(2)), { refus: phrase });
+  assert.deepEqual(ajouterAdversaires(au(IDENTIFIANTS_MAX), [marmiton]), { refus: phrase });
+  // Un compteur forcé plus haut encore ne fabrique rien non plus.
+  assert.deepEqual(ajouterAdversaires(au(Number.MAX_SAFE_INTEGER), [marmiton]), { refus: phrase });
+  assert.deepEqual(ajouterPersonnage(au(Number.MAX_SAFE_INTEGER), pj(2)), { refus: phrase });
+  // Le reste se fait toujours : n'ajouter personne, poser, retirer, dire qui commence.
+  assert.deepEqual(ajouterAdversaires(epuise, []).ids, []);
+  assert.equal(poser(epuise, "adv99999", "D4").miseEnPlace.protagonistes[1].case, "D4");
+  assert.equal(retirer(epuise, "adv99999").miseEnPlace.compteur, IDENTIFIANTS_MAX);
+  assert.equal(reglerQuiCommence(epuise, "adv").miseEnPlace.quiCommence, "adv");
+  // Un refus plus ordinaire passe d'abord : ce personnage est déjà là.
+  assert.deepEqual(ajouterPersonnage(epuise, aubepineEssai()), { refus: "Ce personnage est déjà dans le combat." });
 });
 
 // ─── La pose d'office ───────────────────────────────────────────────────────

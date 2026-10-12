@@ -18,7 +18,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { vueBarre, vueFiche, vuePanneau, vuePlateau, vuePreparation } from "../js/combat/lecture.js";
+import { vueBarre, vueFiche, vueLigne, vuePanneau, vuePlateau, vuePreparation } from "../js/combat/lecture.js";
 import { appliquer, gesteEnCours, ouvrirCombat } from "../js/combat/moteur.js";
 import { candidats } from "../js/combat/offre.js";
 import { ajouterAdversaires, ajouterPersonnage, miseEnPlaceVide } from "../js/combat/preparation.js";
@@ -627,7 +627,12 @@ test("panneau : une attaque d'un PJ, étape par étape, jusqu'au détail des dé
   etat = jouer(etat, de(8, 6));
   vue = vuePanneau(etat, null);
   assert.equal(vue.titre, "Aubépine joue — 1 action sur 2, souffle 10");
-  assert.deepEqual([vue.geste.revenir, vue.geste.contexte.reglages, vue.geste.cibles], [null, null, []]);
+  assert.deepEqual([vue.geste.revenir, vue.geste.contexte.reglages], [null, null]);
+  // La rangée « Cible : » reste montrée pendant le jet, comme sur la maquette : la seule cible choisie, enfoncée, inactive avec sa raison.
+  const pendantLeJet = [{ id: "adv2", libelle: "Marmiton", choisie: true, actif: false, raison: "Une action est en cours.", commande: { evenement: { type: "regler", champ: "cible", valeur: "adv2" } } }];
+  assert.deepEqual(vue.geste.cibles, pendantLeJet);
+  assert.notEqual(appliquer(etat, vue.geste.cibles[0].commande.evenement).refus, undefined, "le moteur refuse d'en changer");
+  assert.equal(vue.focus, "de", "la commande qui attend reste le dé");
   assert.deepEqual(vue.geste.chaine, [
     { titre: "1er dé", etat: "reussi", valeur: 6, detail: null },
     { titre: "2e dé", etat: "a_lancer", de: "d8" },
@@ -818,7 +823,10 @@ test("panneau : un déplacement : la puissance et ses deux boutons, les cases d'
     ["A2", "A3", "B1", "B2", "B3", "C1", "C2", "C3"],
     "à une distance de 1 à 2",
   );
-  assert.deepEqual(vue.geste.cases[0], { case: "A2", choisie: false, commande: { evenement: { type: "regler", champ: "arrivee", valeur: "A2" } } });
+  assert.deepEqual(vue.geste.cases[0], { case: "A2", nom: "Case A2 : s'y déplacer", choisie: false, commande: { evenement: { type: "regler", champ: "arrivee", valeur: "A2" } } });
+  // Le double porte le nom même de la case de la carte.
+  const surLaCarte = vuePlateau(etat, null).cases;
+  for (const une of vue.geste.cases) assert.equal(une.nom, surLaCarte[une.case].choix.nom, une.case);
   assert.deepEqual(vue.geste.confirmer, { libelle: "Confirmer", actif: false, raison: "Choisissez une case d'arrivée.", commande: { evenement: { type: "confirmer" } } });
   assert.equal(appliquer(etat, { type: "confirmer" }).refus.message, "Choisissez une case d'arrivée.");
   assert.deepEqual([vue.geste.contexte, vue.geste.chaine, vue.geste.aLancer, vue.geste.lettres], [null, [], null, null], "aucun dé");
@@ -968,7 +976,8 @@ test("panneau : les réglages à la main entrent au contexte ; sous désavantage
   let etat = duel();
   etat = jouer(etat, capacite(etat, "pj1", "Émincer"), regler("cible", "adv2"), regler("modificateur", 2, "Minutie"));
   let vue = vuePanneau(etat, null);
-  assert.deepEqual([vue.geste.contexte.de, vue.geste.contexte.modificateurs], ["d8+2", ["+2 (à la main : Minutie)"]]);
+  // Le dé s'écrit nu : son modificateur le suit, avec sa source, une seule fois (« d8+2 » devant « +2 » se lisait d8+2+2).
+  assert.deepEqual([vue.geste.contexte.de, vue.geste.contexte.modificateurs], ["d8", ["+2 (à la main : Minutie)"]]);
   assert.deepEqual([vue.geste.contexte.reglages.modificateur.valeur, vue.geste.contexte.reglages.modificateur.raison], [2, "Minutie"]);
   assert.deepEqual([vue.geste.contexte.avantages, vue.geste.contexte.desavantages, vue.geste.contexte.net], [[], ["Émincer hors maîtrise"], "1 désavantage"]);
   assert.deepEqual(vue.geste.aLancer, { faces: 8, combien: 2, libelle: "d8", motif: "chaine" });
@@ -1015,7 +1024,7 @@ test("panneau : relancer ou garder, puis le dé de la relance", () => {
     { titre: "3e dé", etat: "a_venir", de: "d8" },
   ]);
   assert.deepEqual(vue.geste.aLancer, { faces: 8, combien: 1, libelle: "d8", motif: "relance" });
-  assert.equal(vue.geste.bilan, "Avantage dépensé : cliquez sur le d8 pour relancer le 2e dé.");
+  assert.equal(vue.geste.bilan, "1 réussite pour l'instant. Avantage dépensé : cliquez sur le d8 pour relancer le 2e dé.");
   assert.equal(vue.focus, "de");
 
   vue = vuePanneau(jouer(relance, de(8, 7)), null);
@@ -1076,7 +1085,7 @@ test("panneau : le point de la maquette, dans la démonstration : la Taloche d'A
   assert.equal(vue.geste.description, "Une taloche qui inflige 2/4/8.");
   assert.deepEqual(vue.geste.contexte, {
     titre: "Jet d'attaque · Taloche [1] contre Marmiton de corvée n° 2",
-    de: "d8+1",
+    de: "d8",
     detail: "Force 4 + Agilité 5",
     modificateurs: ["+1 (Vif)"],
     difficulte: "5, sa défense",
@@ -1106,7 +1115,10 @@ test("panneau : le point de la maquette, dans la démonstration : la Taloche d'A
   assert.deepEqual(apres.chaine[1], { titre: "2e dé", etat: "relance", valeur: 4, detail: "3 + 1" });
   assert.deepEqual(apres.chaine[2], { titre: "relance", etat: "a_lancer", de: "d8" });
   assert.deepEqual(apres.aLancer, { faces: 8, combien: 1, libelle: "d8", motif: "relance" });
-  assert.equal(apres.bilan, "Avantage dépensé : cliquez sur le d8 pour relancer le 2e dé.");
+  // Le bilan de la maquette : la tête, puis l'avantage dépensé.
+  assert.equal(apres.bilan, "1 réussite pour l'instant. Avantage dépensé : cliquez sur le d8 pour relancer le 2e dé.");
+  // Et la rangée « Cible : » y est encore, avec la cible choisie.
+  assert.deepEqual(apres.cibles.map((cible) => [cible.libelle, cible.choisie, cible.actif]), [["Marmiton de corvée n° 2", true, false]]);
 });
 
 test("panneau : l'annonce est celle de l'état, dans chaque genre ; le combat terminé dit sa victoire", () => {
@@ -1157,7 +1169,7 @@ test("préparation : vide, elle attend ses personnages, dit la banque sans adver
   assert.deepEqual(vue, {
     personnages: { attente: true, phrases: ["Les personnages en ligne ne se lisent pas pour l'instant."], options: [] },
     adversaires: { options: [], vide: "Cette banque n'a aucun adversaire." },
-    rencontre: { actif: false, raison: "Composez d'abord une rencontre." },
+    rencontre: { actif: false, raison: "Composez d'abord une rencontre" },
     quiCommence: [
       { camp: "pj", libelle: "Les PJ", choisi: true, commande: { preparer: { type: "qui_commence", camp: "pj" } } },
       { camp: "adv", libelle: "Les adversaires", choisi: false, commande: { preparer: { type: "qui_commence", camp: "adv" } } },
@@ -1245,7 +1257,8 @@ test("préparation : la rencontre préparée se place, sauf vide ou au-delà d'u
   ];
   const avec = (mep, rencontre) => vuePreparation(mep, { ...APPORTS_VIDES, adversaires, rencontre }).rencontre;
   const vide = mettreEnPlace({});
-  assert.deepEqual(avec(vide, []), { actif: false, raison: "Composez d'abord une rencontre." });
+  // Le texte de la mission (§ 10.7), tel quel : sans point final.
+  assert.deepEqual(avec(vide, []), { actif: false, raison: "Composez d'abord une rencontre" });
   assert.deepEqual(avec(vide, [{ nom: "Marmiton", nombre: 3 }, { nom: "Plongeur", nombre: 1 }]), { actif: true, raison: null });
   assert.deepEqual(avec(vide, [{ nom: "Marmiton", nombre: 12 }]), { actif: true, raison: null });
   assert.deepEqual(avec(mettreEnPlace({ adversaires: { Marmiton: 10 } }), [{ nom: "Marmiton", nombre: 2 }]), { actif: true, raison: null }, "à la suite : dix et deux font douze");
@@ -1497,6 +1510,49 @@ test("concordance : là où le combat de référence ne passe pas (X, jauge, dé
   const tourAdverse = jouer(duel({ adv: lie }), FIN_DE_TOUR);
   compte = eprouverLaSuite(tourAdverse, [capacite(tourAdverse, "adv2", "Frappe"), regler("cible", "pj1"), de(8, 8), de(8, 8), de(8, 8)], "l'adversaire au coût en lien");
   assert.ok(compte > 20, `${compte} événements éprouvés`);
+});
+
+// ─── Le journal ─────────────────────────────────────────────────────────────
+
+test("journal : une ligne où quelqu'un meurt donne à part la phrase de la mort, et elle seule ; les autres rendent leur texte entier", () => {
+  const { etat } = versContenu(scenario, PHOTOS_DE_REFERENCE);
+  assert.equal(etat.phase, "termine");
+  const mortes = etat.journal.filter((ligne) => ligne.mort === true);
+  assert.equal(mortes.length, 3, "le combat de référence a trois morts");
+  for (const ligne of etat.journal) {
+    const vue = vueLigne(etat, ligne);
+    // La ligne ne perd ni ne gagne un signe : les deux morceaux la redonnent.
+    assert.equal(`${vue.texte}${vue.mort ?? ""}`, ligne.texte);
+    assert.equal(vue.genre, ligne.genre);
+    if (ligne.mort !== true) assert.equal(vue.mort, null, ligne.texte);
+  }
+  assert.deepEqual(
+    mortes.map((ligne) => vueLigne(etat, ligne).mort),
+    ["Marmiton n° 1 meurt.", "Marmiton n° 2 meurt.", "Chef meurt."],
+  );
+  // Ce qui précède finit par l'espace qui séparait les phrases, et ne redit pas la mort.
+  for (const ligne of mortes) {
+    const vue = vueLigne(etat, ligne);
+    assert.match(vue.texte, /\. $/);
+    assert.doesNotMatch(vue.texte, /meurt/);
+  }
+  // La forme d'une ligne dans l'état ne change pas : un genre, un texte, et « mort » pour celles-là seulement.
+  for (const ligne of etat.journal) assert.deepEqual(Object.keys(ligne).sort(), ligne.mort === true ? ["genre", "mort", "texte"] : ["genre", "texte"]);
+
+  // Le plus long des noms qui finissent la ligne : un mort nommé comme la fin d'un autre ne lui prend pas sa phrase.
+  const homonymes = combat([
+    { photo: pjEssai(), case: "D4" },
+    { photo: adversaireEssai((valeurs) => Object.assign(valeurs, { nom: "Sous-Marmiton" })), case: "D4" },
+    { photo: adversaireEssai(), case: "D4" },
+  ]);
+  const court = (id) => homonymes.noms[id].court;
+  const tous = { ...homonymes, protagonistes: { ...homonymes.protagonistes, adv2: { ...homonymes.protagonistes.adv2, mort: { tour: 1 } }, adv3: { ...homonymes.protagonistes.adv3, mort: { tour: 1 } } } };
+  assert.ok(`${court("adv2")} meurt.`.endsWith(`${court("adv3")} meurt.`), `${court("adv2")} finit comme ${court("adv3")}`);
+  assert.deepEqual(vueLigne(tous, { genre: "geste", texte: `Corps 2 → 0. ${court("adv2")} meurt.`, mort: true }), { genre: "geste", texte: "Corps 2 → 0. ", mort: `${court("adv2")} meurt.` });
+  // Un vivant ne prête pas son nom : seul un mort du combat finit une ligne.
+  assert.deepEqual(vueLigne(homonymes, { genre: "geste", texte: `Corps 2 → 0. ${court("adv2")} meurt.`, mort: true }), { genre: "geste", texte: "", mort: `Corps 2 → 0. ${court("adv2")} meurt.` }, "introuvable : la ligne entière");
+  // Sans la marque de l'état, rien n'est mis en évidence, même si le texte finit ainsi.
+  assert.deepEqual(vueLigne(tous, { genre: "geste", texte: `${court("adv2")} meurt.` }), { genre: "geste", texte: `${court("adv2")} meurt.`, mort: null });
 });
 
 // ─── Le module ──────────────────────────────────────────────────────────────

@@ -24,6 +24,7 @@ import {
   FACES_LOCALISATION,
   FACE_CONTRE,
   GRILLE_PJ,
+  IDENTIFIANTS_MAX,
   LETTRES,
   LONGUEUR_RAISON,
   MOTIF_CASE,
@@ -37,6 +38,7 @@ import {
   ROLES_PASSIFS,
   ROLES_SANS_BOUTON,
   SIGNES,
+  TIRAGES_MAX,
   geler,
   raisonValide,
 } from "../js/combat/regles.js";
@@ -123,11 +125,28 @@ test("regles — le plateau, les plafonds, les bornes", () => {
   assert.equal(COLONNES.length, COTE);
   for (const nom of ["A1", "A10", "J1", "J10", "D4"]) assert.ok(MOTIF_CASE.test(nom), nom);
   for (const nom of ["A0", "A11", "K1", "a1", "A01", " A1", "A1 ", "AA1", "", "A", "10"]) assert.ok(!MOTIF_CASE.test(nom), `« ${nom} » n'est pas une case`);
-  assert.deepEqual([PLAFOND_PJ, PLAFOND_ADVERSAIRES, PLAFOND_EXEMPLAIRES, EVENEMENTS_MAX], [12, 60, 12, 20000]);
+  assert.deepEqual([PLAFOND_PJ, PLAFOND_ADVERSAIRES, PLAFOND_EXEMPLAIRES, EVENEMENTS_MAX], [12, 60, 12, 5000]);
+  assert.deepEqual([IDENTIFIANTS_MAX, TIRAGES_MAX], [99999, 100]);
   assert.deepEqual([ACTIONS_PJ, REUSSITES_MAX, FACES_LOCALISATION], [2, 3, 20]);
   assert.deepEqual(LETTRES, ["A", "B", "C"]);
   assert.deepEqual([BORNE_REGLAGE, BORNE_DEGATS, LONGUEUR_RAISON], [20, 999, 80]);
-  assert.deepEqual(BORNES_PHOTO, { ligne: 200, texte: 4000, nombre: 9999, des: 20, faces: 100, capacites: 200, facons: 20, armes: 40, zones: 19, liens: 20, elements: 40, avertissements: 200 });
+  assert.deepEqual(BORNES_PHOTO, {
+    ligne: 200,
+    texte: 4000,
+    nombre: 9999,
+    des: 20,
+    faces: 100,
+    capacites: 200,
+    facons: 20,
+    armes: 40,
+    zones: 19,
+    liens: 20,
+    elements: 40,
+    avertissements: 200,
+    faconsEnTout: 600,
+    deplacements: 20,
+    source: 200000,
+  });
   assert.equal(PARAMETRE_LOC, "loc_multiple");
   assert.deepEqual(ELEMENTS_COMBAT, { intervention: "Intervention", passif: "Passif", degats: "Dégâts", portee: "Portée", locMultiple: "Localisation multiple", centre: "Centré" });
 });
@@ -549,6 +568,33 @@ test("validerEvenement — une opération sans l'un de ses champs, des valeurs q
   assert.deepEqual(validerEvenement({ type: "de", faces: 10, valeurs: [] }), { erreur: "L'événement « de » : « valeurs » n'est pas une liste d'au moins un dé." });
 });
 
+test("validerEvenement — un dé porte cent tirages au plus : un de plus est refusé avant d'être lu", () => {
+  assert.equal(TIRAGES_MAX, 100);
+  // Le dé le plus lourd que la main puisse régler tient largement : 20 désavantages, 21 tirages.
+  assert.ok(TIRAGES_MAX > 1 + BORNE_REGLAGE);
+  const tirages = (combien, valeur = 6) => ({ type: "de", faces: 10, valeurs: Array.from({ length: combien }, () => valeur) });
+  const plein = validerEvenement(tirages(TIRAGES_MAX));
+  assert.equal(plein.evenement.valeurs.length, TIRAGES_MAX);
+  assert.deepEqual(validerEvenement(tirages(TIRAGES_MAX + 1)), { erreur: "L'événement « de » : « valeurs » compte plus de 100 tirages." });
+  // Avant d'en lire un seul : le refus est celui du nombre, même si aucune valeur n'est un dé.
+  let lues = 0;
+  const piegees = new Proxy(Array.from({ length: TIRAGES_MAX + 1 }, () => "pas un dé"), {
+    get(cible, nom, receveur) {
+      if (typeof nom === "string" && /^[0-9]+$/.test(nom)) lues += 1;
+      return Reflect.get(cible, nom, receveur);
+    },
+  });
+  assert.deepEqual(validerEvenement({ type: "de", faces: 10, valeurs: piegees }), { erreur: "L'événement « de » : « valeurs » compte plus de 100 tirages." });
+  assert.equal(lues, 0);
+  // Désarmé : à la borne, ce sont bien les valeurs qui sont lues, et jugées.
+  assert.deepEqual(validerEvenement(tirages(TIRAGES_MAX, 11)), { erreur: "L'événement « de » : une valeur n'est pas un entier de 1 à 10." });
+  // Un contenu gardé le refuse de même, en disant lequel de ses événements.
+  assert.equal(
+    contenuRefuse((contenu) => contenu.evenements.push(tirages(TIRAGES_MAX + 1))),
+    "L'événement n° 5 est refusé : L'événement « de » : « valeurs » compte plus de 100 tirages.",
+  );
+});
+
 // ─── Les photographies ──────────────────────────────────────────────────────
 
 const ESSAIS = { pjEssai, adversaireEssai, aubepineEssai, chefDePartieEssai, marmitonDeCorveeEssai };
@@ -922,6 +968,84 @@ test("validerPhoto — chaque liste à sa borne, et un cran au-delà", () => {
   }
 });
 
+test("validerPhoto — les façons, toutes capacités confondues : 600 passent, 601 non ; celles de déplacement : 20 passent, 21 non", () => {
+  assert.deepEqual([BORNES_PHOTO.faconsEnTout, BORNES_PHOTO.deplacements], [600, 20]);
+  const compter = (photo) => photo.valeurs.capacites.reduce((total, capacite) => total + capacite.facons.length, 0);
+  // Deux cents capacités de trois façons : ce qu'un personnage donnerait au plus. Aucune liste n'y dépasse sa borne.
+  const chargee = (deQuatre) => (valeurs) => {
+    valeurs.capacites = Array.from({ length: BORNES_PHOTO.capacites }, (_rien, rang) =>
+      capaciteEssai({ nom: `Tour ${rang + 1}`, niveau: 3, evolue: true, facons: Array.from({ length: rang < deQuatre ? 4 : 3 }, (_r, puissance) => faconEssai({ puissance: puissance + 1 })) }),
+    );
+  };
+  assert.equal(compter(passe(pjEssai(), chargee(0))), 600);
+  assert.equal(refusDe(pjEssai(), chargee(1)), "la photographie compte plus de 600 façons.");
+  // Les listes à leurs bornes, mises bout à bout, feraient quatre mille façons : c'est ce total qui est refusé.
+  const forgee = (valeurs) => {
+    valeurs.capacites = Array.from({ length: BORNES_PHOTO.capacites }, (_rien, rang) =>
+      capaciteEssai({ nom: `Tour ${rang + 1}`, facons: Array.from({ length: BORNES_PHOTO.facons }, (_r, puissance) => faconEssai({ puissance })) }),
+    );
+  };
+  assert.equal(refusDe(adversaireEssai(), forgee), "la photographie compte plus de 600 façons.");
+
+  // Les capacités de déplacement : vingt façons, toutes ensemble.
+  const deplacements = (parCapacite, enPlus = []) => (valeurs) => {
+    valeurs.capacites = [
+      ...parCapacite.map((combien, rang) =>
+        capaciteEssai({ nom: `Pas ${rang + 1}`, role: "deplacement", niveau: 1, evolue: true, facons: Array.from({ length: combien }, (_r, puissance) => faconEssai({ puissance: puissance + 1 })) }),
+      ),
+      ...enPlus,
+    ];
+  };
+  passe(pjEssai(), deplacements([20]));
+  passe(pjEssai(), deplacements([10, 10]));
+  passe(adversaireEssai(), deplacements([1, 1]));
+  for (const partage of [[20, 1], [7, 7, 7], [11, 10]]) {
+    assert.equal(refusDe(pjEssai(), deplacements(partage)), "les capacités de déplacement comptent plus de 20 façons.", partage.join(" + "));
+    assert.equal(refusDe(adversaireEssai(), deplacements(partage)), "les capacités de déplacement comptent plus de 20 façons.", partage.join(" + "));
+  }
+  // Seul ce rôle compte : vingt façons de déplacement, et vingt d'une capacité sans rôle, passent ensemble.
+  const sansRole = capaciteEssai({ nom: "Tour de main", facons: Array.from({ length: 20 }, (_r, puissance) => faconEssai({ puissance })) });
+  assert.equal(compter(passe(pjEssai(), deplacements([20], [sansRole]))), 40);
+  // Un contenu gardé est refusé de même, en disant quel protagoniste.
+  assert.equal(
+    contenuRefuse((_c, protagonistes) => deplacements([20, 1])(protagonistes[0].photo.valeurs)),
+    "La photographie de « pj1 » est refusée : les capacités de déplacement comptent plus de 20 façons.",
+  );
+});
+
+test("validerPhoto — la source d'un adversaire : 200 000 signes de JSON passent, un de plus non", () => {
+  assert.equal(BORNES_PHOTO.source, 200000);
+  const enveloppe = JSON.stringify({ ligne: { note: "" }, types: [], resolu: {} }).length;
+  const avecSource = (signes) => {
+    const donnee = retouchee(chefDePartieEssai(), () => {});
+    donnee.source = { ligne: { note: "a".repeat(signes - enveloppe) }, types: [], resolu: {} };
+    assert.equal(JSON.stringify(donnee.source).length, signes);
+    return donnee;
+  };
+  const juste = avecSource(BORNES_PHOTO.source);
+  const rendu = validerPhoto(juste);
+  assert.equal(rendu.erreur, undefined);
+  assert.deepEqual(rendu.photo.source, juste.source);
+  assert.deepEqual(validerPhoto(avecSource(BORNES_PHOTO.source + 1)), { erreur: "la source de la photographie dépasse 200 000 signes." });
+  // Ce sont les signes du JSON qui comptent, guillemets et échappements compris.
+  const echappee = retouchee(chefDePartieEssai(), () => {});
+  echappee.source = { ligne: { note: '"'.repeat(Math.floor((BORNES_PHOTO.source - enveloppe) / 2) + 1) }, types: [], resolu: {} };
+  assert.ok(echappee.source.ligne.note.length < BORNES_PHOTO.source / 2 + 1, "le texte lui-même tient deux fois dans la borne");
+  assert.deepEqual(validerPhoto(echappee), { erreur: "la source de la photographie dépasse 200 000 signes." });
+  // Une ligne forgée aux trente mille capacités, que « Fiche complète » mettrait des secondes à dessiner.
+  const forgee = retouchee(chefDePartieEssai(), () => {});
+  forgee.source = { ligne: { capacites: Array.from({ length: 30000 }, (_rien, rang) => ({ nom: `Capacité ${rang}`, rang: 1 })) }, types: [], resolu: {} };
+  assert.deepEqual(validerPhoto(forgee), { erreur: "la source de la photographie dépasse 200 000 signes." });
+  // La source d'un personnage n'est pas comptée ici : « accepter » borne chacun de ses champs.
+  const sur = personnageEssai();
+  assert.ok(passe(aubepineEssai(), (_v, entiere) => (entiere.source = { personnage: sur }), { accepter }).source.personnage);
+  // Un contenu gardé est refusé de même, en disant quel protagoniste.
+  assert.equal(
+    contenuRefuse((_c, protagonistes) => (protagonistes[1].photo.source = avecSource(BORNES_PHOTO.source + 1).source)),
+    "La photographie de « adv2 » est refusée : la source de la photographie dépasse 200 000 signes.",
+  );
+});
+
 test("validerPhoto — les indices désignent quelque chose dans leur liste", () => {
   const indices = [
     ["l'arme de la façon n° 1 de « Frappe »", (v, n) => (v.capacites[0].facons[0].arme = n), 2],
@@ -1251,11 +1375,36 @@ test("validerContenu — la mise en place : ses champs, le camp qui commence, le
   assert.equal(contenuRefuse((contenu) => (contenu.miseEnPlace = [])), "La mise en place n'est pas un objet simple.");
   assert.ok(validerContenu(contenuEssai((contenu) => (contenu.miseEnPlace.quiCommence = "adv")), OPTIONS).contenu);
   assert.equal(contenuRefuse((contenu) => (contenu.miseEnPlace.quiCommence = "PJ")), "Le camp qui commence n'est pas une valeur connue.");
-  assert.equal(contenuRefuse((contenu) => (contenu.miseEnPlace.compteur = -1)), "Le compteur des identifiants n'est pas un indice.");
+  assert.equal(contenuRefuse((contenu) => (contenu.miseEnPlace.compteur = -1)), "Le compteur des identifiants n'est pas un entier de 0 à 99 999.");
+  for (const compteur of [4.5, "4", null, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.equal(contenuRefuse((contenu) => (contenu.miseEnPlace.compteur = compteur)), "Le compteur des identifiants n'est pas un entier de 0 à 99 999.");
+  }
   assert.equal(contenuRefuse((contenu) => (contenu.miseEnPlace.protagonistes = {})), "La mise en place n'est pas une liste.");
   // Le compteur ne redescend jamais : il a pu dépasser ceux qui restent, jamais l'inverse.
   assert.ok(validerContenu(contenuEssai((contenu) => (contenu.miseEnPlace.compteur = 40)), OPTIONS).contenu);
   assert.equal(contenuRefuse((contenu) => (contenu.miseEnPlace.compteur = 3)), "L'identifiant « adv4 » dépasse le compteur.");
+});
+
+test("validerContenu — le compteur s'arrête au dernier identifiant que sa forme permet : 99 999 passe, 100 000 non", () => {
+  assert.equal(IDENTIFIANTS_MAX, 99999);
+  // À la borne, avec le dernier identifiant : le combat se reprend.
+  const plein = validerContenu(contenuEssai((contenu, protagonistes) => {
+    contenu.miseEnPlace.compteur = IDENTIFIANTS_MAX;
+    protagonistes[3].id = `adv${IDENTIFIANTS_MAX}`;
+  }), OPTIONS);
+  assert.equal(plein.contenu.miseEnPlace.compteur, IDENTIFIANTS_MAX);
+  assert.equal(plein.contenu.miseEnPlace.protagonistes[3].id, "adv99999");
+  // Un cran au-delà : le combat forgé est refusé avant qu'un identifiant à six chiffres n'y naisse.
+  for (const compteur of [IDENTIFIANTS_MAX + 1, 2 ** 40, Number.MAX_SAFE_INTEGER]) {
+    assert.equal(contenuRefuse((contenu) => (contenu.miseEnPlace.compteur = compteur)), "Le compteur des identifiants n'est pas un entier de 0 à 99 999.", String(compteur));
+  }
+  // Le motif et la borne disent la même chose : six chiffres ne font pas un identifiant.
+  assert.equal(
+    contenuRefuse((_c, protagonistes) => (protagonistes[3].id = `adv${IDENTIFIANTS_MAX + 1}`)),
+    "L'identifiant du protagoniste n° 4 n'est pas l'identifiant d'un protagoniste.",
+  );
+  assert.ok(validerEvenement({ type: "passer", qui: `pj${IDENTIFIANTS_MAX}` }).evenement);
+  assert.equal(validerEvenement({ type: "passer", qui: `pj${IDENTIFIANTS_MAX + 1}` }).erreur, "L'événement « passer » : « qui » n'est pas l'identifiant d'un protagoniste.");
 });
 
 test("validerContenu — les identifiants : au motif, uniques, du bon camp ; les cases lisibles", () => {
@@ -1318,7 +1467,7 @@ test("validerContenu — les plafonds : 12 personnages, 60 adversaires, 12 exemp
   assert.ok(validerContenu(contenuEssai(avec([autrePj(1), homonyme])), OPTIONS).contenu);
 });
 
-test("validerContenu — les événements : chacun par validerEvenement, 20 000 au plus", () => {
+test("validerContenu — les événements : chacun par validerEvenement, 5 000 au plus", () => {
   assert.equal(contenuRefuse((contenu) => (contenu.evenements = {})), "Le combat n'est pas une liste.");
   assert.equal(contenuRefuse((contenu) => contenu.evenements.push({ type: "de", faces: 8, valeurs: [9] })), "L'événement n° 5 est refusé : L'événement « de » : une valeur n'est pas un entier de 1 à 8.");
   assert.equal(contenuRefuse((contenu) => (contenu.evenements[1].inconnu = 1)), "L'événement n° 2 est refusé : L'événement « capacite » porte un champ inconnu.");
@@ -1328,7 +1477,7 @@ test("validerContenu — les événements : chacun par validerEvenement, 20 000 
   const tant = (combien) => (contenu) => (contenu.evenements = Array.from({ length: combien }, () => ({ type: "fin_de_tour" })));
   const plein = validerContenu(contenuEssai(tant(EVENEMENTS_MAX)), OPTIONS);
   assert.equal(plein.contenu.evenements.length, EVENEMENTS_MAX);
-  assert.equal(contenuRefuse(tant(EVENEMENTS_MAX + 1)), "Le combat compte plus de 20 000 événements.");
+  assert.equal(contenuRefuse(tant(EVENEMENTS_MAX + 1)), "Le combat compte plus de 5 000 événements.");
 });
 
 test("le socle — aucune des trois fonctions ne lève, même sur une donnée piégée", () => {

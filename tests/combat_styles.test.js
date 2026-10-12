@@ -248,6 +248,8 @@ test("combat.css — chaque règle part d'une classe « combat » ; aucune class
     "combat-sous-ligne", "combat-jauge-souffle",
     // Ce que la mesure des cases a fait ajouter (des initiales de trois signes, rognées par le rond).
     "combat-initiales-longues",
+    // Ce que la relecture de fin de groupe a fait ajouter.
+    "combat-assiste", "combat-mort", "combat-refus", "combat-fiche-avant", "combat-preparation-commence", "combat-preparation-lancer",
   ]) {
     assert.ok(classes.has(attendue), `.${attendue} n'a aucune règle`);
   }
@@ -271,6 +273,17 @@ test("combat.css — aucun outline hors du focus ; la cible est une bordure roug
   assert.equal(valeur(COMBAT, ".combat-case", "overflow"), "hidden");
   assert.equal(valeur(COMBAT, ".combat-grille :focus-visible", "outline-offset"), "calc(var(--trait) * -2)");
   assert.ok(!selecteursDe(COMBAT).some((regle) => /focus/.test(regle.selecteur) && /\.combat-(?:jeton|case|capacite|de)\b/.test(regle.selecteur) && /outline:\s*none/.test(regle.corps)), "un focus effacé");
+  // Le contour du focus est de la couleur d'accent, comme la marque de celui qui joue et d'un jeton tenu en main : sur
+  // eux, il ne se voyait pas (mesuré dans un navigateur : aucun pixel ne changeait de 3:1). Un anneau de la couleur des
+  // initiales, dans le rond, le montre.
+  for (const marque of [".combat-jeton.joue", ".combat-jeton[aria-pressed=\"true\"]"]) {
+    assert.equal(valeur(COMBAT, marque, "border-color"), "var(--accent)", marque);
+    assert.equal(valeur(COMBAT, `${marque}:focus-visible .combat-rond`, "box-shadow"), "inset 0 0 0 calc(var(--trait) * 2) currentColor", marque);
+  }
+  // Cet anneau l'emporte sur le rond creux d'un jeton écarté, et rien ne l'efface après lui.
+  const rang = (selecteur) => selecteursDe(COMBAT).findIndex((regle) => regle.selecteur === selecteur);
+  assert.ok(pese(poids(".combat-jeton.joue:focus-visible .combat-rond")) > pese(poids(".combat-pj.inactif .combat-rond")));
+  assert.ok(rang(".combat-jeton.joue:focus-visible .combat-rond") > rang(".combat-jeton.mort .combat-rond"));
 
   // Mission § 10.4 : la cible choisie, un trait rouge discontinu.
   assert.equal(valeur(COMBAT, ".combat-jeton.cible", "border-style"), "dashed");
@@ -282,6 +295,17 @@ test("combat.css — aucun outline hors du focus ; la cible est une bordure roug
   assert.equal(valeur(COMBAT, ".combat-case.active", "border-color"), "var(--accent)");
   // La bordure d'un jeton existe au repos : une marque ne déplace rien.
   assert.match(valeur(COMBAT, ".combat-jeton", "border"), /solid transparent$/);
+  // Pendant un choix, une case d'arrivée possible est marquée : un trait discontinu d'accent (mission § 10.4).
+  assert.match(valeur(COMBAT, ".combat-case.possible", "border"), /dashed var\(--accent\)$/);
+  // L'armure : signalée dès qu'elle baisse, en rouge à 0 (mission § 10.5).
+  assert.equal(valeur(COMBAT, ".combat-zones .abimee", "color"), "var(--combat-alerte)");
+  assert.equal(valeur(COMBAT, ".combat-zones .detruite", "color"), "var(--combat-echec)");
+  for (const etat of ["abimee", "detruite"]) assert.equal(valeur(COMBAT, `.combat-zones .${etat}`, "font-weight"), "var(--graisse-forte)", etat);
+  // Le rang de dégâts atteint, en évidence (mission § 10.6) : sa bordure et sa couleur, que les autres rangs n'ont pas.
+  assert.match(valeur(COMBAT, ".combat-lettres li.atteinte", "border"), /solid var\(--combat-reussite\)$/);
+  assert.equal(valeur(COMBAT, ".combat-lettres li.atteinte", "color"), "var(--combat-reussite)");
+  assert.equal(valeur(COMBAT, ".combat-lettres li", "color"), "var(--texte-2)");
+  assert.match(valeur(COMBAT, ".combat-lettres li", "border"), /solid var\(--bordure\)$/);
 
   // Arbitrage § 7.3 : aucune opacité, qui ferait tomber un contraste.
   const opacites = (css) => selecteursDe(css).filter((regle) => declarations(regle.corps).some(([propriete]) => propriete === "opacity" || propriete === "filter")).map((regle) => regle.selecteur);
@@ -439,6 +463,14 @@ test("combat.css — une colonne ; à 56rem le plateau et l'action à gauche, le
     const colonnes = valeur(COMBAT, ".combat-cadre", "grid-template-columns", cadre);
     assert.deepEqual(colonnes.match(/minmax\(0, \d+fr\)/g).join(" "), colonnes, `${cadre}`);
   }
+  // La barre du téléphone, comme la maquette : l'état, « Fin de tour » et « ⋯ » sur une ligne, les commandes au bout ;
+  // ce que « ⋯ » ouvre sur sa rangée, sous lui ; l'état de l'enregistrement sur la sienne.
+  assert.equal(valeur(COMBAT, ".combat-barre", "flex-wrap"), "wrap");
+  assert.equal(valeur(COMBAT, ".combat-commandes", "flex"), "0 1 auto");
+  assert.equal(valeur(COMBAT, ".combat-commandes", "margin-left"), "auto");
+  assert.equal(valeur(COMBAT, ".combat-autres", "flex"), "1 1 100%");
+  assert.equal(valeur(COMBAT, ".combat-autres", "justify-content"), "flex-end");
+  assert.equal(valeur(COMBAT, ".combat-garde", "flex"), "1 1 100%");
   // La barre : sur un téléphone, « ⋯ » ouvre les autres boutons ; à 56rem ils sont là.
   assert.equal(valeur(COMBAT, ".combat-autres", "display"), "none");
   assert.equal(valeur(COMBAT, ".combat-autres.ouvert", "display"), "flex");
@@ -476,8 +508,18 @@ test("combat.css — le plateau : des pistes que rien n'élargit, des cases qui 
     const tailles = selecteursDe(COMBAT).filter((regle) => regle.selecteur === selecteur && regle.cadre === cadre).flatMap((regle) => declarations(regle.corps)).filter(([propriete]) => propriete === "font-size").map(([, v]) => v);
     assert.equal(tailles.length, 2, `${selecteur} ${cadre}`);
     assert.equal(tailles[0], "var(--taille-petite)");
-    assert.match(tailles[1], /^(?:\d+cqi|min\(var\(--taille-petite\), \d+cqi\))$/);
+    assert.match(tailles[1], /^(?:\d+cqi|min\(var\(--taille-petite\), (?:\d+cqi|max\(calc\(var\(--taille-petite\) \* 0\.7\), \d+cqi\))\))$/);
   }
+  // À partir de 56rem, le nom court fait 15 % du côté de la case, comme sur la maquette (10,5 px dans une case de 72),
+  // jamais plus que le petit texte du site, ni moins que ses sept dixièmes. À 20 %, presque tous les noms étaient coupés
+  // (mesuré : 44 jetons sur 46 à 1 440 px). Le rond et le « +k » suivent la même mesure.
+  const MESURE = "min(var(--taille-petite), max(calc(var(--taille-petite) * 0.7), 15cqi))";
+  assert.equal(valeur(COMBAT, ".combat-jeton", "font-size", MEDIA_56), MESURE);
+  assert.equal(valeur(COMBAT, ".combat-grille .combat-rond", "width", MEDIA_56), MESURE);
+  assert.equal(valeur(COMBAT, ".combat-plus-large", "font-size", MEDIA_56), MESURE);
+  // Le plancher : 9,8 px, que le texte de la carte ne passe pas.
+  assert.equal(Math.round(parseFloat(jetons(JETONS, "clair")["taille-petite"]) * 16 * 0.7 * 10) / 10, 9.8);
+  assert.equal((sansCommentaires(COMBAT).match(/\d+cqi/g) ?? []).filter((mesure) => mesure === "20cqi").length, 0, "plus aucune mesure à 20 % de la case");
   assert.equal(valeur(COMBAT, ".combat-rond", "width"), "100%");
   assert.equal(valeur(COMBAT, ".combat-rond", "aspect-ratio"), "1 / 1");
   assert.equal(valeur(COMBAT, ".combat-rond", "border-radius"), "50%");
@@ -583,6 +625,43 @@ test("combat.css — aucune règle générale ne l'emporte sur la police d'une c
   assert.equal(valeur(COMBAT, ".combat-case-plus", "line-height"), "1");
 });
 
+// ——— Un bouton inactif, une saisie refusée : ils se voient ———
+
+test("combat.css — un bouton du site rendu inactif n'a pas l'aspect d'un bouton actif ; une saisie refusée se voit ; aucune opacité", () => {
+  // « Fin de tour » pendant un geste, « Lancer le combat », « Ajouter », « Copier », « Confirmer », un pas de la
+  // puissance : comme une capacité inactive, trait discontinu, fond transparent, texte gris. Dans un navigateur, seul
+  // le curseur changeait (0 pixel sur 6 292).
+  const inactif = ".combat .bouton[aria-disabled=\"true\"]";
+  for (const [propriete, attendue] of [["border-style", "dashed"], ["border-color", "var(--bordure)"], ["background", "transparent"], ["color", "var(--texte-2)"]]) {
+    assert.equal(valeur(COMBAT, inactif, propriete), attendue, propriete);
+    if (propriete !== "border-color") assert.equal(valeur(COMBAT, ".combat-capacite[aria-disabled=\"true\"]", propriete), attendue, `une capacité inactive : ${propriete}`);
+  }
+  // La règle l'emporte sur les deux boutons du site, le principal et le secondaire (css/ecran.css).
+  for (const duSite of [".bouton", ".bouton.secondaire"]) assert.ok(pese(poids(inactif)) > pese(poids(duSite)), duSite);
+  assert.deepEqual(declarations(regles(COMBAT).find((regle) => regle.selecteur === inactif).corps).map(([propriete]) => propriete).filter((propriete) => /opacity|filter/.test(propriete)), []);
+  // Son texte et son trait tiennent leur contraste, sur les deux fonds et dans les deux thèmes.
+  for (const theme of ["clair", "sombre"]) {
+    const j = jetons(JETONS, theme);
+    for (const fond of ["fond", "fond-2"]) {
+      assert.ok(contraste(j["texte-2"], j[fond]) >= 4.5, `${theme} : le texte sur --${fond}`);
+      assert.ok(contraste(j.bordure, j[fond]) >= 3, `${theme} : le trait sur --${fond}`);
+    }
+  }
+  // La cible choisie, que le jet rend inactive, n'est pas un choix écarté : son nom garde la couleur du texte, après la règle des inactifs.
+  const choisie = ".combat-cibles button[aria-pressed=\"true\"][aria-disabled=\"true\"]";
+  assert.equal(valeur(COMBAT, choisie, "color"), "var(--texte)");
+  const rang = (selecteur) => selecteursDe(COMBAT).findIndex((regle) => regle.selecteur === selecteur);
+  assert.ok(rang(choisie) > rang(".combat-cibles button[aria-disabled=\"true\"]"));
+  assert.ok(pese(poids(choisie)) > pese(poids(".combat-cibles button[aria-disabled=\"true\"]")));
+
+  // Une saisie refusée : le champ prend le rouge de l'échec, sans changer de taille ; sa phrase aussi.
+  assert.equal(valeur(COMBAT, ".combat [aria-invalid=\"true\"]", "border-color"), "var(--combat-echec)");
+  assert.equal(valeur(COMBAT, ".combat [aria-invalid=\"true\"]", "box-shadow"), "inset 0 0 0 var(--trait) var(--combat-echec)");
+  assert.equal(valeur(COMBAT, ".combat [aria-invalid=\"true\"]", "border-width"), null, "le champ ne change pas de taille");
+  assert.equal(valeur(COMBAT, ".combat-refus", "color"), "var(--combat-echec)");
+  assert.equal(valeur(COMBAT, ".combat-refus", "display"), null, "cachée par son attribut tant que rien n'est refusé");
+});
+
 // ——— La raison d'un bouton inactif ———
 
 test("combat.css — la raison d'un bouton inactif ne s'écrit pas à côté de lui : elle se lit sous sa rangée au survol et au focus", () => {
@@ -611,9 +690,19 @@ test("combat.css — la raison d'un bouton inactif ne s'écrit pas à côté de 
 // ——— La barre, les fiches, le panneau : la maquette ———
 
 test("combat.css — comme sur la maquette : « Fin de tour » ferme la barre ; l'état suit la ligne sous le nom ; les jauges, la résistance, le texte de la capacité", () => {
-  // La barre : sur un grand écran, « Nouveau combat » passe devant « Fin de tour », bouton principal.
-  assert.equal(valeur(COMBAT, ".combat-autres", "order", MEDIA_56), "-1");
-  assert.equal(valeur(COMBAT, ".combat-autres", "order"), null);
+  // La barre : sur un grand écran, tout sur une ligne ; l'enregistrement, puis, au bout, « Nouveau combat » devant
+  // « Fin de tour », bouton principal. Le document, lui, garde l'ordre du téléphone.
+  assert.equal(valeur(COMBAT, ".combat-autres", "order", MEDIA_56), "1");
+  assert.equal(valeur(COMBAT, ".combat-commandes", "order", MEDIA_56), "2");
+  assert.equal(valeur(COMBAT, ".combat-commandes", "margin-left", MEDIA_56), "0");
+  // L'état de l'enregistrement prend la place libre et pousse les boutons au bout ; ce qui passe à la ligne, vers 56rem,
+  // reste à droite (vu à 900 px : « Fin de tour » tombait seul à gauche, sous le titre), et le titre reste à gauche.
+  assert.equal(valeur(COMBAT, ".combat-garde", "flex", MEDIA_56), "1 1 auto");
+  assert.equal(valeur(COMBAT, ".combat-barre", "justify-content", MEDIA_56), "flex-end");
+  assert.equal(valeur(COMBAT, ".combat-etat", "margin-right", MEDIA_56), "auto");
+  assert.equal(valeur(COMBAT, ".combat-barre", "justify-content"), null);
+  assert.equal(valeur(COMBAT, ".combat-garde", "order", MEDIA_56), null);
+  for (const selecteur of [".combat-autres", ".combat-commandes", ".combat-garde"]) assert.equal(valeur(COMBAT, selecteur, "order"), null, selecteur);
 
   // L'en-tête d'une fiche : deux lignes, et l'état dans la seconde, à la suite.
   assert.equal(valeur(COMBAT, ".combat-fiche summary", "grid-template-areas"), "\"pastille nom actions repli\" \"pastille sous sous repli\"");
@@ -664,6 +753,86 @@ test("combat.css — comme sur la maquette : « Fin de tour » ferme la barre ; 
   // La préparation : son lien vers les personnages est une cible de 44 px.
   assert.equal(valeur(COMBAT, ".combat-preparation a", "min-height"), "var(--cible-tactile)");
   assert.equal(valeur(COMBAT, ".combat-preparation a", "display"), "inline-flex");
+});
+
+// ——— Ce que la relecture de fin de groupe a montré ———
+
+test("combat.css — le dé relancé garde le rouge de son échec ; au journal, la seule phrase de la mort ; la place de la barre de défilement", () => {
+  // Un dé relancé est toujours un échec : il en garde le rouge, en trait discontinu ; sa valeur, grisée, reste barrée.
+  assert.equal(valeur(COMBAT, ".combat-de.relance", "border-color"), "var(--combat-echec)");
+  assert.equal(valeur(COMBAT, ".combat-de.relance", "border-color"), valeur(COMBAT, ".combat-de.echoue", "border-color"));
+  assert.equal(valeur(COMBAT, ".combat-de.relance", "border-style"), "dashed");
+  assert.equal(valeur(COMBAT, ".combat-de.relance", "color"), "var(--texte-2)");
+  assert.equal(valeur(COMBAT, ".combat-de.relance .combat-de-valeur", "text-decoration"), "line-through");
+
+  // Au journal, la phrase de la mort seule est en évidence, comme sur la maquette : aucune règle ne colore une ligne entière.
+  assert.equal(valeur(COMBAT, ".combat-lignes .combat-mort", "color"), "var(--combat-echec)");
+  assert.equal(valeur(COMBAT, ".combat-lignes .combat-mort", "font-weight"), "var(--graisse-forte)");
+  assert.deepEqual(selecteursDe(COMBAT).filter((regle) => /^\.combat-lignes li\.mort\b/.test(regle.selecteur)).map((regle) => regle.selecteur), []);
+  // Dans Firefox, la barre de défilement se pose sur le contenu : le journal lui laisse sa place, à droite.
+  assert.equal(valeur(COMBAT, ".combat-lignes", "padding"), "0 var(--espace-3) 0 0");
+});
+
+test("combat.css — la préparation : « Qui commence » sur sa ligne puis ses deux options ; à 56rem, avec « Lancer le combat » au bout de sa rangée", () => {
+  // Sur un téléphone, l'intitulé prend sa ligne : ses deux options restent ensemble.
+  assert.equal(valeur(COMBAT, ".combat-preparation-commence .combat-ligne > span", "flex"), "0 0 100%");
+  assert.equal(valeur(COMBAT, ".combat-preparation-commence .combat-ligne > span", "flex", MEDIA_56), "0 0 auto");
+  assert.equal(valeur(COMBAT, ".combat-ligne", "flex-wrap"), "wrap");
+  // Rien de la barre de la maquette sous 56rem : les blocs s'y empilent.
+  assert.equal(valeur(COMBAT, ".combat-preparation", "display"), null);
+  // À 56rem : chaque bloc sur sa rangée, sauf ces deux-là, le second poussé au bout.
+  assert.equal(valeur(COMBAT, ".combat-preparation", "display", MEDIA_56), "flex");
+  assert.equal(valeur(COMBAT, ".combat-preparation", "flex-wrap", MEDIA_56), "wrap");
+  assert.equal(valeur(COMBAT, ".combat-preparation > *", "flex", MEDIA_56), "0 0 100%");
+  assert.equal(valeur(COMBAT, ".combat-preparation > .combat-preparation-commence", "flex", MEDIA_56), "1 1 auto");
+  assert.equal(valeur(COMBAT, ".combat-preparation > .combat-preparation-lancer", "flex", MEDIA_56), "0 1 auto");
+  assert.equal(valeur(COMBAT, ".combat-preparation > .combat-preparation-lancer", "margin-left", MEDIA_56), "auto");
+  assert.equal(valeur(COMBAT, ".combat-preparation-lancer .combat-ligne", "justify-content", MEDIA_56), "flex-end");
+  // Ces deux règles pèsent plus que celle de tous les blocs, qu'elles suivent.
+  for (const bloc of ["commence", "lancer"]) assert.ok(pese(poids(`.combat-preparation > .combat-preparation-${bloc}`)) > pese(poids(".combat-preparation > *")), bloc);
+});
+
+test("combat.css — les réglages à la main entre le contexte et les dés dans le document ; à 56rem, la grille les range à droite, sous le texte de la capacité", () => {
+  // Sous 56rem : une colonne, dans l'ordre du document ; aucun placement.
+  assert.equal(valeur(COMBAT, ".combat-des", "grid-template-columns"), "minmax(0, 1fr)");
+  for (const bloc of [".combat-contexte", ".combat-jet", ".combat-reglages", ".combat-assiste"]) {
+    assert.equal(valeur(COMBAT, bloc, "min-width"), "0", bloc);
+    for (const propriete of ["grid-column", "grid-row", "order"]) assert.equal(valeur(COMBAT, bloc, propriete), null, `${bloc} ${propriete}`);
+  }
+  // À 56rem : les dés à gauche, la place de la palette à droite.
+  assert.equal(valeur(COMBAT, ".combat-des", "grid-template-columns", MEDIA_56), "minmax(0, 2fr) minmax(0, 1fr)");
+  // Le contexte a sa rangée, les dés la rangée souple : le texte de la capacité, qui la traverse, n'écarte jamais le contexte des dés.
+  assert.equal(valeur(COMBAT, ".combat-des", "grid-template-rows", MEDIA_56), "auto 1fr auto");
+  assert.equal(valeur(COMBAT, ".combat-des", "row-gap", MEDIA_56), "0");
+  assert.deepEqual([valeur(COMBAT, ".combat-contexte", "grid-column", MEDIA_56), valeur(COMBAT, ".combat-contexte", "grid-row", MEDIA_56)], ["1", "1"]);
+  assert.deepEqual([valeur(COMBAT, ".combat-jet", "grid-column", MEDIA_56), valeur(COMBAT, ".combat-jet", "grid-row", MEDIA_56)], ["1", "2 / span 2"]);
+  for (const bloc of [".combat-reglages", ".combat-assiste"]) {
+    assert.equal(valeur(COMBAT, bloc, "grid-column", MEDIA_56), "2", bloc);
+    assert.match(valeur(COMBAT, bloc, "border-left", MEDIA_56), /solid var\(--separateur\)$/, bloc);
+  }
+  assert.equal(valeur(COMBAT, ".combat-assiste", "grid-row", MEDIA_56), "1 / span 2");
+  // Seuls à droite, les réglages prennent toute la hauteur ; sous le texte de la capacité, la dernière rangée.
+  assert.equal(valeur(COMBAT, ".combat-reglages", "grid-row", MEDIA_56), "1 / span 3");
+  assert.equal(valeur(COMBAT, ".combat-des:has(> .combat-assiste) > .combat-reglages", "grid-row", MEDIA_56), "3");
+  assert.ok(pese(poids(".combat-des:has(> .combat-assiste) > .combat-reglages")) > pese(poids(".combat-reglages")));
+});
+
+test("combat.css — les fiches : le nom d'une zone, en-tête de sa ligne ; « Case » et « Retirer » sous la fiche ; à 200 %, la table défile dans la fiche", () => {
+  // Le nom d'une zone est un en-tête de ligne, et se lit comme le texte ; les en-têtes de colonne restent en gris.
+  assert.equal(valeur(COMBAT, ".combat-zones tbody th", "color"), "var(--texte)");
+  assert.equal(valeur(COMBAT, ".combat-zones th", "color"), "var(--texte-2)");
+  assert.ok(pese(poids(".combat-zones tbody th")) > pese(poids(".combat-zones th")));
+  assert.equal(valeur(COMBAT, ".combat-zones th", "font-weight"), "normal");
+  // Avec le texte à 200 % sur un téléphone, la table défile dans la fiche, non la page.
+  assert.equal(valeur(COMBAT, ".combat-fiche-corps", "overflow-x"), "auto");
+  // Avant le lancement, le groupe du champ « Case » prolonge le cadre de la fiche, hors du volet ; son champ ne prend pas la rangée.
+  assert.equal(valeur(COMBAT, ".combat-fiche:has(+ .combat-fiche-avant)", "margin-bottom"), "0");
+  assert.match(valeur(COMBAT, ".combat-fiche-avant", "border"), /solid var\(--separateur\)$/);
+  assert.equal(valeur(COMBAT, ".combat-fiche-avant", "border-top"), "0");
+  assert.equal(valeur(COMBAT, ".combat-fiche-avant", "background"), valeur(COMBAT, ".combat-fiche", "background"));
+  assert.equal(valeur(COMBAT, ".combat-fiche-avant", "display"), null, "toujours visible : rien ne le cache");
+  assert.equal(enRem(valeur(COMBAT, ".combat-fiche-avant .champ", "width"), jetons(JETONS, "clair")), 6);
+  assert.equal(valeur(COMBAT, ".combat-fiche-avant .champ", "margin-bottom"), "0");
 });
 
 // ——— Les cibles de 44 px, le journal ———

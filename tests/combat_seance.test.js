@@ -12,8 +12,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { nouveauSecret } from "../js/securite/chiffrement.js";
-import { PHRASES_DE_GARDE, chiffrerCombat, creerGardien, dechiffrerCombat, magasinCombatIndexedDB, magasinCombatMemoire } from "../js/combat/enregistrement.js";
+import { PHRASES_DE_GARDE, REVISION_MAX, chiffrerCombat, creerGardien, dechiffrerCombat, magasinCombatIndexedDB, magasinCombatMemoire } from "../js/combat/enregistrement.js";
 import { validerEvenement } from "../js/combat/forme.js";
+import { IDENTIFIANTS_MAX } from "../js/combat/regles.js";
 import { gesteEnCours } from "../js/combat/moteur.js";
 import { offre } from "../js/combat/offre.js";
 import { creerSeance, heureMurale } from "../js/combat/seance.js";
@@ -555,12 +556,20 @@ partout("ouvrir : rien de gardé, la séance reste vide et se joue", async (lieu
   assert.deepEqual(seance.miseEnPlace().protagonistes, []);
   assert.equal(gardien.etat(), lieu.durable ? "garde" : "memoire");
   lancerLeTrio(seance);
+  // Rien ne s'écrit dans le tour des commandes : l'écriture part un tour plus
+  // tard, et toutes les commandes venues d'ici là n'en font qu'une, qui porte
+  // le combat entier.
+  assert.equal(await lieu.gardee(), null);
   await gardien.repos();
-  // La première écriture part au premier clic ; les suivantes, venues
-  // pendant qu'elle chiffrait, n'en font qu'une.
   const lu = await lireLaBase(lieu);
-  assert.equal(lu.revision, 2);
-  assert.equal(lu.texte, seance.texte(2));
+  assert.equal(lu.revision, 1);
+  assert.equal(lu.texte, seance.texte(1));
+  // La commande suivante fait l'écriture suivante.
+  accepte(seance.jouer({ type: "passer", qui: "pj1" }));
+  await gardien.repos();
+  const suivante = await lireLaBase(lieu);
+  assert.equal(suivante.revision, 2);
+  assert.equal(suivante.texte, seance.texte(2));
 });
 
 partout("ouvrir : un combat gardé se reprend, état et journal au signe près, par un autre onglet", async (lieu) => {
@@ -636,8 +645,8 @@ partout("un rechargement en plein geste retrouve le moment, et n'attend pas un d
   assert.deepEqual(lignes(seance), journalAttendu);
   assert.deepEqual(seance.etat(), REFERENCE.etat);
   await gardien.repos();
-  assert.equal((await lireLaBase(lieu)).revision, 5, "une file à une place : le premier dé part, puis une seule écriture porte toute la suite");
-  assert.equal((await lireLaBase(lieu)).texte, seance.texte(5));
+  assert.equal((await lireLaBase(lieu)).revision, 4, "le dé et toute la suite, joués dans le même tour, ne font qu'une écriture");
+  assert.equal((await lireLaBase(lieu)).texte, seance.texte(4));
 });
 
 partout("un combat dont une photographie porte une description de deux lignes se garde et se reprend", async (lieu) => {
@@ -686,6 +695,8 @@ const ILLISIBLES = [
     },
     () => abime(() => {}),
   ],
+  ["un chiffré de cinq mégaoctets, bien écrit et vide de sens", { retoucher: (enveloppe) => ({ ...enveloppe, chiffre: "A".repeat(5 * 1024 * 1024) }) }, () => abime(() => {})],
+  ["un chiffré plus long que le plus gros combat", { retoucher: (enveloppe) => ({ ...enveloppe, chiffre: "A".repeat(12 * 1024 * 1024) }) }, () => abime(() => {})],
 ];
 
 const COMMANDES = [
@@ -729,14 +740,21 @@ for (const [cas, options, fabriquer] of ILLISIBLES) {
     await gardien.repos();
     assert.deepEqual(await lieu.gardee(), enveloppe, "la base n'a pas bougé");
 
-    // « Nouveau combat » rend la main tout de suite, et s'écrit au-dessus.
+    // « Nouveau combat » rend la main tout de suite, et s'écrit au-dessus :
+    // l'ajout qui le suit dans le même tour part dans la même écriture.
     accepte(seance.nouveau());
     assert.equal(seance.bloque(), null);
     accepte(seance.preparer({ type: "ajouter_personnage", photo: AUBEPINE }));
+    assert.deepEqual(await lieu.gardee(), enveloppe, "rien ne s'écrit dans le tour des commandes");
     await gardien.repos();
     assert.equal(gardien.etat(), lieu.durable ? "garde" : "memoire");
+    const neuf = await lireLaBase(lieu);
+    assert.equal(neuf.revision, 4, "la révision ne redescend pas : le combat neuf s'écrit à la suivante");
+    assert.equal(neuf.texte, seance.texte(4));
+    accepte(seance.preparer({ type: "qui_commence", camp: "adv" }));
+    await gardien.repos();
     const lu = await lireLaBase(lieu);
-    assert.equal(lu.revision, 5, "la révision ne redescend pas : le combat vide à 4, l'ajout à 5");
+    assert.equal(lu.revision, 5, "et le changement d'après à celle d'après");
     assert.equal(lu.texte, seance.texte(5));
 
     const suivante = await monter(lieu);
@@ -744,6 +762,115 @@ for (const [cas, options, fabriquer] of ILLISIBLES) {
     assert.deepEqual(suivante.seance.etat().ordre, ["pj1"]);
   });
 }
+
+for (const [cas, demesuree] of [
+  ["la plus grande qu'un nombre sache porter", Number.MAX_SAFE_INTEGER],
+  ["un cran au-delà de sa borne", REVISION_MAX + 1],
+]) {
+  partout(`ouvrir : une révision démesurée (${cas}) est une donnée abîmée ; « Nouveau combat » repart de la révision 1, et le combat se garde de nouveau`, async (lieu) => {
+    // La révision est en clair dans l'enveloppe : qui écrit dans la base la pose sans la clé.
+    const enveloppe = await poserEnBase(lieu, abime(() => {}), { retoucher: (lue) => ({ ...lue, revision: demesuree }) });
+    const montee = await monter(lieu);
+    const { seance, gardien } = montee;
+    assert.deepEqual(await seance.ouvrir(), { issue: "illisible" });
+    assert.equal(seance.bloque(), "illisible");
+    toutEstRefuse(montee, PHRASES_DE_GARDE.illisible);
+    await gardien.repos();
+    assert.deepEqual(await lieu.gardee(), enveloppe, "la base n'a pas bougé");
+
+    accepte(seance.nouveau());
+    accepte(seance.preparer({ type: "ajouter_personnage", photo: AUBEPINE }));
+    await gardien.repos();
+    assert.equal(gardien.etat(), lieu.durable ? "garde" : "memoire");
+    const lu = await lireLaBase(lieu);
+    assert.equal(lu.revision, 1, "au-dessus d'une révision qui vaut 0");
+    assert.equal(lu.texte, seance.texte(1));
+
+    // La page rechargée retrouve le combat neuf, et sa suite se garde.
+    const suivante = await monter(lieu);
+    assert.deepEqual(await suivante.seance.ouvrir(), { issue: "repris" });
+    assert.deepEqual(suivante.seance.etat().ordre, ["pj1"]);
+    accepte(suivante.seance.preparer({ type: "qui_commence", camp: "adv" }));
+    await suivante.gardien.repos();
+    assert.equal((await lireLaBase(lieu)).revision, 2);
+  });
+}
+
+partout("ouvrir : un combat gardé à la borne même de la révision se reprend ; sa suite s'écrit, la révision repartie de 1", async (lieu) => {
+  // Un combat forgé avec la clé, sain en tout : sa révision est la plus haute qui se lise.
+  await poserEnBase(lieu, JSON.stringify({ ...SAIN, revision: REVISION_MAX }), { revision: REVISION_MAX });
+  const { seance, gardien } = await monter(lieu);
+  assert.deepEqual(await seance.ouvrir(), { issue: "repris" });
+  assert.equal(seance.bloque(), null);
+  assert.deepEqual(seance.etat().ordre, ["pj1", "adv2", "adv3", "adv4"]);
+  accepte(seance.nouveau());
+  accepte(seance.preparer({ type: "ajouter_personnage", photo: AUBEPINE }));
+  await gardien.repos();
+  assert.equal(gardien.etat(), lieu.durable ? "garde" : "memoire");
+  const lu = await lireLaBase(lieu);
+  assert.equal(lu.revision, 1);
+  assert.equal(lu.texte, seance.texte(1));
+  const suivante = await monter(lieu);
+  assert.deepEqual(await suivante.seance.ouvrir(), { issue: "repris" });
+  assert.deepEqual(suivante.seance.etat().ordre, ["pj1"]);
+});
+
+// La mise en place du trio, telle qu'elle serait gardée, son compteur forcé.
+async function trioAuCompteur(compteur) {
+  const source = await monter(memoire());
+  await source.seance.ouvrir();
+  preparerLeTrio(source.seance);
+  await source.gardien.repos();
+  const contenu = JSON.parse(source.seance.texte(3));
+  contenu.miseEnPlace.compteur = compteur;
+  return JSON.stringify(contenu);
+}
+
+partout("les identifiants s'épuisent : à la borne du compteur, le combat se reprend, l'ajout est refusé par sa phrase, et rien ne se garde", async (lieu) => {
+  const phrase = "Ce combat a épuisé ses identifiants : commencez-en un nouveau.";
+  const enveloppe = await poserEnBase(lieu, await trioAuCompteur(IDENTIFIANTS_MAX));
+  const { seance, gardien } = await monter(lieu);
+  assert.deepEqual(await seance.ouvrir(), { issue: "repris" });
+  const avant = { miseEnPlace: seance.miseEnPlace(), etat: seance.etat(), texte: seance.texte(4) };
+  refuse(seance.preparer({ type: "ajouter_adversaires", photos: [MARMITON] }), "interdit", phrase);
+  refuse(seance.preparer({ type: "ajouter_personnage", photo: pjEssai((valeurs) => (valeurs.identifiant = "essai-persil-0000000003")) }), "interdit", phrase);
+  assert.equal(seance.miseEnPlace(), avant.miseEnPlace);
+  assert.equal(seance.etat(), avant.etat);
+  assert.equal(seance.texte(4), avant.texte);
+  await gardien.repos();
+  assert.deepEqual(await lieu.gardee(), enveloppe, "un refus ne garde rien");
+  // Le reste de la préparation se fait toujours, et se garde.
+  accepte(seance.preparer({ type: "poser", id: "adv3", case: "D4" }));
+  await gardien.repos();
+  assert.equal((await lireLaBase(lieu)).texte, seance.texte(4));
+  // « Nouveau combat » repart d'un compteur à zéro.
+  accepte(seance.nouveau());
+  accepte(seance.preparer({ type: "ajouter_adversaires", photos: [MARMITON] }));
+  assert.deepEqual(seance.etat().ordre, ["adv1"]);
+});
+
+partout("les identifiants s'épuisent : le dernier se donne, et le combat qui le porte se relit ; un compteur au-delà de sa borne est une donnée abîmée", async (lieu) => {
+  await poserEnBase(lieu, await trioAuCompteur(IDENTIFIANTS_MAX - 1));
+  const { seance, gardien } = await monter(lieu);
+  assert.deepEqual(await seance.ouvrir(), { issue: "repris" });
+  accepte(seance.preparer({ type: "ajouter_adversaires", photos: [MARMITON] }));
+  assert.deepEqual(seance.etat().ordre, ["pj1", "pj2", "adv3", "adv99999"]);
+  await gardien.repos();
+  // Sans la borne, l'identifiant suivant aurait six chiffres : le combat gardé avec lui ne se relisait plus.
+  const relue = await monter(lieu);
+  assert.deepEqual(await relue.seance.ouvrir(), { issue: "repris" });
+  assert.deepEqual(relue.seance.etat().ordre, ["pj1", "pj2", "adv3", "adv99999"]);
+  // Et le dernier joue comme un autre, une fois le combat lancé.
+  accepte(relue.seance.preparer({ type: "qui_commence", camp: "adv" }));
+  accepte(relue.seance.lancer());
+  accepte(relue.seance.jouer({ type: "passer", qui: "adv99999" }));
+
+  const [, fabriquer] = LIEUX.find(([, autre]) => autre().durable === lieu.durable);
+  const force = fabriquer();
+  await poserEnBase(force, await trioAuCompteur(IDENTIFIANTS_MAX + 1));
+  const refusee = await monter(force);
+  assert.deepEqual(await refusee.seance.ouvrir(), { issue: "illisible" });
+});
 
 partout("ouvrir : le même contenu, sain, se reprend (les cas abîmés ne tiennent qu'à leur retouche)", async (lieu) => {
   await poserEnBase(lieu, abime(() => {}));

@@ -86,7 +86,7 @@
 }
 
 /* L'état de l'enregistrement reste visible sur un téléphone, sur sa propre
-   ligne, sous le titre. */
+   ligne, la dernière de la barre. */
 .combat-garde {
   flex: 1 1 100%;
   margin: 0;
@@ -94,18 +94,26 @@
   font-size: var(--taille-petite);
 }
 
+/* Sur un téléphone, comme sur la maquette : l'état, puis « Fin de tour » et
+   « ⋯ » au bout de la même ligne. Là où ils ne tiennent pas (320 px), ils
+   passent à la ligne, toujours à droite. */
 .combat-commandes {
   display: flex;
-  flex: 1 1 100%;
+  flex: 0 1 auto;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--espace-2);
+  margin-left: auto;
 }
 
+/* Ce que « ⋯ » ouvre a sa propre rangée, sous lui : rangé dans celle des
+   commandes, il les faisait passer à la ligne en s'ouvrant, et « ⋯ »
+   quittait le doigt. */
 .combat-autres {
   display: none;
   flex: 1 1 100%;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--espace-2);
 }
 
@@ -407,6 +415,15 @@
   color: var(--texte-2);
 }
 
+/* Le focus sur le jeton de celui qui joue, ou sur un jeton tenu en main : le
+   contour du focus, de la couleur d'accent, tombe sur leur marque, qui est
+   de cette couleur, et ne se voyait pas (mesuré : aucun pixel ne changeait
+   de 3:1). Un anneau de la couleur des initiales, dans le rond, le montre. */
+.combat-jeton.joue:focus-visible .combat-rond,
+.combat-jeton[aria-pressed="true"]:focus-visible .combat-rond {
+  box-shadow: inset 0 0 0 calc(var(--trait) * 2) currentColor;
+}
+
 /* « +k » : deux boutons dans le document, dont un seul se voit. Sous 56rem,
    celui qui compte au-delà de deux jetons. */
 .combat-case-plus {
@@ -554,10 +571,31 @@
   align-self: center;
 }
 
+/* « Qui commence », sur un téléphone : l'intitulé sur sa ligne, puis ses
+   deux options ensemble, comme sur la maquette. À la suite de l'intitulé,
+   la seconde passait seule à la ligne, et le choix était coupé en deux. */
+.combat-preparation-commence .combat-ligne > span {
+  flex: 0 0 100%;
+}
+
 .combat-ligne .champ,
 .combat-reglages .champ,
-.combat-fiche-corps .champ {
+.combat-fiche-avant .champ {
   margin-bottom: 0;
+}
+
+/* Une saisie refusée se voit : son champ prend le rouge de l'échec, en
+   bordure et en trait intérieur, sans changer de taille. Sa phrase, liée au
+   champ, dit ce qui est attendu. */
+.combat [aria-invalid="true"] {
+  border-color: var(--combat-echec);
+  box-shadow: inset 0 0 0 var(--trait) var(--combat-echec);
+}
+
+.combat-refus {
+  margin: 0 0 var(--espace-2);
+  color: var(--combat-echec);
+  font-size: var(--taille-petite);
 }
 
 /* Un nombre (un modificateur, un décalage, des exemplaires) tient en peu
@@ -620,6 +658,24 @@
   border-style: dashed;
   background: transparent;
   color: var(--texte-2);
+}
+
+/* Un bouton du site rendu inactif (« Fin de tour » pendant un geste, « Lancer
+   le combat », « Ajouter », « Copier », « Confirmer », un pas de la
+   puissance) : le même aspect, trait discontinu, fond transparent, texte
+   gris, sans opacité. Il gardait l'aspect d'un bouton actif, et rien ne le
+   disait avant l'appui sur un téléphone, qui n'a pas de curseur. */
+.combat .bouton[aria-disabled="true"] {
+  border-style: dashed;
+  border-color: var(--bordure);
+  background: transparent;
+  color: var(--texte-2);
+}
+
+/* Pendant le jet, la cible choisie reste montrée, et ne se change plus : ce
+   n'est pas un choix écarté, son nom garde la couleur du texte. */
+.combat-cibles button[aria-pressed="true"][aria-disabled="true"] {
+  color: var(--texte);
 }
 
 /* La raison d'un bouton inactif lui est liée (aria-describedby) : un lecteur
@@ -719,17 +775,25 @@
   border-top: var(--trait) solid var(--separateur);
 }
 
+.combat-contexte,
 .combat-jet,
-.combat-reglages {
+.combat-reglages,
+.combat-assiste {
   min-width: 0;
 }
 
-.combat-reglages {
+/* Dans le document, et donc sur un téléphone : le contexte ; les réglages à
+   la main, qui n'existent qu'avant le premier dé ; les dés ; puis le texte
+   de la capacité. Un trait sépare les réglages et ce texte de ce qui les
+   précède. */
+.combat-reglages,
+.combat-assiste {
   padding-top: var(--espace-3);
   border-top: var(--trait) solid var(--separateur);
 }
 
-.combat-reglages h3 {
+.combat-reglages h3,
+.combat-assiste h3 {
   margin: 0 0 var(--espace-2);
   color: var(--texte-2);
   font-size: var(--taille-petite);
@@ -809,8 +873,11 @@
   color: var(--combat-echec);
 }
 
+/* Un dé relancé est toujours un échec : il en garde le rouge, en trait
+   discontinu, et sa valeur, grisée, est barrée. */
 .combat-de.relance {
   border-style: dashed;
+  border-color: var(--combat-echec);
   color: var(--texte-2);
 }
 
@@ -902,6 +969,33 @@
 .combat-fiche.ciblee {
   border: var(--trait) dashed var(--combat-adv);
   box-shadow: inset 0 0 0 var(--trait) var(--combat-adv);
+}
+
+/* Avant le lancement, le champ « Case » et « Retirer » suivent la fiche,
+   hors du volet : ils se voient que la fiche soit ouverte ou repliée, à
+   toute largeur. Leur groupe prolonge le cadre de la fiche. */
+.combat-fiche:has(+ .combat-fiche-avant) {
+  margin-bottom: 0;
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.combat-fiche-avant {
+  margin-bottom: var(--espace-2);
+  padding: var(--espace-2) var(--espace-3);
+  border: var(--trait) solid var(--separateur);
+  border-top: 0;
+  border-radius: 0 0 var(--rayon) var(--rayon);
+  background: var(--fond-2);
+}
+
+.combat-fiche-avant .combat-ligne {
+  align-items: center;
+  margin: 0;
+}
+
+.combat-fiche-avant .champ {
+  width: calc(var(--espace-6) * 3);
 }
 
 /* Le nom déplie le volet. Aucun bouton n'y loge : « Jouer » est dans le
@@ -1019,12 +1113,15 @@
   display: none;
 }
 
+/* Avec le texte à 200 % sur un téléphone, la table des zones est plus large
+   que la fiche : elle y défile, plutôt que de faire défiler la page. */
 .combat-fiche-corps {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: var(--espace-2);
   padding: 0 var(--espace-3) var(--espace-3);
+  overflow-x: auto;
 }
 
 .combat-fiche-corps p,
@@ -1100,6 +1197,11 @@
 .combat-zones th {
   color: var(--texte-2);
   font-weight: normal;
+}
+
+/* Le nom d'une zone est l'en-tête de sa ligne : il se lit comme le texte. */
+.combat-zones tbody th {
+  color: var(--texte);
 }
 
 /* Les faces du d20 se lisent d'un bloc ; l'armure se range à droite, pour
@@ -1206,11 +1308,13 @@
   margin: 0 auto 0 0;
 }
 
-/* Sa hauteur est limitée et il défile : 18rem sur un téléphone. */
+/* Sa hauteur est limitée et il défile : 18rem sur un téléphone. À droite,
+   la place d'une barre de défilement : dans Firefox elle se pose sur le
+   contenu, et couvrait la fin des lignes. */
 .combat-lignes {
   max-height: calc(var(--espace-6) * 9);
   margin: 0;
-  padding: 0;
+  padding: 0 var(--espace-3) 0 0;
   overflow: auto;
   list-style: none;
   font-family: var(--police-chasse-fixe);
@@ -1229,7 +1333,9 @@
   font-weight: var(--graisse-forte);
 }
 
-.combat-lignes li.mort {
+/* Seule la phrase de la mort est en évidence, comme sur la maquette, et non
+   la ligne entière. */
+.combat-lignes .combat-mort {
   color: var(--combat-echec);
   font-weight: var(--graisse-forte);
 }
@@ -1245,28 +1351,48 @@
 
 /* De 56rem à 80rem : le plateau et le panneau d'action à gauche, les deux
    camps à droite. Un jeton montre son nom court à côté de son rond ; trois
-   par case, le « +k » dans une colonne à part pour ne prendre aucune ligne. */
+   par case, le « +k » dans une colonne à part pour ne prendre aucune ligne.
+
+   Le nom court se mesure sur la case : 15 % de son côté, comme sur la
+   maquette (10,5 px dans une case de 72), jamais plus que le petit texte du
+   site, ni moins que ses sept dixièmes (9,8 px). À 20 %, presque tous les
+   noms étaient coupés (« Aubé… », « C… » à côté de « +1 »). C'est l'exception
+   aux tailles de texte du site, pour les seuls jetons de la carte. */
 @media (min-width: 56rem) {
-  .combat-garde {
-    flex: 0 1 auto;
-  }
-
-  .combat-commandes {
-    flex: 0 1 auto;
-    margin-left: auto;
-  }
-
   .combat-plus-bouton {
     display: none;
   }
 
-  /* Comme sur la maquette, le bouton principal ferme la barre : « Nouveau
-     combat » passe devant « Fin de tour ». Le document garde l'ordre du
-     téléphone (« Fin de tour », puis le menu). */
+  /* Comme sur la maquette, tout tient sur une ligne, et le bouton principal
+     ferme la barre : l'état de l'enregistrement, puis, au bout, « Nouveau
+     combat » et « Fin de tour ». Le document garde l'ordre du téléphone
+     (« Fin de tour », le menu, l'enregistrement).
+
+     L'état de l'enregistrement prend la place libre, et pousse les boutons
+     au bout. Là où tout ne tient pas sur une ligne (vers 56rem), ce qui
+     passe à la suivante reste à droite : rangé à gauche, « Fin de tour »
+     tombait seul sous le titre. */
+  .combat-barre {
+    justify-content: flex-end;
+  }
+
+  .combat-etat {
+    margin-right: auto;
+  }
+
+  .combat-garde {
+    flex: 1 1 auto;
+  }
+
   .combat-autres {
     display: flex;
     flex: 0 1 auto;
-    order: -1;
+    order: 1;
+  }
+
+  .combat-commandes {
+    order: 2;
+    margin-left: 0;
   }
 
   /* La raison de « Fin de tour » se lit sous lui, au bout de la barre, et
@@ -1327,7 +1453,7 @@
     padding: 0 var(--espace-1) 0 var(--trait);
     border-width: calc(var(--trait) * 2);
     font-size: var(--taille-petite);
-    font-size: min(var(--taille-petite), 20cqi);
+    font-size: min(var(--taille-petite), max(calc(var(--taille-petite) * 0.7), 15cqi));
     line-height: var(--interligne-titre);
   }
 
@@ -1347,7 +1473,7 @@
   .combat-grille .combat-rond {
     flex: none;
     width: var(--taille-petite);
-    width: min(var(--taille-petite), 20cqi);
+    width: min(var(--taille-petite), max(calc(var(--taille-petite) * 0.7), 15cqi));
   }
 
   .combat-grille .combat-initiales {
@@ -1388,22 +1514,89 @@
     display: block;
     padding: 0 calc(var(--trait) * 2);
     font-size: var(--taille-petite);
-    font-size: min(var(--taille-petite), 20cqi);
+    font-size: min(var(--taille-petite), max(calc(var(--taille-petite) * 0.7), 15cqi));
   }
 
   .combat-groupe-titre {
     flex: 0 0 25%;
   }
 
-  .combat-des {
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  /* La préparation, comme la barre de la maquette : « Qui commence » et
+     « Lancer le combat » sur une rangée, le second au bout. Les autres blocs
+     gardent chacun leur rangée. */
+  .combat-preparation {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    column-gap: var(--espace-3);
   }
 
-  .combat-reglages {
+  .combat-preparation > * {
+    flex: 0 0 100%;
+    min-width: 0;
+  }
+
+  .combat-preparation > .combat-preparation-commence {
+    flex: 1 1 auto;
+  }
+
+  .combat-preparation > .combat-preparation-lancer {
+    flex: 0 1 auto;
+    margin-left: auto;
+    text-align: right;
+  }
+
+  .combat-preparation-lancer .combat-ligne {
+    justify-content: flex-end;
+  }
+
+  .combat-preparation-commence .combat-ligne > span {
+    flex: 0 0 auto;
+  }
+
+  /* Les dés à gauche ; à droite, la place de la palette de la maquette : le
+     texte de la capacité, puis les réglages à la main. Le document garde
+     l'ordre du téléphone ; la grille place. Le contexte a sa rangée, les dés
+     prennent la rangée souple : le texte de la capacité, qui la traverse,
+     n'écarte donc jamais le contexte des dés, si long soit-il. */
+  .combat-des {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto;
+    row-gap: 0;
+  }
+
+  .combat-contexte {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .combat-jet {
+    grid-column: 1;
+    grid-row: 2 / span 2;
+  }
+
+  .combat-reglages,
+  .combat-assiste {
+    grid-column: 2;
     padding-top: 0;
     padding-left: var(--espace-3);
     border-top: 0;
     border-left: var(--trait) solid var(--separateur);
+  }
+
+  .combat-assiste {
+    grid-row: 1 / span 2;
+  }
+
+  /* Seuls à droite, les réglages prennent toute la hauteur ; sous le texte
+     de la capacité, la dernière rangée. */
+  .combat-reglages {
+    grid-row: 1 / span 3;
+  }
+
+  .combat-des:has(> .combat-assiste) > .combat-reglages {
+    grid-row: 3;
+    padding-top: var(--espace-3);
   }
 
   .combat-de {

@@ -24,6 +24,7 @@ import {
   FACES_LOCALISATION,
   FACE_CONTRE,
   GRILLE_PJ,
+  IDENTIFIANTS_MAX,
   LETTRES,
   MOTIF_CASE,
   PLAFOND_ADVERSAIRES,
@@ -32,6 +33,7 @@ import {
   REGLES,
   ROLES,
   ROLES_PASSIFS,
+  TIRAGES_MAX,
   geler,
   raisonValide,
 } from "./regles.js";
@@ -230,6 +232,8 @@ const EVENEMENTS = {
     lire(donnee, quoi) {
       const faces = entier(donnee.faces, `${quoi} : « faces »`, 2, BORNES_PHOTO.faces);
       if (!Array.isArray(donnee.valeurs) || donnee.valeurs.length === 0) refuser(`${quoi} : « valeurs » n'est pas une liste d'au moins un dé.`);
+      // Avant d'en lire une seule : un dé ne se lance pas plus de TIRAGES_MAX fois.
+      if (donnee.valeurs.length > TIRAGES_MAX) refuser(`${quoi} : « valeurs » compte plus de ${ecrireNombre(TIRAGES_MAX)} tirages.`);
       return { faces, valeurs: donnee.valeurs.map((valeur) => entier(valeur, `${quoi} : une valeur`, 1, faces)) };
     },
   },
@@ -357,7 +361,11 @@ function lireSource(donnee, camp, accepter) {
   if (!estObjet(donnee.ligne) || !estObjet(donnee.resolu) || !Array.isArray(donnee.types) || !donnee.types.every(estObjet)) {
     refuser(`${quoi} n'a pas la forme d'un adversaire : sa ligne, celles de ses types, sa résolution.`);
   }
-  return copieSimple({ ligne: donnee.ligne, types: donnee.types, resolu: donnee.resolu }, quoi);
+  const copie = copieSimple({ ligne: donnee.ligne, types: donnee.types, resolu: donnee.resolu }, quoi);
+  // La copie est faite de données simples : son JSON s'écrit sans surprise,
+  // et sa longueur est celle que le combat gardera.
+  if (JSON.stringify(copie).length > BORNES_PHOTO.source) refuser(`${quoi} dépasse ${ecrireNombre(BORNES_PHOTO.source)} signes.`);
+  return copie;
 }
 
 /** Trois nombres, un par lettre, ou rien. */
@@ -530,6 +538,15 @@ function lireValeurs(donnee, camp) {
     lireCapacite(capacite, rang, armes.length, liens.length),
   );
 
+  // Les façons se comptent aussi ensemble : l'offre les juge toutes à chaque
+  // capacité jouée, et calcule pour celles de déplacement les cases où elles
+  // mènent. Ce que la borne de chaque liste laisse passer, mis bout à bout,
+  // ferait durer des minutes le rejeu d'un combat forgé.
+  const faconsEnTout = capacites.reduce((total, capacite) => total + capacite.facons.length, 0);
+  if (faconsEnTout > BORNES_PHOTO.faconsEnTout) refuser(`la photographie compte plus de ${ecrireNombre(BORNES_PHOTO.faconsEnTout)} façons.`);
+  const deplacements = capacites.reduce((total, capacite) => total + (capacite.role === "deplacement" ? capacite.facons.length : 0), 0);
+  if (deplacements > BORNES_PHOTO.deplacements) refuser(`les capacités de déplacement comptent plus de ${ecrireNombre(BORNES_PHOTO.deplacements)} façons.`);
+
   const passifs = liste(donnee.passifs, "la liste des passifs câblés", capacites.length, "passifs").map((passif, rang) => {
     const du = `du passif câblé n° ${rang + 1}`;
     champs(passif, `le passif câblé n° ${rang + 1}`, ["capacite", "role", "niveau"]);
@@ -601,7 +618,9 @@ function lireMiseEnPlace(donnee, mode, accepter) {
   champs(donnee, "La mise en place", ["mode", "quiCommence", "compteur", "protagonistes"]);
   if (typeof mode !== "string" || donnee.mode !== mode) refuser("La mise en place n'est pas celle de ce mode.");
   const quiCommence = parmi(donnee.quiCommence, "Le camp qui commence", CAMPS);
-  const compteur = indice(donnee.compteur, "Le compteur des identifiants");
+  // Au-delà, un identifiant aurait un chiffre de trop : le protagoniste ajouté
+  // ensuite ne pourrait rien jouer, et le combat ne se relirait plus.
+  const compteur = entier(donnee.compteur, "Le compteur des identifiants", 0, IDENTIFIANTS_MAX);
   liste(donnee.protagonistes, "La mise en place", PLAFOND_PJ + PLAFOND_ADVERSAIRES, "protagonistes");
 
   const vus = new Set();

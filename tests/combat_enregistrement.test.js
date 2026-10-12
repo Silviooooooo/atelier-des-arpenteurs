@@ -7,6 +7,7 @@
 
 import { test as controle } from "node:test";
 import assert from "node:assert/strict";
+import { randomFillSync } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { MOT_DE_PASSE_DEMO } from "../js/banque/chargement.js";
 import { ITERATIONS_MAX, nouveauSecret, ouvrirAvecMotDePasse, versBase64 } from "../js/securite/chiffrement.js";
@@ -14,6 +15,7 @@ import { transformer } from "../js/personnage/format.js";
 import {
   FORMAT_COMBAT,
   PHRASES_DE_GARDE,
+  REVISION_MAX,
   TAILLE_MAX_COMBAT,
   chiffrerCombat,
   creerGardien,
@@ -141,6 +143,8 @@ test("chiffrement — un appel mal fait rend une erreur, sans lever", async () =
     [TEXTE, SECRET, { mode: "autre", revision: 1 }],
     [TEXTE, SECRET, { mode: "demo", revision: 0 }],
     [TEXTE, SECRET, { mode: "demo", revision: 1.5 }],
+    [TEXTE, SECRET, { mode: "demo", revision: REVISION_MAX + 1 }],
+    [TEXTE, SECRET, { mode: "demo", revision: Number.MAX_SAFE_INTEGER }],
     [TEXTE, SECRET, { mode: "demo" }],
     [{ regles: 1 }, SECRET, { mode: "demo", revision: 1 }],
     [TEXTE, null, { mode: "demo", revision: 1 }],
@@ -152,6 +156,8 @@ test("chiffrement — un appel mal fait rend une erreur, sans lever", async () =
     assert.equal(issue.code, "invalide");
     assert.equal(typeof issue.erreur, "string");
   }
+  // Désarmé : à sa borne même, la révision se chiffre.
+  assert.equal((await chiffrerCombat(TEXTE, SECRET, { mode: "demo", revision: REVISION_MAX })).revision, REVISION_MAX);
 });
 
 test("borne — 8 Mo de clair passent, un octet de plus est refusé, à l'écriture comme à la lecture", async () => {
@@ -195,6 +201,15 @@ test("donnée abîmée — chaque défaut de l'enregistrement est « illisible �
   const autreChiffre = await chiffrer();
   const retourne = (texte) => (texte[0] === "A" ? "B" : "A") + texte.slice(1);
   const sans = (champ) => Object.fromEntries(Object.entries(e).filter(([cle]) => cle !== champ));
+  // Un chiffré dont le base64 finit par un remplissage : selon la longueur
+  // du texte, il y en a un ou non. On allonge le texte jusqu'à en trouver un.
+  let rempli = null;
+  for (let ajout = 0; ajout <= 26 && rempli === null; ajout += 1) {
+    const candidat = await chiffrer(contenu(3, ["abcdefghijklmnopqrstuvwxyz".slice(0, ajout)]));
+    if (candidat.chiffre.endsWith("=")) rempli = candidat;
+  }
+  assert.ok(rempli, "un chiffré au base64 rempli a été trouvé");
+  assert.equal(typeof (await dechiffrerCombat(rempli, SECRET, { mode: "demo" })).texte, "string", "désarmé : avec son remplissage, il se lit");
   const cas = {
     "un signe du chiffré changé": { ...e, chiffre: retourne(e.chiffre) },
     "le vecteur d'un autre chiffrement": { ...e, iv: autreChiffre.iv },
@@ -205,6 +220,8 @@ test("donnée abîmée — chaque défaut de l'enregistrement est « illisible �
     "un chiffré vide": { ...e, chiffre: "" },
     "un chiffré qui n'est pas du base64": { ...e, chiffre: "@@@@" },
     "un chiffré mal rempli": { ...e, chiffre: `${e.chiffre.replace(/=+$/, "")}=` },
+    // Le décodeur du navigateur l'accepterait : c'est la longueur, multiple de quatre, qui le refuse.
+    "un chiffré sans son remplissage": { ...rempli, chiffre: rempli.chiffre.replace(/=+$/, "") },
     "un chiffré réduit à son étiquette": { ...e, chiffre: versBase64(new Uint8Array(16)) },
     "un chiffré qui n'est pas un texte": { ...e, chiffre: [1, 2, 3] },
     "un vecteur trop court": { ...e, iv: versBase64(new Uint8Array(8)) },
@@ -217,6 +234,11 @@ test("donnée abîmée — chaque défaut de l'enregistrement est « illisible �
     "une révision négative": { ...e, revision: -1 },
     "une révision non entière": { ...e, revision: 1.5 },
     "une révision en texte": { ...e, revision: "3" },
+    "une révision au-delà de sa borne": { ...e, revision: REVISION_MAX + 1 },
+    "une révision démesurée": { ...e, revision: Number.MAX_SAFE_INTEGER },
+    "un sel trop long": { ...e, sel: versBase64(new Uint8Array(32)) },
+    "un vecteur trop long": { ...e, iv: versBase64(new Uint8Array(24)) },
+    "un chiffré plus long que le plus gros combat": { ...e, chiffre: "A".repeat(12 * 1024 * 1024) },
     "une date qui n'en est pas une": { ...e, enregistre_le: "hier" },
     "une date qui n'est pas un texte": { ...e, enregistre_le: 12 },
     "un format nul": { ...e, format: 0 },
@@ -237,6 +259,7 @@ test("donnée abîmée — chaque défaut de l'enregistrement est « illisible �
     assert.equal("texte" in issue, false, nom);
   }
   assert.equal((await dechiffrerCombat(cas["une révision en texte"], SECRET, { mode: "demo" })).revision, 0);
+  assert.equal((await dechiffrerCombat(cas["une révision démesurée"], SECRET, { mode: "demo" })).revision, 0);
   assert.equal((await dechiffrerCombat(cas["un champ en plus"], SECRET, { mode: "demo" })).revision, 3);
   // Désarmé : le même enregistrement, intact.
   assert.equal((await dechiffrerCombat({ ...e }, SECRET, { mode: "demo" })).texte, TEXTE);
@@ -256,11 +279,117 @@ test("format plus récent — reconnu avant tout autre examen, quelles que soien
   assert.equal((await dechiffrerCombat({ ...e, etiquette: "neuve" }, SECRET, { mode: "demo" })).code, "illisible");
 });
 
-test("revisionDe — un entier sûr positif ou nul, sinon 0", () => {
+// ─── L'enveloppe longue ─────────────────────────────────────────────────────
+
+const ABIME = { erreur: "Le combat gardé ne se déchiffre pas : il est abîmé.", code: "illisible", revision: 3 };
+// Ce qu'un chiffré pèse au plus, étiquette comprise : la borne de la lecture.
+const OCTETS_CHIFFRE_MAX = TAILLE_MAX_COMBAT + 64 * 1024;
+
+test("enveloppe longue — un chiffré de plusieurs mégaoctets ne fait rien lever : abîmé, il est « illisible » ; sain, il se relit", async () => {
+  const e = await chiffrer();
+  // Du base64 valide, aux longueurs où l'examen du texte faisait déborder la
+  // pile : sous la borne, il est examiné puis ne se déchiffre pas ; au-delà,
+  // il est refusé sans être examiné.
+  for (const signes of [5 * 1024 * 1024, 8 * 1024 * 1024, 4 * Math.ceil(OCTETS_CHIFFRE_MAX / 3), 12 * 1024 * 1024, 32 * 1024 * 1024]) {
+    assert.deepEqual(await dechiffrerCombat({ ...e, chiffre: "A".repeat(signes) }, SECRET, { mode: "demo" }), ABIME, `${signes} signes`);
+  }
+  // Un combat qui se compresse mal, sous la borne du clair : son chiffré
+  // passe les 4,5 Mo où la lecture levait. Il s'écrit, et se relit tel quel.
+  const octets = new Uint8Array(6_000_000);
+  randomFillSync(octets);
+  const texte = versBase64(octets);
+  assert.ok(texte.length < TAILLE_MAX_COMBAT);
+  const ecrit = await chiffrer(texte);
+  assert.ok(ecrit.chiffre.length > 7 * 1024 * 1024, `un chiffré de ${ecrit.chiffre.length} signes`);
+  const relu = await dechiffrerCombat(ecrit, SECRET, { mode: "demo" });
+  assert.equal(relu.revision, 3);
+  assert.ok(relu.texte === texte, "le texte revient à l'identique");
+});
+
+// Du deflate fait de blocs vides, puis d'un bloc qui porte le texte : il se
+// décompresse en ce texte, quel que soit son poids. « total » est le nombre
+// d'octets du tout.
+function deflateLeste(total) {
+  const ENTETE = 5;
+  const vides = Math.floor((total - ENTETE - 1) / ENTETE);
+  const texte = "a".repeat(total - ENTETE - vides * ENTETE);
+  const corps = new Uint8Array(total);
+  for (let rang = 0; rang < vides; rang += 1) corps.set([0x00, 0x00, 0x00, 0xff, 0xff], rang * ENTETE);
+  // Le dernier bloc : non compressé lui aussi, sa longueur, puis son complément.
+  corps.set([0x01, texte.length, 0x00, 0xff - texte.length, 0xff], vides * ENTETE);
+  corps.set(new TextEncoder().encode(texte), (vides + 1) * ENTETE);
+  return { corps, texte };
+}
+
+test("borne — un chiffré plus lourd que le plus gros combat est refusé avant tout examen, même s'il se déchiffrerait", async () => {
+  // Désarmé d'abord : léger, ce deflate lesté se lit.
+  const leger = deflateLeste(64 * 1024);
+  assert.deepEqual(await dechiffrerCombat(await forger(leger.corps, { compresser: false }), SECRET, { mode: "demo" }), { texte: leger.texte, revision: 3 });
+  // À la borne même (8 Mo et 64 Ko, étiquette de 16 octets comprise), il se lit encore.
+  const juste = deflateLeste(OCTETS_CHIFFRE_MAX - 16);
+  const aLaBorne = await forger(juste.corps, { compresser: false });
+  assert.equal(aLaBorne.chiffre.length, 4 * Math.ceil(OCTETS_CHIFFRE_MAX / 3));
+  assert.deepEqual(await dechiffrerCombat(aLaBorne, SECRET, { mode: "demo" }), { texte: juste.texte, revision: 3 });
+  // Un octet de plus : la bonne clé, un clair de quelques signes, et pourtant « illisible ».
+  const trop = deflateLeste(OCTETS_CHIFFRE_MAX - 16 + 1);
+  assert.deepEqual(await dechiffrerCombat(await forger(trop.corps, { compresser: false }), SECRET, { mode: "demo" }), ABIME);
+});
+
+test("écriture — un compressé qui ne se relirait pas ne s'écrit pas : « trop_gros », dit en jouant et non au rechargement", async () => {
+  // Aucun compresseur ne grossit un texte de plus de 64 Ko : celui-ci le fait,
+  // pour voir la garde. Il ajoute « leste » octets à ce que rend le vrai.
+  const Vrai = globalThis.CompressionStream;
+  const reel = (await transformer(new TextEncoder().encode(TEXTE), new Vrai("deflate-raw"))).length;
+  let leste = 0;
+  globalThis.CompressionStream = class {
+    constructor(format) {
+      const vrai = new Vrai(format);
+      const queue = new TransformStream({
+        flush(sortie) {
+          if (leste > 0) sortie.enqueue(new Uint8Array(leste));
+        },
+      });
+      this.writable = vrai.writable;
+      this.readable = vrai.readable.pipeThrough(queue);
+    }
+  };
+  try {
+    // Désarmé : sans lest, le texte s'écrit comme toujours.
+    assert.deepEqual(await dechiffrerCombat(await chiffrer(), SECRET, { mode: "demo" }), { texte: TEXTE, revision: 3 });
+    // À la borne de la lecture, étiquette comprise : il s'écrit encore.
+    leste = OCTETS_CHIFFRE_MAX - 16 - reel;
+    const aLaBorne = await chiffrer();
+    assert.equal(aLaBorne.chiffre.length, 4 * Math.ceil(OCTETS_CHIFFRE_MAX / 3));
+    // Un octet de plus : refusé à l'écriture, par la phrase du combat trop gros.
+    leste += 1;
+    assert.deepEqual(await chiffrer(), { erreur: "Ce combat dépasse 8 Mo : il n'est plus gardé.", code: "trop_gros" });
+  } finally {
+    globalThis.CompressionStream = Vrai;
+  }
+});
+
+test("donnée piégée — un enregistrement dont un champ lève à la lecture est « illisible », sans que rien ne remonte", async () => {
+  const e = await chiffrer();
+  const piege = (champ) => Object.defineProperty({ ...e }, champ, { enumerable: true, get: () => { throw new RangeError("piège"); } });
+  for (const champ of CHAMPS) {
+    const issue = await dechiffrerCombat(piege(champ), SECRET, { mode: "demo" });
+    assert.equal(issue.code, "illisible", champ);
+    assert.equal(issue.erreur, "Le combat gardé ne se déchiffre pas : il est abîmé.", champ);
+    // La révision lue avant le piège est rendue ; piégée elle-même, elle vaut 0.
+    assert.equal(issue.revision, champ === "revision" ? 0 : 3, champ);
+  }
+  // Désarmé : le même enregistrement, sans piège.
+  assert.equal((await dechiffrerCombat({ ...e }, SECRET, { mode: "demo" })).texte, TEXTE);
+});
+
+test("revisionDe — un entier de 0 à sa borne, sinon 0", () => {
+  assert.equal(REVISION_MAX, 2 ** 40);
   for (const [enregistrement, attendue] of [
     [{ revision: 4 }, 4],
     [{ revision: 0 }, 0],
-    [{ revision: Number.MAX_SAFE_INTEGER }, Number.MAX_SAFE_INTEGER],
+    [{ revision: REVISION_MAX }, REVISION_MAX],
+    [{ revision: REVISION_MAX + 1 }, 0],
+    [{ revision: Number.MAX_SAFE_INTEGER }, 0],
     [{ revision: Number.MAX_SAFE_INTEGER + 1 }, 0],
     [{ revision: -1 }, 0],
     [{ revision: 2.5 }, 0],
@@ -478,6 +607,7 @@ test("mode à part — la démonstration et le mode réel gardent chacun leur co
   await demo.charger();
   await reel.charger();
   demo.garder(assembler(["démonstration"]));
+  await demo.repos();
   demo.garder(assembler(["démonstration", "suite"]));
   await demo.repos();
   assert.equal(gardee(fabrique, "reel"), null);
@@ -534,36 +664,78 @@ function espionner(magasin, { lent = false } = {}) {
   });
 }
 
-test("file — une seule place : jamais deux écritures à la fois, et la dernière demande remplace celle qui attendait", async () => {
+test("garder — rien de lourd dans le tour de l'appel : le texte s'assemble un tour plus tard, et les demandes venues entre-temps ne font qu'une écriture", async () => {
   const fabrique = fabriqueIndexedDB();
   const vu = espionner(await onglet(fabrique));
-  const gardien = gardienDe(vu.magasin);
+  let lectures = 0;
+  const gardien = gardienDe(vu.magasin, { secret: () => ((lectures += 1), SECRET) });
   await gardien.charger();
+  const apresChargement = lectures;
   const assembles = [];
-  for (let n = 1; n <= 10; n += 1) {
-    gardien.garder((revision) => {
-      assembles.push(n);
-      return contenu(revision, [n]);
-    });
-  }
+  const demande = (n) => (revision) => (assembles.push(n), contenu(revision, [n]));
+
+  gardien.garder(demande(1));
+  // Dans le tour de l'appel, la file est prise et « Enregistrement… » se dit ;
+  // mais ni la clé n'est lue, ni le texte assemblé, ni rien encodé.
+  assert.equal(gardien.etat(), "ecriture");
+  assert.deepEqual(gardien.annonces, ["ecriture"]);
+  assert.deepEqual(assembles, []);
+  assert.equal(lectures, apresChargement);
+  // Ni dans les microtâches de ce tour : elles passent avant que l'écouteur
+  // d'un clic ait rendu la main à la page.
+  for (let fois = 0; fois < 100; fois += 1) await Promise.resolve();
+  assert.deepEqual(assembles, [], "rien ne part dans les microtâches du clic");
+  assert.equal(lectures, apresChargement);
+
+  // Deux demandes de plus avant le départ : une seule écriture, celle de la dernière.
+  gardien.garder(demande(2));
+  gardien.garder(demande(3));
   await gardien.repos();
-  // La première part ; des neuf autres, seule la dernière est écrite.
+  assert.deepEqual(assembles, [3]);
+  assert.equal(lectures, apresChargement + 1);
+  assert.deepEqual(vu.ecritures, [[1, 0, true]]);
+  assert.equal(await texteGarde(fabrique), contenu(1, [3]));
+  assert.deepEqual(gardien.annonces, ["ecriture", "garde"], "une seule alternance pour toute la rafale");
+});
+
+test("file — une seule place : jamais deux écritures à la fois, et la dernière demande remplace celle qui attendait", async () => {
+  const fabrique = fabriqueIndexedDB();
+  const vu = espionner(await onglet(fabrique), { lent: true });
+  const gardien = gardienDe(vu.magasin);
+  const chargement = gardien.charger();
+  await unFeu(vu);
+  vu.lacher.shift()();
+  await chargement;
+  const assembles = [];
+  const demande = (n) => (revision) => (assembles.push(n), contenu(revision, [n]));
+
+  // La première part, et attend dans la base ; neuf autres arrivent pendant qu'elle écrit.
+  gardien.garder(demande(1));
+  await unFeu(vu);
+  for (let n = 2; n <= 10; n += 1) gardien.garder(demande(n));
+  await new Promise((suite) => setTimeout(suite, 20));
+  assert.deepEqual(assembles, [1], "rien d'autre ne s'assemble tant que la première écrit");
+  assert.equal(vu.enCours, 1);
+  assert.equal(vu.lacher.length, 1, "ni ne part vers la base");
+  // Elle finit : des neuf autres, seule la dernière est écrite, après elle.
+  vu.lacher.shift()();
+  await unFeu(vu);
   assert.deepEqual(assembles, [1, 10]);
+  // Une demande de plus pendant cette seconde écriture : elle attend son tour, elle aussi.
+  gardien.garder(demande(11));
+  vu.lacher.shift()();
+  await unFeu(vu);
+  vu.lacher.shift()();
+  await gardien.repos();
+  assert.deepEqual(assembles, [1, 10, 11]);
   assert.deepEqual(vu.ecritures, [
     [1, 0, true],
     [2, 1, true],
+    [3, 2, true],
   ]);
-  assert.equal(vu.ensemble, 1);
-  assert.equal(await texteGarde(fabrique), contenu(2, [10]));
-  assert.deepEqual(gardien.annonces, ["ecriture", "garde"], "une seule alternance pour toute la rafale");
-
-  // Une demande arrivée pendant l'écriture part après elle, jamais avec elle.
-  gardien.garder(assembler(["onze"]));
-  await Promise.resolve();
-  gardien.garder(assembler(["douze"]));
-  await gardien.repos();
-  assert.equal(vu.ensemble, 1);
-  assert.equal(await texteGarde(fabrique), contenu(4, ["douze"]));
+  assert.equal(vu.ensemble, 1, "jamais deux écritures à la fois");
+  assert.equal(await texteGarde(fabrique), contenu(3, [11]));
+  assert.deepEqual(gardien.annonces, ["ecriture", "garde"], "une seule alternance pour toute la file");
 });
 
 test("révision — deux onglets : celui qui trouve une autre révision que la sienne n'écrase rien, le dit, et reprend le plus récent", async () => {
@@ -728,11 +900,17 @@ test("donnée abîmée — à l'ouverture, « illisible » ; rien n'est touché 
   assert.deepEqual(await gardienDe(await onglet(fabrique)).charger(), { texte: contenu(7, []), revision: 7 });
 });
 
-test("donnée abîmée — une révision qui ne se lit pas vaut 0 : « Nouveau combat » s'écrit à la révision 1, puis se relit", async () => {
+test("donnée abîmée — une révision qui ne se lit pas, ou démesurée, vaut 0 : « Nouveau combat » s'écrit à la révision 1, puis se relit", async () => {
+  // Les deux dernières : un enregistrement sain en tout, sauf sa révision,
+  // posée à la main au-delà de sa borne (elle est en clair, hors de ce que
+  // le chiffrement protège). Sans la borne, plus rien ne s'écrivait par-dessus.
+  const sain = await chiffrer(contenu(6), { revision: 6 });
   for (const abime of [
     { mode: "demo", format: 1, revision: "sept", chiffre: "…" },
     { mode: "demo", revision: -3 },
     { mode: "demo" },
+    { ...sain, revision: Number.MAX_SAFE_INTEGER },
+    { ...sain, revision: REVISION_MAX + 1 },
   ]) {
     const fabrique = fabriqueIndexedDB();
     await poser(fabrique, abime);
@@ -747,6 +925,78 @@ test("donnée abîmée — une révision qui ne se lit pas vaut 0 : « Nouveau c
     assert.equal(gardee(fabrique).revision, 1);
     assert.deepEqual(await gardienDe(await onglet(fabrique)).charger(), { texte: contenu(1, []), revision: 1 });
   }
+});
+
+test("révision — à sa borne, elle repart de 1 : un enregistrement posé là ne rend pas le combat ingardable", async () => {
+  // Un combat forgé avec la bonne clé, à la borne exacte et un cran dessous : il se lit.
+  for (const [posee, suivantes] of [
+    [REVISION_MAX, [1, 2]],
+    [REVISION_MAX - 1, [REVISION_MAX, 1]],
+  ]) {
+    const fabrique = fabriqueIndexedDB();
+    await poser(fabrique, await chiffrer(contenu(posee, ["gardé"]), { revision: posee }));
+    const vu = espionner(await onglet(fabrique));
+    const gardien = gardienDe(vu.magasin);
+    assert.deepEqual(await gardien.charger(), { texte: contenu(posee, ["gardé"]), revision: posee });
+    for (const [rang, attendue] of suivantes.entries()) {
+      gardien.garder(assembler(["gardé", rang]));
+      await gardien.repos();
+      assert.equal(gardien.etat(), "garde", `après ${posee}, la révision ${attendue} s'écrit`);
+      assert.equal(gardee(fabrique).revision, attendue);
+      assert.equal(await texteGarde(fabrique), contenu(attendue, ["gardé", rang]));
+    }
+    // Chaque écriture attendait la révision gardée, exactement : la comparaison n'est pas levée.
+    assert.deepEqual(vu.ecritures, [[suivantes[0], posee, true], [suivantes[1], suivantes[0], true]]);
+    assert.deepEqual(await gardienDe(await onglet(fabrique)).charger(), { texte: contenu(suivantes[1], ["gardé", 1]), revision: suivantes[1] });
+  }
+});
+
+test("enveloppe longue — à l'ouverture, un chiffré démesuré est « illisible » ; « Nouveau combat » s'écrit par-dessus", async () => {
+  const sain = await chiffrer(contenu(6), { revision: 6 });
+  for (const signes of [5 * 1024 * 1024, 12 * 1024 * 1024]) {
+    const fabrique = fabriqueIndexedDB();
+    const longue = { ...sain, chiffre: "A".repeat(signes) };
+    await poser(fabrique, longue);
+    const gardien = gardienDe(await onglet(fabrique));
+    assert.deepEqual(await gardien.charger(), { erreur: "Le combat gardé ne se déchiffre pas : il est abîmé.", code: "illisible" }, `${signes} signes`);
+    assert.equal(gardien.etat(), "illisible");
+    assert.equal(gardien.phrase(), PHRASES_DE_GARDE.illisible);
+    assert.equal(gardee(fabrique).chiffre.length, signes, "rien n'est touché avant « Nouveau combat »");
+    gardien.garder(assembler([]));
+    await gardien.repos();
+    assert.equal(gardien.etat(), "garde");
+    assert.equal(gardee(fabrique).revision, 7);
+    assert.deepEqual(await gardienDe(await onglet(fabrique)).charger(), { texte: contenu(7, []), revision: 7 });
+  }
+});
+
+test("charger — une levée du déchiffrement ne remonte pas : le combat gardé est « illisible », et reste remplaçable", async () => {
+  const fabrique = fabriqueIndexedDB();
+  await poser(fabrique, await chiffrer(contenu(6, ["gardé"]), { revision: 6 }));
+  // Un secret dont la lecture lève : rien, dans le déchiffrement, ne s'y attend.
+  const casse = { cle: SECRET.cle, iterations: SECRET.iterations };
+  Object.defineProperty(casse, "sel", { enumerable: true, get: () => { throw new RangeError("Maximum call stack size exceeded"); } });
+  await assert.rejects(dechiffrerCombat(gardee(fabrique), casse, { mode: "demo" }), RangeError, "armé : le déchiffrement, seul, lève bien");
+
+  let courant = casse;
+  const gardien = gardienDe(await onglet(fabrique), { secret: () => courant });
+  assert.deepEqual(await gardien.charger(), { erreur: "Le combat gardé ne se déchiffre pas : il est abîmé.", code: "illisible" });
+  assert.equal(gardien.etat(), "illisible");
+  assert.equal(gardien.phrase(), PHRASES_DE_GARDE.illisible);
+  assert.deepEqual(gardien.annonces, ["illisible"]);
+  assert.equal(gardee(fabrique).revision, 6, "rien n'est touché");
+  // « Nouveau combat » s'écrit au-dessus de la révision gardée, que le gardien a lue malgré la levée.
+  courant = SECRET;
+  gardien.garder(assembler([]));
+  await gardien.repos();
+  assert.equal(gardien.etat(), "garde");
+  assert.equal(gardee(fabrique).revision, 7);
+  assert.equal(await texteGarde(fabrique), contenu(7, []));
+
+  // Désarmé : avec un secret sain, le même enregistrement se relisait.
+  const autre = fabriqueIndexedDB();
+  await poser(autre, await chiffrer(contenu(6, ["gardé"]), { revision: 6 }));
+  assert.deepEqual(await gardienDe(await onglet(autre)).charger(), { texte: contenu(6, ["gardé"]), revision: 6 });
 });
 
 test("format plus récent — une enveloppe de format 2 à neuf clés : « rechargez la page », et rien ne s'écrit par-dessus", async () => {
@@ -867,9 +1117,9 @@ test("écriture qui échoue — quota, combat trop gros, assemblage qui lève, b
     await gardien.repos();
     assert.equal(gardien.etat(), "memoire", nom);
     assert.equal(gardien.phrase(), "Ce navigateur ne garde pas le combat", nom);
-    // Un assemblage qui échoue le fait avant que l'écriture ne parte : « Enregistrement… » ne paraît pas.
-    assert.equal(gardien.annonces.at(-1), "memoire", nom);
-    assert.deepEqual(gardien.annonces.slice(0, -1), nom.startsWith("l'assemblage lève") ? [] : ["ecriture"], nom);
+    // La file est prise dès la demande, et le texte assemblé un tour plus tard :
+    // « Enregistrement… » paraît d'abord, même quand c'est l'assemblage qui échoue.
+    assert.deepEqual(gardien.annonces, ["ecriture", "memoire"], nom);
     assert.deepEqual(gardee(fabrique), avant, `${nom} : l'écriture d'avant reste`);
     // La panne levée, le gardien n'écrit plus : le combat continue en mémoire.
     fabrique.pannes.ecritureEchoue = false;
@@ -975,11 +1225,19 @@ test("oublier — la file se vide : l'écriture en attente ne part pas, celle qu
   gardien.garder(assembler(["a"]));
   await gardien.repos();
 
+  // Deux demandes : la seconde arrive pendant que la première se chiffre, et
+  // « entre » se glisse juste après elle.
+  async function deuxDemandes(leGardien, assembles, entre = () => {}) {
+    await new Promise((partie) => {
+      leGardien.garder((revision) => (assembles.push("première"), partie(), contenu(revision, ["a", "b"])));
+    });
+    leGardien.garder((revision) => (assembles.push("seconde"), contenu(revision, ["a", "b", "c"])));
+    entre();
+    await leGardien.repos();
+  }
+
   const assembles = [];
-  gardien.garder((revision) => (assembles.push("première"), contenu(revision, ["a", "b"])));
-  gardien.garder((revision) => (assembles.push("seconde"), contenu(revision, ["a", "b", "c"])));
-  gardien.oublier();
-  await gardien.repos();
+  await deuxDemandes(gardien, assembles, () => gardien.oublier());
   await new Promise((resoudre) => setTimeout(resoudre, 20));
   assert.deepEqual(assembles, ["première"], "la demande en attente n'a pas été assemblée");
   assert.deepEqual(vu.ecritures, [[1, 0, true]], "aucune écriture après l'oubli");
@@ -988,12 +1246,23 @@ test("oublier — la file se vide : l'écriture en attente ne part pas, celle qu
   await gardien.repos();
   assert.equal(vu.ecritures.length, 1);
 
-  // Désarmé : sans oubli, les deux mêmes demandes s'écrivent.
+  // Une demande qui n'est pas encore partie ne part pas non plus après l'oubli.
+  const patient = gardienDe(await onglet(fabrique));
+  await patient.charger();
+  const partis = [];
+  patient.garder((revision) => (partis.push("jamais"), contenu(revision, ["a", "z"])));
+  patient.oublier();
+  await patient.repos();
+  await new Promise((resoudre) => setTimeout(resoudre, 20));
+  assert.deepEqual(partis, []);
+  assert.equal(await texteGarde(fabrique), contenu(1, ["a"]));
+
+  // Désarmé : sans oubli, les deux mêmes demandes s'écrivent, l'une après l'autre.
   const autre = gardienDe(await onglet(fabrique));
   await autre.charger();
-  autre.garder(assembler(["a", "b"]));
-  autre.garder(assembler(["a", "b", "c"]));
-  await autre.repos();
+  const ecrites = [];
+  await deuxDemandes(autre, ecrites);
+  assert.deepEqual(ecrites, ["première", "seconde"]);
   assert.equal(await texteGarde(fabrique), contenu(3, ["a", "b", "c"]));
 });
 
