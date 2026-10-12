@@ -5,7 +5,8 @@
 // lisez_moi. Chaque ligne garde le texte d'origine de ses cellules (brut),
 // pour qu'un lot futur puisse réinterpréter les données sans nouvel import.
 // Les colonnes se retrouvent par leur en-tête, jamais par leur position, et
-// sans casse, accents ni espaces : l'auteur réordonne ses feuilles.
+// sans casse, accents, espaces ni signe invisible (noms.js) : l'auteur
+// réordonne ses feuilles.
 //
 // L'import relève E1, E2, E6, A7, I1 et I4 en lisant les lignes ; controle.js
 // relève le reste sur la banque. Rien n'est corrigé : les anomalies voyagent

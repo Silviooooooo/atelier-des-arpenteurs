@@ -1,9 +1,10 @@
 // Ce que les fiches affichent (SPECIFICATION.md, § 5.2, § 9 et § 16.6).
 //
 // Un index de la banque, calculé une fois : les renvois résolus comme le
-// contrôle les résout (exactement, puis sans casse, accents ni espaces,
-// § 6.3), « octroyée par » pour une capacité, « porté par » pour un élément,
-// le nom affiché d'un paramètre (§ 5.2), et les anomalies de chaque ligne.
+// contrôle les résout (exactement, puis sans casse, accents, espaces ni
+// signe invisible, § 6.3), « octroyée par » pour une capacité, « porté par »
+// pour un élément, le nom affiché d'un paramètre (§ 5.2), et les anomalies
+// de chaque ligne.
 // Il reprend les définitions du contrôle, et n'en ajoute aucune : une
 // capacité est octroyée par les blocs qui la citent dans leur colonne des
 // capacités (A3) ; un élément est porté par les blocs et les capacités qui le
@@ -14,7 +15,7 @@
 // affichent un adversaire résolu, sans le résoudre à chaque affichage.
 
 import { banqueSansAdversaires, entreesLisibles, indexerAdversaires } from "../adversaire/resolution.js";
-import { cle, repertoire } from "./noms.js";
+import { cle, nomCompare, repertoire } from "./noms.js";
 import { TEXTES } from "./recherche.js";
 
 // La liste de la banque que montre chaque catégorie de la consultation
@@ -53,15 +54,19 @@ function ajouter(table, cleTable, valeur) {
   if (!table.get(cleTable).includes(valeur)) table.get(cleTable).push(valeur);
 }
 
-function parNom(liste) {
+function parNom(liste, nomDe = (entree) => entree.nom) {
   const table = new Map();
-  for (const entree of liste) ajouter(table, entree.nom, entree);
+  for (const entree of liste) ajouter(table, nomDe(entree), entree);
   return table;
 }
 
 export function indexer(banque) {
   const tables = Object.fromEntries(Object.keys(LISTES).map((categorie) => [categorie, parNom(entreesDe(banque, categorie))]));
   const repertoires = Object.fromEntries(Object.entries(tables).map(([categorie, table]) => [categorie, repertoire(table.keys())]));
+  // Les entrées que le contrôle tient pour un doublon (E3, E16) : de même
+  // nom une fois les signes invisibles retirés. Une table à part : celles
+  // des renvois gardent les noms tels que la banque les écrit.
+  const homonymes = Object.fromEntries(Object.keys(LISTES).map((categorie) => [categorie, parNom(entreesDe(banque, categorie), (entree) => nomCompare(entree.nom))]));
   let resolution = null;
   const adversaires = () => (resolution ??= indexerAdversaires(banque));
   // Ce qu'un adversaire porte une fois résolu, pour la recherche : résolu
@@ -133,8 +138,20 @@ export function indexer(banque) {
 
   return {
     resoudre,
-    /** Les entrées de ce nom exact (plusieurs en cas de doublon, E3 ou E16). */
-    entrees: (categorie, nom) => tables[categorie].get(nom) ?? [],
+    /**
+     * Les entrées de ce nom : plusieurs en cas de doublon (E3 ou E16), que
+     * les fiches comptent comme le contrôle. Viennent d'abord celles qui
+     * portent le nom tel qu'il est écrit (la première est celle que
+     * prennent les renvois exacts), puis celles qui n'en diffèrent que par
+     * un signe invisible. Aucune quand rien ne porte ce nom exact : une
+     * adresse forgée d'un signe invisible reste une fiche introuvable.
+     */
+    entrees: (categorie, nom) => {
+      const exactes = tables[categorie].get(nom);
+      if (!exactes) return [];
+      const autres = homonymes[categorie].get(nomCompare(nom)).filter((entree) => entree.nom !== nom);
+      return autres.length ? [...exactes, ...autres] : exactes;
+    },
     /** L'index de résolution des adversaires (§ 16.2), fait à la première demande, gardé ensuite. */
     adversaires,
     /**

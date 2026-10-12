@@ -22,6 +22,16 @@
 // annonce ; les autres codes de la feuille se déclenchent sur des variantes
 // fabriquées au moment de l'essai, pour que la démonstration reste jouable.
 //
+// Le simulateur de combat (lot 4) y trouve ce qui lui manquait, toujours
+// fictif : les éléments Intervention et Passif, en fin d'Eléments ; Passif
+// sur douze capacités (Vif, Costaud, Nez fin, Palais d'acier, Réduction,
+// Feuilletage, les trois styles de combat et les trois maîtrises),
+// Intervention sur deux (Dressage minute, Coup de chalumeau) ; et deux
+// capacités du bloc de base, en fin de Capacites : « Pas de côté », une
+// intervention au coût X, et « Guetter ». Tout est posé en fin de feuille ou
+// dans une cellule existante : aucune ligne ne change de numéro, aucune
+// anomalie ne s'ajoute, aucune valeur d'un adversaire ne change.
+//
 // Après une modification, réécrire essais/classeur_essai.xlsx :
 //   node tests/outils/classeur_essai.js
 
@@ -75,7 +85,7 @@ export const CLASSEUR_ESSAI = {
         // deux archétypes à style et maîtrise au choix, trois constellations,
         // deux primordiaux, des armes des trois types, des armures sur les
         // six zones (deux sur le torse), un bouclier, un consommable.
-        ["Gestes de cuisine", "Dégâts(Taloche)", "Pas chassé, Goûter, Taloche", "{degats:{force}*0,5/{force}/{force}*2}(Taloche)", "Bloc de base ; dégâts de mains nues en expression", "Base"],
+        ["Gestes de cuisine", "Dégâts(Taloche)", "Pas chassé, Goûter, Taloche, Pas de côté, Guetter", "{degats:{force}*0,5/{force}/{force}*2}(Taloche)", "Bloc de base ; dégâts de mains nues en expression", "Base"],
         ["Marmiton", _, "Vif, Nez fin", _, "Espèce", "Espèce"],
         ["Gâte-sauce", _, "Costaud, Palais d'acier", _, "Espèce", "Espèce"],
         ["Saucier", _, "Réduction, Flambage, Dressage minute, (Solo du chef | Brigade), (Maîtrise du lourd | Maîtrise de l'agile)", _, "Archétype : style et maîtrise au choix", "Archétype"],
@@ -132,6 +142,9 @@ export const CLASSEUR_ESSAI = {
         ["Défense", "{defense}", "Le bouclier encaisse jusqu'à {defense} points."],
         ["Style de combat", _, "Ne s'acquiert qu'à la création."],
         ["Maîtrise", _, "Octroyée par l'archétype."],
+        // Le simulateur de combat (lot 4).
+        ["Intervention", _, "Se joue pendant le tour adverse."],
+        ["Passif", _, "Agit sans action."],
       ],
     },
     {
@@ -160,22 +173,22 @@ export const CLASSEUR_ESSAI = {
         ["Pas chassé", "N", "N-1", 0, _, "Se déplace de [N] cases.", "Base"],
         ["Goûter", 0, _, _, _, "Fait un jet de caractéristique.", "Base"],
         ["Taloche", "N", _, _, _, "Une taloche qui inflige [N*{degats}].", "Base : mains nues"],
-        ["Vif", "N", _, _, _, "Ajoutez [N] aux jets d'agilité.", "Espèce"],
-        ["Nez fin", 0, 1, _, _, "Retournez un dé devant un plat douteux.", "Espèce"],
-        ["Costaud", "N", _, _, _, "Ajoutez [N] aux jets de force.", "Espèce"],
-        ["Palais d'acier", 0, 1, _, _, "Retournez un dé face à un poison.", "Espèce"],
-        ["Réduction", "N", _, _, _, "Retire [N] points d'armure par réussite.", "Archétype"],
+        ["Vif", "N", _, _, "Passif", "Ajoutez [N] aux jets d'agilité.", "Espèce"],
+        ["Nez fin", 0, 1, _, "Passif", "Retournez un dé devant un plat douteux.", "Espèce"],
+        ["Costaud", "N", _, _, "Passif", "Ajoutez [N] aux jets de force.", "Espèce"],
+        ["Palais d'acier", 0, 1, _, "Passif", "Retournez un dé face à un poison.", "Espèce"],
+        ["Réduction", "N", _, _, "Passif", "Retire [N] points d'armure par réussite.", "Archétype"],
         ["Flambage", "N", "5*N", _, _, "Multiplie les dégâts par [1+N].", "Archétype"],
-        ["Dressage minute", 0, _, _, _, "Sert un allié avant son tour.", "Archétype"],
-        ["Feuilletage", "N", _, _, _, "Pare [N] coups par tour.", "Archétype"],
+        ["Dressage minute", 0, _, _, "Intervention", "Sert un allié avant son tour.", "Archétype"],
+        ["Feuilletage", "N", _, _, "Passif", "Pare [N] coups par tour.", "Archétype"],
         ["Glaçage", "N", "5*N", _, _, "Fige la cible pendant [N] tours.", "Archétype"],
-        ["Coup de chalumeau", 0, 10, _, _, "Gagne un point de lien.", "Archétype"],
-        ["Solo du chef", "N", 0, 0, "Style de combat", "Seul sur sa case : [N] avantages.", "Style de combat"],
-        ["Brigade", "N", 0, 0, "Style de combat", "Avec un allié sur sa case : [N] avantages.", "Style de combat"],
-        ["Minutie", "N", 0, 0, "Style de combat", "Contre la même cible : [N] avantages.", "Style de combat"],
-        ["Maîtrise du lourd", "N", _, _, "Maîtrise", "Les [N] premières capacités d'un objet Lourde, sans désavantage.", "Maîtrise"],
-        ["Maîtrise de l'agile", "N", _, _, "Maîtrise", "Les [N] premières capacités d'un objet Agile, sans désavantage.", "Maîtrise"],
-        ["Maîtrise du précis", "N", _, _, "Maîtrise", "Les [N] premières capacités d'un objet Précise, sans désavantage.", "Maîtrise"],
+        ["Coup de chalumeau", 0, 10, _, "Intervention", "Gagne un point de lien.", "Archétype"],
+        ["Solo du chef", "N", 0, 0, "Style de combat, Passif", "Seul sur sa case : [N] avantages.", "Style de combat"],
+        ["Brigade", "N", 0, 0, "Style de combat, Passif", "Avec un allié sur sa case : [N] avantages.", "Style de combat"],
+        ["Minutie", "N", 0, 0, "Style de combat, Passif", "Contre la même cible : [N] avantages.", "Style de combat"],
+        ["Maîtrise du lourd", "N", _, _, "Maîtrise, Passif", "Les [N] premières capacités d'un objet Lourde, sans désavantage.", "Maîtrise"],
+        ["Maîtrise de l'agile", "N", _, _, "Maîtrise, Passif", "Les [N] premières capacités d'un objet Agile, sans désavantage.", "Maîtrise"],
+        ["Maîtrise du précis", "N", _, _, "Maîtrise, Passif", "Les [N] premières capacités d'un objet Précise, sans désavantage.", "Maîtrise"],
         ["Bouillonnement", "N", "2*N", _, _, "Fait bouillir [N] marmites.", "Constellation"],
         ["Cuillère d'argent", 0, _, _, _, "Une fois par jour, relance un dé.", "Constellation"],
         ["Fournaise", 1, 1, 1, _, "Réchauffe la case.", "Primordial : trois puissances"],
@@ -188,6 +201,17 @@ export const CLASSEUR_ESSAI = {
         ["Émincer", 0, 4, _, _, "Une réussite de plus si vous en avez une.", "Arme"],
         ["Se couvrir", 0, _, _, _, "Reportez les dommages sur les {defense} points du couvercle.", "Bouclier"],
         ["Boire le bouillon", 0, _, _, _, "Regagnez 5 points de résistance.", "Consommable"],
+        // Le simulateur de combat (lot 4) : deux capacités du bloc de base.
+        ["Pas de côté", 0, "X", _, "Intervention", "Annulez [X] dégâts reçus.", "Base : intervention, coût X"],
+        [
+          "Guetter",
+          0,
+          _,
+          _,
+          _,
+          "Après un déplacement, ou pour finir son tour : une de vos capacités se joue en intervention jusqu'au prochain tour de votre camp.",
+          "Base",
+        ],
       ],
     },
     {

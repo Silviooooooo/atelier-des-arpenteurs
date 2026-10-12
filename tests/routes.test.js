@@ -9,6 +9,8 @@ import { MESSAGE_BANQUE_SANS_ADVERSAIRES, entreesDe, indexer, listeDe, manqueDe 
 import { importerFichier } from "../js/banque/importation.js";
 import { TEXTES, filtrer, pourRecherche } from "../js/banque/recherche.js";
 import { CATEGORIES, adresseAnomalies, adresseFiche, adresseListe, lireRoute, rubriqueDe } from "../js/routes.js";
+import { avecAdversaires } from "./outils/adversaires_essai.js";
+import { fabriquerClasseur } from "./outils/fabrique_classeur.js";
 
 const ESSAI = readFileSync(new URL("../essais/classeur_essai.xlsx", import.meta.url));
 const { banque } = await importerFichier(ESSAI, "classeur_essai.xlsx");
@@ -156,6 +158,48 @@ test("fiches — renvois résolus comme au contrôle, cassés sinon", () => {
   assert.equal(index.resoudre("capacites", "Omelette fantôme"), null);
   assert.equal(index.entrees("blocs", "Louche d'acier").length, 2);
   assert.deepEqual(index.entrees("blocs", "inconnu"), []);
+});
+
+// Le signe invisible (lot 4, § 6.3), écrit par son code. Les fiches lisent
+// entrees() : elle compte un doublon comme le contrôle (E3, E16).
+test("fiches — les entrées d'un nom comptent ses doublons à un signe invisible près, sous un nom exact seulement ; la casse, un accent ou une espace intérieure font un autre nom", async () => {
+  const description = avecAdversaires([["Marmiton\u200B", "Commis"], ["Type", "Commis \u2060", null, 2]], {
+    blocs: [["Fou\u200Bet", null, "Coup de louche", null, "E3 : « Fouet » à un signe invisible près", "Équipement"]],
+    capacites: [["Vif\u200B", "N", null, null, null, "Doublon de puissance.", "E3 : « Vif » suivi de U+200B"]],
+  });
+  description.feuilles.find((f) => f.nom === "Eléments").lignes.push(["Collant\u200B", null, "E3 : « Collant » suivi de U+200B."]);
+  // Et trois noms qui ne diffèrent d'un autre que par la casse, une espace au milieu ou un accent : d'autres noms (lignes 7 et 8 de la feuille Adversaires).
+  description.feuilles.find((f) => f.nom === "Adversaires").lignes.push(["marmiton", "Commis"], ["Type", "Com mis", null, 3]);
+  description.feuilles.find((f) => f.nom === "Blocs").lignes.push(["Fouét", null, "Coup de louche", null, "Un autre nom que « Fouet » : l'accent diffère", "Équipement"]);
+  const { banque: doublee } = await importerFichier(fabriquerClasseur(description), "essai.xlsx");
+  const index = indexer(doublee);
+  const lus = (categorie, nom) => index.entrees(categorie, nom).map((entree) => [entree.nom, entree.brut?.ligne ?? entree.variantes[0].brut.ligne]);
+  // D'abord l'entrée qui porte le nom tel qu'il est écrit, puis celle qui n'en diffère que par un signe invisible.
+  assert.deepEqual(lus("adversaires", "Marmiton"), [["Marmiton", 4], ["Marmiton\u200B", 5]]);
+  assert.deepEqual(lus("adversaires", "Marmiton\u200B"), [["Marmiton\u200B", 5], ["Marmiton", 4]]);
+  assert.deepEqual(lus("types", "Commis"), [["Commis", 2], ["Commis \u2060", 6]]);
+  assert.deepEqual(lus("blocs", "Fouet").map(([nom]) => nom), ["Fouet", "Fou\u200Bet"]);
+  assert.deepEqual(lus("elements", "Collant").map(([nom]) => nom), ["Collant", "Collant\u200B"]);
+  // La première reste celle du nom exact : la fiche d'une capacité, qui ne montre que la première, ne change pas.
+  assert.deepEqual(lus("capacites", "Vif").map(([nom]) => nom), ["Vif", "Vif\u200B"]);
+  assert.equal(index.entrees("capacites", "Vif\u200B")[0].nom, "Vif\u200B");
+  // Un doublon exact garde l'ordre de la feuille ; un nom sans doublon, sa seule entrée.
+  assert.deepEqual(lus("blocs", "Louche d'acier"), [["Louche d'acier", 2], ["Louche d'acier", 16]]);
+  assert.deepEqual(lus("types", "Rôtisseur"), [["Rôtisseur", 3]]);
+  // Un type et un adversaire ne se mêlent pas.
+  assert.deepEqual(index.entrees("adversaires", "Commis"), []);
+  // « Exactement » : la casse, une espace au milieu du nom ou un accent font un autre nom. Il a ses propres
+  // entrées, et n'est pas compté parmi celles du premier (plus haut : deux « Marmiton », deux « Commis », deux « Fouet »).
+  assert.deepEqual(lus("adversaires", "marmiton"), [["marmiton", 7]]);
+  assert.deepEqual(lus("types", "Com mis"), [["Com mis", 8]]);
+  assert.deepEqual(lus("blocs", "Fouét").map(([nom]) => nom), ["Fouét"]);
+  assert.deepEqual(index.entrees("adversaires", "MARMITON"), []);
+  // Rien ne porte ce nom exact : aucune entrée, même à un signe près. Le renvoi, lui, se résout, de la façon approchée.
+  const simple = indexer(banque);
+  assert.deepEqual(simple.entrees("adversaires", "Plongeur\u200B"), []);
+  assert.equal(simple.resoudre("adversaires", "Plongeur\u200B"), "Plongeur");
+  assert.deepEqual(simple.entrees("blocs", "Fouet\u2060"), []);
+  assert.equal(simple.resoudre("blocs", "Fouet\u2060"), "Fouet");
 });
 
 test("fiches — « octroyée par », « porté par », nom affiché (§ 5.2, § 9)", () => {

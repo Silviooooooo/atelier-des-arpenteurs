@@ -6,10 +6,10 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { GRAVITES } from "../js/banque/controle.js";
 import { importerFichier } from "../js/banque/importation.js";
-import { cle, repertoire } from "../js/banque/noms.js";
+import { cle, nomCompare, repertoire, sansSignesInvisibles } from "../js/banque/noms.js";
 import { FAUTES } from "./outils/adversaires_essai.js";
 import { fabriquerClasseur } from "./outils/fabrique_classeur.js";
 import { CLASSEUR_ESSAI, CLASSEUR_PROPRE } from "./outils/classeur_essai.js";
@@ -189,8 +189,8 @@ test("contrôle — messages : E4 au format du § 5.1, E7 et A1 disent ce qu'ils
   assert.equal(message("E4", 7)[0], "Le bloc « Poêle en fonte » cite la capacité « Omelette fantôme », introuvable dans Capacites.");
   assert.match(message("E7", 11)[0], /Le bloc « Hachoir » transmet 3 fois le paramètre distance \(\{distance:0\}, \{distance:1\}\(Jet de sel\), \{distance:2\}\(Jet de sel\)\)/);
   assert.deepEqual(message("A1", 6), [
-    "Le bloc « Marmite hurlante » cite « coup de poele » pour la capacité « Coup de poêle » : seules la casse, les accents ou les espaces diffèrent.",
-    "Le bloc « Marmite hurlante » cite « brulant » pour l'élément « Brûlant » : seules la casse, les accents ou les espaces diffèrent.",
+    "Le bloc « Marmite hurlante » cite « coup de poele » pour la capacité « Coup de poêle » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent.",
+    "Le bloc « Marmite hurlante » cite « brulant » pour l'élément « Brûlant » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent.",
   ]);
 });
 
@@ -209,7 +209,7 @@ test("E7 — ciblé à côté de sans cible : admis ; deux sans cible, ou la mê
   assert.deepEqual(await e7("{distance:0}, {distance:1}(Jet de poivre)"), [["E4", 7], ["E4", 7], ["E4", 11]]);
 });
 
-test("noms — clé sans casse, accents ni espaces ; résolution exacte, approchée, ambiguë, absente", () => {
+test("noms — clé sans casse, accents, espaces ni signe invisible ; résolution exacte, approchée, ambiguë, absente", () => {
   assert.equal(cle(" Coup  de Poêle "), "coupdepoele");
   assert.equal(cle("Eléments transmis aux capacités"), cle("éléments TRANSMIS aux capacites"));
   const noms = repertoire(["Coup", "Choc", "choc"]);
@@ -217,4 +217,263 @@ test("noms — clé sans casse, accents ni espaces ; résolution exacte, approch
   assert.deepEqual(noms.resoudre("coup "), { nom: "Coup", facon: "approchee" });
   assert.deepEqual(noms.resoudre("CHOC"), { nom: null, candidats: ["Choc", "choc"] });
   assert.deepEqual(noms.resoudre("Rien"), { nom: null, candidats: [] });
+  // Un signe invisible ne fait pas un autre nom : le renvoi est retrouvé, de la façon approchée.
+  assert.equal(cle("Mar\u200Bmiton"), "marmiton");
+  assert.deepEqual(repertoire(["Marmiton"]).resoudre("Marmiton\u200B"), { nom: "Marmiton", facon: "approchee" });
+  assert.deepEqual(repertoire(["Marmiton\u200B"]).resoudre("marmiton"), { nom: "Marmiton\u200B", facon: "approchee" });
+  // Les deux noms définis : chacun se cite exactement, et tout autre renvoi est ambigu.
+  const deux = repertoire(["Marmiton", "Marmiton\u200B"]);
+  assert.deepEqual(deux.resoudre("Marmiton"), { nom: "Marmiton", facon: "exacte" });
+  assert.deepEqual(deux.resoudre("Marmiton\u200B"), { nom: "Marmiton\u200B", facon: "exacte" });
+  assert.deepEqual(deux.resoudre("marmiton"), { nom: null, candidats: ["Marmiton", "Marmiton\u200B"] });
+});
+
+// ─── Le signe invisible (lot 4, § 6.3) ──────────────────────────────────────
+//
+// Les vingt et un signes de format que la comparaison des noms retire, dits
+// par leur code : un fichier du dépôt n'écrit jamais le signe lui-même, que
+// personne ne verrait.
+const SIGNES_INVISIBLES = [
+  0x00ad, 0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e,
+  0x2060, 0x2061, 0x2062, 0x2063, 0x2064, 0x2066, 0x2067, 0x2068, 0x2069, 0xfeff,
+];
+const codeDit = (code) => `U+${code.toString(16).toUpperCase().padStart(4, "0")}`;
+
+test("noms — les vingt et un signes invisibles de la liste, chacun retiré ; aucun autre signe ne l'est", () => {
+  assert.equal(SIGNES_INVISIBLES.length, 21);
+  for (const code of SIGNES_INVISIBLES) {
+    const signe = String.fromCodePoint(code);
+    assert.equal(sansSignesInvisibles(`Mar${signe}miton`), "Marmiton", codeDit(code));
+    assert.equal(cle(signe), "", codeDit(code));
+    assert.equal(cle(`${signe}Mar${signe}miton${signe}`), "marmiton", codeDit(code));
+    // L'espace que le signe cachait au bord ne fait pas un autre nom.
+    assert.equal(nomCompare(`Marmiton ${signe}`), "Marmiton", codeDit(code));
+    assert.deepEqual(repertoire(["Marmiton"]).resoudre(`Marmiton${signe}`), { nom: "Marmiton", facon: "approchee" }, codeDit(code));
+  }
+  // Aucun autre : de tout Unicode, ces vingt et un points de code sont les seuls à disparaître.
+  const retires = [];
+  for (let code = 0; code <= 0x10ffff; code += 1) {
+    if (code >= 0xd800 && code <= 0xdfff) continue;
+    if (sansSignesInvisibles(String.fromCodePoint(code)) === "") retires.push(code);
+  }
+  assert.deepEqual(retires.map(codeDit), SIGNES_INVISIBLES.map(codeDit));
+  // Les voisins de la liste restent, dans le texte comme dans la clé : les signes qui bordent chaque
+  // plage, U+2065 (non attribué, au milieu d'une plage), U+061C et U+180E (invisibles, hors liste).
+  for (const code of [0x00ac, 0x00ae, 0x061c, 0x180e, 0x2010, 0x2065, 0x206a, 0xfefe, 0xe0001]) {
+    const voisin = String.fromCodePoint(code);
+    assert.equal(sansSignesInvisibles(`Mar${voisin}miton`), `Mar${voisin}miton`, codeDit(code));
+    assert.equal(cle(`Mar${voisin}miton`), `mar${voisin}miton`, codeDit(code));
+    assert.deepEqual(repertoire(["Marmiton"]).resoudre(`Mar${voisin}miton`), { nom: null, candidats: [] }, codeDit(code));
+  }
+  // Les espaces voisins ne sont pas des signes invisibles : la fonction les garde, et la clé les retire, comme avant.
+  for (const code of [0x00a0, 0x200a, 0x2028, 0x2029, 0x202f, 0x205f]) {
+    const espace = String.fromCodePoint(code);
+    assert.equal(sansSignesInvisibles(`Mar${espace}miton`), `Mar${espace}miton`, codeDit(code));
+    assert.equal(cle(`Mar${espace}miton`), "marmiton", codeDit(code));
+  }
+  // Rien d'autre ne change dans le texte : ni la casse, ni les accents, ni les espaces.
+  assert.equal(sansSignesInvisibles(" Coup\u200B  de Poêle "), " Coup  de Poêle ");
+  assert.equal(nomCompare(" Coup\u200B  de Poêle \u200B "), "Coup  de Poêle");
+  assert.notEqual(nomCompare("Coup de Poêle"), nomCompare("coup de poele"), "exactement : la casse et les accents comptent");
+  assert.deepEqual([sansSignesInvisibles(null), sansSignesInvisibles(undefined), nomCompare(null)], ["", "", ""]);
+});
+
+test("E3 — un signe invisible ne cache pas un doublon : un bloc, un élément (et l'espace que le signe cachait), une capacité de même puissance", async () => {
+  const lignes = {};
+  const { banque, anomalies } = await importer(
+    variante((feuilles) => {
+      feuilles[1].lignes.push(["Marmiton\u200B", null, "Vif", null, "E3 : « Marmiton » suivi de U+200B", "Espèce"]);
+      lignes.bloc = feuilles[1].lignes.length;
+      feuilles[2].lignes.push(["Collant \u2060", null, "E3 : « Collant », une espace, puis U+2060."]);
+      lignes.element = feuilles[2].lignes.length;
+      feuilles[3].lignes.push(["Vif\u200B", "N", null, null, null, "Doublon de puissance.", "E3 : le même nom au signe près, la même puissance"]);
+      lignes.vif = feuilles[3].lignes.length;
+      feuilles[3].lignes.push(["Goûter\u00AD", 1, null, null, null, "Une autre puissance.", "Pas d'E3 : la puissance diffère"]);
+      lignes.gouter = feuilles[3].lignes.length;
+    }),
+  );
+  const de = (feuille, ligne) => anomalies.filter((a) => a.feuille === feuille && a.ligne === ligne).map((a) => [a.code, a.message]);
+  assert.deepEqual(de("Blocs", lignes.bloc), [["E3", "Le bloc « Marmiton\u200B » est déjà défini ligne 19."]]);
+  // L'élément en double n'est porté par rien sous ce nom-là : A4 le dit aussi.
+  assert.deepEqual(de("Eléments", lignes.element), [
+    ["E3", "L'élément « Collant \u2060 » est déjà défini ligne 5."],
+    ["A4", "L'élément « Collant \u2060 » n'est porté par rien : ni bloc, ni capacité, ni paramètre transmis."],
+  ]);
+  // L'import garde deux capacités, telles qu'écrites ; le contrôle confronte leurs variantes.
+  assert.deepEqual(banque.capacites.filter((c) => cle(c.nom) === "vif").map((c) => c.nom), ["Vif", "Vif\u200B"]);
+  assert.deepEqual(de("Capacites", lignes.vif), [
+    ["E3", "La capacité « Vif\u200B » a déjà une variante de puissance « N », ligne 24."],
+    ["A3", "La capacité « Vif\u200B » n'est rattachée à aucun bloc."],
+  ]);
+  // Une autre puissance n'est pas un doublon (§ 6.3 : même nom et même puissance).
+  assert.deepEqual(de("Capacites", lignes.gouter), [["A3", "La capacité « Goûter\u00AD » n'est rattachée à aucun bloc."]]);
+  // Rien d'autre ne bouge : les anomalies annoncées, et ces six-là.
+  assert.equal(anomalies.length, ANNONCEES.length + 6);
+  assert.equal(anomalies.filter((a) => a.code === "E3").length, ANNONCEES.filter(([code]) => code === "E3").length + 3);
+});
+
+// Les anomalies d'une ligne d'une feuille : [code, message].
+const surLaLigne = (anomalies) => (feuille, ligne) => anomalies.filter((a) => a.feuille === feuille && a.ligne === ligne).map((a) => [a.code, a.message]);
+const nombreDE3 = (anomalies) => anomalies.filter((a) => a.code === "E3").length;
+const E3_ANNONCEES = ANNONCEES.filter(([code]) => code === "E3").length;
+
+// La première définition peut être celle qui porte le signe : la table des
+// doublons se range, comme elle se lit, sous le nom comparé. Et les lignes de
+// deux capacités de même nom peuvent s'entrelacer dans la feuille : le
+// doublon est toujours la ligne la plus basse, et la ligne citée la plus
+// haute, quelle que soit celle qui porte le signe.
+test("E3 — le signe invisible sur la première définition, et des variantes entrelacées : la ligne la plus basse est le doublon, la plus haute est citée", async () => {
+  const lignes = {};
+  const { banque, anomalies } = await importer(
+    variante((feuilles) => {
+      feuilles[1].lignes.push(["Bocal\u200B", null, "Vif", null, "Le premier « Bocal », suivi de U+200B", "Équipement"]);
+      lignes.premierBloc = feuilles[1].lignes.length;
+      feuilles[1].lignes.push(["Bocal", null, "Vif", null, "E3 : le second, sans signe", "Équipement"]);
+      lignes.secondBloc = feuilles[1].lignes.length;
+      feuilles[2].lignes.push(["Gluant\u2060", null, "Le premier « Gluant », suivi de U+2060."]);
+      lignes.premierElement = feuilles[2].lignes.length;
+      feuilles[2].lignes.push(["Gluant", null, "E3 : le second, sans signe."]);
+      lignes.secondElement = feuilles[2].lignes.length;
+      // « Blanchir » suivi de U+200B aux puissances 1 et 2, et « Blanchir » à la puissance 2, écrit entre les deux.
+      feuilles[3].lignes.push(["Blanchir\u200B", 1, null, null, null, "La puissance 1.", "Le nom suivi de U+200B"]);
+      lignes.haute = feuilles[3].lignes.length;
+      feuilles[3].lignes.push(["Blanchir", 2, null, null, null, "La puissance 2.", "Le même nom, sans signe"]);
+      lignes.milieu = feuilles[3].lignes.length;
+      feuilles[3].lignes.push(["Blanchir\u200B", 2, null, null, null, "Doublon de puissance.", "E3 : la puissance 2 est écrite une ligne plus haut"]);
+      lignes.basse = feuilles[3].lignes.length;
+    }),
+  );
+  const de = surLaLigne(anomalies);
+  assert.deepEqual(de("Blocs", lignes.premierBloc), []);
+  assert.deepEqual(de("Blocs", lignes.secondBloc), [["E3", `Le bloc « Bocal » est déjà défini ligne ${lignes.premierBloc}.`]]);
+  // Les deux éléments ne sont portés par rien : A4 sur chacun, E3 sur le second seulement.
+  assert.deepEqual(de("Eléments", lignes.premierElement).map(([code]) => code), ["A4"]);
+  assert.deepEqual(de("Eléments", lignes.secondElement), [
+    ["E3", `L'élément « Gluant » est déjà défini ligne ${lignes.premierElement}.`],
+    ["A4", "L'élément « Gluant » n'est porté par rien : ni bloc, ni capacité, ni paramètre transmis."],
+  ]);
+  // L'import range la ligne basse avec la haute, sous le nom qu'elles écrivent : les lignes s'entrelacent.
+  assert.deepEqual(banque.capacites.filter((c) => cle(c.nom) === "blanchir").map((c) => [c.nom, c.variantes.map((v) => v.brut.ligne)]), [
+    ["Blanchir\u200B", [lignes.haute, lignes.basse]],
+    ["Blanchir", [lignes.milieu]],
+  ]);
+  assert.deepEqual(de("Capacites", lignes.haute).map(([code]) => code), ["A3"]);
+  assert.deepEqual(de("Capacites", lignes.milieu).map(([code]) => code), ["A3"]);
+  assert.deepEqual(de("Capacites", lignes.basse), [["E3", `La capacité « Blanchir\u200B » a déjà une variante de puissance « 2 », ligne ${lignes.milieu}.`]]);
+  // Rien d'autre : trois E3, deux A4, deux A3.
+  assert.equal(nombreDE3(anomalies), E3_ANNONCEES + 3);
+  assert.equal(anomalies.length, ANNONCEES.length + 7);
+});
+
+// « Exactement » : retirer les signes invisibles ne fait pas de la
+// comparaison des doublons une comparaison approchée. La casse, un accent ou
+// une espace au milieu du nom font un autre nom, et non un doublon ; c'est
+// un renvoi qui s'y tromperait que dirait A1.
+test("E3 — exactement : la casse, un accent ou une espace intérieure font un autre nom, pas un doublon (bloc, élément, capacité de même puissance)", async () => {
+  const lignes = {};
+  const { banque, anomalies } = await importer(
+    variante((feuilles) => {
+      feuilles[1].lignes.push(["marmiton", null, "Vif", null, "Pas d'E3 : la casse diffère", "Espèce"]);
+      lignes.blocCasse = feuilles[1].lignes.length;
+      feuilles[1].lignes.push(["Grand  Four", null, "Fournaise", null, "Pas d'E3 : deux espaces au milieu du nom", "Primordial"]);
+      lignes.blocEspace = feuilles[1].lignes.length;
+      feuilles[2].lignes.push(["Epais", null, "Pas d'E3 : l'accent diffère."]);
+      lignes.element = feuilles[2].lignes.length;
+      feuilles[3].lignes.push(["vif", "N", null, null, null, "La même puissance.", "Pas d'E3 : la casse diffère"]);
+      lignes.capaciteCasse = feuilles[3].lignes.length;
+      feuilles[3].lignes.push(["Reduction", "N", null, null, null, "La même puissance.", "Pas d'E3 : l'accent diffère"]);
+      lignes.capaciteAccent = feuilles[3].lignes.length;
+    }),
+  );
+  // Chacun a pourtant la clé d'un autre : un renvoi approché les confondrait.
+  const homonymes = (liste, nom) => liste.filter((entree) => cle(entree.nom) === cle(nom)).map((entree) => entree.nom);
+  assert.deepEqual(homonymes(banque.blocs, "Marmiton"), ["Marmiton", "marmiton"]);
+  assert.deepEqual(homonymes(banque.blocs, "Grand Four"), ["Grand Four", "Grand  Four"]);
+  assert.deepEqual(homonymes(banque.elements, "Épais"), ["Épais", "Epais"]);
+  assert.deepEqual(homonymes(banque.capacites, "Vif"), ["Vif", "vif"]);
+  assert.deepEqual(homonymes(banque.capacites, "Réduction"), ["Réduction", "Reduction"]);
+  const de = surLaLigne(anomalies);
+  assert.deepEqual(de("Blocs", lignes.blocCasse), []);
+  assert.deepEqual(de("Blocs", lignes.blocEspace), []);
+  // Ce que rien ne cite sous ce nom-là se dit, sans doublon : A4 pour l'élément, A3 pour les capacités.
+  assert.deepEqual(de("Eléments", lignes.element), [["A4", "L'élément « Epais » n'est porté par rien : ni bloc, ni capacité, ni paramètre transmis."]]);
+  assert.deepEqual(de("Capacites", lignes.capaciteCasse), [["A3", "La capacité « vif » n'est rattachée à aucun bloc."]]);
+  assert.deepEqual(de("Capacites", lignes.capaciteAccent), [["A3", "La capacité « Reduction » n'est rattachée à aucun bloc."]]);
+  assert.equal(nombreDE3(anomalies), E3_ANNONCEES);
+  assert.equal(anomalies.length, ANNONCEES.length + 3);
+});
+
+// Deux capacités dont les noms ne diffèrent que d'un signe invisible, et dont
+// les puissances diffèrent : la lecture retenue (§ 6.3, § 12). L'import en
+// garde deux, et ce n'est pas un doublon. La seconde, que rien ne cite sous ce
+// nom-là, se dit par A3. Un renvoi exact prend celle qu'il écrit ; un renvoi
+// approché ne sait plus laquelle, et devient une erreur (E4, renvoi ambigu)
+// dont les deux candidats ne se distinguent pas à l'écran.
+test("E3 — à un signe invisible près mais d'une autre puissance : deux capacités, sans doublon ; un renvoi approché vers ce nom devient ambigu (E4)", async () => {
+  const lignes = {};
+  const { banque, anomalies } = await importer(
+    variante((feuilles) => {
+      feuilles[3].lignes.push(["Goûter\u200B", 1, null, null, null, "Une autre puissance.", "Pas d'E3 : la puissance diffère ; A3"]);
+      lignes.capacite = feuilles[3].lignes.length;
+      feuilles[1].lignes.push(["Bocal", null, "Goûter, gouter", null, "Un renvoi exact, puis le même à l'accent près : E4, ambigu", "Équipement"]);
+      lignes.bloc = feuilles[1].lignes.length;
+    }),
+  );
+  assert.deepEqual(banque.capacites.filter((c) => cle(c.nom) === "gouter").map((c) => [c.nom, c.variantes.map((v) => v.puissance)]), [
+    ["Goûter", ["0"]],
+    ["Goûter\u200B", ["1"]],
+  ]);
+  const de = surLaLigne(anomalies);
+  assert.deepEqual(de("Capacites", lignes.capacite), [["A3", "La capacité « Goûter\u200B » n'est rattachée à aucun bloc."]]);
+  assert.deepEqual(de("Blocs", lignes.bloc), [["E4", "Le bloc « Bocal » cite la capacité « gouter », introuvable dans Capacites (renvoi ambigu : « Goûter », « Goûter\u200B »)."]]);
+  assert.equal(nombreDE3(anomalies), E3_ANNONCEES);
+  assert.equal(anomalies.length, ANNONCEES.length + 2);
+  // Sans la seconde capacité, le même renvoi est retrouvé, et signalé (A1).
+  const seul = await importer(variante((feuilles) => feuilles[1].lignes.push(["Bocal", null, "Goûter, gouter", null, "Un renvoi à l'accent près", "Équipement"])));
+  assert.deepEqual(surLaLigne(seul.anomalies)("Blocs", lignes.bloc), [
+    ["A1", "Le bloc « Bocal » cite « gouter » pour la capacité « Goûter » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
+  ]);
+});
+
+test("A1 — un renvoi qui ne diffère que d'un signe invisible est résolu, et signalé : capacité, élément, paramètre", async () => {
+  let ligne;
+  const { anomalies } = await importer(
+    variante((feuilles) => {
+      feuilles[1].lignes.push(["Bocal", "Collant\u200B", "Vif\u00AD", "{cha\u2060leur:1}", "A1 : trois renvois à un signe invisible près", "Équipement"]);
+      ligne = feuilles[1].lignes.length;
+    }),
+  );
+  assert.deepEqual(anomalies.filter((a) => a.feuille === "Blocs" && a.ligne === ligne).map((a) => [a.code, a.gravite, a.message]), [
+    ["A1", "avertissement", "Le bloc « Bocal » cite « Vif\u00AD » pour la capacité « Vif » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
+    ["A1", "avertissement", "Le bloc « Bocal » cite « Collant\u200B » pour l'élément « Collant » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
+    ["A1", "avertissement", "Le bloc « Bocal » cite « cha\u2060leur » pour le paramètre « chaleur » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
+  ]);
+  // Résolus : ni capacité, ni élément introuvable, ni paramètre que rien ne reçoit.
+  assert.equal(anomalies.length, ANNONCEES.length + 3);
+});
+
+// Un signe invisible écrit tel quel dans un fichier ne se voit ni à la
+// relecture ni dans une différence, et un outil peut l'ôter sans rien dire :
+// la liste de noms.js y perdrait un signe, un contrôle son cas. Le code et
+// les contrôles l'écrivent donc par son code (barre oblique inversée, « u »,
+// quatre chiffres), et la spécification par « U+… ».
+test("signe invisible — ni le code, ni les contrôles, ni la spécification n'en écrivent un tel quel", () => {
+  const signes = new Set(SIGNES_INVISIBLES.map((code) => String.fromCodePoint(code)));
+  const racine = new URL("../", import.meta.url);
+  const fichiers = ["SPECIFICATION.md"];
+  for (const dossier of ["js", "outils", "tests"]) {
+    for (const fichier of readdirSync(new URL(`${dossier}/`, racine), { recursive: true })) {
+      if (fichier.endsWith(".js")) fichiers.push(`${dossier}/${fichier.replaceAll("\\", "/")}`);
+    }
+  }
+  assert.ok(fichiers.includes("js/banque/noms.js") && fichiers.includes("tests/outils/adversaires_essai.js"), "les sous-dossiers sont lus");
+  const fautes = [];
+  for (const chemin of fichiers) {
+    readFileSync(new URL(chemin, racine), "utf8")
+      .split("\n")
+      .forEach((ligne, indice) => {
+        for (const signe of ligne) if (signes.has(signe)) fautes.push(`${chemin}, ligne ${indice + 1} : ${codeDit(signe.codePointAt(0))}`);
+      });
+  }
+  assert.deepEqual(fautes, []);
 });

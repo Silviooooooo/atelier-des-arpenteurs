@@ -24,7 +24,7 @@ test("import — la banque a le format du § 5.1, avec la source et son empreint
   assert.equal(b.format, 1);
   const empreinte = `sha256:${createHash("sha256").update(ESSAI).digest("hex")}`;
   assert.deepEqual(b.sources, [{ classeur: "regles", fichier: "classeur_essai.xlsx", empreinte }]);
-  assert.deepEqual([b.blocs.length, b.capacites.length, b.elements.length, b.lisez_moi.length], [37, 44, 20, 5]);
+  assert.deepEqual([b.blocs.length, b.capacites.length, b.elements.length, b.lisez_moi.length], [37, 46, 22, 5]);
   assert.deepEqual([b.types_adversaires.length, b.adversaires.length], [2, 5]);
 });
 
@@ -115,6 +115,54 @@ test("import — capacités : une variante par ligne, retrouvée malgré l'ordre
   });
   assert.equal(brut.ligne, 7);
   assert.equal(brut.cellules["Éléments propres"], "Brûlant");
+});
+
+// Les ajouts du lot 4 au classeur d'essai (§ 10.3), pour le simulateur de
+// combat : mot pour mot, car la banque de démonstration en est tirée
+// (tests/site.test.js), et le simulateur les lit dans la démonstration.
+test("import — les ajouts du simulateur de combat : deux éléments, Passif et Intervention sur leurs capacités, deux capacités du bloc de base", async () => {
+  const b = await banque();
+  const element = (nom) => {
+    const { brut, ...reste } = b.elements.find((e) => e.nom === nom);
+    return { ...reste, ligne: brut.ligne };
+  };
+  assert.deepEqual(element("Intervention"), { nom: "Intervention", parametres_recus: [], description: "Se joue pendant le tour adverse.", ligne: 23 });
+  assert.deepEqual(element("Passif"), { nom: "Passif", parametres_recus: [], description: "Agit sans action.", ligne: 24 });
+  // Les capacités qui portent chacun des deux éléments, dans l'ordre de la feuille : douze passifs, trois interventions.
+  const portent = (nom) => b.capacites.filter((c) => c.variantes.some((v) => v.elements.some((e) => e.nom === nom))).map((c) => c.nom);
+  assert.deepEqual(portent("Passif"), [
+    "Vif", "Nez fin", "Costaud", "Palais d'acier", "Réduction", "Feuilletage",
+    "Solo du chef", "Brigade", "Minutie", "Maîtrise du lourd", "Maîtrise de l'agile", "Maîtrise du précis",
+  ]);
+  assert.deepEqual(portent("Intervention"), ["Dressage minute", "Coup de chalumeau", "Pas de côté"]);
+  // Un style de combat et une maîtrise gardent leur élément d'avant, devant le nouveau.
+  const elements = (nom) => b.capacites.find((c) => c.nom === nom).variantes.map((v) => v.elements);
+  for (const style of ["Solo du chef", "Brigade", "Minutie"]) assert.deepEqual(elements(style), [[{ nom: "Style de combat" }, { nom: "Passif" }]], style);
+  for (const maitrise of ["Maîtrise du lourd", "Maîtrise de l'agile", "Maîtrise du précis"]) assert.deepEqual(elements(maitrise), [[{ nom: "Maîtrise" }, { nom: "Passif" }]], maitrise);
+  assert.deepEqual(elements("Vif"), [[{ nom: "Passif" }]]);
+  assert.deepEqual(elements("Coup de chalumeau"), [[{ nom: "Intervention" }]]);
+  // Le bloc de base donne les deux capacités nouvelles, après les trois d'avant, sans changer de ligne.
+  const gestes = b.blocs.find((bloc) => bloc.nom === "Gestes de cuisine");
+  assert.deepEqual([gestes.type, gestes.brut.ligne], ["Base", 18]);
+  assert.deepEqual(gestes.capacites, ["Pas chassé", "Goûter", "Taloche", "Pas de côté", "Guetter"].map((nom) => ({ forme: "simple", nom })));
+  // Les deux capacités, cellule par cellule, en fin de feuille.
+  const variantes = (nom) => b.capacites.find((c) => c.nom === nom).variantes.map(({ brut, notes, ...variante }) => ({ ...variante, ligne: brut.ligne }));
+  assert.deepEqual(variantes("Pas de côté"), [
+    { puissance: "0", cout_souffle: "X", cout_lien: "", elements: [{ nom: "Intervention" }], description: "Annulez [X] dégâts reçus.", ligne: 52 },
+  ]);
+  assert.deepEqual(variantes("Guetter"), [
+    {
+      puissance: "0",
+      cout_souffle: "",
+      cout_lien: "",
+      elements: [],
+      description: "Après un déplacement, ou pour finir son tour : une de vos capacités se joue en intervention jusqu'au prochain tour de votre camp.",
+      ligne: 53,
+    },
+  ]);
+  // Posés en fin de feuille : les dernières lignes d'Eléments et de Capacites, et aucune anomalie sur elles.
+  assert.deepEqual([b.elements.at(-1).nom, b.capacites.at(-1).nom], ["Passif", "Guetter"]);
+  assert.deepEqual(b.anomalies.filter((a) => (a.feuille === "Eléments" && a.ligne >= 23) || (a.feuille === "Capacites" && a.ligne >= 52)), []);
 });
 
 test("import — les valeurs restent des chaînes, telles qu'écrites", async () => {

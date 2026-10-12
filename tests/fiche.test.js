@@ -252,6 +252,10 @@ test("démonstration — le personnage fourni vient de l'outil, est complet, et 
   const index = indexerCreation(banque);
   assert.deepEqual(changements(index, personnage.empreintes), []);
   assert.deepEqual(manques(banque, personnage, { index })[9], []);
+  // Il suit ses dix-neuf capacités, dont les deux que le bloc de base donne depuis le lot 4 (§ 15.7).
+  const suivies = personnage.empreintes.filter((e) => e.genre === "capacite").map((e) => e.nom);
+  assert.equal(suivies.length, 19);
+  assert.deepEqual(suivies.slice(9, 14), ["Pas chassé", "Goûter", "Taloche", "Pas de côté", "Guetter"]);
   assert.match(lirePersonnage(texte, { mode: "reel" }).erreur, /créé dans la démonstration/);
 });
 

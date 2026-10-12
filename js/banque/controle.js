@@ -10,7 +10,7 @@
 // où le classeur laisse une ambiguïté, il la signale.
 
 import { FEUILLE as FEUILLE_ADVERSAIRES, constatsDesAdversaires } from "../adversaire/controle.js";
-import { cle, repertoire } from "./noms.js";
+import { cle, nomCompare, repertoire } from "./noms.js";
 import { parametresInvoques } from "./notation.js";
 import { TYPES, typeInconnu } from "./types.js";
 import { packsDArmure } from "../personnage/packs.js";
@@ -97,31 +97,42 @@ export function controler(banque) {
   }
   const parametres = repertoire([...receveurs.keys()]);
 
-  // Un renvoi retrouvé sans casse, accents ni espaces est résolu, mais
-  // signalé (A1).
+  // Un renvoi retrouvé sans casse, accents, espaces ni signe invisible est
+  // résolu, mais signalé (A1).
   function resoudre(repertoireCible, renvoi, lieu, genre) {
     const trouve = repertoireCible.resoudre(renvoi);
     if (trouve.facon === "approchee") {
-      signaler("A1", lieu, `${lieu.sujet} cite « ${renvoi} » pour ${genre} « ${trouve.nom} » : seules la casse, les accents ou les espaces diffèrent.`);
+      signaler("A1", lieu, `${lieu.sujet} cite « ${renvoi} » pour ${genre} « ${trouve.nom} » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent.`);
     }
     return trouve;
   }
 
   // E3 : même nom défini deux fois ; pour une capacité, même nom et même
-  // puissance (§ 5.1).
+  // puissance (§ 5.1). Les noms se comparent exactement, une fois leurs
+  // signes invisibles retirés (nomCompare) : rien ne distinguerait les deux à
+  // l'écran. Le message cite le nom tel qu'il est écrit.
   function doublons(objets, genre, feuille) {
     const vus = new Map();
     for (const objet of objets) {
-      const premier = vus.get(objet.nom);
+      const nom = nomCompare(objet.nom);
+      const premier = vus.get(nom);
       if (premier) signaler("E3", { feuille, ligne: objet.brut.ligne }, `${genre} « ${objet.nom} » est déjà défini ligne ${premier.brut.ligne}.`);
-      else vus.set(objet.nom, objet);
+      else vus.set(nom, objet);
     }
   }
   doublons(banque.blocs, "Le bloc", "Blocs");
   doublons(banque.elements, "L'élément", "Eléments");
+  // L'import range les lignes de Capacites en variantes par nom tel
+  // qu'écrit : deux capacités dont les noms ne diffèrent que d'un signe
+  // invisible y restent deux capacités. Leurs variantes se confrontent donc
+  // ici, toutes ensemble, dans l'ordre des lignes de la feuille.
+  const variantesParNom = new Map();
   for (const capacite of banque.capacites) {
+    for (const variante of capacite.variantes) ajouter(variantesParNom, nomCompare(capacite.nom), { capacite, variante });
+  }
+  for (const homonymes of variantesParNom.values()) {
     const vues = new Map();
-    for (const variante of capacite.variantes) {
+    for (const { capacite, variante } of homonymes.sort((a, b) => a.variante.brut.ligne - b.variante.brut.ligne)) {
       const premiere = vues.get(variante.puissance);
       const lieu = { feuille: "Capacites", ligne: variante.brut.ligne };
       if (premiere) {

@@ -84,12 +84,17 @@ export function afficher(contexte, nom) {
     .adversaires()
     .utilisateurs(nom)
     .map((adversaire) => el("a", { href: adresseFiche("adversaires", adversaire) }, adversaire));
+  // Un doublon de types du même nom écrit : l'héritage prend le premier
+  // (§ 16.2). Quand un signe invisible en distingue un (§ 6.3), chacun garde
+  // les adversaires qui écrivent son nom : « le premier » de la page serait
+  // faux sous l'un des deux noms.
+  const heritage = types.every((type) => type.nom === nom) ? "Les adversaires héritent du premier." : "Chaque adversaire hérite du premier dont il écrit le nom exact.";
   return el(
     "article",
     { classe: "fiche" },
     titre(nom),
     el("p", { classe: "secondaire-texte" }, "Type d'adversaires. Une cellule vide hérite : la valeur vient d'un type appliqué avant lui, ou de la ligne de l'adversaire."),
-    types.length > 1 ? el("p", { classe: "message" }, `Ce nom désigne ${types.length} types : c'est un doublon (E16), ils se suivent ci-dessous. Les adversaires héritent du premier.`) : null,
+    types.length > 1 ? el("p", { classe: "message" }, `Ce nom désigne ${types.length} types : c'est un doublon (E16), ils se suivent ci-dessous. ${heritage}`) : null,
     types.map((type) => corps(index, type)),
     section("Adversaires qui l'utilisent", liste(utilisateurs), "Aucun adversaire ne l'utilise."),
   );

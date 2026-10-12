@@ -126,9 +126,9 @@ function ecart(a, b) {
 
 /**
  * La zone des personnages qu'un nom désigne : { code, approchee } ou null.
- * Le nom se compare sans casse, accents ni espaces ; à défaut, un nom à
- * deux lettres d'écart au plus d'une seule des six zones est reconnu, et
- * signalé (A11) : « Jambre droite » se lit « jambe droite ».
+ * Le nom se compare sans casse, accents, espaces ni signe invisible ; à
+ * défaut, un nom à deux lettres d'écart au plus d'une seule des six zones
+ * est reconnu, et signalé (A11) : « Jambre droite » se lit « jambe droite ».
  */
 export function reconnaitreZone(nom) {
   const ecrit = cle(nom);

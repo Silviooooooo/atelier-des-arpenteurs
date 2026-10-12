@@ -28,7 +28,7 @@ export const SOMME_CARACTERISTIQUES = 36;
 
 // Le nom d'une caractéristique invoquée entre accolades ({force},
 // {culture néruvienne}, {culture_neruvienne}) : comparé sans casse, accents,
-// espaces ni soulignés.
+// espaces, signe invisible ni soulignés.
 const cleCaracteristique = (nom) => cle(nom).replace(/_/g, "");
 const PAR_NOM = new Map(CARACTERISTIQUES.flatMap((c) => [[cleCaracteristique(c.nom), c.code], [cleCaracteristique(c.code), c.code]]));
 

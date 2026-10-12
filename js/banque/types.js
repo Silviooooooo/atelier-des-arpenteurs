@@ -1,8 +1,8 @@
 // Les types de blocs (SPECIFICATION.md, § 4.1 et § 6.3).
 //
 // Le type d'un bloc est lu dans la colonne « Type » de la feuille Blocs, et
-// comparé sans casse, sans accents ni espaces : « Equipement » est
-// « Équipement ». Les types reconnus sont ceux que le livret énumère
+// comparé sans casse, accents, espaces ni signe invisible : « Equipement »
+// est « Équipement ». Les types reconnus sont ceux que le livret énumère
 // (« Système », « Blocs »). Le livret nomme aussi « Style de combat » et
 // « Constellation de naissance » : le premier est reconnu, le second vaut
 // « Constellation », comme dans le classeur (§ 12). Un bloc sans type (A8)

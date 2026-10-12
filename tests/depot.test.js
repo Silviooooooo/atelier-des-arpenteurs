@@ -502,7 +502,7 @@ test("historique — repère un classeur ou un jeton ajouté puis retiré", () =
     writeFileSync(join(essai, "regles_jdr.xlsx"), "un faux classeur");
     writeFileSync(join(essai, "note.txt"), `jeton : ${"ghp_" + "A1b2".repeat(9)}`);
     // En UTF-16, comme dans l'arbre (jetonsEntiers) : les octets nuls ôtés.
-    writeFileSync(join(essai, "note16.txt"), Buffer.from(`﻿jeton : ${"ghp_" + "C3d4".repeat(9)}\r\n`, "utf16le"));
+    writeFileSync(join(essai, "note16.txt"), Buffer.from(`\uFEFFjeton : ${"ghp_" + "C3d4".repeat(9)}\r\n`, "utf16le"));
     writeFileSync(join(essai, "propre.txt"), "rien");
     g("add", "-A");
     g("commit", "-q", "-m", "ajout");

@@ -8,7 +8,8 @@
 // plus la ligne fautive. Chaque cas dit, mot pour mot, les anomalies que la
 // feuille doit produire ; tests/adversaires.test.js les vérifie une à une,
 // et tests/controle.test.js y prend les codes que le classeur d'essai seul
-// ne déclenche pas.
+// ne déclenche pas. Depuis le lot 4, E16, A1 et A16 ont aussi leur cas « à
+// un signe invisible près » (§ 6.3).
 
 import { CLASSEUR_ESSAI, CLASSEUR_PROPRE } from "./classeur_essai.js";
 
@@ -42,6 +43,45 @@ export function avecAdversaires(lignes, { blocs = [], capacites = [], socle = tr
 export function sansAdversaires(base = CLASSEUR_ESSAI) {
   const description = structuredClone(base);
   description.feuilles = description.feuilles.filter((f) => f.nom !== "Adversaires");
+  return description;
+}
+
+// Ce que le lot 4 a ajouté au classeur d'essai pour le simulateur de combat
+// (§ 10.3), et ce que portait avant lui la colonne « Éléments propres » des
+// capacités qu'il a touchées.
+const ELEMENTS_DU_COMBAT = ["Intervention", "Passif"];
+const CAPACITES_DU_COMBAT = ["Pas de côté", "Guetter"];
+const ELEMENTS_PROPRES_D_AVANT = {
+  Vif: _,
+  "Nez fin": _,
+  Costaud: _,
+  "Palais d'acier": _,
+  Réduction: _,
+  "Dressage minute": _,
+  Feuilletage: _,
+  "Coup de chalumeau": _,
+  "Solo du chef": "Style de combat",
+  Brigade: "Style de combat",
+  Minutie: "Style de combat",
+  "Maîtrise du lourd": "Maîtrise",
+  "Maîtrise de l'agile": "Maîtrise",
+  "Maîtrise du précis": "Maîtrise",
+};
+
+/**
+ * Le classeur d'essai tel qu'il était avant les ajouts du simulateur de
+ * combat (lot 4) : sans les deux éléments, sans les deux capacités du bloc
+ * de base, chaque capacité touchée rendue à ses éléments propres d'avant.
+ * Il sert à vérifier que ces ajouts ne changent aucun adversaire.
+ */
+export function sansAjoutsDuCombat() {
+  const description = structuredClone(CLASSEUR_ESSAI);
+  const feuille = (nom) => description.feuilles.find((f) => f.nom === nom);
+  const sans = (nom, retires) => (feuille(nom).lignes = feuille(nom).lignes.filter((ligne) => !retires.includes(ligne?.[0])));
+  sans("Eléments", ELEMENTS_DU_COMBAT);
+  sans("Capacites", CAPACITES_DU_COMBAT);
+  for (const ligne of feuille("Capacites").lignes) if (Object.hasOwn(ELEMENTS_PROPRES_D_AVANT, ligne[0] ?? "")) ligne[4] = ELEMENTS_PROPRES_D_AVANT[ligne[0]];
+  feuille("Blocs").lignes.find((ligne) => ligne[0] === "Gestes de cuisine")[2] = "Pas chassé, Goûter, Taloche";
   return description;
 }
 
@@ -184,14 +224,45 @@ export const FAUTES = [
     ],
   },
   {
+    // Un signe invisible s'écrit ici par son code (« \u200B ») : le fichier ne porte jamais le signe lui-même.
+    code: "E16",
+    cas: "un adversaire et un type dont le nom ne diffère d'un autre que par un signe invisible, ou par l'espace qu'il cachait",
+    description: avecAdversaires([["Marmiton\u200B", "Commis"], ["Type", "Commis \u2060", _, 2]]),
+    attendues: [
+      ["E16", 5, "L'adversaire « Marmiton\u200B » est déjà défini ligne 4."],
+      ["E16", 6, "Le type « Commis \u2060 » est déjà défini ligne 2."],
+    ],
+  },
+  {
+    // La première définition porte le signe : la table des doublons se range sous le nom comparé, comme elle se lit.
+    code: "E16",
+    cas: "le signe invisible sur la première définition : la seconde, sans signe, est le doublon (un type, un adversaire)",
+    description: avecAdversaires([["Type", "Écailler\u200B", _, 2], ["Type", "Écailler", _, 3], ["Sommelier\u2060", "Commis"], ["Sommelier", "Commis"]]),
+    attendues: [
+      ["E16", 6, "Le type « Écailler » est déjà défini ligne 5."],
+      ["E16", 8, "L'adversaire « Sommelier » est déjà défini ligne 7."],
+      ["I5", 5, "Le type « Écailler\u200B » n'est utilisé par aucun adversaire."],
+    ],
+  },
+  {
     code: "A1",
     cas: "un type, un bloc et une capacité cités à la casse ou aux accents près",
     description: avecAdversaires([["A", "commis/ROTISSEUR", _, _, _, _, _, "//, couteau d'office", "//, pas chasse"]]),
     attendues: [
-      ["A1", 5, "L'adversaire « A » cite « commis » pour le type « Commis » : seules la casse, les accents ou les espaces diffèrent."],
-      ["A1", 5, "L'adversaire « A » cite « ROTISSEUR » pour le type « Rôtisseur » : seules la casse, les accents ou les espaces diffèrent."],
-      ["A1", 5, "L'adversaire « A » cite « couteau d'office » pour le bloc « Couteau d'office » : seules la casse, les accents ou les espaces diffèrent."],
-      ["A1", 5, "L'adversaire « A » cite « pas chasse » pour la capacité « Pas chassé » : seules la casse, les accents ou les espaces diffèrent."],
+      ["A1", 5, "L'adversaire « A » cite « commis » pour le type « Commis » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
+      ["A1", 5, "L'adversaire « A » cite « ROTISSEUR » pour le type « Rôtisseur » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
+      ["A1", 5, "L'adversaire « A » cite « couteau d'office » pour le bloc « Couteau d'office » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
+      ["A1", 5, "L'adversaire « A » cite « pas chasse » pour la capacité « Pas chassé » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
+    ],
+  },
+  {
+    code: "A1",
+    cas: "un type, un bloc et une capacité cités à un signe invisible près : résolus, et signalés",
+    description: avecAdversaires([["A", "Commis\u200B", _, _, _, _, _, "//, Couteau d'office\u00AD", "//, Pas\u2060 chassé"]]),
+    attendues: [
+      ["A1", 5, "L'adversaire « A » cite « Commis\u200B » pour le type « Commis » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
+      ["A1", 5, "L'adversaire « A » cite « Couteau d'office\u00AD » pour le bloc « Couteau d'office » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
+      ["A1", 5, "L'adversaire « A » cite « Pas\u2060 chassé » pour la capacité « Pas chassé » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
     ],
   },
   {
@@ -243,6 +314,21 @@ export const FAUTES = [
     cas: "un adversaire qui porte le nom d'un type",
     description: avecAdversaires([["Commis", "Commis"]]),
     attendues: [["A16", 5, "L'adversaire « Commis » porte le nom d'un type, défini ligne 2."]],
+  },
+  {
+    code: "A16",
+    cas: "un adversaire qui porte le nom d'un type, à un signe invisible près",
+    description: avecAdversaires([["Rôtisseur\u200D", "Commis"]]),
+    attendues: [["A16", 5, "L'adversaire « Rôtisseur\u200D » porte le nom d'un type, défini ligne 3."]],
+  },
+  {
+    code: "A16",
+    cas: "un adversaire sans signe invisible, face à un type dont le nom en porte un",
+    description: avecAdversaires([["Type", "Écailler\u200B", _, 2], ["Écailler", "Commis"]]),
+    attendues: [
+      ["A16", 6, "L'adversaire « Écailler » porte le nom d'un type, défini ligne 5."],
+      ["I5", 5, "Le type « Écailler\u200B » n'est utilisé par aucun adversaire."],
+    ],
   },
   {
     code: "I4",

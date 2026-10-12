@@ -151,12 +151,13 @@ export function indexerAdversaires(banque, index = indexerCreation(banque)) {
     const constats = [];
     const signaler = (code, message) => constats.push({ code, ligne, message });
     const ambigu = (trouve) => (trouve.candidats?.length > 1 ? ` (renvoi ambigu : ${trouve.candidats.map((n) => `« ${citer(n)} »`).join(", ")})` : "");
-    // Un renvoi retrouvé sans casse ni accents est résolu, et signalé (A1).
-    // Les blancs ne comptent pas : la notation les réduit en lisant la
-    // cellule, et un nom à double espace, écrit de même des deux côtés, n'a
-    // rien d'approché.
+    // Un renvoi retrouvé sans casse, accents ni signe invisible est résolu,
+    // et signalé (A1), du même message que le contrôle des autres feuilles
+    // (js/banque/controle.js). Les blancs ne comptent pas : la notation les
+    // réduit en lisant la cellule, et un nom à double espace, écrit de même
+    // des deux côtés, n'a rien d'approché.
     const approche = (ecrit, trouve, quoi) => {
-      if (blancs(trouve) !== ecrit) signaler("A1", `${sujet} cite « ${citer(ecrit)} » pour ${quoi} « ${citer(trouve)} » : seules la casse, les accents ou les espaces diffèrent.`);
+      if (blancs(trouve) !== ecrit) signaler("A1", `${sujet} cite « ${citer(ecrit)} » pour ${quoi} « ${citer(trouve)} » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent.`);
     };
 
     // La colonne Type d'un adversaire ; un type n'hérite de rien. Le nom

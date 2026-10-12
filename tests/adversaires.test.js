@@ -17,7 +17,7 @@ import { typeDe } from "../js/banque/types.js";
 import { indexerCreation } from "../js/personnage/calcul.js";
 import { fraction } from "../js/personnage/expressions.js";
 import { packsDArmure } from "../js/personnage/packs.js";
-import { FAUTES, HUMANOIDE, avecAdversaires } from "./outils/adversaires_essai.js";
+import { FAUTES, HUMANOIDE, avecAdversaires, sansAjoutsDuCombat } from "./outils/adversaires_essai.js";
 import { fabriquerClasseur } from "./outils/fabrique_classeur.js";
 
 const _ = null;
@@ -656,7 +656,7 @@ test("feuille — « aucun » dans la colonne Type : aucun type ; un nom à doub
   );
   assert.deepEqual([de("Solitaire").types, de("Solitaire").complet], [[], true]);
   assert.deepEqual(noms(de("Exact").equipement), ["Grand  couteau"]);
-  assert.deepEqual(anomalies, [["A1", 7, "L'adversaire « Approché » cite « grand couteau » pour le bloc « Grand  couteau » : seules la casse, les accents ou les espaces diffèrent."]]);
+  assert.deepEqual(anomalies, [["A1", 7, "L'adversaire « Approché » cite « grand couteau » pour le bloc « Grand  couteau » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."]]);
 });
 
 test("résolution — « complet » : une grille, une attaque et une défense qui se lisent", async () => {
@@ -673,6 +673,45 @@ test("résolution — « complet » : une grille, une attaque et une défense qu
   assert.equal(de("Défense nulle").defense.valeur, 0);
 });
 
+// ─── La démonstration et les ajouts du simulateur de combat (§ 16.7) ────────
+
+// Le lot 4 a posé dans le classeur d'essai deux éléments, deux capacités du
+// bloc de base, et Passif ou Intervention sur quatorze capacités, dont une
+// maîtrise et une capacité que portent des adversaires. Aucune valeur d'un
+// adversaire ne doit en changer : chacun se résout, par le même code, comme
+// sur le classeur d'avant.
+test("démonstration — les ajouts du simulateur de combat ne changent aucun adversaire : chacun se résout à l'identique sur le classeur d'avant", async () => {
+  const { banque: avant, erreur } = await importerFichier(fabriquerClasseur(sansAjoutsDuCombat()), "classeur_essai.xlsx");
+  assert.equal(erreur, undefined, erreur);
+  // Le classeur d'avant est bien un autre classeur : ni les deux éléments, ni les deux capacités.
+  assert.deepEqual([avant.capacites.length, avant.elements.length], [BANQUE.capacites.length - 2, BANQUE.elements.length - 2]);
+  assert.deepEqual([BANQUE.capacites.length, BANQUE.elements.length], [46, 22]);
+  const ajoutes = (liste, ancienne) => liste.map((entree) => entree.nom).filter((nom) => !ancienne.some((entree) => entree.nom === nom));
+  assert.deepEqual(ajoutes(BANQUE.elements, avant.elements), ["Intervention", "Passif"]);
+  assert.deepEqual(ajoutes(BANQUE.capacites, avant.capacites), ["Pas de côté", "Guetter"]);
+  // Les ajouts touchent bien ce que portent des adversaires : la comparaison n'est pas vide de sens.
+  const elementsDe = (banque, nom) => banque.capacites.find((c) => c.nom === nom).variantes[0].elements.map((e) => e.nom);
+  assert.deepEqual([elementsDe(avant, "Nez fin"), elementsDe(BANQUE, "Nez fin")], [[], ["Passif"]]);
+  assert.deepEqual([elementsDe(avant, "Maîtrise de l'agile"), elementsDe(BANQUE, "Maîtrise de l'agile")], [["Maîtrise"], ["Maîtrise", "Passif"]]);
+
+  // Tout ce que rend la résolution : nombres, zones et armures, équipement, maîtrises, capacités, constats.
+  const resolus = (banque) => {
+    const index = indexerAdversaires(banque);
+    return JSON.parse(JSON.stringify(banque.adversaires.map((adversaire) => index.resoudre(adversaire))));
+  };
+  const [aujourdhui, hier] = [resolus(BANQUE), resolus(avant)];
+  assert.deepEqual(aujourdhui.map((r) => r.nom), ["Marmiton de corvée", "Chef de partie", "Plongeur", "Homard furieux", "Mouette chapardeuse"]);
+  for (const [i, resolu] of aujourdhui.entries()) assert.deepEqual(resolu, hier[i], resolu.nom);
+  // Les types se lisent de même, et la feuille porte les mêmes anomalies.
+  const lus = (banque) => {
+    const index = indexerAdversaires(banque);
+    return JSON.parse(JSON.stringify(banque.types_adversaires.map((type) => index.analyser(type, "type").constats)));
+  };
+  assert.deepEqual(lus(BANQUE), lus(avant));
+  const anomalies = (banque) => banque.anomalies.map((a) => [a.code, a.feuille, a.ligne, a.message]);
+  assert.deepEqual(anomalies(BANQUE), anomalies(avant));
+});
+
 // ─── Les contrôles de la feuille (§ 6.3) ────────────────────────────────────
 
 test("contrôle — la feuille du classeur d'essai ne porte que les trois anomalies qu'elle annonce", () => {
@@ -680,7 +719,7 @@ test("contrôle — la feuille du classeur d'essai ne porte que les trois anomal
     BANQUE.anomalies.filter((a) => a.feuille === "Adversaires").map((a) => [a.code, a.ligne, a.message]),
     [
       ["A11", 2, "Le type « Commis » : la zone « Jambre droite » est reconnue par approximation comme « Jambe droite »."],
-      ["A1", 3, "Le type « Rôtisseur » cite « Maitrise de l'agile » pour la capacité « Maîtrise de l'agile » : seules la casse, les accents ou les espaces diffèrent."],
+      ["A1", 3, "Le type « Rôtisseur » cite « Maitrise de l'agile » pour la capacité « Maîtrise de l'agile » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
       ["A15", 8, "L'adversaire « Mouette chapardeuse » a la capacité « Frappe », qui invoque {degats}, sans arme pour lui donner ses dégâts."],
     ],
   );
@@ -696,6 +735,33 @@ for (const faute of FAUTES) {
     assert.ok(faute.attendues.some(([code]) => code === faute.code), `le cas déclenche ${faute.code}`);
   });
 }
+
+// « De même nom » (E16, A16) s'entend exactement, une fois les signes
+// invisibles retirés (§ 6.3) : ce retrait ne fait pas de la comparaison une
+// comparaison approchée. La casse, un accent ou une espace au milieu du nom
+// font un autre nom, et non un doublon ; un type nouveau, que rien n'utilise,
+// se dit donc par I5, comme tout type.
+test("contrôle — E16 et A16 comparent exactement : la casse, un accent ou une espace intérieure font un autre nom, pas un doublon", async () => {
+  const { banque, anomalies } = await feuille([
+    ["marmiton", "Commis"],
+    ["Mar miton", "Commis"],
+    ["Type", "commis", _, 2],
+    ["Type", "Rotisseur", _, 2],
+    ["Type", "Rôtis seur", _, 2],
+    ["rôtisseur", "Commis"],
+    ["Rotisseur", "Commis"],
+  ]);
+  // Chacun est une entrée de la banque, sous le nom qu'il écrit.
+  assert.deepEqual(noms(banque.adversaires), ["Marmiton", "marmiton", "Mar miton", "rôtisseur", "Rotisseur"]);
+  assert.deepEqual(noms(banque.types_adversaires), ["Commis", "Rôtisseur", "commis", "Rotisseur", "Rôtis seur"]);
+  assert.deepEqual(anomalies, [
+    // « Rotisseur », l'adversaire, porte exactement le nom d'un type : A16, et lui seul.
+    ["A16", 11, "L'adversaire « Rotisseur » porte le nom d'un type, défini ligne 8."],
+    ["I5", 7, "Le type « commis » n'est utilisé par aucun adversaire."],
+    ["I5", 8, "Le type « Rotisseur » n'est utilisé par aucun adversaire."],
+    ["I5", 9, "Le type « Rôtis seur » n'est utilisé par aucun adversaire."],
+  ]);
+});
 
 test("contrôle — les dix-sept codes de la feuille, chacun déclenché, avec sa gravité", () => {
   const codes = ["E8", "E9", "E10", "E11", "E12", "E13", "E14", "E15", "E16", "A11", "A12", "A13", "A14", "A15", "A16", "I4", "I5"];

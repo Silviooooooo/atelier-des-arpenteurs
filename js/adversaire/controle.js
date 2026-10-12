@@ -12,7 +12,12 @@
 // quand dix adversaires en héritent ; ce qui ne se voit qu'une fois
 // l'héritage appliqué (E12, E15, A12, A15) se range à la ligne de
 // l'adversaire.
+//
+// « De même nom » (E16, A16) s'entend comme pour E3 : exactement, une fois
+// les signes invisibles retirés (js/banque/noms.js). Le message cite le nom
+// tel qu'il est écrit.
 
+import { nomCompare } from "../banque/noms.js";
 import { citer } from "./notation.js";
 import { FEUILLE, entreesLisibles, indexerAdversaires } from "./resolution.js";
 
@@ -32,9 +37,9 @@ export function constatsDesAdversaires(banque) {
 
   const typesVus = new Map();
   for (const type of types) {
-    const premier = typesVus.get(type.nom);
+    const premier = typesVus.get(nomCompare(type.nom));
     if (premier) constats.push({ code: "E16", ligne: ligneDe(type), message: `Le type « ${citer(type.nom)} » est déjà défini ligne ${ligneDe(premier)}.` });
-    else typesVus.set(type.nom, type);
+    else typesVus.set(nomCompare(type.nom), type);
     garder(index.analyser(type, "type").constats);
     if (!premier && index.utilisateurs(type.nom).length === 0) {
       constats.push({ code: "I5", ligne: ligneDe(type), message: `Le type « ${citer(type.nom)} » n'est utilisé par aucun adversaire.` });
@@ -43,10 +48,10 @@ export function constatsDesAdversaires(banque) {
 
   const adversairesVus = new Map();
   for (const adversaire of adversaires) {
-    const premier = adversairesVus.get(adversaire.nom);
+    const premier = adversairesVus.get(nomCompare(adversaire.nom));
     if (premier) constats.push({ code: "E16", ligne: ligneDe(adversaire), message: `L'adversaire « ${citer(adversaire.nom)} » est déjà défini ligne ${ligneDe(premier)}.` });
-    else adversairesVus.set(adversaire.nom, adversaire);
-    const homonyme = typesVus.get(adversaire.nom);
+    else adversairesVus.set(nomCompare(adversaire.nom), adversaire);
+    const homonyme = typesVus.get(nomCompare(adversaire.nom));
     if (homonyme) {
       constats.push({ code: "A16", ligne: ligneDe(adversaire), message: `L'adversaire « ${citer(adversaire.nom)} » porte le nom d'un type, défini ligne ${ligneDe(homonyme)}.` });
     }

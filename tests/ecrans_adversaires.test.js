@@ -482,7 +482,7 @@ test("fiche d'un adversaire — chaque valeur dit d'où elle vient : le Chef de 
     const constats = rubrique(lu, "À vérifier");
     assert.deepEqual(textes(constats, "li"), [
       "A11 · avertissement — Le type « Commis » : la zone « Jambre droite » est reconnue par approximation comme « Jambe droite ». (Adversaires, ligne 2)",
-      "A1 · avertissement — Le type « Rôtisseur » cite « Maitrise de l'agile » pour la capacité « Maîtrise de l'agile » : seules la casse, les accents ou les espaces diffèrent. (Adversaires, ligne 3)",
+      "A1 · avertissement — Le type « Rôtisseur » cite « Maitrise de l'agile » pour la capacité « Maîtrise de l'agile » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent. (Adversaires, ligne 3)",
     ]);
     assert.deepEqual(liens(constats), [["Adversaires, ligne 2", "#/anomalies/Adversaires/2"], ["Adversaires, ligne 3", "#/anomalies/Adversaires/3"]]);
     // Sa propre ligne n'a pas d'anomalie : elle se dit, sans lien.
@@ -666,6 +666,70 @@ test("fiche d'un adversaire — deux adversaires de même nom (E16) se suivent ;
     const choix = ouvrir(contexte, "#/rencontre");
     assert.ok(textes(choix, ".nom-rencontre a").includes(hostile));
     assert.equal(choix.querySelectorAll("img").length, 0);
+  });
+});
+
+// Le signe invisible (lot 4, § 6.3) : les fiches comptent un doublon comme le
+// contrôle, noms comparés une fois leurs signes invisibles retirés. Le signe
+// s'écrit ici par son code, jamais lui-même.
+test("fiches — un doublon à un signe invisible près se dit comme au contrôle : adversaire et type (E16), bloc et élément (E3) ; une adresse forgée d'un signe reste introuvable", async () => {
+  const description = avecAdversaires([["Marmiton\u200B", "Commis[2]"], ["Type", "Commis \u2060", _, 2]], {
+    blocs: [["Bouillon\u00AD revigorant", _, "Boire le bouillon", _, "E3 : le nom d'un autre bloc, à un signe invisible près", "Consommable"]],
+  });
+  description.feuilles.find((f) => f.nom === "Eléments").lignes.push(["Collant\u200B", _, "E3 : « Collant » suivi de U+200B."]);
+  const { banque, erreur } = await importerFichier(fabriquerClasseur(description), "essai.xlsx");
+  assert.equal(erreur, undefined, erreur);
+  // Le contrôle les tient pour des doublons, en plus de ceux du classeur d'essai (un bloc, un élément) : les fiches doivent en dire autant.
+  const doublons = (code, feuille) => banque.anomalies.filter((a) => a.code === code && a.feuille === feuille).length;
+  assert.deepEqual([doublons("E3", "Blocs"), doublons("E3", "Eléments"), doublons("E16", "Adversaires")], [2, 2, 2]);
+  await dansLeDocument(() => {
+    const contexte = contexteDe({ ...banque, publiee_le: BANQUE.publiee_le });
+    const lignesLues = (ecran) => ecran.querySelector(".lectures-adversaire").children.map((n) => (n.tagName === "H2" ? texteDe(n) : n.className));
+    let ecran = ouvrir(contexte, "#/adversaire/Marmiton");
+    assert.deepEqual(textes(ecran, ".ecran-adversaire .ne-pas-imprimer .message"), ["Ce nom désigne 2 adversaires : c'est un doublon (E16), ils se suivent ci-dessous. Une rencontre prend le premier."]);
+    assert.deepEqual(lignesLues(ecran), ["Ligne 4", "lecture", "Ligne 5", "lecture"]);
+    assert.deepEqual(textes(ecran, ".cadre-cartes .carte-attaque .carte-valeur"), ["4", "6"]);
+    // Sous l'autre nom, la même fiche : celui qui porte ce nom-là vient d'abord, c'est lui que prend une rencontre.
+    ecran = ouvrir(contexte, `#/adversaire/${encodeURIComponent("Marmiton\u200B")}`);
+    assert.equal(textes(ecran, ".ecran-adversaire .ne-pas-imprimer .message").length, 1);
+    assert.deepEqual(lignesLues(ecran), ["Ligne 5", "lecture", "Ligne 4", "lecture"]);
+
+    // Deux types que seul un signe invisible distingue : chacun garde les adversaires qui écrivent son nom.
+    // « Les adversaires héritent du premier », la phrase du doublon exact, serait fausse sous le second nom.
+    const phraseDesTypes = "Ce nom désigne 2 types : c'est un doublon (E16), ils se suivent ci-dessous. Chaque adversaire hérite du premier dont il écrit le nom exact.";
+    let fiche = ouvrir(contexte, "#/type/Commis").querySelector("article");
+    assert.deepEqual(textes(fiche, ".message"), [phraseDesTypes]);
+    assert.deepEqual([...fiche.querySelectorAll("dl")].map((dl) => texteDe(dl.children[0])), ["Nombre d'actions1", "Nombre d'actions2"]);
+    assert.deepEqual(liens(rubrique(fiche, "Adversaires qui l'utilisent")).map(([nom]) => nom), ["Marmiton", "Marmiton\u200B"]);
+    // Sous l'autre nom, le type qui le porte vient d'abord, et aucun adversaire n'en hérite : nul n'écrit ce nom-là.
+    fiche = ouvrir(contexte, `#/type/${encodeURIComponent("Commis \u2060")}`).querySelector("article");
+    assert.deepEqual(textes(fiche, ".message"), [phraseDesTypes]);
+    assert.deepEqual([...fiche.querySelectorAll("dl")].map((dl) => texteDe(dl.children[0])), ["Nombre d'actions2", "Nombre d'actions1"]);
+    assert.deepEqual(contenu(rubrique(fiche, "Adversaires qui l'utilisent")), ["Aucun adversaire ne l'utilise."]);
+
+    fiche = ouvrir(contexte, "#/bloc/Bouillon%20revigorant").querySelector(".panneau-fiche article");
+    assert.equal(texteDe(fiche.querySelector("h1")), "Bouillon revigorant");
+    assert.deepEqual(textes(fiche, ".message"), ["Ce nom désigne 2 blocs : c'est un doublon (E3), ils se suivent ci-dessous."]);
+    assert.deepEqual(textes(fiche, "h2").filter((h) => h === "Capacités").length, 2, "les deux blocs, l'un sous l'autre");
+
+    fiche = ouvrir(contexte, "#/element/Collant").querySelector(".panneau-fiche article");
+    assert.equal(texteDe(fiche.querySelector("h1")), "Collant");
+    assert.deepEqual(textes(fiche, ".message"), ["Ce nom désigne 2 éléments : c'est un doublon (E3), ils se suivent ci-dessous."]);
+    assert.deepEqual(textes(fiche, ".description"), ["Englue la cible.", "E3 : « Collant » suivi de U+200B."]);
+
+    // Un nom sans doublon n'en dit rien.
+    assert.deepEqual(textes(ouvrir(contexte, "#/element/Br%C3%BBlant").querySelector(".panneau-fiche article"), ".message"), []);
+  });
+  // Dans la démonstration, rien ne porte ces noms à un signe près : une adresse forgée ne devient pas une fiche.
+  await dansLeDocument(() => {
+    const contexte = contexteDe();
+    let ecran = ouvrir(contexte, `#/adversaire/${encodeURIComponent("Plongeur\u200B")}`);
+    assert.equal(texteDe(ecran.querySelector(".panneau-fiche h1")), "Fiche introuvable");
+    assert.deepEqual(textes(ecran, ".panneau-fiche article p"), ["Rien ne porte le nom « Plongeur\u200B » parmi les adversaires.", "Vouliez-vous dire Plongeur ?"]);
+    assert.deepEqual(liens(ecran, ".panneau-fiche article a"), [["Plongeur", "#/adversaire/Plongeur"]]);
+    ecran = ouvrir(contexte, `#/bloc/${encodeURIComponent("Fouet\u2060")}`);
+    assert.equal(texteDe(ecran.querySelector(".panneau-fiche h1")), "Fiche introuvable");
+    assert.deepEqual(liens(ecran, ".panneau-fiche article a"), [["Fouet", "#/bloc/Fouet"]]);
   });
 });
 

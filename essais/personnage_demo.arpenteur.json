@@ -8,8 +8,8 @@
   "modifie_le": "2026-09-29T20:00:00.000Z",
   "enregistre_le": "2026-09-29T20:00:00.000Z",
   "banque": {
-    "empreinte": "sha256:ab52899d8728709b5743294bfb5b42505f970bccefc4c5fdc2af8a4da681420b",
-    "publiee_le": "2026-10-11T18:51:47+02:00"
+    "empreinte": "sha256:99b0aea99624d7961507de46bfde218bfcfb947f1b40f33ae0e1b61ff0c5bf5f",
+    "publiee_le": "2026-10-12T01:58:30+02:00"
   },
   "identite": {
     "nom": "Aubépine Crèmebrûlée",
@@ -182,17 +182,17 @@
     {
       "genre": "capacite",
       "nom": "Vif",
-      "empreinte": "044870fd0d5bd5"
+      "empreinte": "1d3df20a33d1c8"
     },
     {
       "genre": "capacite",
       "nom": "Nez fin",
-      "empreinte": "0b71359b1cd579"
+      "empreinte": "093d6cb766206f"
     },
     {
       "genre": "capacite",
       "nom": "Réduction",
-      "empreinte": "0985e560e84952"
+      "empreinte": "1dd23b2c2153d3"
     },
     {
       "genre": "capacite",
@@ -202,17 +202,17 @@
     {
       "genre": "capacite",
       "nom": "Dressage minute",
-      "empreinte": "084674a02d37e9"
+      "empreinte": "12e3eead3c59f0"
     },
     {
       "genre": "capacite",
       "nom": "Solo du chef",
-      "empreinte": "130919532774e9"
+      "empreinte": "03f5a81f4bb814"
     },
     {
       "genre": "capacite",
       "nom": "Maîtrise de l'agile",
-      "empreinte": "0f215ff9c28ebc"
+      "empreinte": "00f64cee1f1aa3"
     },
     {
       "genre": "capacite",
@@ -238,6 +238,16 @@
       "genre": "capacite",
       "nom": "Taloche",
       "empreinte": "05179ed0a3fca9"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Pas de côté",
+      "empreinte": "19709465126d7b"
+    },
+    {
+      "genre": "capacite",
+      "nom": "Guetter",
+      "empreinte": "07c8155ec7154c"
     },
     {
       "genre": "capacite",

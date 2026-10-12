@@ -181,6 +181,51 @@ test("points — coûts 1, 3 et 6 ; plafond de 10 ; reliquat ; niveau 0 et capac
   assert.ok(manques(BANQUE, personnageEssai((p) => (p.niveaux = [{ capacite: "Flambage", niveau: 3 }])), { index: INDEX })[8].length);
 });
 
+// Le simulateur de combat (lot 4, § 15.7) : le bloc de base de la
+// démonstration donne deux capacités de plus, et douze capacités portent
+// Passif, trois Intervention. Aubépine en reçoit sa part, sans un point de
+// plus à dépenser.
+test("démonstration — Aubépine a les deux capacités nouvelles du bloc de base, et Passif ou Intervention sur les siennes ; ses points ne changent pas", () => {
+  const f = fiche();
+  assert.deepEqual(f.capacites.map((c) => c.nom), [
+    "Vif", "Nez fin", "Réduction", "Flambage", "Dressage minute", "Solo du chef", "Maîtrise de l'agile", "Fournaise", "Cendre",
+    "Pas chassé", "Goûter", "Taloche", "Pas de côté", "Guetter",
+    "Frappe", "Émincer", "Choc sourd", "Se couvrir", "Boire le bouillon",
+  ]);
+  const nouvelles = {
+    "Pas de côté": { cout: { souffle: "X", lien: "0" }, elements: ["Intervention"], texte: "Annulez X dégâts reçus." },
+    Guetter: {
+      cout: { souffle: "0", lien: "0" },
+      elements: [],
+      texte: "Après un déplacement, ou pour finir son tour : une de vos capacités se joue en intervention jusqu'au prochain tour de votre camp.",
+    },
+  };
+  for (const [nom, attendue] of Object.entries(nouvelles)) {
+    const c = capacite(f, nom);
+    // Du bloc de base, hors des groupes du recto ; elle n'évolue pas : niveau 0, sans point à dépenser.
+    assert.deepEqual([c.aVenir, c.role, c.groupe, c.origines, c.niveau, c.niveauMax, c.peutEvoluer], [false, "base", null, ["Gestes de cuisine"], 0, 0, false], nom);
+    assert.deepEqual(c.cout, attendue.cout, nom);
+    assert.deepEqual(c.elements, attendue.elements, nom);
+    assert.deepEqual(c.descriptions, [{ source: "Gestes de cuisine", texte: attendue.texte }], nom);
+    assert.deepEqual(niveauxPermis(f, c), [0], nom);
+  }
+  // Les éléments de ses capacités, pour celles qui en portent.
+  assert.deepEqual(Object.fromEntries(f.capacites.filter((c) => c.elements.length).map((c) => [c.nom, c.elements])), {
+    Vif: ["Passif"],
+    "Nez fin": ["Passif"],
+    Réduction: ["Passif"],
+    "Dressage minute": ["Intervention"],
+    "Solo du chef": ["Style de combat", "Passif"],
+    "Maîtrise de l'agile": ["Maîtrise", "Passif"],
+    "Pas de côté": ["Intervention"],
+  });
+  // Le style reste un style, et rien ne s'ajoute au décompte ni aux avertissements.
+  assert.equal(capacite(f, "Solo du chef").groupe, "style");
+  assert.deepEqual(f.points, { depenses: 10, recus: 8, plafond: 10, reliquat: 0, depasse: false });
+  assert.deepEqual(f.avertissements.map((a) => a.genre), ["a_venir"]);
+  assert.deepEqual(manques(BANQUE, personnageEssai(), { index: INDEX })[9], []);
+});
+
 test("points — des capacités reçues au-delà de 10 : aucune montée possible, et le total réel", () => {
   // Braise (N) au lieu de Cendre, la constellation du Chaudron (Bouillonnement,
   // N), la spatule (Moulinet farineux, N) : 8 − 0 + 1 + 1 + 1 = 11.
