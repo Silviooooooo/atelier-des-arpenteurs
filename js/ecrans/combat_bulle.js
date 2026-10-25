@@ -31,10 +31,22 @@
 // echelle.js, seul module qui écrive dans la feuille de style d'un nœud ;
 // la bulle n'y écrit rien, elle pose la classe de son côté. Elle se replace
 // à son ouverture, quand son protagoniste ou le genre de son contenu change
-// (l'écran, à qui rendre le dit, appelle replacer), à l'ouverture d'une
-// infobulle, et quand la fenêtre change de taille ; jamais au défilement,
-// jamais à un dé : le jet qui grandit défile dans la bulle, et la page ne
-// défile jamais. Tout focus posé ici l'est sans faire défiler la page.
+// (l'écran, à qui rendre le dit, appelle replacer), et quand la fenêtre
+// change de taille ; une infobulle se place à sa propre ouverture. Jamais au
+// défilement, jamais à un dé : le jet qui grandit défile dans la bulle, et la
+// page ne défile jamais. Tout focus posé ici l'est sans faire défiler la page.
+//
+// Ce qui défile dans la bulle (div.combat-bulle-defile) ne bouge que par une
+// seule fonction, montrerDansLaBulle, et par son seul scrollTop : remis en
+// haut à chaque ouverture, il amène dans la partie vue ce qui reçoit le focus
+// et l'aperçu qui s'ouvre sous une ligne (complément, § 4.1, § 4.5 et § 4.9 ;
+// relecture du groupe 2, C-03 : la règle 2 du contrat, § 0.2, l'admet
+// désormais à côté de la liste du journal). Le défilement de la page, lui,
+// n'est jamais touché.
+//
+// Le doigt se juge au dernier appui, que l'écran retient sur sa racine
+// (dernierAppui) : le focus qui suit un appui du doigt, sur le jeton comme sur
+// la ligne, n'ouvre pas d'infobulle (spéc. § 17.7).
 //
 // Le corps de la bulle n'est refait que si ce qu'il montre change : un rendu
 // de plus n'efface ni une saisie en cours, ni le focus. Avant de le refaire,
@@ -132,8 +144,10 @@ function bordsDeLaLigne(repere, ligne) {
  * Les infobulles d'une couche. couche : le div.combat-infobulles où elles
  * vivent ; repere : ce sur quoi elles se posent (la bulle, ou la zone sous la
  * carte), un nœud ou une fonction qui le rend, à défaut le parent de la
- * couche ; actions : { hachurer(noms | null) } ; services : { minuteur, fenetre }
- * (minuteur : { poser(f, ms), retirer(n) } ; fenetre() : { largeur, hauteur }).
+ * couche ; actions : { hachurer(noms | null) } ; services : { minuteur,
+ * fenetre, dernierAppui } (minuteur : { poser(f, ms), retirer(n) } ;
+ * fenetre() : { largeur, hauteur } ; dernierAppui() : le genre du dernier
+ * appui sur l'écran, « touch », « mouse », « clavier » ou null).
  * Rend { lier, fermer, vider }.
  *
  * lier(declencheur, { contenu, hachures, cotes }) : contenu, une fonction qui
@@ -143,11 +157,14 @@ function bordsDeLaLigne(repere, ligne) {
  * largeur de la bulle ; sinon, son ancre est le déclencheur). Au doigt
  * (pointerType « touch »), ni le survol ni le focus qui suit l'appui n'en
  * ouvrent : c'est l'aperçu qui dit la ligne, avec ses hachures, que
- * l'infobulle effacerait.
+ * l'infobulle effacerait. L'appui peut avoir été fait sur le déclencheur, ou
+ * ailleurs sur l'écran (le jeton qui ouvre la bulle) : services.dernierAppui
+ * le dit.
  *
  * fermer() (Échap) ferme l'ouverte, sans bouger le focus, et rend vrai s'il
- * y en avait une. vider() les retire toutes, à chaque corps refait, sans
- * toucher aux hachures : c'est l'appelant qui les efface.
+ * y avait quelque chose à voir : son contenu, ou ses seules hachures sur la
+ * carte (« Jet d'attaque »). vider() les retire toutes, à chaque corps
+ * refait, sans toucher aux hachures : c'est l'appelant qui les efface.
  */
 export function creerInfobulles({ couche, repere = null, actions = {}, services = {} } = {}) {
   const minuteur = services.minuteur ?? MINUTEUR_DE_LA_PAGE;
@@ -233,7 +250,7 @@ export function creerInfobulles({ couche, repere = null, actions = {}, services 
       armer(entree);
     });
     declencheur.addEventListener("focus", () => {
-      if (auDoigt) {
+      if (auDoigt || services.dernierAppui?.() === "touch") {
         auDoigt = false;
         return;
       }
@@ -256,13 +273,15 @@ export function creerInfobulles({ couche, repere = null, actions = {}, services 
     });
   }
 
-  // Une infobulle dont le déclencheur a quitté la page (un corps refait sans
-  // vider) ne compte plus : Échap passe à la suite.
+  // Les seules hachures d'un déclencheur sans contenu (« Jet d'attaque ») se
+  // voient sur la carte : Échap les efface d'abord, comme une infobulle. Une
+  // infobulle dont le déclencheur a quitté la page (un corps refait sans
+  // vider), ou qui ne montrait rien, ne compte pas : Échap passe à la suite.
   function fermer() {
     const entree = ouverte;
     if (entree === null) return false;
     fermerLEntree(entree);
-    return entree.noeud !== null && entree.declencheur.isConnected !== false;
+    return (entree.noeud !== null || (entree.hachures?.length ?? 0) > 0) && entree.declencheur.isConnected !== false;
   }
 
   function vider() {
@@ -342,10 +361,12 @@ function ecrire(noeud, texte) {
 
 /**
  * La bulle. `actions` : { executer(commande, origine), lancerLeDe(),
- * hachurer(noms | null), focusSurLeJeton(id), fermerLaCase(), rafraichir() } ;
- * composerListe et composerGeste fabriquent son contenu (combat_action.js).
- * Rend { noeud, onglet, listeDeCase, rendre, focaliser, echap, dehors,
- * auDehors, replacer, oublier }.
+ * hachurer(noms | null), focusSurLeJeton(id), focusSurLaCase(nomDeCase),
+ * fermerLaCase(), rafraichir() } ; composerListe et composerGeste fabriquent
+ * son contenu (combat_action.js) ; dernierAppui() dit le genre du dernier
+ * appui sur l'écran, que ses infobulles lisent. Rend { noeud, onglet,
+ * listeDeCase, rendre, focaliser, echap, fermerLInfobulle, dehors, auDehors,
+ * replacer, oublier }.
  *
  * rendre(vue, ecran) → { montree, ouverture } ; vue : vuePanneau ; ecran :
  * { etroit, caseOuverte, ancre, repere, fenetre, origineDeLaCible } (ancre : la
@@ -361,6 +382,10 @@ function ecrire(noeud, texte) {
  * pas (l'écran, après Échap, le met au jeton). La liste d'une case se ferme
  * comme son bouton « Fermer » : actions.fermerLaCase().
  *
+ * fermerLInfobulle() ferme l'infobulle ouverte (ou les seules hachures de
+ * « Jet d'attaque »), sans bouger le focus, et rend vrai s'il y avait
+ * quelque chose à voir : l'écran la demande à Échap, où que soit le focus.
+ *
  * Le geste fini, ou la bulle fermée, la vue dit « Qui joue ? » : le focus va
  * au jeton (l'écran se refait pendant executer, comme au groupe 1). Quand la
  * fenêtre change de taille, l'infobulle ouverte se ferme, l'écran se refait
@@ -370,8 +395,12 @@ function ecrire(noeud, texte) {
  * Deux mémoires, reduite et celle du contenu (l'aperçu ouvert, les réglages
  * dépliés, l'explication des causes), remise à zéro quand le geste change ;
  * oublier() les remet à zéro (« Annuler le geste »).
+ *
+ * Ce qui défile dans la bulle revient en haut à chaque ouverture (et quand
+ * l'onglet la rouvre) ; ce qui reçoit le focus, et l'aperçu qui s'ouvre sous
+ * une ligne, y sont amenés dans la partie vue (montrerDansLaBulle).
  */
-export function creer(actions, { composerListe, composerGeste }) {
+export function creer(actions, { composerListe, composerGeste, dernierAppui = null }) {
   const titre = el("h2", { classe: "combat-bulle-titre", tabindex: "-1" });
   const sous = el("p", { classe: "combat-bulle-sous" });
   const tete = el("div", { classe: "combat-bulle-tete" }, titre, sous);
@@ -408,7 +437,7 @@ export function creer(actions, { composerListe, composerGeste }) {
     couche,
     repere: noeud,
     actions: { hachurer: (noms) => actions.hachurer?.(noms) },
-    services: { fenetre: () => fenetreDe(dernierEcran) },
+    services: { fenetre: () => fenetreDe(dernierEcran), dernierAppui },
   });
 
   const garder = (cle) => {
@@ -424,10 +453,28 @@ export function creer(actions, { composerListe, composerGeste }) {
     if (etaitMontree && contenuMontre === null && derniereVue?.genre === "qui_joue") actions.focusSurLeJeton?.(qui);
   }
 
+  /**
+   * Le seul défilement de la bulle : celui de ce qui défile en elle, par son
+   * scrollTop, jamais celui de la page. duHaut le remet en haut (une
+   * ouverture) ; un nœud qu'il porte et que la partie vue ne montre pas
+   * entier y est amené, par le plus court : le haut d'abord s'il est plus
+   * grand qu'elle.
+   */
+  function montrerDansLaBulle(noeud, { duHaut = false } = {}) {
+    if (duHaut) defile.scrollTop = 0;
+    if (!noeud || !defile.contains(noeud)) return;
+    const vue = defile.getBoundingClientRect();
+    const boite = noeud.getBoundingClientRect();
+    if (boite.top < vue.top) defile.scrollTop -= vue.top - boite.top;
+    else if (boite.bottom > vue.bottom) defile.scrollTop += Math.min(boite.bottom - vue.bottom, boite.top - vue.top);
+  }
+
   const actionsDuContenu = {
     executer: (commande, origine) => executerPuisSuivre(commande, origine),
     lancerLeDe: () => actions.lancerLeDe?.(),
     hachurer: (noms) => actions.hachurer?.(noms),
+    // L'aperçu qui s'ouvre sous une ligne se montre dans la partie vue.
+    montrer: (noeud) => montrerDansLaBulle(noeud),
   };
 
   const classes = () =>
@@ -544,6 +591,9 @@ export function creer(actions, { composerListe, composerGeste }) {
         rendue = signature;
         refaireLeCorps(vue, contenu, ouverture);
       }
+      // Ouverte, elle se lit du haut : un défilement d'avant cacherait sa
+      // première ligne, qui va recevoir le focus.
+      if (ouverture) montrerDansLaBulle(null, { duHaut: true });
     }
 
     const ongletMontre = !etroit && vue.genre === "action" && reduite;
@@ -591,6 +641,8 @@ export function creer(actions, { composerListe, composerGeste }) {
     const titreDuContenu = (contenuMontre === "case" ? listeDeCase.querySelector("h3") : null) ?? titre;
     const cible = defile.querySelector("[data-focus]") ?? premiereLigneActive(defile) ?? titreDuContenu;
     cible.focus({ preventScroll: true });
+    // Sans défiler la page, mais la commande qui attend se voit dans la bulle.
+    montrerDansLaBulle(cible);
     return true;
   }
 
@@ -609,6 +661,7 @@ export function creer(actions, { composerListe, composerGeste }) {
     reduite = false;
     rendre(derniereVue, dernierEcran);
     replacer();
+    montrerDansLaBulle(null, { duHaut: true });
     focaliser();
   }
 
@@ -639,13 +692,22 @@ export function creer(actions, { composerListe, composerGeste }) {
     else if (fermeture?.genre === "reduire" && reduire()) actions.focusSurLeJeton?.(protagonisteDe(derniereVue));
   }
 
-  // Maj+Tab depuis le premier élément de la bulle revient au jeton ; Tab
+  // Maj+Tab depuis le premier élément de la bulle revient au jeton ; pour la
+  // liste d'une case, au « +k » qui l'a ouverte, qui en tient lieu. Sans
+  // protagoniste ni case, l'appui n'est pas pris : le navigateur fait. Tab
   // après la croix sort de la bulle, qui reste ouverte : ni piège ni modale.
   function auClavier(evenement) {
     if (evenement.key !== "Tab" || evenement.shiftKey !== true) return;
     if (!rienDeTabulableAvant(noeud, evenement.target)) return;
+    if (contenuMontre === "case" && present(dernierEcran.caseOuverte)) {
+      evenement.preventDefault();
+      actions.focusSurLaCase?.(dernierEcran.caseOuverte);
+      return;
+    }
+    const qui = protagonisteDe(derniereVue);
+    if (qui === null) return;
     evenement.preventDefault();
-    actions.focusSurLeJeton?.(protagonisteDe(derniereVue));
+    actions.focusSurLeJeton?.(qui);
   }
 
   /** Échap : l'infobulle d'abord, puis la bulle (fermée ou réduite) ; rien si elle est cachée. */
@@ -653,6 +715,9 @@ export function creer(actions, { composerListe, composerGeste }) {
     if (infobulles.fermer()) return "infobulle";
     return fermerOuReduire();
   }
+
+  /** L'infobulle ouverte, ou les seules hachures de « Jet d'attaque » : fermées sans bouger le focus ; vrai s'il y avait à voir. */
+  const fermerLInfobulle = () => infobulles.fermer();
 
   /** Vrai pour un nœud hors de la bulle et de son onglet, la bulle montrée. */
   const dehors = (cible) => contenuMontre !== null && !noeud.contains(cible) && !onglet.contains(cible);
@@ -670,5 +735,5 @@ export function creer(actions, { composerListe, composerGeste }) {
     infobulles.fermer();
   }
 
-  return { noeud, onglet, listeDeCase, rendre, focaliser, echap, dehors, auDehors, replacer, oublier };
+  return { noeud, onglet, listeDeCase, rendre, focaliser, echap, fermerLInfobulle, dehors, auDehors, replacer, oublier };
 }

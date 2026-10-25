@@ -21,7 +21,9 @@
 // l'événement « annuler », sans champ ; le réglage « defense », un type
 // d'armure ; la cause d'un désavantage de maîtrise (« maitrise », présente
 // exactement quand « desavantage » est vrai) ; les types du dé de défense à
-// égalité (« egalite »).
+// égalité (« egalite »). Et, à la relecture du groupe (C-15), un texte de la
+// photographie ne porte pas plus un demi-codet isolé qu'un caractère de
+// contrôle.
 
 import { CARACTERISTIQUES } from "../personnage/regles.js";
 import {
@@ -103,8 +105,13 @@ function liste(valeur, quoi, max, objets) {
 }
 
 // Les deux séparateurs de ligne sont fabriqués par leur code : écrits tels
-// quels, ils couperaient la ligne de ce fichier.
-const CONTROLE = new RegExp(`[\\p{Cc}${String.fromCodePoint(0x2028, 0x2029)}]`, "u");
+// quels, ils couperaient la ligne de ce fichier. Un demi-codet isolé (la
+// moitié d'un signe astral, seule : \p{Cs}) est refusé comme un caractère de
+// contrôle : il ne se voit pas, le JSON l'écrit en six octets, et un nom qui
+// n'en serait fait donnerait une raison proposée vide, que le moteur refuse
+// (relecture du groupe 2, C-15). Le drapeau « u » lit une paire bien formée
+// comme un seul signe, qui n'est pas un demi-codet : une poêle (U+1F373) passe.
+const CONTROLE = new RegExp(`[\\p{Cc}\\p{Cs}${String.fromCodePoint(0x2028, 0x2029)}]`, "u");
 const BLANCS_DE_LIGNE = /[\n\r\t]/g;
 
 /** Un texte d'une ligne : il entre au journal, qui tient une ligne par geste. */
@@ -123,7 +130,10 @@ function ligne(valeur, quoi, min = 1) {
  */
 function texte(valeur, quoi) {
   if (typeof valeur !== "string") refuser(`${quoi} n'est pas un texte.`);
-  if (CONTROLE.test(valeur.replace(BLANCS_DE_LIGNE, ""))) refuser(`${quoi} porte un caractère de contrôle.`);
+  // Chaque blanc de ligne devient une espace, et non rien : ôté, il
+  // recollerait les deux moitiés d'un signe astral qu'il sépare, deux
+  // demi-codets isolés qui passeraient alors pour un seul signe.
+  if (CONTROLE.test(valeur.replace(BLANCS_DE_LIGNE, " "))) refuser(`${quoi} porte un caractère de contrôle.`);
   if (valeur.length > BORNES_PHOTO.texte) refuser(`${quoi} dépasse ${ecrireNombre(BORNES_PHOTO.texte)} signes.`);
   return valeur;
 }

@@ -7,9 +7,13 @@
 // tient ce qu'un texte peut tenir : des jetons seulement (et les trois
 // propriétés que js/ecrans/echelle.js écrit sur la bulle), les trois @media,
 // les classes, le contour réservé au focus, les quinze couleurs dans les deux
-// thèmes et leurs contrastes, les longueurs du groupe 2, les trois
+// thèmes et leurs contrastes, les quinze longueurs du groupe 2, les trois
 // dispositions, la bulle et son volet, ses lignes, la hachure, le bandeau, les
-// segments du journal et le cadre d'un jet.
+// segments du journal et le cadre d'un jet. Depuis la relecture de fin du
+// groupe 2 : la flèche de la bulle enfin dessinée, la plaque des jetons d'une
+// case hachurée, les passifs à 44 px, les lignes plates et seules à 36 px
+// (data-ligne, lu aussi dans js/ecrans/combat_action.js), le dé relancé barré
+// d'un fond, le journal hors de la vue, la marge de défilement du volet.
 //
 // Chaque règle est une fonction qui rend la liste des défauts : vide sur la
 // feuille du dépôt, non vide sur une feuille fautive écrite ici même. Une
@@ -292,7 +296,9 @@ function defautsDesClasses(css) {
   for (const { selecteur } of selecteursDe(css)) {
     // Chaque règle part de l'écran du combat : elle ne touche rien d'autre.
     // « :where(.combat) » en part aussi, sans rien peser (la police, plus bas).
-    if (!/^(?:\.combat(?![\w])|\.combat-[a-z]|:where\(\.combat\) [a-z]|#ecran:has\(> \.combat\)$)/.test(selecteur)) defauts.push(`règle hors de l'écran du combat : ${selecteur}`);
+    // La racine, seule à porter la marge de défilement de la page, tant que le
+    // volet est montré, et sous ce seul sélecteur.
+    if (!/^(?:\.combat(?![\w])|\.combat-[a-z]|:where\(\.combat\) [a-z]|#ecran:has\(> \.combat\)$|html:has\(\.combat-bulle:not\(\[hidden\]\)\)$)/.test(selecteur)) defauts.push(`règle hors de l'écran du combat : ${selecteur}`);
     for (const [, classe] of selecteur.matchAll(/\.([\w-]+)/g)) {
       if (/carte/.test(classe)) defauts.push(`classe en « carte » : ${selecteur}`);
       else if (classe !== "combat" && !classe.startsWith("combat-") && !CLASSES_DU_SITE.has(classe) && !ETATS.has(classe)) defauts.push(`classe inconnue .${classe} : ${selecteur}`);
@@ -301,7 +307,7 @@ function defautsDesClasses(css) {
   return defauts;
 }
 
-test("combat.css — chaque règle part d'une classe « combat » ; aucune classe hors de combat-, des états du contrat et des classes communes ; aucun nom en « carte »", () => {
+test("combat.css — chaque règle part d'une classe « combat » (la racine seule, tant que le volet est montré) ; aucune classe hors de combat-, des états du contrat et des classes communes ; aucun nom en « carte »", () => {
   assert.deepEqual(defautsDesClasses(COMBAT), []);
   const refuse = (css, motif) => assert.match(defautsDesClasses(css).join("\n"), motif, css);
   refuse(".fiche { margin: 0; }", /hors de l'écran du combat/);
@@ -316,7 +322,12 @@ test("combat.css — chaque règle part d'une classe « combat » ; aucune class
   refuse(".combat .carte-adversaire { margin: 0; }", /classe en « carte »/);
   refuse(":where(.fiche) button { margin: 0; }", /hors de l'écran du combat/);
   refuse(":where(button) { margin: 0; }", /hors de l'écran du combat/);
-  assert.deepEqual(defautsDesClasses(".combat { margin: 0; }\n.combat-fiche.joue summary::after,\n.combat-copie .champ { margin: 0; }\n:where(.combat) button { font: inherit; }"), []);
+  // La racine n'est admise que sous le sélecteur du volet montré, et pour elle-même.
+  refuse("html { scroll-padding-bottom: var(--hauteur-volet); }", /hors de l'écran du combat : html$/);
+  refuse("html:has(.fiche) { scroll-padding-bottom: var(--hauteur-volet); }", /hors de l'écran du combat/);
+  refuse(":root:has(.combat-bulle:not([hidden])) { scroll-padding-bottom: var(--hauteur-volet); }", /hors de l'écran du combat/);
+  refuse("html:has(.combat-bulle:not([hidden])) .fiche { margin: 0; }", /hors de l'écran du combat/);
+  assert.deepEqual(defautsDesClasses(".combat { margin: 0; }\n.combat-fiche.joue summary::after,\n.combat-copie .champ { margin: 0; }\n:where(.combat) button { font: inherit; }\nhtml:has(.combat-bulle:not([hidden])) { scroll-padding-bottom: var(--hauteur-volet); }"), []);
   // La racine que vise la largeur, les nœuds du contrat (§ 7.9) et les classes nouvelles du groupe 2 (contrat § 10.2) :
   // chacune a sa règle ; « combat-qui-suite » a quitté le code avec les pas de la puissance.
   const classes = new Set(selecteursDe(COMBAT).flatMap((regle) => [...regle.selecteur.matchAll(/\.([\w-]+)/g)].map(([, classe]) => classe)));
@@ -462,12 +473,15 @@ test("jetons.css — les quinze couleurs du combat, dans les deux thèmes, exact
 // ——— Les longueurs du groupe 2 ———
 
 // Contrat § 10.1 : [jeton, valeur], au bloc clair, sans « combat » dans leur
-// nom. La dernière sert au créateur en vignettes (css/ecran.css).
+// nom. La dernière sert au créateur en vignettes (css/ecran.css). À la
+// relecture de fin du groupe : la hauteur de la bulle en pixels (la fenêtre
+// moins 32 px, compl. § 4.1, que « 2rem » ne vaut qu'à la taille de texte par
+// défaut), et la hauteur d'attente d'une ligne du journal (une ligne de texte).
 const LONGUEURS = [
   ["largeur-bulle", "20rem"],
   ["largeur-bulle-jet", "29.5rem"],
   ["largeur-infobulle", "18rem"],
-  ["hauteur-bulle-max", "calc(100vh - var(--espace-6))"],
+  ["hauteur-bulle-max", "calc(100vh - 32px)"],
   ["hauteur-volet", "45%"],
   ["ligne-souris", "36px"],
   ["fleche-bulle", "8px"],
@@ -477,6 +491,7 @@ const LONGUEURS = [
   ["hachure-angle", "135deg"],
   ["rayon-cadre", "4px"],
   ["marge-cadre", "3px"],
+  ["hauteur-ligne-journal", "calc(var(--taille-petite) * var(--interligne))"],
   ["largeur-vignette", "180px"],
 ];
 
@@ -497,10 +512,17 @@ function defautsDesLongueurs(css, feuille) {
   return defauts;
 }
 
-test("jetons.css — les quatorze longueurs du groupe 2, au bloc clair, sans « combat » dans leur nom ; aucune --bulle-* ; --fleche-bulle égale FLECHE (js/ecrans/echelle.js)", () => {
+test("jetons.css — les quinze longueurs du groupe 2, au bloc clair, sans « combat » dans leur nom ; aucune --bulle-* ; --fleche-bulle égale FLECHE (js/ecrans/echelle.js)", () => {
   assert.equal(FLECHE, 8);
+  assert.equal(LONGUEURS.length, 15);
   assert.deepEqual(defautsDesLongueurs(JETONS, COMBAT), []);
   const refuse = (css, motif, feuille = COMBAT) => assert.match(defautsDesLongueurs(css, feuille).join("\n"), motif);
+  // La hauteur de la bulle écrite d'après une taille de texte : 2rem ne vaut 32 px qu'à 16 px le rem.
+  refuse(JETONS.replace("--hauteur-bulle-max: calc(100vh - 32px);", "--hauteur-bulle-max: calc(100vh - var(--espace-6));"), /--hauteur-bulle-max : calc\(100vh - var\(--espace-6\)\)/);
+  // La hauteur d'attente d'une ligne du journal : une ligne de texte de sa taille, ni absente ni inemployée.
+  refuse(JETONS.replace("--hauteur-ligne-journal: calc(var(--taille-petite) * var(--interligne));", "--hauteur-ligne-journal: calc(var(--taille-texte) * var(--interligne));"), /--hauteur-ligne-journal : calc\(var\(--taille-texte\)/);
+  refuse(JETONS.replace(/\r?\n {2}--hauteur-ligne-journal: [^;]+;/, ""), /--hauteur-ligne-journal : undefined/);
+  refuse(JETONS, /--hauteur-ligne-journal ne sert pas/, COMBAT.replaceAll("var(--hauteur-ligne-journal)", "var(--hauteur-volet)"));
   refuse(JETONS.replace("--fleche-bulle: 8px;", "--fleche-bulle: 9px;"), /--fleche-bulle : 9px[\s\S]*diffère de FLECHE \(8\)/);
   refuse(JETONS.replace("--ligne-souris: 36px;", "--ligne-souris: 44px;"), /--ligne-souris : 44px/);
   refuse(JETONS.replace("--largeur-vignette: 180px;", ""), /--largeur-vignette : undefined/);
@@ -972,13 +994,41 @@ test("combat.css — comme sur la maquette : « Fin de tour » ferme la barre ; 
 
 // ——— Ce que la relecture de fin de groupe a montré ———
 
+// Un dé relancé : sa valeur barrée d'un fond, de la couleur du dé, centré sur sa largeur ; aucun text-decoration sur elle.
+function defautsDuDeRelance(css) {
+  const defauts = [];
+  const relancee = ".combat-de.relance .combat-de-valeur";
+  for (const [propriete, attendue] of [["width", "fit-content"], ["margin-inline", "auto"], ["background", "linear-gradient(currentColor, currentColor) center / 100% var(--trait) no-repeat"]]) {
+    const lue = valeur(css, relancee, propriete);
+    if (lue !== attendue) defauts.push(`${relancee} { ${propriete}: ${lue} } au lieu de ${attendue}`);
+  }
+  for (const regle of selecteursDe(css)) {
+    if (!/\.combat-de-valeur$/.test(regle.selecteur)) continue;
+    for (const [propriete, v] of declarations(regle.corps)) if (/^text-decoration/.test(propriete)) defauts.push(`${[regle.cadre, regle.selecteur].filter(Boolean).join(" ")} { ${propriete}: ${v} }`);
+  }
+  return defauts;
+}
+
 test("combat.css — le dé relancé garde le rouge de son échec ; au journal, la seule phrase de la mort ; la place de la barre de défilement", () => {
   // Un dé relancé est toujours un échec : il en garde le rouge, en trait discontinu ; sa valeur, grisée, reste barrée.
   assert.equal(valeur(COMBAT, ".combat-de.relance", "border-color"), "var(--combat-echec)");
   assert.equal(valeur(COMBAT, ".combat-de.relance", "border-color"), valeur(COMBAT, ".combat-de.echoue", "border-color"));
   assert.equal(valeur(COMBAT, ".combat-de.relance", "border-style"), "dashed");
   assert.equal(valeur(COMBAT, ".combat-de.relance", "color"), "var(--texte-2)");
-  assert.equal(valeur(COMBAT, ".combat-de.relance .combat-de-valeur", "text-decoration"), "line-through");
+  // La barre est un fond, un trait à mi-hauteur sur la largeur de la valeur, de sa couleur grisée, sans nœud de plus :
+  // Firefox ne barrait pas, par text-decoration, la valeur, bloc d'un bouton souple (relecture de fin du groupe 2).
+  assert.deepEqual(defautsDuDeRelance(COMBAT), []);
+  const feuille = COMBAT.replaceAll("\r\n", "\n");
+  const remplacer = (cherche, remplace) => {
+    assert.equal(feuille.split(cherche).length, 2, `fragment absent ou répété : ${cherche}`);
+    return feuille.replace(cherche, () => remplace);
+  };
+  const refuse = (css, motif) => assert.match(defautsDuDeRelance(css).join("\n"), motif);
+  // La feuille d'avant : text-decoration, que Firefox ne dessinait pas.
+  refuse(remplacer("  background: linear-gradient(currentColor, currentColor) center / 100% var(--trait) no-repeat;", "  text-decoration: line-through;"), /background: null[\s\S]*\{ text-decoration: line-through \}/);
+  // La valeur sur toute la largeur du dé : le trait la dépasserait.
+  refuse(remplacer("  width: fit-content;", "  width: auto;"), /width: auto/);
+  refuse(remplacer("  margin-inline: auto;\n  background: linear-gradient", "  background: linear-gradient"), /margin-inline: null/);
 
   // Au journal, la phrase de la mort seule est en évidence, comme sur la maquette : aucune règle ne colore une ligne entière.
   assert.equal(valeur(COMBAT, ".combat-lignes .combat-mort", "color"), "var(--combat-echec)");
@@ -1059,20 +1109,44 @@ function enRem(expression, definis) {
   return nombre === undefined ? null : Number(nombre) * Number(facteur);
 }
 
-test("combat.css — toute cible fait 44 px, hors les cases (et les lignes de la bulle sous une souris, plus bas) ; le journal est limité à 18rem, à 24rem sur un grand écran, et défile", () => {
+// Un passif du pied de la bulle, qu'un appui du doigt ouvre : une cible de 44 px, à la souris comme au doigt (spéc. § 9 ;
+// le complément n'amende la règle que pour les lignes, § 4.1). Rien ne la rabaisse, dans aucun cadre.
+function defautsDuPassif(css) {
+  const defauts = [];
+  for (const [propriete, attendue] of [["display", "inline-flex"], ["align-items", "center"], ["min-height", "var(--cible-tactile)"]]) {
+    const lue = valeur(css, ".combat-passif", propriete);
+    if (lue !== attendue) defauts.push(`.combat-passif { ${propriete}: ${lue} } au lieu de ${attendue}`);
+  }
+  for (const regle of selecteursDe(css)) {
+    if (!/\.combat-passif\b/.test(regle.selecteur) || (regle.cadre === null && regle.selecteur === ".combat-passif")) continue;
+    for (const [propriete, v] of declarations(regle.corps)) if (/^(?:display|min-height|height|max-height)$/.test(propriete)) defauts.push(`${[regle.cadre, regle.selecteur].filter(Boolean).join(" ")} { ${propriete}: ${v} } : le passif perd ses 44 px`);
+  }
+  return defauts;
+}
+
+test("combat.css — toute cible fait 44 px, hors les cases (et les lignes de la bulle sous une souris, plus bas), les passifs compris ; le journal est limité à 18rem, à 24rem sur un grand écran, et défile", () => {
   assert.equal(jetons(JETONS, "clair")["cible-tactile"], "44px");
-  for (const selecteur of [".combat button", ".combat select", ".combat textarea", ".combat input", ".combat label", ".combat-fiche summary", ".combat-reglages summary", ".combat-capacite", ".combat-bulle .combat-capacite", ".combat-cibles button", ".combat-case-liste button"]) {
+  for (const selecteur of [".combat button", ".combat select", ".combat textarea", ".combat input", ".combat label", ".combat-fiche summary", ".combat-reglages summary", ".combat-capacite", ".combat-bulle .combat-capacite", ".combat-cibles button", ".combat-case-liste button", ".combat-passif"]) {
     assert.equal(valeur(COMBAT, selecteur, "min-height"), "var(--cible-tactile)", selecteur);
   }
+  // Les passifs : 21 px de haut jusqu'à la relecture de fin du groupe 2 ; désormais 44, sans @media de plus.
+  assert.deepEqual(defautsDuPassif(COMBAT), []);
+  const feuille = COMBAT.replaceAll("\r\n", "\n");
+  const refusePassif = (css, motif) => assert.match(defautsDuPassif(css).join("\n"), motif);
+  assert.equal(feuille.split(".combat-passif {\n  display: inline-flex;\n  align-items: center;\n  min-height: var(--cible-tactile);\n").length, 2);
+  refusePassif(feuille.replace(".combat-passif {\n  display: inline-flex;\n  align-items: center;\n  min-height: var(--cible-tactile);\n", ".combat-passif {\n"), /\.combat-passif \{ display: null \}[\s\S]*\{ min-height: null \}/);
+  refusePassif(`${feuille}\n.combat-bulle-pied .combat-passif {\n  min-height: 0;\n}\n`, /\.combat-bulle-pied \.combat-passif \{ min-height: 0 \} : le passif perd ses 44 px/);
+  refusePassif(feuille.replace("@media (pointer: fine) {\n", "@media (pointer: fine) {\n  .combat-passif {\n    min-height: var(--ligne-souris);\n  }\n\n"), /@media \(pointer: fine\) \.combat-passif \{ min-height: var\(--ligne-souris\) \}/);
   assert.equal(valeur(COMBAT, ".combat button", "min-width"), "var(--cible-tactile)");
   // Un dé est plus grand qu'une cible, dans les deux sens.
   for (const cadre of [null, MEDIA_56]) {
     for (const propriete of ["width", "height"]) assert.match(valeur(COMBAT, ".combat-de", propriete, cadre), /^calc\(var\(--cible-tactile\) \+ var\(--espace-\d\)\)$/, `${cadre} ${propriete}`);
   }
   // Rien d'autre que le plateau ne redescend sous 44 px.
-  const rabaisses = (css) => selecteursDe(css).filter((regle) => declarations(regle.corps).some(([propriete, v]) => /^min-(?:width|height)$/.test(propriete) && v === "0") && /button|input|select|summary|capacite|\.combat-de\b/.test(regle.selecteur)).map((regle) => regle.selecteur);
+  const rabaisses = (css) => selecteursDe(css).filter((regle) => declarations(regle.corps).some(([propriete, v]) => /^min-(?:width|height)$/.test(propriete) && v === "0") && /button|input|select|summary|capacite|passif|\.combat-de\b/.test(regle.selecteur)).map((regle) => regle.selecteur);
   assert.deepEqual(rabaisses(COMBAT), [".combat input[type=\"checkbox\"]", ".combat input[type=\"radio\"]", ".combat-grille button"]);
   assert.deepEqual(rabaisses(".combat-choix button { min-height: 0; }"), [".combat-choix button"]);
+  assert.deepEqual(rabaisses(".combat-bulle-pied .combat-passif { min-height: 0; }"), [".combat-bulle-pied .combat-passif"]);
 
   // Mission § 10.8.
   const definis = jetons(JETONS, "clair");
@@ -1086,7 +1160,38 @@ test("combat.css — toute cible fait 44 px, hors les cases (et les lignes de la
   assert.equal(enRem("calc(var(--espace-6) * 10)", definis), 20);
   assert.equal(enRem("20rem", definis), null);
   assert.equal(valeur(COMBAT, ".combat-lignes", "font-family"), "var(--police-chasse-fixe)");
+
+  // Une ligne hors de la vue ne se met pas en page (annuler sur 15 000 événements, compl. § 9 : 131,8 ms dans Edge, la mise
+  // en page de 45 000 lignes). Tant qu'elle n'a pas été vue, son contenu a la hauteur d'une ligne de texte de sa taille,
+  // à l'interligne du site ; le navigateur y ajoute son padding et son trait : 21 + 8 + 1 = 30 px à la taille par défaut.
+  assert.deepEqual(defautsDuJournalHorsDeLaVue(COMBAT), []);
+  assert.equal(definis["hauteur-ligne-journal"], "calc(var(--taille-petite) * var(--interligne))");
+  const px = (nom) => parseFloat(definis[nom]) * 16;
+  assert.equal(px("taille-petite") * Number(definis.interligne) + 2 * px("espace-1") + parseFloat(definis.trait), 30);
+  const refuseJournal = (css, motif) => assert.match(defautsDuJournalHorsDeLaVue(css).join("\n"), motif);
+  refuseJournal(feuille.replace("  content-visibility: auto;\n", ""), /content-visibility: null/);
+  refuseJournal(feuille.replace("  contain-intrinsic-size: auto var(--hauteur-ligne-journal);", "  contain-intrinsic-size: var(--hauteur-ligne-journal);"), /contain-intrinsic-size: var\(--hauteur-ligne-journal\) \}/);
+  refuseJournal(feuille.replace(".combat-lignes {\n  max-height", ".combat-lignes {\n  line-height: var(--interligne-titre);\n  max-height"), /\.combat-lignes \{ line-height: var\(--interligne-titre\) \}/);
 });
+
+// La ligne du journal hors de la vue : content-visibility, et une hauteur d'attente d'une ligne de texte, que rien ne
+// change (ni la taille ni l'interligne de la liste ou de ses lignes).
+function defautsDuJournalHorsDeLaVue(css) {
+  const defauts = [];
+  for (const [selecteur, propriete, attendue] of [
+    [".combat-lignes li", "content-visibility", "auto"],
+    [".combat-lignes li", "contain-intrinsic-size", "auto var(--hauteur-ligne-journal)"],
+    [".combat-lignes", "font-size", "var(--taille-petite)"],
+  ]) {
+    const lue = valeur(css, selecteur, propriete);
+    if (lue !== attendue) defauts.push(`${selecteur} { ${propriete}: ${lue} } au lieu de ${attendue}`);
+  }
+  for (const regle of selecteursDe(css)) {
+    if (!/^\.combat-lignes(?: li)?$/.test(regle.selecteur)) continue;
+    for (const [propriete, v] of declarations(regle.corps)) if (propriete === "line-height" || (propriete === "font-size" && regle.selecteur !== ".combat-lignes") || propriete === "font") defauts.push(`${[regle.cadre, regle.selecteur].filter(Boolean).join(" ")} { ${propriete}: ${v} }`);
+  }
+  return defauts;
+}
 
 // ——— Le groupe 2 : la bulle, ses lignes, la hachure, le bandeau, le journal ———
 
@@ -1151,7 +1256,13 @@ const ATTENDUES_DE_LA_BULLE = [
 
 // La flèche, deux triangles de bordures : pour chaque côté, le bord puis le fond, collés à la face qui regarde l'ancre,
 // placés le long d'elle par la propriété de la flèche. Celle de la bulle n'existe qu'à 56rem.
+//
+// Relecture de fin du groupe 2 : celle de la bulle ne se dessinait jamais. Son raccourci « border », à 56rem, venait
+// après les règles de côté, au même poids, et remettait les quatre couleurs transparentes. Ses bords transparents se
+// posent donc hors des @media, avant les côtés ; à 56rem, le style et la largeur seuls ; et, après la première règle
+// de côté, aucune règle de la flèche ne repose une couleur de bord (le raccourci, border-color, ceux d'un côté).
 const FACES = { droite: "right", gauche: "left", dessous: "bottom", dessus: "top" };
+const POSE_UNE_COULEUR_DE_BORD = /^border(?:-(?:top|right|bottom|left|block|inline)(?:-(?:start|end))?)?(?:-color)?$/;
 function defautsDesFleches(css) {
   const defauts = [];
   for (const porteur of ["bulle", "infobulle"]) {
@@ -1165,11 +1276,34 @@ function defautsDesFleches(css) {
       for (const pseudo of [avant, apres]) if (!/var\(--bulle-fleche\)/.test(valeur(css, pseudo, long) ?? "")) defauts.push(`${pseudo} : ${long} sans la propriété de la flèche`);
     }
   }
-  for (const [pseudo, cadre] of [[".combat-infobulle::before", null], [".combat-infobulle::after", null], [".combat-bulle::before", MEDIA_56], [".combat-bulle::after", MEDIA_56]]) {
-    if (valeur(css, pseudo, "content", cadre) !== "\"\"") defauts.push(`${pseudo} : sans contenu`);
-    if (valeur(css, pseudo, "border", cadre) !== "var(--fleche-bulle) solid transparent") defauts.push(`${pseudo} : ${valeur(css, pseudo, "border", cadre)}`);
+  // L'infobulle : un raccourci, transparent, avant ses côtés.
+  for (const pseudo of [".combat-infobulle::before", ".combat-infobulle::after"]) {
+    if (valeur(css, pseudo, "content") !== "\"\"") defauts.push(`${pseudo} : sans contenu`);
+    if (valeur(css, pseudo, "border") !== "var(--fleche-bulle) solid transparent") defauts.push(`${pseudo} : ${valeur(css, pseudo, "border")}`);
   }
-  for (const pseudo of [".combat-bulle::before", ".combat-bulle::after"]) if (valeur(css, pseudo, "content") !== null) defauts.push(`${pseudo} : une flèche au volet`);
+  // La bulle : ses bords transparents hors des @media, avant ses côtés ; à 56rem, son contenu, le style et la largeur.
+  const liste = selecteursDe(css);
+  const premierCote = (porteur) => liste.findIndex((regle) => Object.keys(FACES).some((cote) => regle.selecteur === `.combat-${porteur}-${cote}::before` || regle.selecteur === `.combat-${porteur}-${cote}::after`));
+  for (const pseudo of [".combat-bulle::before", ".combat-bulle::after"]) {
+    const rang = rangDe(css, pseudo);
+    const cote = premierCote("bulle");
+    if (valeur(css, pseudo, "border-color") !== "transparent") defauts.push(`${pseudo} : ses bords ne sont pas transparents`);
+    else if (!(rang >= 0 && (cote < 0 || rang < cote))) defauts.push(`${pseudo} : ses bords transparents ne précèdent pas les règles de côté`);
+    if (valeur(css, pseudo, "content") !== null) defauts.push(`${pseudo} : une flèche au volet`);
+    if (valeur(css, pseudo, "content", MEDIA_56) !== "\"\"") defauts.push(`${pseudo} : sans contenu à 56rem`);
+    if (valeur(css, pseudo, "border-style", MEDIA_56) !== "solid") defauts.push(`${pseudo} : border-style ${valeur(css, pseudo, "border-style", MEDIA_56)} à 56rem`);
+    if (valeur(css, pseudo, "border-width", MEDIA_56) !== "var(--fleche-bulle)") defauts.push(`${pseudo} : border-width ${valeur(css, pseudo, "border-width", MEDIA_56)} à 56rem`);
+  }
+  // Après la première règle de côté, rien ne repose une couleur de bord sur la flèche, dans aucun cadre.
+  for (const porteur of ["bulle", "infobulle"]) {
+    const cote = premierCote(porteur);
+    liste.forEach((regle, rang) => {
+      if (cote < 0 || rang <= cote || (regle.selecteur !== `.combat-${porteur}::before` && regle.selecteur !== `.combat-${porteur}::after`)) return;
+      for (const [propriete] of declarations(regle.corps)) {
+        if (POSE_UNE_COULEUR_DE_BORD.test(propriete)) defauts.push(`${[regle.cadre, regle.selecteur].filter(Boolean).join(" ")} : ${propriete} après les règles de côté, qui en efface la couleur`);
+      }
+    });
+  }
   for (const regle of selecteursDe(css)) {
     if (/bulle|infobulle/.test(regle.selecteur) && /::(?:before|after)$/.test(regle.selecteur) && declarations(regle.corps).some(([propriete]) => /^(?:transform|box-shadow|rotate)$/.test(propriete))) defauts.push(`${regle.selecteur} : une flèche tournée ou ombrée`);
   }
@@ -1183,7 +1317,11 @@ test("combat.css — la bulle : le volet sous 56rem ; à 56rem posée sur le cad
   assert.ok(rangDe(COMBAT, ".combat-bulle-jet", MEDIA_56) > rangDe(COMBAT, ".combat-bulle", MEDIA_56));
   // Ce qui cache pèse plus que ce qui montre, et ne fait que cacher.
   for (const montre of [".combat-bulle", ".combat-onglet", ".combat-infobulle", ".combat-bandeau"]) assert.ok(pese(poids(`${montre}[hidden]`)) > pese(poids(montre)), montre);
-  assert.deepEqual(selecteursDe(COMBAT).filter((regle) => /\[hidden\]/.test(regle.selecteur) && !/^\s*display:\s*none;\s*$/.test(regle.corps)).map((regle) => regle.selecteur), []);
+  // Une règle dont le sujet est caché ne fait que cacher (la racine, tant que le volet n'est pas caché, est un autre sujet).
+  const cachesQuiMontrent = (css) => selecteursDe(css).filter((regle) => /\[hidden\]$/.test(regle.selecteur) && !/^\s*display:\s*none;\s*$/.test(regle.corps)).map((regle) => regle.selecteur);
+  assert.deepEqual(cachesQuiMontrent(COMBAT), []);
+  assert.deepEqual(cachesQuiMontrent(casser(FEUILLE, ".combat-bandeau[hidden] {\n  display: none;", ".combat-bandeau[hidden] {\n  display: none; visibility: hidden;")), [".combat-bulle[hidden]", ".combat-onglet[hidden]", ".combat-infobulle[hidden]", ".combat-bandeau[hidden]"]);
+  assert.deepEqual(cachesQuiMontrent("html:has(.combat-bulle:not([hidden])) { scroll-padding-bottom: var(--hauteur-volet); }"), []);
   // Le ✕ (ou « – »), dernier du document, se pose dans le coin de la bulle : son en-tête lui laisse sa place.
   assert.equal(valeur(COMBAT, ".combat-bulle-fermer", "position"), "absolute");
   assert.match(valeur(COMBAT, ".combat-bulle-tete", "padding"), /calc\(var\(--cible-tactile\) \+ var\(--espace-\d\)\)/);
@@ -1200,17 +1338,38 @@ test("combat.css — la bulle : le volet sous 56rem ; à 56rem posée sur le cad
   fautive(`${FEUILLE}\n.combat-bulle::before {\n  content: "";\n}\n`, /\.combat-bulle::before : une flèche au volet/);
   fautive(casser(FEUILLE, "  border-right-color: var(--fond);", "  border-right-color: var(--fond-2);"), /\.combat-bulle-droite::after : le triangle du fond/);
   fautive(casser(FEUILLE, "  bottom: calc(100% - var(--trait));", "  bottom: 100%;"), /\.combat-infobulle-dessous::after : bottom 100%/);
+
+  // La flèche de la bulle (relecture de fin du groupe 2). La feuille d'avant : le raccourci à 56rem, après les côtés.
+  const transparents = ".combat-bulle::before,\n.combat-bulle::after {\n  border-color: transparent;\n}\n\n";
+  const aCinquanteSix = "    border-style: solid;\n    border-width: var(--fleche-bulle);";
+  const davant = casser(casser(FEUILLE, transparents, ""), aCinquanteSix, "    border: var(--fleche-bulle) solid transparent;");
+  fautive(davant, /@media \(min-width: 56rem\) \.combat-bulle::before : border après les règles de côté[\s\S]*@media \(min-width: 56rem\) \.combat-bulle::after : border après les règles de côté/);
+  fautive(davant, /\.combat-bulle::before : ses bords ne sont pas transparents/);
+  // Le raccourci seul remis ; les bords transparents ôtés ; posés après les côtés ; une couleur d'un côté reposée.
+  fautive(casser(FEUILLE, aCinquanteSix, "    border: var(--fleche-bulle) solid transparent;"), /\.combat-bulle::after : border-style null à 56rem/);
+  fautive(casser(FEUILLE, transparents, ""), /\.combat-bulle::after : ses bords ne sont pas transparents/);
+  const apres = `${casser(FEUILLE, transparents, "")}\n${transparents}`;
+  fautive(apres, /\.combat-bulle::before : ses bords transparents ne précèdent pas les règles de côté/);
+  fautive(apres, /^\.combat-bulle::after : border-color après les règles de côté/m);
+  fautive(`${FEUILLE}\n.combat-bulle::after {\n  border-top-color: transparent;\n}\n`, /\.combat-bulle::after : border-top-color après les règles de côté/);
+  fautive(`${FEUILLE}\n.combat-infobulle::before {\n  border-color: var(--fond);\n}\n`, /\.combat-infobulle::before : border-color après les règles de côté/);
+  fautive(casser(FEUILLE, "    border-width: var(--fleche-bulle);", "    border-width: var(--trait);"), /\.combat-bulle::before : border-width var\(--trait\) à 56rem/);
+  // Ce qui ne repose aucune couleur passe : la largeur, le style.
+  assert.deepEqual(defautsDesFleches(`${FEUILLE}\n.combat-bulle::before {\n  border-width: var(--fleche-bulle);\n  border-style: solid;\n}\n`), []);
 });
 
-// Contrat § 10.3, les lignes de la bulle : 44 px au doigt, 36 sous une souris, pour elles seules.
+// Contrat § 10.3, les lignes de la bulle : 44 px au doigt, 36 sous une souris, pour elles seules. Une ligne est une
+// capacité à une puissance, seule à porter data-ligne (relecture de fin du groupe 2) : « Passer son tour » et les rangées
+// du jet, qui sont aussi des .combat-capacite de la bulle, gardent leurs 44 px.
+const LIGNE = ".combat-bulle .combat-capacite[data-ligne]";
 function defautsDesLignes(css) {
   const defauts = [];
   if (valeur(css, ".combat-bulle .combat-capacite", "min-height") !== "var(--cible-tactile)") defauts.push("une ligne de la bulle, au doigt : pas 44 px");
-  if (valeur(css, ".combat-bulle .combat-capacite", "min-height", MEDIA_SOURIS) !== "var(--ligne-souris)") defauts.push("une ligne de la bulle, sous une souris : pas 36 px");
+  if (valeur(css, LIGNE, "min-height", MEDIA_SOURIS) !== "var(--ligne-souris)") defauts.push("une ligne de la bulle, sous une souris : pas 36 px");
   for (const regle of selecteursDe(css)) {
     for (const [propriete, v] of declarations(regle.corps)) {
       const souris = /var\(--ligne-souris\)/.test(v);
-      const permise = regle.cadre === MEDIA_SOURIS && regle.selecteur === ".combat-bulle .combat-capacite" && propriete === "min-height";
+      const permise = regle.cadre === MEDIA_SOURIS && regle.selecteur === LIGNE && propriete === "min-height";
       if (souris && !permise) defauts.push(`36 px hors des lignes de la bulle : ${[regle.cadre, regle.selecteur].filter(Boolean).join(" ")} { ${propriete}: ${v} }`);
       if (regle.cadre === MEDIA_SOURIS && !permise) defauts.push(`sous une souris, autre chose que les lignes de la bulle : ${regle.selecteur} { ${propriete}: ${v} }`);
     }
@@ -1218,17 +1377,122 @@ function defautsDesLignes(css) {
   return defauts;
 }
 
-test("combat.css — les lignes de la bulle : 44 px au doigt, 36 px sous une souris (pointer: fine), pour elles seules ; toute autre cible garde ses 44 px", () => {
+test("combat.css — les lignes de la bulle (data-ligne) : 44 px au doigt, 36 px sous une souris (pointer: fine), pour elles seules ; « Passer son tour », les rangées du jet et toute autre cible gardent leurs 44 px", () => {
   assert.deepEqual(defautsDesLignes(COMBAT), []);
   assert.equal(jetons(JETONS, "clair")["ligne-souris"], "36px");
-  // La règle des lignes pèse plus que celle de tous les boutons de l'écran.
+  // La règle des lignes pèse plus que celle de tous les boutons de l'écran, et que les 44 px des capacités de la bulle.
   assert.ok(pese(poids(".combat-bulle .combat-capacite")) > pese(poids(".combat button")));
+  assert.ok(pese(poids(LIGNE)) > pese(poids(".combat-bulle .combat-capacite")));
   const refuse = (css, motif) => assert.match(defautsDesLignes(css).join("\n"), motif);
+  // La feuille d'avant : 36 px pour toute capacité de la bulle, « Passer son tour » et les rangées du jet compris.
+  const souris = "@media (pointer: fine) {\n  .combat-bulle .combat-capacite[data-ligne] {";
+  const davant = casser(FEUILLE, souris, "@media (pointer: fine) {\n  .combat-bulle .combat-capacite {");
+  refuse(davant, /sous une souris : pas 36 px/);
+  refuse(davant, /36 px hors des lignes de la bulle : @media \(pointer: fine\) \.combat-bulle \.combat-capacite \{/);
   // 36 px hors de la bulle : une capacité du panneau, un bouton quelconque, au doigt.
-  refuse(casser(FEUILLE, "@media (pointer: fine) {\n  .combat-bulle .combat-capacite {", "@media (pointer: fine) {\n  .combat-capacite {"), /36 px hors des lignes de la bulle : @media \(pointer: fine\) \.combat-capacite/);
+  refuse(casser(FEUILLE, souris, "@media (pointer: fine) {\n  .combat-capacite {"), /36 px hors des lignes de la bulle : @media \(pointer: fine\) \.combat-capacite/);
   refuse(casser(FEUILLE, ".combat button {\n  min-width: var(--cible-tactile);", ".combat button {\n  min-height: var(--ligne-souris);\n  min-width: var(--cible-tactile);"), /36 px hors des lignes de la bulle : \.combat button/);
   refuse(casser(FEUILLE, ".combat-bulle .combat-capacite {\n  width: 100%;\n  min-height: var(--cible-tactile);", ".combat-bulle .combat-capacite {\n  width: 100%;\n  min-height: var(--ligne-souris);"), /au doigt : pas 44 px/);
   refuse(casser(FEUILLE, "    min-height: var(--ligne-souris);\n  }\n}", "    min-height: var(--ligne-souris);\n  }\n\n  .combat-bulle-fermer {\n    min-width: 0;\n  }\n}"), /sous une souris, autre chose que les lignes de la bulle : \.combat-bulle-fermer/);
+});
+
+// Les lignes seules portent data-ligne : dans le texte de js/ecrans/combat_action.js, hors des commentaires, le mot ne
+// paraît que dans ligneDeCapacite (de sa signature à l'accolade fermante en début de ligne), et il y paraît.
+const ACTION = lire("js/ecrans/combat_action.js");
+function defautsDuMarqueurDesLignes(source) {
+  const texte = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "$1");
+  const debut = texte.indexOf("function ligneDeCapacite(");
+  const fin = debut < 0 ? -1 : texte.indexOf("\n}", debut);
+  if (debut < 0 || fin < 0) return ["ligneDeCapacite introuvable"];
+  const defauts = [];
+  const vus = [...texte.matchAll(/data-ligne/g)].map((trouve) => trouve.index);
+  if (!vus.some((i) => i > debut && i < fin)) defauts.push("ligneDeCapacite ne pose pas data-ligne");
+  for (const i of vus) {
+    if (i > debut && i < fin) continue;
+    const ligne = texte.slice(texte.lastIndexOf("\n", i) + 1, texte.indexOf("\n", i) < 0 ? undefined : texte.indexOf("\n", i)).trim();
+    defauts.push(`data-ligne hors de ligneDeCapacite : ${ligne}`);
+  }
+  return defauts;
+}
+
+test("combat_action.js — data-ligne ne marque que les lignes de la bulle (une capacité à une puissance) : « Passer son tour » et « Jet d'attaque » ne le portent pas", () => {
+  assert.deepEqual(defautsDuMarqueurDesLignes(ACTION), []);
+  const source = "function ligneDeCapacite(r, ligne) {\n  return el(\"button\", { classe: \"combat-capacite\", \"data-ligne\": ligne.cle });\n}\n\nfunction jetPrete(r, j) {\n  const [noeud] = bouton(r, {\n    cle: \"jet_prete\",\n    classe: \"combat-capacite\",\n  });\n  return noeud;\n}\n";
+  assert.deepEqual(defautsDuMarqueurDesLignes(source), []);
+  const refuse = (texte, motif) => assert.match(defautsDuMarqueurDesLignes(texte).join("\n"), motif);
+  // data-ligne ajouté à « Jet d'attaque » : il prendrait les 36 px des lignes.
+  refuse(source.replace("    cle: \"jet_prete\",", "    cle: \"jet_prete\", \"data-ligne\": \"jet\","), /data-ligne hors de ligneDeCapacite : cle: "jet_prete", "data-ligne": "jet",/);
+  refuse(source.replace(", \"data-ligne\": ligne.cle", ""), /ligneDeCapacite ne pose pas data-ligne/);
+  refuse(source.replace("function ligneDeCapacite(", "function uneLigne("), /ligneDeCapacite introuvable/);
+  // Un commentaire qui le nomme ne compte pas.
+  assert.deepEqual(defautsDuMarqueurDesLignes(`// Les lignes portent data-ligne.\n/* La feuille lit [data-ligne]. */\n${source}  // data-ligne\n`), []);
+  // Le lecteur prend bien le corps de la fonction, jusqu'à son accolade en début de ligne, aux fins de ligne du dépôt.
+  assert.deepEqual(defautsDuMarqueurDesLignes(source.replaceAll("\n", "\r\n")), []);
+  assert.match(defautsDuMarqueurDesLignes(`${source}\nconst x = { "data-ligne": 1 };\n`).join("\n"), /data-ligne hors de ligneDeCapacite : const x/);
+});
+
+// Les lignes de la bulle, des rangées plates (maquette, vue 1, là où le complément se tait) : ni bord ni fond au repos,
+// aucun écart vertical entre deux lignes d'un groupe ; au survol et au focus, le fond doux et un trait d'accent en dedans.
+// Une ligne inactive garde l'aspect d'un bouton inactif du site : son trait discontinu, visible, sans fond, en gris ; elle
+// ne s'éclaire pas au survol.
+const LIGNE_INACTIVE = `${LIGNE}[aria-disabled="true"]`;
+const LIGNE_ECLAIREE = [`${LIGNE}:not([aria-disabled="true"]):hover`, `${LIGNE}:not([aria-disabled="true"]):focus-visible`];
+function defautsDesLignesPlates(css) {
+  const defauts = ecarts(css, [
+    [LIGNE, "border-color", "transparent", null],
+    [LIGNE, "background", "transparent", null],
+    [LIGNE_INACTIVE, "border-color", "var(--bordure)", null],
+    [".combat-bulle .combat-groupe", "row-gap", "0", null],
+    ...LIGNE_ECLAIREE.flatMap((selecteur) => [
+      [selecteur, "background", "var(--accent-doux)", null],
+      [selecteur, "box-shadow", "inset 0 0 0 var(--trait) var(--accent)", null],
+    ]),
+  ]);
+  // Le bord de la ligne existe au repos (sa largeur et son style viennent de .combat-capacite) : rien ne l'ôte, rien ne
+  // l'écarte de sa voisine, et la règle de l'inactive l'emporte sur celle du repos.
+  for (const regle of selecteursDe(css)) {
+    if (!regle.selecteur.startsWith(LIGNE) && regle.selecteur !== ".combat-bulle .combat-capacite" && regle.selecteur !== ".combat-option") continue;
+    for (const [propriete, v] of declarations(regle.corps)) {
+      if (/^(?:border|border-width|border-style|border-top|border-bottom|margin|margin-top|margin-bottom|margin-block)$/.test(propriete)) defauts.push(`${[regle.cadre, regle.selecteur].filter(Boolean).join(" ")} { ${propriete}: ${v} }`);
+    }
+  }
+  if (!(pese(poids(LIGNE_INACTIVE)) > pese(poids(LIGNE)))) defauts.push("la ligne inactive ne l'emporte pas sur la ligne au repos");
+  for (const eclairee of LIGNE_ECLAIREE) if (!(pese(poids(eclairee)) > pese(poids(LIGNE)))) defauts.push(`${eclairee} ne l'emporte pas sur le repos`);
+  // Ce que la ligne au repos et l'inactive posent ne touche pas l'aspect d'une capacité inactive : ni le style du trait,
+  // ni la couleur du texte ; le fond du repos est le sien, transparent.
+  for (const selecteur of [LIGNE, LIGNE_INACTIVE]) {
+    for (const cadre of [null, MEDIA_56, MEDIA_80, MEDIA_SOURIS]) {
+      for (const propriete of ["border-style", "color", "opacity"]) if (valeur(css, selecteur, propriete, cadre) !== null) defauts.push(`${[cadre, selecteur].filter(Boolean).join(" ")} { ${propriete}: ${valeur(css, selecteur, propriete, cadre)} } : l'aspect d'une ligne inactive change`);
+    }
+  }
+  if (valeur(css, LIGNE_INACTIVE, "background") !== null) defauts.push(`${LIGNE_INACTIVE} { background: ${valeur(css, LIGNE_INACTIVE, "background")} } : l'aspect d'une ligne inactive change`);
+  return defauts;
+}
+
+test("combat.css — les lignes de la bulle sont des rangées plates : ni bord ni fond au repos, aucun écart entre elles ; au survol et au focus, le fond doux et un trait d'accent en dedans ; l'inactive garde son trait discontinu", () => {
+  assert.deepEqual(defautsDesLignesPlates(COMBAT), []);
+  // L'inactive : le trait discontinu, le fond transparent et le gris d'une capacité inactive, que rien ne change pour
+  // une ligne (le contrôle « un bouton du site rendu inactif n'a pas l'aspect d'un bouton actif », plus haut).
+  for (const [propriete, attendue] of [["border-style", "dashed"], ["background", "transparent"], ["color", "var(--texte-2)"]]) {
+    assert.equal(valeur(COMBAT, ".combat-capacite[aria-disabled=\"true\"]", propriete), attendue, propriete);
+  }
+  assert.equal(valeur(COMBAT, ".combat .bouton[aria-disabled=\"true\"]", "border-color"), valeur(COMBAT, LIGNE_INACTIVE, "border-color"));
+  const refuse = (css, motif) => assert.match(defautsDesLignesPlates(css).join("\n"), motif);
+  refuse(`${FEUILLE}\n${LIGNE_INACTIVE} {\n  color: var(--texte);\n}\n`, /\[aria-disabled="true"\] \{ color: var\(--texte\) \} : l'aspect d'une ligne inactive change/);
+  // La feuille d'avant : des boutons encadrés, chacun séparé du suivant.
+  const repos = `${LIGNE} {\n  border-color: transparent;\n  background: transparent;\n}\n\n`;
+  refuse(casser(FEUILLE, repos, ""), /\[data-ligne\] \{ border-color: null \} au lieu de transparent/);
+  refuse(casser(FEUILLE, ".combat-bulle .combat-groupe {\n  row-gap: 0;\n}\n\n", ""), /\.combat-bulle \.combat-groupe \{ row-gap: null \}/);
+  refuse(casser(FEUILLE, `${LIGNE} {\n  border-color: transparent;`, `${LIGNE} {\n  border-color: var(--bordure);`), /\{ border-color: var\(--bordure\) \} au lieu de transparent/);
+  // Le bord ôté : l'inactive perdrait son trait discontinu.
+  refuse(casser(FEUILLE, `${LIGNE} {\n  border-color: transparent;`, `${LIGNE} {\n  border: 0;\n  border-color: transparent;`), /\[data-ligne\] \{ border: 0 \}/);
+  // L'inactive sans trait visible, ou éclairée au survol.
+  refuse(casser(FEUILLE, `${LIGNE_INACTIVE} {`, `${LIGNE}[aria-disabled="false"] {`), /\[aria-disabled="true"\] \{ border-color: null \}/);
+  refuse(casser(FEUILLE, `${LIGNE}:not([aria-disabled="true"]):hover,`, `${LIGNE}:hover,`), /:not\(\[aria-disabled="true"\]\):hover \{ background: null \}/);
+  refuse(casser(FEUILLE, `${LIGNE}:not([aria-disabled="true"]):focus-visible {`, `${LIGNE}:not([aria-disabled="true"]):focus {`), /:focus-visible \{ background: null \}/);
+  refuse(casser(FEUILLE, "  box-shadow: inset 0 0 0 var(--trait) var(--accent);\n}\n\n.combat-bulle .combat-cout", "  box-shadow: 0 0 0 var(--trait) var(--accent);\n}\n\n.combat-bulle .combat-cout"), /box-shadow: 0 0 0 var\(--trait\) var\(--accent\) \} au lieu de inset/);
+  // Un écart entre deux lignes, par une marge.
+  refuse(`${FEUILLE}\n.combat-option {\n  margin-bottom: var(--espace-1);\n}\n`, /\.combat-option \{ margin-bottom: var\(--espace-1\) \}/);
 });
 
 // Contrat § 10.3, la hachure.
@@ -1260,6 +1524,80 @@ test("combat.css — la hachure de la portée : 3 px sur 9 à 135°, sous les je
   refuse(casser(FEUILLE, "  background-color: var(--accent-doux);\n}", "  background: var(--accent-doux);\n}"), /\.combat-case\.active efface la hachure/);
   refuse(casser(FEUILLE, ".combat-case.portee {\n  background-image: repeating-linear-gradient(var(--hachure-angle)", ".combat-case.portee {\n  background-image: repeating-linear-gradient(var(--hachure-pas)"), /la hachure : repeating-linear-gradient\(var\(--hachure-pas\)/);
   refuse(casser(FEUILLE, "  border-color: var(--combat-portee-bord);\n  border-radius: calc(var(--rayon) / 2);", "  border-radius: calc(var(--rayon) / 2);"), /la légende sans le bord/);
+});
+
+// Sur une case hachurée, une plaque du fond sous un jeton et sous le « +k » (relecture de fin du groupe 2 : le texte à
+// même les traits tombait à 2,34:1 en sombre, les ronds à 1,02:1). Hors le jeton de qui joue ou tenu en main, qui garde
+// la sienne. Leur texte, --texte, tient 4,5:1 sur --fond dans les deux thèmes.
+const PLAQUES = [".combat-case.portee .combat-jeton:not(.joue):not([aria-pressed=\"true\"])", ".combat-case.portee .combat-case-plus"];
+function defautsDeLaPlaque(css, jetonsCss) {
+  const defauts = [];
+  for (const plaque of PLAQUES) if (valeur(css, plaque, "background-color") !== "var(--fond)") defauts.push(`${plaque} : sans la plaque du fond`);
+  // Elle l'emporte sur le fond transparent du jeton et du « +k ».
+  for (const [plaque, sous] of [[PLAQUES[0], ".combat-jeton"], [PLAQUES[1], ".combat-case-plus"]]) if (!(pese(poids(plaque)) > pese(poids(sous)))) defauts.push(`${plaque} ne l'emporte pas sur ${sous}`);
+  // Aucune autre plaque, qui couvrirait la marque de qui joue ou d'un jeton tenu en main.
+  for (const regle of selecteursDe(css)) {
+    if (!/^\.combat-case\.portee \./.test(regle.selecteur) || PLAQUES.includes(regle.selecteur)) continue;
+    defauts.push(`une autre règle sur une case hachurée : ${regle.selecteur}`);
+  }
+  for (const marque of [".combat-jeton.joue", ".combat-jeton[aria-pressed=\"true\"]"]) if (valeur(css, marque, "background") !== "var(--accent-doux)") defauts.push(`${marque} sans sa plaque, l'accent doux`);
+  // Ce qui se lit sur la plaque est le texte du site.
+  for (const porteur of [".combat-jeton", ".combat-case-plus"]) if (valeur(css, porteur, "color") !== "var(--texte)") defauts.push(`${porteur} : ${valeur(css, porteur, "color")} sur la plaque`);
+  for (const theme of ["clair", "sombre"]) {
+    const j = jetons(jetonsCss, theme);
+    const mesure = contraste(j.texte, j.fond);
+    if (!(mesure >= 4.5)) defauts.push(`${theme} : --texte sur --fond, ${mesure.toFixed(2)}:1 sous 4,5`);
+  }
+  return defauts;
+}
+
+test("combat.css — sur une case hachurée, une plaque du fond sous les jetons et le « +k », hors de qui joue ; --texte y tient 4,5:1 dans les deux thèmes", () => {
+  assert.deepEqual(defautsDeLaPlaque(COMBAT, JETONS), []);
+  // Sans plaque, le texte et les ronds se dessinaient sur la hachure : sous 4,5:1 pour le texte en sombre, sous 3:1 pour un rond.
+  const sombre = jetons(JETONS, "sombre");
+  assert.equal(contraste(sombre.texte, sombre["combat-portee"]).toFixed(2), "2.34");
+  assert.ok(contraste(sombre["combat-adv"], sombre["combat-portee"]) < 3);
+  const refuse = (css, motif, jetonsCss = JETONS) => assert.match(defautsDeLaPlaque(css, jetonsCss).join("\n"), motif);
+  // La feuille d'avant : aucune plaque.
+  const bloc = `${PLAQUES[0]},\n${PLAQUES[1]} {\n  background-color: var(--fond);\n}\n\n`;
+  refuse(casser(FEUILLE, bloc, ""), /\.combat-jeton:not\(\.joue\):not\(\[aria-pressed="true"\]\) : sans la plaque du fond[\s\S]*\.combat-case-plus : sans la plaque du fond/);
+  refuse(casser(FEUILLE, `${PLAQUES[1]} {\n  background-color: var(--fond);`, `${PLAQUES[1]} {\n  background-color: transparent;`), /\.combat-case-plus : sans la plaque du fond/);
+  // La plaque sur le jeton de qui joue : elle couvrirait sa marque.
+  refuse(casser(FEUILLE, `${PLAQUES[0]},`, ".combat-case.portee .combat-jeton,"), /une autre règle sur une case hachurée : \.combat-case\.portee \.combat-jeton$/m);
+  // Un texte qui ne tiendrait pas sur la plaque.
+  refuse(FEUILLE, /sombre : --texte sur --fond/, JETONS.replace("--texte: #e6e8eb;", "--texte: #3a3f46;"));
+  refuse(casser(FEUILLE, ".combat-case-plus {\n  position: relative;\n  z-index: 1;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--texte);", ".combat-case-plus {\n  position: relative;\n  z-index: 1;\n  padding: 0;\n  border: 0;\n  background: transparent;\n  color: var(--combat-mort);"), /\.combat-case-plus : var\(--combat-mort\) sur la plaque/);
+});
+
+// Le volet, non modal, peut couvrir ce qui a le focus (WCAG 2.4.11) : tant qu'il est montré, la page garde en bas une
+// marge de défilement de sa hauteur au plus (le jeton de sa hauteur), par la feuille seule. À 56rem, la bulle posée n'en
+// demande aucune. Rien d'autre ne pose de marge de défilement, et la racine ne porte rien d'autre.
+const RACINE_DU_VOLET = "html:has(.combat-bulle:not([hidden]))";
+function defautsDeLaMargeDuVolet(css) {
+  const defauts = [];
+  const hauteur = valeur(css, ".combat-bulle", "max-height");
+  if (hauteur !== "var(--hauteur-volet)") defauts.push(`le volet : max-height ${hauteur}`);
+  if (valeur(css, RACINE_DU_VOLET, "scroll-padding-bottom") !== hauteur) defauts.push(`${RACINE_DU_VOLET} { scroll-padding-bottom: ${valeur(css, RACINE_DU_VOLET, "scroll-padding-bottom")} } : pas la hauteur du volet`);
+  if (valeur(css, RACINE_DU_VOLET, "scroll-padding-bottom", MEDIA_56) !== "auto") defauts.push(`${MEDIA_56} ${RACINE_DU_VOLET} { scroll-padding-bottom: ${valeur(css, RACINE_DU_VOLET, "scroll-padding-bottom", MEDIA_56)} } : la bulle posée garde la marge`);
+  for (const regle of selecteursDe(css)) {
+    for (const [propriete, v] of declarations(regle.corps)) {
+      const marge = /^scroll-(?:padding|margin)/.test(propriete);
+      if (regle.selecteur === RACINE_DU_VOLET ? propriete !== "scroll-padding-bottom" : marge) defauts.push(`${[regle.cadre, regle.selecteur].filter(Boolean).join(" ")} { ${propriete}: ${v} }`);
+    }
+  }
+  return defauts;
+}
+
+test("combat.css — tant que le volet est montré, la page garde en bas une marge de défilement de sa hauteur ; à 56rem, aucune", () => {
+  assert.deepEqual(defautsDeLaMargeDuVolet(COMBAT), []);
+  const refuse = (css, motif) => assert.match(defautsDeLaMargeDuVolet(css).join("\n"), motif);
+  // La feuille d'avant : aucune marge.
+  refuse(casser(FEUILLE, `${RACINE_DU_VOLET} {\n  scroll-padding-bottom: var(--hauteur-volet);\n}\n\n`, ""), /\{ scroll-padding-bottom: null \} : pas la hauteur du volet/);
+  refuse(casser(FEUILLE, "  scroll-padding-bottom: var(--hauteur-volet);", "  scroll-padding-bottom: var(--espace-6);"), /\{ scroll-padding-bottom: var\(--espace-6\) \} : pas la hauteur du volet/);
+  refuse(casser(FEUILLE, "    scroll-padding-bottom: auto;", "    scroll-padding-bottom: var(--hauteur-volet);"), /la bulle posée garde la marge/);
+  // Une marge posée ailleurs, ou autre chose posé sur la racine.
+  refuse(`${FEUILLE}\n.combat-fiche {\n  scroll-margin-bottom: var(--hauteur-volet);\n}\n`, /^\.combat-fiche \{ scroll-margin-bottom: var\(--hauteur-volet\) \}$/m);
+  refuse(`${FEUILLE}\n${RACINE_DU_VOLET} {\n  overflow: hidden;\n}\n`, /\{ overflow: hidden \}$/m);
 });
 
 // Contrat § 10.3, le bandeau.

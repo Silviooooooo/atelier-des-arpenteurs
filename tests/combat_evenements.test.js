@@ -18,8 +18,10 @@
 //
 // Au groupe 2 (contrat du groupe, § 2, § 4, § 5.4) : l'événement « annuler »
 // entre dans la table, le plafond passe à 15 000 événements, le rejeu rend la
-// main par tranches, le journal n'est recopié qu'une fois par événement, et le
-// PJ visé par un adversaire choisit le type de sa défense à égalité de dés.
+// main par tranches, le journal n'est recopié qu'une fois par événement (et
+// le rejeu le prolonge d'un événement à l'autre sans le recopier, relecture
+// du groupe, C-09), et le PJ visé par un adversaire choisit le type de sa
+// défense à égalité de dés.
 // La pile d'annulation ne passe jamais par JSON : les états entiers se
 // comparent sans elle (ses contrôles sont dans combat_annulation.test.js), et
 // les lignes du journal par leur genre et leur texte (leurs segments ont les
@@ -1239,6 +1241,88 @@ test("rejeu, le générateur : il cède { pas } après chaque tranche, ⌊n/1 00
   assert.deepEqual(mener(rejeu({ ...contenuDe(2000), regles: 1 })), { cedes: [], fin: { erreur: { pas: 0, code: "forme", message: "Ce combat a été commencé avec une autre version des règles." } } });
 });
 
+// Groupe 2 (relecture du groupe, C-09 ; compl. § 4.10, « le rejeu reste
+// linéaire, annulations comprises ») : le rejeu laisse la liste du journal
+// ouverte d'un événement à l'autre, et ne la gèle qu'à la fin. Ce qu'il rend
+// est ce qu'appliquer() fait pas à pas : l'état, le journal ligne pour ligne
+// (segments et barres compris), l'annonce, et les plages des maillons, que la
+// liste partagée fausserait si elles se lisaient après l'événement.
+
+/** Le combat refait par appliquer(), un événement après l'autre, comme le jeu. */
+const pasAPas = (contenu) => contenu.evenements.reduce((etat, evenement) => jouer(etat, evenement), ouvrirCombat(contenu.miseEnPlace));
+
+// Les maillons de la pile d'annulation, du plus récent au plus ancien : leur
+// genre et leur plage. La pile ne se compare jamais en profondeur (contrat du
+// groupe 2, § 0.2, règle 6).
+function maillonsDe(etat) {
+  const vus = [];
+  for (let maillon = etat.annulation.pile; maillon !== null; maillon = maillon.precedent) vus.push({ genre: maillon.quoi.genre, plage: maillon.plage });
+  return vus;
+}
+
+// Rejoue le contenu, le refait pas à pas, et compare ; rend les deux états.
+function commeAppliquer(contenu, nom) {
+  const rendu = rejouer(contenu);
+  assert.deepEqual(Object.keys(rendu), ["etat"], `${nom} : ${JSON.stringify(rendu.erreur)}`);
+  const { etat } = rendu;
+  const attendu = pasAPas(contenu);
+  assert.deepEqual(sansAnnulation(etat), sansAnnulation(attendu), `${nom} : l'état, hors annulation`);
+  assert.deepEqual(maillonsDe(etat), maillonsDe(attendu), `${nom} : les plages des maillons`);
+  assert.equal(etat.annulation.attente === null, attendu.annulation.attente === null, `${nom} : le geste payé en attente`);
+  // Le journal rendu est gelé, et chaque ligne ; tout le reste de l'état aussi.
+  assert.ok(Object.isFrozen(etat.journal), `${nom} : le journal rendu est gelé`);
+  assert.ok(etat.journal.every(estGele), `${nom} : chaque ligne est gelée`);
+  assert.ok(Object.isFrozen(etat), `${nom} : l'état est gelé`);
+  for (const [champ, valeur] of Object.entries(sansAnnulation(etat))) assert.ok(estGele(valeur), `${nom} : ${champ} est gelé`);
+  return { etat, attendu };
+}
+
+test("le rejeu rend ce qu'appliquer fait pas à pas, plages des maillons comprises : le combat de référence, 2 000 passes, 1 000 paires « geste, annuler »", () => {
+  // Le combat de référence : des capacités jouées avec leurs dés, une mort, la
+  // fin du combat. Puis, à sa suite, chacun de ses gestes annulé, du dernier
+  // au premier : chaque ligne « Annulé » barre la plage de son maillon.
+  const { contenu } = versContenu(scenario, PHOTOS_DE_REFERENCE);
+  const { attendu: reference } = commeAppliquer(contenu, "le combat de référence");
+  const maillons = maillonsDe(reference);
+  assert.ok(maillons.length > 1 && maillons.some((maillon) => maillon.genre === "capacite"), "la référence laisse des maillons de capacité");
+  const annulations = Array.from({ length: maillons.length }, () => ({ type: "annuler" }));
+  const { etat: defait } = commeAppliquer({ ...contenu, evenements: [...contenu.evenements, ...annulations] }, "la référence, puis tout annulé");
+  assert.deepEqual(
+    defait.journal.slice(-maillons.length).map((ligne) => ligne.barre),
+    maillons.map((maillon) => maillon.plage),
+    "les barres sont les plages des maillons, du dernier geste au premier",
+  );
+  assert.equal(defait.annulation.pile, null, "tout est défait");
+
+  // 2 000 passes : chacune est un geste, ses trois lignes [2 + 3r, 5 + 3r).
+  const miseEnPlace = miseEnPlaceEssai(surD4(AUBEPINE, MARMITON));
+  const passes = Array.from({ length: 1999 }, (_rien, rang) => ({ type: "passer", qui: rang % 2 === 0 ? "pj1" : "adv2" }));
+  const { etat: passe } = commeAppliquer({ regles: REGLES, revision: 1, miseEnPlace, evenements: [LANCER, ...passes] }, "2 000 passes");
+  assert.deepEqual(
+    maillonsDe(passe).reverse(),
+    passes.map((_rien, rang) => ({ genre: "passer", plage: [2 + 3 * rang, 5 + 3 * rang] })),
+  );
+
+  // 1 000 paires : « passer » (trois lignes) ou « Fin de tour » (deux), tour à
+  // tour, chacun aussitôt annulé ; la ligne « Annulé » suit sa plage.
+  const paires = [];
+  const barres = [];
+  let lignes = 2;
+  for (let rang = 0; rang < 1000; rang += 1) {
+    const geste = rang % 2 === 0 ? { type: "passer", qui: "pj1" } : { type: "fin_de_tour" };
+    const ecrites = geste.type === "passer" ? 3 : 2;
+    paires.push(geste, { type: "annuler" });
+    barres.push([lignes, lignes + ecrites]);
+    lignes += ecrites + 1;
+  }
+  const { etat: annule } = commeAppliquer({ regles: REGLES, revision: 1, miseEnPlace, evenements: [LANCER, ...paires] }, "1 000 paires");
+  assert.equal(annule.journal.length, lignes);
+  assert.deepEqual(annule.journal.filter((ligne) => ligne.genre === "annule").map((ligne) => ligne.barre), barres);
+  assert.deepEqual(annule.tour, { numero: 1, camp: "pj" }, "chaque geste défait : le tour d'avant lui");
+  assert.equal(annule.annulation.pile, null);
+  assert.equal(annule.pas, 2001, "le compte des événements ne recule pas");
+});
+
 test("rejouer refuse un contenu d'une autre version des règles, ou qui ne se lit pas, sans rien jouer", () => {
   const { contenu } = versContenu(scenario, PHOTOS_DE_REFERENCE, { jusqua: 0 });
   assert.equal(contenu.regles, REGLES);
@@ -1623,4 +1707,47 @@ test("une recopie du journal par événement : un tableau neuf quand il écrit, 
   );
   assert.equal(annule.journal.length, longueur + 4);
   assert.ok(Object.isFrozen(annule.journal));
+});
+
+// Le rejeu (relecture du groupe 2, C-09) : rejouer N événements par
+// appliquer() recopiait N fois une liste qui s'allonge, un coût quadratique
+// (15 000 passes en 22 s sous Node). Le rejeu prolonge la même liste d'un
+// événement à l'autre : il ne la recopie qu'à sa première écriture, quand
+// elle est vide, et le compte des recopies d'une liste longue ne croît plus
+// avec N. Le contrôle le voit aussi sur le chemin qui gèle à chaque
+// événement, appliquer() pas à pas : là, il croît avec N.
+test("le rejeu de N événements recopie le journal un nombre de fois qui ne croît pas avec N ; appliquer, pas à pas, une fois par événement qui écrit", () => {
+  // Plus longue que toute autre liste de ces états : seul le journal l'atteint.
+  const seuil = 50;
+  const miseEnPlace = miseEnPlaceEssai(surD4(AUBEPINE, MARMITON));
+  const contenuDe = (evenements) => ({ regles: REGLES, revision: 1, miseEnPlace, evenements: [LANCER, ...evenements] });
+  const passes = (combien) => contenuDe(Array.from({ length: combien - 1 }, (_rien, rang) => ({ type: "passer", qui: rang % 2 === 0 ? "pj1" : "adv2" })));
+  const paires = (combien) => contenuDe(Array.from({ length: combien }, (_rien, rang) => [rang % 2 === 0 ? { type: "passer", qui: "pj1" } : { type: "fin_de_tour" }, { type: "annuler" }]).flat());
+
+  // Armé : l'étalement d'une liste de cette longueur se compte.
+  const longue = Array.from({ length: seuil }, (_rien, rang) => rang);
+  assert.equal(compterLesRecopies(seuil, () => [...longue]), 1);
+
+  for (const [nom, fabriquer, petit, grand] of [
+    ["passes", passes, 100, 1000],
+    ["paires « geste, annuler »", paires, 50, 500],
+  ]) {
+    // Les contenus se font hors du compte : leur liste d'événements est longue.
+    const [court, long] = [fabriquer(petit), fabriquer(grand)];
+    const recopies = [court, long].map((contenu) => {
+      let rendu = null;
+      const vues = compterLesRecopies(seuil, () => {
+        rendu = rejouer(contenu);
+      });
+      assert.equal(rendu.etat?.pas, contenu.evenements.length, `${nom} : ${JSON.stringify(rendu.erreur)}`);
+      assert.ok(rendu.etat.journal.length > 2 * seuil, `${nom} : le journal dépasse le seuil`);
+      return vues;
+    });
+    assert.equal(recopies[1], recopies[0], `${nom} : ${recopies[0]} recopies pour ${court.evenements.length} événements, ${recopies[1]} pour ${long.evenements.length}`);
+    assert.ok(recopies[1] <= 1, `${nom} : ${recopies[1]} recopies`);
+    // Le chemin qui gèle à chaque événement : une recopie par événement qui
+    // écrit, dès que la liste atteint le seuil.
+    const pasAPasVues = compterLesRecopies(seuil, () => pasAPas(long));
+    assert.ok(pasAPasVues > long.evenements.length / 2, `${nom}, pas à pas : ${pasAPasVues} recopies`);
+  }
 });

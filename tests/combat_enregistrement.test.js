@@ -210,6 +210,11 @@ test("donnée abîmée — chaque défaut de l'enregistrement est « illisible �
   }
   assert.ok(rempli, "un chiffré au base64 rempli a été trouvé");
   assert.equal(typeof (await dechiffrerCombat(rempli, SECRET, { mode: "demo" })).texte, "string", "désarmé : avec son remplissage, il se lit");
+  // La date n'est jugée que par sa forme, celle de toISOString : Date.parse
+  // lit ce texte de dix millions de signes et plus, un commentaire entre
+  // parenthèses lui étant permis (relecture du groupe 2, C-23).
+  const dateDemesuree = `Oct 25 2026 (${"x".repeat(10_000_000)})`;
+  assert.equal(Number.isNaN(Date.parse(dateDemesuree)), false, "Date.parse la lit");
   const cas = {
     "un signe du chiffré changé": { ...e, chiffre: retourne(e.chiffre) },
     "le vecteur d'un autre chiffrement": { ...e, iv: autreChiffre.iv },
@@ -241,6 +246,10 @@ test("donnée abîmée — chaque défaut de l'enregistrement est « illisible �
     "un chiffré plus long que le plus gros combat": { ...e, chiffre: "A".repeat(12 * 1024 * 1024) },
     "une date qui n'en est pas une": { ...e, enregistre_le: "hier" },
     "une date qui n'est pas un texte": { ...e, enregistre_le: 12 },
+    "une date que Date.parse lit, de dix millions de signes et plus": { ...e, enregistre_le: dateDemesuree },
+    "une date que Date.parse lit, écrite en mots": { ...e, enregistre_le: "Oct 12 2026" },
+    "une date que Date.parse lit, sans ses millièmes": { ...e, enregistre_le: "2026-10-12T08:00:00Z" },
+    "une date à la forme de toISOString, que Date.parse ne lit pas": { ...e, enregistre_le: "2026-13-45T99:99:99.999Z" },
     "un format nul": { ...e, format: 0 },
     "un format en texte": { ...e, format: "1" },
     "un format non entier": { ...e, format: 1.5 },
@@ -263,6 +272,10 @@ test("donnée abîmée — chaque défaut de l'enregistrement est « illisible �
   assert.equal((await dechiffrerCombat(cas["un champ en plus"], SECRET, { mode: "demo" })).revision, 3);
   // Désarmé : le même enregistrement, intact.
   assert.equal((await dechiffrerCombat({ ...e }, SECRET, { mode: "demo" })).texte, TEXTE);
+  // Les deux formes de toISOString : l'année en quatre chiffres, ou signée en six.
+  for (const date of ["2026-10-12T08:00:00.000Z", "+020000-01-01T00:00:00.000Z", "-000001-01-01T00:00:00.000Z"]) {
+    assert.equal((await dechiffrerCombat({ ...e, enregistre_le: date }, SECRET, { mode: "demo" })).texte, TEXTE, date);
+  }
   // Un mode de lecture inconnu : rien ne se lit.
   assert.equal((await dechiffrerCombat(e, SECRET, { mode: "autre" })).code, "illisible");
   assert.equal((await dechiffrerCombat(e, SECRET)).code, "illisible");

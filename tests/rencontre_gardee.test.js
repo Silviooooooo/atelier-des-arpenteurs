@@ -302,6 +302,11 @@ test("déchiffrement — absente, forme, contenu ; rien ne lève, si long ou si 
   const e = await chiffrer(D2);
   for (const rien of [null, undefined]) assert.deepEqual(await lire(rien), { entrees: [], ecart: "absente" });
   const sansCle = Object.fromEntries(Object.entries(e).filter(([champ]) => champ !== "enregistre_le"));
+  // La date n'est jugée que par sa forme, celle de toISOString : Date.parse
+  // lit ce texte de dix millions de signes et plus, un commentaire entre
+  // parenthèses lui étant permis (relecture du groupe 2, C-23).
+  const dateDemesuree = `Oct 25 2026 (${"x".repeat(10_000_000)})`;
+  assert.equal(Number.isNaN(Date.parse(dateDemesuree)), false, "Date.parse la lit");
   const formes = [
     ["un texte", "enveloppe"],
     ["un nombre", 3],
@@ -329,12 +334,20 @@ test("déchiffrement — absente, forme, contenu ; rien ne lève, si long ou si 
     ["un chiffré qui n'est pas un texte", { ...e, chiffre: [1, 2, 3] }],
     ["une date qui n'en est pas une", { ...e, enregistre_le: "pas une date" }],
     ["une date en nombre", { ...e, enregistre_le: 42 }],
+    ["une date que Date.parse lit, de dix millions de signes et plus", { ...e, enregistre_le: dateDemesuree }],
+    ["une date que Date.parse lit, écrite en mots", { ...e, enregistre_le: "Oct 25 2026" }],
+    ["une date que Date.parse lit, sans ses millièmes", { ...e, enregistre_le: "2026-10-25T08:00:00Z" }],
+    ["une date à la forme de toISOString, que Date.parse ne lit pas", { ...e, enregistre_le: "2026-13-45T99:99:99.999Z" }],
   ];
   for (const [quoi, valeur] of formes) assert.deepEqual(await lire(valeur), { entrees: [], ecart: "forme" }, quoi);
   // Lue sous un mode inconnu, ou sans mode, une enveloppe n'a pas de forme.
   assert.equal(await ecart(lire({ ...e, mode: "autre" }, SECRET, "autre")), "forme");
   assert.equal(await ecart(dechiffrerRencontre(e, SECRET)), "forme");
   assert.equal(await ecart(dechiffrerRencontre(e, SECRET, null)), "forme");
+  // Les deux formes de toISOString passent : l'année en quatre chiffres, ou signée en six.
+  for (const date of ["2026-10-25T08:00:00.000Z", "+020000-01-01T00:00:00.000Z", "-000001-01-01T00:00:00.000Z"]) {
+    assert.deepEqual(await lire({ ...e, enregistre_le: date }), { entrees: D2, ecart: null }, date);
+  }
   // Les bornes elles-mêmes passent la forme : la clé ou le déchiffrement les arrêtent.
   assert.equal(await ecart(lire({ ...e, iterations: ITERATIONS_MAX })), "cle");
   assert.equal(await ecart(lire({ ...e, iterations: 1 })), "cle");

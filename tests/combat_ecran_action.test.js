@@ -2,7 +2,10 @@
 // simulateur de combat (SPECIFICATION.md, § 17 et § 11, domaine « Combat » ;
 // contrat du lot 4, groupe 2, § 8.1 à § 8.4, § 9.5 à § 9.7, § 14 É1) :
 // js/ecrans/combat_action.js, dans le document simulé, sur des vues écrites
-// à la main dans les formes du contrat.
+// à la main dans les formes du contrat. Trois d'entre elles (la liste, le jet
+// payé, l'attaque du Chef) sont tenues à la forme de celles que rend
+// vuePanneau au même moment du combat de référence : mêmes clés, sur deux
+// niveaux (relecture du groupe 2, C-24).
 //
 // Le module ne porte aucune règle : ces contrôles vérifient qu'il montre ce
 // que dit la vue, qu'il émet la commande que la vue lui donne avec son
@@ -16,6 +19,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { boutons, installerDom, texteDe } from "./outils/dom_simule.js";
+import { vuePanneau } from "../js/combat/lecture.js";
+import { scenario } from "./outils/combat_reference.js";
+import { aubepineEssai, chefDePartieEssai, marmitonDeCorveeEssai } from "./outils/photographies_essai.js";
+import { versContenu } from "./outils/scenario.js";
 
 const { creer, composerListe, composerGeste } = await import("../js/ecrans/combat_action.js");
 
@@ -178,7 +185,7 @@ const LIGNES = {
   dressage: ligneVue({ cle: "6:0", libelle: "Dressage minute", degats: null, intervention: true, cout: "1 souffle", commande: capacite(6, 0), jouer: "Jouer Dressage minute", survol: survolDe("Dressage minute", { origine: "Saucier", portee: "Cible au choix, sans condition de portée" }) }),
   pas1: ligneVue({ cle: "9:0", libelle: "Pas chassé [1]", degats: "1 case", commande: capacite(9, 0), jouer: "Jouer Pas chassé [1]", survol: survolDe("Pas chassé", { origine: "Gestes de cuisine", portee: "Arrivée : les cases à une distance de 1 à 1, hachurées sur la carte.", hachures: ["A2", "B1", "B2"] }) }),
   pas2: ligneVue({ cle: "9:1", libelle: "Pas chassé [2]", degats: "2 cases", cout: "2 souffle", commande: capacite(9, 1), jouer: "Jouer Pas chassé [2]", survol: survolDe("Pas chassé", { origine: "Gestes de cuisine", hachures: ["A2", "A3", "B1", "B2", "B3", "C1", "C2", "C3"] }) }),
-  taloche: ligneVue({ cle: "15:0", libelle: "Taloche [1]", degats: "2/4/8", commande: capacite(15, 0), jouer: "Jouer Taloche [1]", survol: survolDe("Taloche", { origine: "Taloche", portee: "Portée 0 : sa case seule, hachurée sur la carte.", hachures: ["A1"] }) }),
+  taloche: ligneVue({ cle: "15:0", libelle: "Taloche [1]", degats: "2/4/8", commande: capacite(15, 0), jouer: "Jouer Taloche [1]", survol: survolDe("Taloche", { origine: "Gestes de cuisine", portee: "Portée 0 : sa case seule, hachurée sur la carte.", hachures: ["A1"] }) }),
 };
 const CLES = ["0:0", "1:0", "4:0", "4:1", "6:0", "9:0", "9:1", "15:0"];
 
@@ -188,7 +195,14 @@ const PASSIFS = [
   { cle: "passif:12", libelle: "Solo du chef [1]", survol: survolDe("Solo du chef", { origine: "Saucier", description: "Seul sur sa case : 1 avantage.", cout: "Passif : ne se joue pas" }) },
 ];
 
-/** La bulle sans geste (vue 1) : la liste d'Aubépine. */
+const ACTION_EN_COURS = "Une action est en cours.";
+/** Les six étapes du groupe 1, celle du jet nommée comme elle l'est pour qui la lance, et celle en cours. */
+const etapesDuGroupe1 = (jet, enCours) =>
+  ["Capacité", "Cible", jet, "Localisation", "Interventions", "Dégâts"].map((nom, rang) => ({ nom, etat: rang < enCours ? "faite" : rang === enCours ? "en_cours" : "a_venir" }));
+/** Une ligne que le geste payé rend inactive (contrat, § 8.1). */
+const enCours = (ligne, choisi = false) => ({ ...ligne, actif: false, raison: ACTION_EN_COURS, choisi });
+
+/** La bulle sans geste (vue 1) : la liste d'Aubépine, juste après le lancement. */
 const vueListe = (champs = {}) => ({
   genre: "action",
   candidats: [],
@@ -196,7 +210,7 @@ const vueListe = (champs = {}) => ({
   entete: { titre: "Aubépine Crèmebrûlée", sous: "actions restantes : 2 sur 2 · souffle 10/10" },
   defenseur: null,
   fermeture: { genre: "fermer", libelle: "Fermer", commande: { choisir: null } },
-  etapes: [],
+  etapes: etapesDuGroupe1("Jet d'attaque", 0),
   groupes: [
     { titre: "Couteau d'office (précise)", lignes: [LIGNES.frappe, LIGNES.emincer] },
     { titre: "Saucier", lignes: [LIGNES.fournaise1, LIGNES.fournaise2, LIGNES.dressage] },
@@ -205,7 +219,7 @@ const vueListe = (champs = {}) => ({
   passer: { actif: true, raison: null, commande: { evenement: { type: "passer", qui: "pj1" } } },
   passifs: PASSIFS,
   geste: null,
-  annonce: null,
+  annonce: { pas: 1, texte: "Combat lancé : 1 personnage contre 3 adversaires. Les PJ commencent. — Tour 1 · camp des PJ —" },
   vainqueur: null,
   focus: "ligne:0:0",
   ...champs,
@@ -261,7 +275,11 @@ const gesteVu = (champs = {}) => ({
   ...champs,
 });
 
-/** La bulle avec un geste payé (vue 2 bis), au point de la maquette. */
+/**
+ * La bulle avec un geste payé (vue 2 bis), au point de la maquette : ses
+ * lignes restent, inactives (« Une action est en cours. »), « Passer son
+ * tour » aussi, et ses passifs.
+ */
 const vueJet = (champs = {}) => ({
   genre: "action",
   candidats: [],
@@ -269,23 +287,51 @@ const vueJet = (champs = {}) => ({
   entete: { titre: "Taloche [1] contre Marmiton de corvée n° 2", sous: "Aubépine · dernière action · souffle 6/10" },
   defenseur: null,
   fermeture: { genre: "reduire", libelle: "Réduire", onglet: "Taloche [1] : rouvrir" },
-  etapes: [
-    { nom: "Capacité", etat: "faite" },
-    { nom: "Cible", etat: "faite" },
-    { nom: "Jet d'attaque", etat: "en_cours" },
-    { nom: "Localisation", etat: "a_venir" },
-    { nom: "Interventions", etat: "a_venir" },
-    { nom: "Dégâts", etat: "a_venir" },
-  ],
-  groupes: [],
-  passer: null,
-  passifs: [],
+  etapes: etapesDuGroupe1("Jet d'attaque", 2),
+  groupes: vueListe().groupes.map((groupe) => ({ ...groupe, lignes: groupe.lignes.map((ligne) => enCours(ligne, ligne.cle === "15:0")) })),
+  passer: { actif: false, raison: ACTION_EN_COURS, commande: { evenement: { type: "passer", qui: "pj1" } } },
+  passifs: PASSIFS,
   geste: gesteVu(),
   annonce: { pas: 12, texte: "2e dé : 4, échec. Relancer ou garder ?" },
   vainqueur: null,
   focus: "choix:relancer",
   ...champs,
 });
+
+/**
+ * Le Chef de partie attaque Aubépine : sa Frappe, après son premier dé. Le
+ * jet est celui de qui se défend (« Jet de défense », lecture.js, etapesDe) ;
+ * ses lignes, sous son arme puis sous « Capacités », inactives ; aucun
+ * passif.
+ */
+const vueDeLAttaqueDuChef = (champs = {}) =>
+  vueJet({
+    nom: "Chef de partie : ses actions",
+    entete: { titre: "Frappe contre Aubépine Crèmebrûlée", sous: "Chef · dernière action · souffle 6/7" },
+    defenseur: "Aubépine lance sa défense · souffle 6/10",
+    fermeture: { genre: "reduire", libelle: "Réduire", onglet: "Frappe : rouvrir" },
+    etapes: etapesDuGroupe1("Jet de défense", 2),
+    groupes: [
+      {
+        titre: "Spatule souple",
+        lignes: [
+          enCours(ligneVue({ commande: { evenement: { type: "capacite", qui: "adv2", capacite: 0, facon: 0 } }, survol: survolDe("Frappe", { origine: "Spatule souple" }) }), true),
+          enCours(ligneVue({ cle: "1:0", libelle: "Moulinet farineux [1]", commande: { evenement: { type: "capacite", qui: "adv2", capacite: 1, facon: 0 } }, jouer: "Jouer Moulinet farineux [1]", survol: survolDe("Moulinet farineux", { origine: "Spatule souple" }) })),
+        ],
+      },
+      {
+        titre: "Capacités",
+        lignes: [
+          enCours({ ...LIGNES.pas1, cle: "2:0", commande: { evenement: { type: "capacite", qui: "adv2", capacite: 2, facon: 0 } }, survol: { ...LIGNES.pas1.survol, origine: null } }),
+          enCours({ ...LIGNES.pas2, cle: "2:1", commande: { evenement: { type: "capacite", qui: "adv2", capacite: 2, facon: 1 } }, survol: { ...LIGNES.pas2.survol, origine: null } }),
+        ],
+      },
+    ],
+    passer: { actif: false, raison: ACTION_EN_COURS, commande: { evenement: { type: "passer", qui: "adv2" } } },
+    passifs: [],
+    annonce: { pas: 45, texte: "1er dé : 5, réussi." },
+    ...champs,
+  });
 
 /** Une vue réduite à un geste, pour regarder une seule de ses parties. */
 const vueDuGeste = (champs, autres = {}) =>
@@ -301,6 +347,34 @@ const QUI_JOUE = {
   annonce: null,
   focus: "candidat:pj1",
 };
+
+// ——— Les vues écrites à la main, tenues à celles du moteur ———
+
+const estObjet = (valeur) => valeur !== null && typeof valeur === "object" && !Array.isArray(valeur);
+/** Les clés d'une vue sur deux niveaux : les siennes, puis celles de chaque objet qu'elle porte, et celles des éléments de chaque liste. */
+function clesSurDeuxNiveaux(vue) {
+  const cles = { "": Object.keys(vue).sort() };
+  for (const [cle, valeur] of Object.entries(vue)) {
+    if (Array.isArray(valeur)) cles[`${cle}[]`] = [...new Set(valeur.filter(estObjet).flatMap((element) => Object.keys(element)))].sort();
+    else if (estObjet(valeur)) cles[cle] = Object.keys(valeur).sort();
+  }
+  return cles;
+}
+
+test("les vues — la liste, le jet payé et l'attaque du Chef, écrites à la main, ont les clés de vuePanneau sur deux niveaux, au même moment du combat de référence", () => {
+  const photos = { "Aubépine Crèmebrûlée": aubepineEssai(), "Chef de partie": chefDePartieEssai(), "Marmiton de corvée": marmitonDeCorveeEssai() };
+  const vueDuMoteur = (jusqua, choisi) => vuePanneau(versContenu(scenario, photos, { jusqua }).etat, choisi);
+  for (const [quoi, ecrite, duMoteur] of [
+    ["la liste d'Aubépine, au lancement", vueListe(), vueDuMoteur(0, "pj1")],
+    ["Taloche [1] contre le Marmiton n° 2, après deux dés", vueJet(), vueDuMoteur({ geste: 7, des: 2 }, "pj1")],
+    ["la Frappe du Chef contre Aubépine, après un dé", vueDeLAttaqueDuChef(), vueDuMoteur({ geste: 8, des: 1 }, "adv2")],
+  ]) {
+    assert.deepEqual(clesSurDeuxNiveaux(ecrite), clesSurDeuxNiveaux(duMoteur), quoi);
+  }
+  // Au même moment, les étapes : celles du groupe 1, et le jet de qui se défend quand un adversaire attaque.
+  assert.deepEqual(vueDeLAttaqueDuChef().etapes, vueDuMoteur({ geste: 8, des: 1 }, "adv2").etapes);
+  assert.deepEqual(vueListe().etapes, vueDuMoteur(0, "pj1").etapes);
+});
 
 // ——— a) La zone sous la carte ———
 
@@ -429,12 +503,12 @@ test("zone — sur un téléphone, le jet sous la carte : son titre, qui le joue
     leBouton(noeud, "Garder ce dé").click();
     assert.deepEqual(appels, [{ commande: { evenement: { type: "garder" } }, origine: "panneau" }]);
 
-    // Un adversaire attaque : son en-tête, et qui se défend sous les étapes.
-    rendre(vueJet({ nom: "Chef de partie : ses actions", entete: { titre: "Frappe contre Aubépine Crèmebrûlée", sous: "Chef · dernière action · souffle 6/7" }, defenseur: "Aubépine lance sa défense · souffle 6/10" }));
+    // Un adversaire attaque : son en-tête, et qui se défend sous les étapes ; le jet est celui de la défense.
+    rendre(vueDeLAttaqueDuChef());
     assert.deepEqual(corps.children.slice(0, 4).map((n) => [forme(n), n.textContent]), [
       ["h2.combat-qui", "Frappe contre Aubépine Crèmebrûlée"],
       ["p.combat-sous", "Chef · dernière action · souffle 6/7"],
-      ["ol.combat-etapes", "CapacitéCibleJet d'attaqueLocalisationInterventionsDégâts"],
+      ["ol.combat-etapes", "CapacitéCibleJet de défenseLocalisationInterventionsDégâts"],
       ["p.combat-defenseur", "Aubépine lance sa défense · souffle 6/10"],
     ]);
 
@@ -1035,6 +1109,31 @@ test("aperçu — un passif ouvre le sien au doigt, sans bouton ni hachure, sous
   });
 });
 
+test("aperçu — ouvert au doigt, sa ligne le dit (aria-expanded, aria-controls vers son identifiant) ; un autre ouvert, ou un passif, le lui ôte ; un passif ne porte rien", () => {
+  avecDom(() => {
+    const { lieu } = composer(composerListe, vueListe());
+    const frappe = laLigne(lieu, "0:0");
+    const taloche = laLigne(lieu, "15:0");
+    const etat = (ligne) => [ligne.getAttribute("aria-expanded"), ligne.getAttribute("aria-controls")];
+    assert.deepEqual(etat(frappe), [null, null], "fermé, rien");
+    appuyer(frappe, "touch");
+    const apercu = lieu.querySelector(".combat-apercu");
+    assert.match(apercu.id, /^combat-bulle-apercu-\d+$/);
+    assert.deepEqual(etat(frappe), ["true", apercu.id], "ouvert : la ligne dit ce qu'elle a ouvert");
+    assert.ok(lieu.querySelector(`#${frappe.getAttribute("aria-controls")}`) === apercu, "aria-controls désigne l'aperçu");
+    // Un appui sur une autre ligne : son aperçu, et la première ne dit plus rien.
+    appuyer(taloche, "touch");
+    assert.deepEqual(etat(frappe), [null, null]);
+    assert.deepEqual(etat(taloche), ["true", lieu.querySelector(".combat-apercu").id]);
+    // Un passif ouvert à son tour : la ligne ne dit plus rien, et le passif ne porte ni l'un ni l'autre.
+    const vif = tous(lieu, "span.combat-passif")[1];
+    appuyer(vif, "touch");
+    assert.deepEqual(etat(taloche), [null, null]);
+    assert.deepEqual(etat(vif), [null, null], "rien sur les passifs");
+    assert.equal(lieu.querySelector(".combat-apercu").hasAttribute("id"), false);
+  });
+});
+
 // ——— d) Le jet ———
 
 test("jet — des nœuds sans en-tête ni conteneur, dans l'ordre de la vue 2 bis : les étapes, qui se défend, les rangées, puis le contexte, les dés, le texte de la capacité et les réglages à la main", () => {
@@ -1133,14 +1232,10 @@ test("jet — sans geste, rien ; ni + ni − : la puissance n'est plus un régla
 
 test("jet — qui se défend : sous les étapes, quand un adversaire attaque ; sinon rien", () => {
   avecDom(() => {
-    const adversaire = vueJet({
-      nom: "Chef de partie : ses actions",
-      entete: { titre: "Frappe contre Aubépine Crèmebrûlée", sous: "Chef · dernière action · souffle 6/7" },
-      defenseur: "Aubépine lance sa défense · souffle 6/10",
-    });
+    const adversaire = vueDeLAttaqueDuChef();
     const { noeuds } = composer(composerGeste, adversaire);
     assert.deepEqual(noeuds.slice(0, 2).map((n) => [forme(n), n.textContent]), [
-      ["ol.combat-etapes", "CapacitéCibleJet d'attaqueLocalisationInterventionsDégâts"],
+      ["ol.combat-etapes", "CapacitéCibleJet de défenseLocalisationInterventionsDégâts"],
       ["p.combat-defenseur", "Aubépine lance sa défense · souffle 6/10"],
     ]);
     assert.equal(composer(composerGeste, vueJet()).lieu.querySelector(".combat-defenseur"), null);
@@ -1260,7 +1355,8 @@ test("jet — une capacité sans jet offre « Sans cible » ; sans cible ni « S
 
 test("jet — un déplacement : un double de 44 px par case d'arrivée, nommé comme sa case ; sa commande part telle quelle, à un ou deux événements", () => {
   avecLeTelephone(({ noeud, rendre, appels }) => {
-    const deux = { evenements: [regler("facon", 0), regler("arrivee", "C3")] };
+    // La commande à deux événements : des événements nus, comme les rend lecture.js (commandeDArrivee ; contrat, § 0.2, règle 7, et § 6.3).
+    const deux = { evenements: [{ type: "regler", champ: "facon", valeur: 0 }, { type: "regler", champ: "arrivee", valeur: "C3" }] };
     rendre(vueDuGeste({ cases: [{ case: "C3", nom: "Case C3 : s'y déplacer", choisie: false, commande: deux }, { case: "D4", nom: "Case D4 : s'y déplacer", choisie: true, commande: regler("arrivee", "D4") }] }));
     const cases = tous(noeud, ".combat-arrivees button");
     assert.deepEqual(cases.map((b) => [texteDe(b), b.getAttribute("aria-pressed"), b.className]), [["C3", "false", "combat-capacite"], ["D4", "true", "combat-capacite"]]);

@@ -414,6 +414,16 @@ function monter(visite) {
   // l'attente au lieu de son bouton.
   let reprises = 0;
   let enReprise = false;
+  // L'élément inactif (aria-disabled) que le clic en cours a touché, retenu
+  // à la capture : le clic au-dehors qui ferme la bulle redessine la barre
+  // avant que le bouton l'entende, et un bouton montré inactif ne fait rien
+  // (compl. § 4.10 ; spéc. § 17.7), même redevenu actif entre-temps.
+  let inactifAuClic = null;
+  // Le genre du dernier appui sur l'écran (« touch », « mouse », « pen »,
+  // « clavier »), vu en capture : un focus qui suit un appui du doigt n'ouvre
+  // pas d'infobulle, que l'appui ait touché la ligne ou le jeton (compl.
+  // § 4.2, « Au doigt » ; spéc. § 17.7).
+  let dernierAppui = null;
   // Ce qui est montré, pour ne réécrire que ce qui change.
   let montree = null;
   let bulleMontree = false;
@@ -439,6 +449,18 @@ function monter(visite) {
     }
   };
 
+  /** Le premier élément inactif (aria-disabled="true") de la cible d'un clic jusqu'à la racine de l'écran ; sinon null. */
+  function ancetreInactif(noeud) {
+    for (let courant = noeud; courant; courant = courant.parentNode) {
+      if (courant.getAttribute?.("aria-disabled") === "true") return courant;
+      if (courant === racine) return null;
+    }
+    return null;
+  }
+
+  /** Un bouton inactif : il l'est, ou il l'était quand le clic en cours l'a touché. */
+  const inactif = (bouton) => estInactif(bouton) || inactifAuClic === bouton;
+
   const hachurer = (noms) => plateau.hachurer(noms);
   const actions = { executer, lancerLeDe, ajouterPersonnage, ajouterAdversaires, placerRencontre, lancer, ouvrirFiche, ouvrirCase, ajouterLaDemonstration, hachurer };
   const plateau = partiePlateau.creer(actions);
@@ -447,11 +469,11 @@ function monter(visite) {
   // carte, sur un téléphone), dans une couche que l'écran crée et qu'elle
   // porte : elles se posent sur elle.
   const coucheDeLaZone = el("div", { classe: "combat-infobulles" });
-  const infobullesDeLaZone = partieBulle.creerInfobulles({ couche: coucheDeLaZone, actions: { hachurer }, services: { minuteur: services.minuteur, fenetre: services.fenetre } });
+  const infobullesDeLaZone = partieBulle.creerInfobulles({ couche: coucheDeLaZone, actions: { hachurer }, services: { minuteur: services.minuteur, fenetre: services.fenetre, dernierAppui: () => dernierAppui } });
   const action = partieAction.creer({ executer, lancerLeDe, hachurer }, { lier: infobullesDeLaZone.lier, couche: coucheDeLaZone });
   const bulle = partieBulle.creer(
-    { executer, lancerLeDe, hachurer, focusSurLeJeton, fermerLaCase: () => fermerLaListe(caseOuverte), rafraichir },
-    { composerListe: partieAction.composerListe, composerGeste: partieAction.composerGeste },
+    { executer, lancerLeDe, hachurer, focusSurLeJeton, focusSurLaCase, fermerLaCase: () => fermerLaListe(caseOuverte), rafraichir },
+    { composerListe: partieAction.composerListe, composerGeste: partieAction.composerGeste, dernierAppui: () => dernierAppui },
   );
   const preparation = partiePreparation.creer(actions);
 
@@ -471,7 +493,7 @@ function monter(visite) {
       "aria-describedby": "combat-raison-fin-de-tour",
       hidden: true,
       onclick: () => {
-        if (!estInactif(finDeTour) && commandeDeFin !== null) executer(commandeDeFin, "panneau");
+        if (!inactif(finDeTour) && commandeDeFin !== null) executer(commandeDeFin, "panneau");
       },
     },
     "Fin de tour",
@@ -563,7 +585,7 @@ function monter(visite) {
   }
 
   function demanderUnNouveauCombat() {
-    if (perimee() || estInactif(nouveau)) return;
+    if (perimee() || inactif(nouveau)) return;
     // Sur un téléphone, le menu reste ouvert : « Annuler » y rend la main au
     // bouton, qui doit se voir.
     menuOuvert = true;
@@ -596,7 +618,7 @@ function monter(visite) {
   // La question se relit au moment du clic, jamais dans une vue d'avant ;
   // le focus va au choix sans risque, « Garder ».
   function demanderLAnnulation() {
-    if (perimee() || estInactif(annulerLeGeste)) return;
+    if (perimee() || inactif(annulerLeGeste)) return;
     const vue = vueBarre(seance.etat()).annuler;
     if (!vue?.actif || !vue.question) return;
     menuOuvert = true;
@@ -711,7 +733,9 @@ function monter(visite) {
   // Quand on ne joue pas (un combat ouvert ailleurs, gardé mais illisible,
   // ou d'une autre version), ce bloc prend la place de la zone sous la carte
   // et dit pourquoi, avec le bouton qui en sort. Pendant « Reprendre le combat
-  // le plus récent », la même attente que l'ouverture remplace son bouton.
+  // le plus récent », la phrase d'attente de l'ouverture remplace son bouton,
+  // sans rôle : la région d'annonce des dés, déjà dans la page, reste la
+  // seule région polie de l'écran (compl. § 4.1).
   const titreDuBlocage = el("h2", { classe: "combat-qui", tabindex: "-1" });
   const choixDuBlocage = el("div", { classe: "combat-choix" });
   const blocage = { noeud: el("section", { classe: "combat-action", "aria-label": "Combat arrêté" }, titreDuBlocage, choixDuBlocage) };
@@ -723,7 +747,7 @@ function monter(visite) {
     if (signature === blocageMontre) return;
     blocageMontre = signature;
     poser(titreDuBlocage, phrase);
-    if (enReprise) choixDuBlocage.replaceChildren(el("p", { classe: "attente", role: "status" }, ATTENTE));
+    if (enReprise) choixDuBlocage.replaceChildren(el("p", { classe: "attente" }, ATTENTE));
     else choixDuBlocage.replaceChildren(...(bouton ? [boutonDeGarde(bouton)] : []));
   }
 
@@ -1210,7 +1234,7 @@ function monter(visite) {
   }
 
   async function copier() {
-    if (perimee() || estInactif(boutonCopier)) return;
+    if (perimee() || inactif(boutonCopier)) return;
     const texte = texteASortir("\n");
     let faite = false;
     try {
@@ -1234,7 +1258,7 @@ function monter(visite) {
   }
 
   function telechargerLeJournal() {
-    if (perimee() || estInactif(boutonTelecharger)) return;
+    if (perimee() || inactif(boutonTelecharger)) return;
     services.telecharger(nomDuFichier(seance.etat().lanceLe), `${MARQUE_D_ORDRE}${texteASortir("\r\n")}`, TYPE_DU_FICHIER);
   }
 
@@ -1265,30 +1289,42 @@ function monter(visite) {
 
   // Un clic hors de la bulle, de son onglet et de la carte la ferme (avant
   // le premier dé) ou la réduit (après) ; le focus reste où il est. Le clic
-  // se voit en capture, avant que ce qu'il touche ait agi.
+  // se voit en capture, avant que ce qu'il touche ait agi : l'élément
+  // inactif qu'il touche est retenu d'abord, car fermer la bulle redessine
+  // la barre, et peut rendre actif un bouton qui ne l'était pas au clic.
   function auClicDansLaPage(evenement) {
-    if (perimee() || !bulleMontree) return;
+    if (perimee()) return;
+    inactifAuClic = ancetreInactif(evenement?.target ?? null);
+    if (!bulleMontree) return;
     const cible = evenement?.target ?? null;
     if (!bulle.dehors(cible) || plateau.noeud.contains(cible)) return;
     sansBougerLeFocus(() => bulle.auDehors());
   }
 
-  // Échap ferme d'abord l'infobulle ouverte de la zone, sans bouger le focus ;
-  // sinon, la bulle montrée et le focus en elle ou sur son jeton, la bulle
-  // ferme son infobulle, ou se ferme, ou se réduit, et le focus va au jeton
-  // (au « +k » pour la liste d'une case). Sinon, Échap n'est pas pris.
+  /** Vrai si le nœud est l'un des « +k » de cette case. */
+  const estUnPlusDe = (noeud, nomDeCase) => noeud !== null && nomDeCase !== null && [...(noeudDeLaCase(nomDeCase)?.querySelectorAll(".combat-case-plus") ?? [])].includes(noeud);
+
+  // Échap ferme d'abord l'infobulle ouverte, de la zone ou de la bulle, où
+  // que soit le focus, sans le bouger (compl. § 4.1 ; WCAG 1.4.13) ; sinon,
+  // la bulle montrée et le focus en elle, sur son jeton ou sur le « +k » qui
+  // en tient lieu (celui de la case du protagoniste quand son jeton ne se
+  // voit pas, celui de la case dont la liste est ouverte), la bulle se ferme
+  // ou se réduit, et le focus va au jeton (au « +k » pour la liste d'une
+  // case). Sinon, Échap n'est pas pris.
   function auClavier(evenement) {
     if (evenement?.key !== "Escape" || perimee()) return;
-    if (infobullesDeLaZone.fermer()) {
+    if (infobullesDeLaZone.fermer() || (bulleMontree && bulle.fermerLInfobulle())) {
       evenement.preventDefault?.();
       return;
     }
     if (!bulleMontree) return;
     const actif = globalThis.document?.activeElement ?? null;
     const qui = protagonisteMontre;
-    const surSonJeton = actif !== null && qui !== null && actif === jetonDe(qui).jeton;
-    if (!surSonJeton && !bulle.noeud.contains(actif)) return;
     const laCase = lieuDuMoment() === bulle.listeDeCase ? caseOuverte : null;
+    const { jeton: sonJeton, nomDeCase: saCase } = jetonDe(qui);
+    const surSonJeton = actif !== null && sonJeton !== null && actif === sonJeton;
+    const surUnPlus = estUnPlusDe(actif, laCase) || (sonJeton === null && estUnPlusDe(actif, saCase));
+    if (!surSonJeton && !surUnPlus && !bulle.noeud.contains(actif)) return;
     const issue = sansBougerLeFocus(() => bulle.echap());
     if (issue === null) return;
     evenement.preventDefault?.();
@@ -1430,9 +1466,26 @@ function monter(visite) {
   // pas la page quand la préparation ou un blocage prend la place de la zone.
   racine.append(limite, aide, zoneDAvis, panneau, cadre, journal, action.annonce);
   rendreLeMenu();
-  // Le clic au-dehors se voit en capture ; Échap, sur l'écran entier.
+  // Le clic au-dehors se voit en capture ; Échap, sur l'écran entier. Le
+  // genre du dernier appui se voit en capture aussi, avant ce qu'il touche :
+  // le doigt (ou la souris, le stylet) au pointerdown, le clavier à une
+  // touche.
   racine.addEventListener("click", (evenement) => auClicDansLaPage(evenement), true);
   racine.addEventListener("keydown", (evenement) => auClavier(evenement));
+  racine.addEventListener(
+    "pointerdown",
+    (evenement) => {
+      dernierAppui = evenement?.pointerType || null;
+    },
+    true,
+  );
+  racine.addEventListener(
+    "keydown",
+    () => {
+      dernierAppui = "clavier";
+    },
+    true,
+  );
 
   // Une seule visite suit le gardien : celle d'avant se désabonne.
   visiteCourante?.desabonner?.();

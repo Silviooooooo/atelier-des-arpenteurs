@@ -276,6 +276,36 @@ test("raisonValide — de 1 à 80 signes, sans blanc de bord, sans caractère de
   }
 });
 
+// Un demi-codet isolé (la moitié d'un signe astral, seule) ne se voit pas, et
+// le JSON l'écrit en six octets : un journal de raisons qui en seraient
+// faites dépasserait la borne de l'enregistrement (relecture du groupe 2,
+// C-15). Les demi-codets se fabriquent par leur code ; le signe astral est
+// une poêle (U+1F373), deux unités UTF-16.
+test("raisonValide — ni demi-codet isolé, de tête ou de queue ; un signe astral entier passe, et compte deux unités sur les 80", () => {
+  const POELE = String.fromCodePoint(0x1f373);
+  // Par indice, et non par décomposition, qui irait signe par signe.
+  const [TETE, QUEUE] = [POELE[0], POELE[1]];
+  assert.deepEqual([POELE.length, TETE, QUEUE], [2, "\uD83C", "\uDF73"]);
+  const pleine = `${"a".repeat(LONGUEUR_RAISON - 2)}${POELE}`;
+  assert.equal(pleine.length, LONGUEUR_RAISON);
+  for (const raison of [POELE, `Une ${POELE} chaude`, pleine]) assert.equal(raisonValide(raison), true, JSON.stringify(raison));
+  for (const raison of [
+    "\uD83C",
+    "a\uDC00",
+    TETE,
+    QUEUE,
+    `Émin${TETE}cer`,
+    `${QUEUE}${TETE}`,
+    `${"a".repeat(LONGUEUR_RAISON - 1)}${TETE}`,
+    `${"a".repeat(LONGUEUR_RAISON - 1)}${POELE}`,
+  ]) {
+    assert.equal(raisonValide(raison), false, JSON.stringify(raison));
+  }
+  // Le moteur lit la raison d'un événement par raisonValide : il la refuse de même.
+  assert.ok(validerEvenement({ type: "regler", champ: "modificateur", valeur: 1, raison: pleine }).evenement);
+  assert.ok(validerEvenement({ type: "regler", champ: "modificateur", valeur: 1, raison: `Minutie${TETE}` }).erreur);
+});
+
 test("geler — en profondeur, les objets simples et les tableaux ; rend ce qu'il reçoit", () => {
   const valeur = { a: [1, { b: { c: [] } }], d: null, e: "texte" };
   assert.equal(geler(valeur), valeur);
@@ -1055,6 +1085,52 @@ test("validerPhoto — chaque texte d'une ligne : 200 signes passent, 201 non ; 
   assert.equal(refusDe(pjEssai(), (_v, entiere) => (entiere.publiee_le = 20261011)), "la date de la banque n'est pas un texte.");
 });
 
+// Un demi-codet isolé (la moitié d'un signe astral, seule) ne se voit pas, et
+// le JSON l'écrit en six octets ; un nom de capacité qui n'en serait fait
+// donnerait une raison proposée vide, que le moteur refuse : les boutons des
+// dégâts directs porteraient une raison refusée. Il est refusé comme un
+// caractère de contrôle, dans chaque texte d'une ligne comme dans un texte à
+// lignes (relecture du groupe 2, C-15). Les demi-codets s'écrivent par leur
+// code ; le signe astral entier, qui passe, est une poêle (U+1F373).
+test("validerPhoto — un demi-codet isolé est refusé comme un caractère de contrôle, dans chaque texte ; un signe astral entier passe", () => {
+  const POELE = String.fromCodePoint(0x1f373);
+  // Par indice, et non par décomposition, qui irait signe par signe.
+  const [TETE, QUEUE] = [POELE[0], POELE[1]];
+  // Un nom de capacité fait seulement de demi-codets, un nom de protagoniste
+  // qui finit par un demi-codet de tête, une description et un avertissement
+  // qui en portent un.
+  assert.equal(refusDe(pjEssai(), (valeurs) => (valeurs.capacites[1].nom = "\uDC00\uDC01")), "le nom de la capacité n° 2 porte un retour à la ligne ou un caractère de contrôle.");
+  assert.equal(refusDe(adversaireEssai(), (valeurs) => (valeurs.capacites[0].nom = "\uDC00\uDC01")), "le nom de la capacité n° 1 porte un retour à la ligne ou un caractère de contrôle.");
+  assert.equal(refusDe(pjEssai(), (valeurs) => (valeurs.nom = "Aubépine\uD800")), "le nom porte un retour à la ligne ou un caractère de contrôle.");
+  assert.equal(refusDe(pjEssai(), (valeurs) => (valeurs.capacites[0].facons[0].description = "Tourbillonne.\uDFFF")), "la description de « Frappe » porte un caractère de contrôle.");
+  assert.equal(refusDe(pjEssai(), (_valeurs, entiere) => entiere.avertissements.push(`Portée${TETE}illisible.`)), "l'avertissement n° 1 porte un caractère de contrôle.");
+  // Les deux moitiés d'une poêle qu'un blanc de ligne sépare ne se recollent
+  // pas quand la forme met ce blanc de côté.
+  for (const blanc of [RETOUR, CHARIOT, TABULATION]) {
+    assert.equal(refusDe(pjEssai(), (valeurs) => (valeurs.capacites[0].facons[0].description = `Tourbillonne ${TETE}${blanc}${QUEUE}.`)), "la description de « Frappe » porte un caractère de contrôle.", JSON.stringify(blanc));
+  }
+  // Chaque texte d'une ligne : un demi-codet de tête ou de queue, aux deux
+  // bouts de chaque plage, et les deux moitiés d'une poêle à l'envers.
+  for (const [quoi, poser] of LIGNES) {
+    for (const demi of ["\uD800", "\uDBFF", "\uDC00", "\uDFFF", `${QUEUE}${TETE}`]) {
+      assert.equal(refusDe(pjEssai(), (valeurs) => poser(valeurs, `Pas${demi}chassé`)), `${quoi} porte un retour à la ligne ou un caractère de contrôle.`, `${quoi} : ${JSON.stringify(demi)}`);
+    }
+    // Un signe astral entier passe, et compte deux unités sur les 200.
+    passe(pjEssai(), (valeurs) => poser(valeurs, `${POELE} Fournaise`));
+    passe(pjEssai(), (valeurs) => poser(valeurs, `${"é".repeat(BORNES_PHOTO.ligne - 2)}${POELE}`));
+    assert.equal(refusDe(pjEssai(), (valeurs) => poser(valeurs, `${"é".repeat(BORNES_PHOTO.ligne - 1)}${POELE}`)), `${quoi} dépasse 200 signes.`);
+  }
+  // Une capacité nommée d'une poêle et de « Fournaise », une poêle dans une
+  // description à deux lignes et dans un avertissement : la photographie
+  // passe, telle quelle.
+  const photo = passe(pjEssai(), (valeurs, entiere) => {
+    valeurs.capacites[1].nom = `${POELE} Fournaise`;
+    valeurs.capacites[0].facons[0].description = `Tourbillonne.${RETOUR}${POELE}`;
+    entiere.avertissements.push(`Portée ${POELE} illisible.`);
+  });
+  assert.deepEqual([photo.valeurs.capacites[1].nom, photo.valeurs.capacites[1].nom.length], [`${POELE} Fournaise`, 12]);
+});
+
 test("validerPhoto — un texte à lignes : 4 000 signes passent, 4 001 non ; vide, il passe", () => {
   passe(pjEssai(), (valeurs) => (valeurs.capacites[0].facons[0].description = "é".repeat(BORNES_PHOTO.texte)));
   passe(pjEssai(), (valeurs) => (valeurs.capacites[0].facons[0].description = ""));
@@ -1645,6 +1721,27 @@ test("validerContenu — chaque photographie passe par validerPhoto, avec « acc
     contenuRefuse(avecSource, { ...OPTIONS, accepter: () => { throw new Error("refusé"); } }),
     "La photographie de « pj1 » est refusée : le personnage de la source est refusé.",
   );
+});
+
+// Un combat gardé forgé dont une photographie porte un demi-codet isolé est
+// refusé à la relecture, comme pour un caractère de contrôle : la
+// photographie que la préparation fabrique n'en porte jamais
+// (js/combat/photographie.js ; relecture du groupe 2, C-15).
+test("validerContenu — une photographie forgée qui porte un demi-codet isolé est refusée à la relecture", () => {
+  assert.equal(
+    contenuRefuse((_c, protagonistes) => (protagonistes[1].photo.valeurs.capacites[0].nom = "\uDC00\uDC01")),
+    "La photographie de « adv2 » est refusée : le nom de la capacité n° 1 porte un retour à la ligne ou un caractère de contrôle.",
+  );
+  assert.equal(
+    contenuRefuse((_c, protagonistes) => (protagonistes[0].photo.valeurs.nom = "Aubépine\uD800")),
+    "La photographie de « pj1 » est refusée : le nom porte un retour à la ligne ou un caractère de contrôle.",
+  );
+  assert.equal(
+    contenuRefuse((_c, protagonistes) => (protagonistes[0].photo.valeurs.capacites[0].facons[0].description = "Tourbillonne.\uDFFF")),
+    "La photographie de « pj1 » est refusée : la description de « Frappe » porte un caractère de contrôle.",
+  );
+  // Sans retouche, le même contenu se relit.
+  assert.ok(validerContenu(contenuEssai(), OPTIONS).contenu);
 });
 
 test("validerContenu — les plafonds : 12 personnages, 60 adversaires, 12 exemplaires, vus des deux côtés", () => {

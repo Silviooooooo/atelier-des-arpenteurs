@@ -16,7 +16,10 @@
 // fenêtre fait 1 280 × 800 px (documentElement). Toujours sans propagation,
 // ni matchMedia, ni ResizeObserver : un écouteur en capture, keydown,
 // pointerenter, pointerleave, pointerdown ({ pointerType }) et toggle se
-// déclenchent à la main (declencher).
+// déclenchent à la main (declencher). À la demande (focusFidele), focus()
+// déclenche blur et focus comme un navigateur : sans cela, le focus que pose
+// l'écran n'ouvrait aucune infobulle, et un défaut s'y cachait (lot 4,
+// groupe 2, relecture, C-02).
 
 // Ce que rend querySelectorAll dans un navigateur : une NodeList, qui se
 // parcourt (for…of, forEach, un indice, length, item) mais n'a ni filter, ni
@@ -227,11 +230,20 @@ class Element extends Noeud {
     return this.declencher("click");
   }
 
-  /** Le focus, et son relevé : { noeud, options } (preventScroll…). */
+  /**
+   * Le focus, et son relevé : { noeud, options } (preventScroll…). Fidèle
+   * (installerDom({ focusFidele: true })), un focus qui change l'élément
+   * actif déclenche, comme un navigateur, blur sur l'ancien puis focus sur le
+   * nouveau ; sinon, aucun événement.
+   */
   focus(options) {
     if (!document) return;
+    const ancien = document.activeElement ?? null;
     document.activeElement = this;
     document.focalisations.push({ noeud: this, options });
+    if (!focusFidele || ancien === this) return;
+    if (ancien instanceof Element) ancien.declencher("blur");
+    this.declencher("focus");
   }
 
   select() {}
@@ -293,13 +305,18 @@ class Element extends Noeud {
 }
 
 let document = null;
+// Le focus fidèle : blur et focus déclenchés à chaque changement de l'élément
+// actif (installerDom({ focusFidele: true })).
+let focusFidele = false;
 
 /**
  * Installe le document simulé dans globalThis, ses relevés vides ; rend une
  * fonction qui le retire. La page : html (une fenêtre de 1 280 × 800 px),
- * puis body.
+ * puis body. focusFidele : un focus() qui change l'élément actif déclenche
+ * blur sur l'ancien puis focus sur le nouveau ; par défaut, rien.
  */
-export function installerDom() {
+export function installerDom({ focusFidele: fidele = false } = {}) {
+  focusFidele = fidele === true;
   const racine = new Element("html");
   Object.assign(racine, { clientWidth: 1280, clientHeight: 800 });
   const corps = new Element("body");
@@ -321,6 +338,7 @@ export function installerDom() {
     globalThis.document = avant.document;
     globalThis.Node = avant.Node;
     document = null;
+    focusFidele = false;
   };
 }
 

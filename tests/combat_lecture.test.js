@@ -682,7 +682,9 @@ test("bulle : Aubépine, sans geste (vue 1) : son nom, son en-tête, « Fermer �
     jouer: "Jouer Taloche [1]",
     survol: {
       titre: "Taloche",
-      origine: "Taloche",
+      // Les mains nues ne sont pas une arme qu'on nomme : leur arme porte le
+      // nom de la capacité, et l'infobulle aurait dit « Taloche · Taloche ».
+      origine: "Gestes de cuisine",
       description: "Une taloche qui inflige 2/4/8.",
       portee: "Portée 0 : sa case seule, hachurée sur la carte.",
       causes: [],
@@ -1323,6 +1325,70 @@ test("bulle : une attaque d'un PJ, étape par étape, jusqu'au détail des dég�
   assert.equal(vue.geste.detail[0].zone, "Torse");
 });
 
+// La raison proposée d'office est le nom de la capacité, coupé à 80 unités
+// UTF-16. Un nom peut être plus long, et c'est une donnée hostile : la coupe
+// peut tomber au milieu d'un signe astral. La raison n'en garde pas la moitié,
+// sans quoi le moteur la refuserait, et avec elle les dégâts directs de la
+// capacité (relecture du groupe 2, C-15). Un nom qui porte un demi-codet
+// isolé n'entre plus dans un combat : la forme d'une photographie le refuse,
+// et la photographie le remplace par une espace (C-15, suite) ; l'élagage de
+// la raison proposée reste une défense de plus. Les demi-codets se fabriquent
+// par leur code ; le signe astral est une poêle (U+1F373), deux unités.
+test("raison proposée : un nom coupé au milieu d'un signe astral ; partout où elle est proposée, sans demi-codet, de 80 unités au plus, et le moteur l'accepte ; un nom à demi-codet isolé n'entre pas dans une photographie", () => {
+  const POELE = String.fromCodePoint(0x1f373);
+  const DEMI_CODET = /\p{Cs}/u;
+
+  // Frappe renommée ; les six raisons proposées pendant son attaque, chacune
+  // éprouvée par le moteur là où l'écran la propose.
+  function raisonsProposees(nom) {
+    let etat = duel({ pj: pjEssai((valeurs) => Object.assign(valeurs.capacites[0], { nom })) });
+    const proposees = [];
+    const accepte = (depuis, evenement, ou) => {
+      const rendu = appliquer(depuis, evenement);
+      assert.equal(rendu.refus, undefined, `${ou} : ${JSON.stringify(evenement)} est refusé : ${rendu.refus?.message}`);
+    };
+    etat = jouer(etat, capacite(etat, "pj1", nom), regler("cible", "adv2"));
+    let vue = vuePanneau(etat, null);
+    for (const champ of ["modificateur", "avantages"]) {
+      const saisie = vue.geste.contexte.reglages[champ];
+      proposees.push(saisie.raisonParDefaut);
+      accepte(etat, completer(saisie, 1), `le contexte, « ${champ} »`);
+    }
+    etat = jouer(etat, de(8, 6), de(8, 2));
+    vue = vuePanneau(etat, null);
+    proposees.push(vue.geste.degats.saisie.raisonParDefaut);
+    accepte(etat, completer(vue.geste.degats.saisie, 7), "la saisie des dégâts");
+    for (const nature of vue.geste.degats.natures.slice(1)) {
+      proposees.push(nature.commande.evenement.operations[0].raison);
+      accepte(etat, nature.commande.evenement, `la nature « ${nature.libelle} »`);
+    }
+    etat = jouer(etat, de(20, 12));
+    vue = vuePanneau(etat, null);
+    const { decaler } = vue.geste.localisation[0];
+    proposees.push(decaler.raisonParDefaut);
+    accepte(etat, completer(decaler, -1), "le décalage du d20");
+    for (const raison of proposees) {
+      assert.ok(!DEMI_CODET.test(raison), `${JSON.stringify(raison)} porte un demi-codet isolé`);
+      assert.ok(raison.length >= 1 && raison.length <= 80, `${JSON.stringify(raison)} : ${raison.length} unités`);
+    }
+    return proposees;
+  }
+
+  // 79 « a », une poêle, une suite : la coupe à 80 tombe entre les deux
+  // moitiés de la poêle, qui s'ôte entière.
+  const coupee = `${"a".repeat(79)}${POELE} et sa suite`;
+  assert.equal(coupee.slice(0, 80).at(-1), POELE[0], "le cas est bien formé : la coupe seule laisserait la première moitié");
+  assert.deepEqual(raisonsProposees(coupee), Array(6).fill("a".repeat(79)));
+  // Une poêle entière à la 80e unité reste.
+  const pleine = `${"a".repeat(78)}${POELE}`;
+  assert.deepEqual(raisonsProposees(`${pleine} et sa suite`), Array(6).fill(pleine));
+  // Deux demi-codets isolés au milieu du nom, un de queue puis un de tête, ou
+  // un demi-codet de tête à la fin d'un nom court : la photographie est refusée.
+  for (const nom of [`Fra${POELE[1]}p${POELE[0]}pe`, `Frappe${POELE[0]}`]) {
+    assert.throws(() => pjEssai((valeurs) => Object.assign(valeurs.capacites[0], { nom })), /porte un retour à la ligne ou un caractère de contrôle/, JSON.stringify(nom));
+  }
+});
+
 test("bulle : un adversaire attaque : le jet de défense du PJ, les rangs à l'envers, l'esquive et ses bornes", () => {
   let etat = jouer(duel(), FIN_DE_TOUR);
   etat = jouer(etat, capacite(etat, "adv2", "Frappe"), regler("cible", "pj1"));
@@ -1842,6 +1908,61 @@ test("plateau : tant que rien n'est payé, un candidat se choisit hors d'un choi
     "celui qui joue et sa cible ne sont pas écartés",
   );
   assert.equal(vueFiche(paye, "pj2", null).jouer, null, "la fiche non plus ne propose pas de jouer");
+});
+
+// « Jouer » d'une fiche ouvre la bulle comme le jeton (compl. § 4.1) : il
+// suit exactement le choix des jetons, tant que rien n'est payé et hors d'un
+// choix de cible ou d'arrivée (relecture du groupe 2, C-18).
+test("fiche : « Jouer » suit le choix des jetons : pendant un geste non payé, hors d'un choix de cible ou d'arrivée ; ni pendant ce choix, ni après le premier dé", () => {
+  const trio = combat([
+    { photo: pjEssai(), case: "D4" },
+    { photo: CIBOULETTE_ESSAI(), case: "D4" },
+    { photo: adversaireEssai(), case: "D4" },
+  ]);
+  const commeLeJeton = (etat, id, ou) => {
+    const jeton = vuePlateau(etat, null).jetons[id].choix;
+    assert.deepEqual(vueFiche(etat, id, null).jouer, jeton?.commande?.choisir === id ? jeton : null, `${ou} : la fiche de ${id} et son jeton`);
+  };
+
+  // Aubépine ouvre Goûter, qui se règle sans cible ni arrivée, et rien n'est lancé : Ciboulette se choisit par sa fiche.
+  let etat = jouer(trio, capacite(trio, "pj1", "Goûter"), regler("caracteristiques", ["force"]), regler("difficulte", 5));
+  assert.deepEqual(vueFiche(etat, "pj2", null).jouer, { commande: { choisir: "pj2" } }, "le geste n'est pas payé");
+  assert.equal(vueFiche(etat, "pj1", null).jouer, null, "celui qui joue ne se choisit pas par sa fiche");
+  for (const id of ["pj2", "adv3"]) commeLeJeton(etat, id, "Goûter ouvert");
+
+  // Le premier dé paie : plus personne ne se choisit.
+  etat = jouer(etat, de(8, 6));
+  assert.equal(gesteEnCours(etat).paye, true);
+  assert.equal(vueFiche(etat, "pj2", null).jouer, null, "après le premier dé");
+  commeLeJeton(etat, "pj2", "après le premier dé");
+
+  // Pendant un choix de cible, la cible choisie comprise, rien : le jeton non plus ne choisit pas.
+  const vise = jouer(trio, capacite(trio, "pj1", "Frappe"));
+  for (const pas of [vise, jouer(vise, regler("cible", "adv3"))]) {
+    assert.equal(vueFiche(pas, "pj2", null).jouer, null, "pendant le choix de la cible");
+    commeLeJeton(pas, "pj2", "pendant le choix de la cible");
+  }
+  // Pendant un choix d'arrivée, de même.
+  const enMarche = jouer(trio, capacite(trio, "pj1", "Pas chassé"));
+  assert.equal(vueFiche(enMarche, "pj2", null).jouer, null, "pendant le choix de l'arrivée");
+  commeLeJeton(enMarche, "pj2", "pendant le choix de l'arrivée");
+
+  // Au tour des adversaires : le Chef sur Frappe, sa cible choisie, sans dé. Le
+  // choix de la cible reste ouvert jusqu'au dé : le Marmiton n° 1 ne se choisit
+  // ni par son jeton ni par sa fiche ; au repos, il se choisit par les deux.
+  const cuisine = jouer(
+    combat([
+      { photo: aubepineEssai(), case: "D4" },
+      { photo: chefDePartieEssai(), case: "D4" },
+      { photo: marmitonDeCorveeEssai(), case: "D4" },
+      { photo: marmitonDeCorveeEssai(), case: "D4" },
+    ]),
+    FIN_DE_TOUR,
+  );
+  assert.deepEqual(vueFiche(cuisine, "adv3", null).jouer, { commande: { choisir: "adv3" } });
+  const chef = jouer(cuisine, capacite(cuisine, "adv2", "Frappe"), regler("cible", "pj1"));
+  assert.equal(vueFiche(chef, "adv3", "adv2").jouer, null);
+  assert.equal(vuePlateau(chef, "adv2").jetons.adv3.choix, null);
 });
 
 test("fiche : « a joué » ne se dit que dans le camp dont c'est le tour, même de qui n'a aucune action", () => {

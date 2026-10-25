@@ -808,6 +808,58 @@ test("les textes — une description garde ses lignes ; un nom à retour de lign
   for (const ligne of lignes) assert.doesNotMatch(ligne, /\p{Cc}/u, JSON.stringify(ligne));
 });
 
+// Un demi-codet isolé (la moitié d'un signe astral, seule), qu'un nom de
+// personnage ou une cellule forgée peut porter, devient une espace comme un
+// caractère de contrôle : validerPhoto le refuse, et la photographie
+// fabriquée passe sa propre forme, qui la juge de même à la relecture
+// (relecture du groupe 2, C-15). Un signe astral entier reste. Les
+// demi-codets s'écrivent par leur code ; le signe astral est une poêle
+// (U+1F373).
+test("les textes — un demi-codet isolé devient une espace, dans un nom comme dans une description ; un signe astral entier reste ; la photographie passe validerPhoto", async () => {
+  const POELE = String.fromCodePoint(0x1f373);
+  const DEMI_CODET = /\p{Cs}/u;
+  // Le nom du personnage : un demi-codet de tête au milieu, une poêle entière à la fin.
+  const personnage = structuredClone(AUBEPINE);
+  personnage.identite.nom = `Aubépine\uD800Crèmebrûlée ${POELE}`;
+  assert.equal(valeursDe(pj(DEMO, personnage)).nom, `Aubépine Crèmebrûlée ${POELE}`);
+  // Une capacité de la banque nommée et décrite de demi-codets, et un adversaire nommé de même.
+  const forgee = await monde((banque) => {
+    const jet = capaciteDe(banque, "Jet de sel");
+    jet.nom = "Jet\uDC00de sel";
+    jet.variantes[0].description = `${jet.variantes[0].description}${POELE}\uDFFF`;
+    blocDe(banque, "Saucier").capacites.push({ forme: "simple", nom: "Jet\uDC00de sel" });
+    banque.adversaires.push(ligneAdversaire("Marmiton de corvée\uD800bis", { capacites: "Jet\uDC00de sel" }));
+  });
+  const v = valeursDe(pj(forgee));
+  const marmiton = valeursDe(adv(forgee, "Marmiton de corvée\uD800bis"));
+  assert.equal(marmiton.nom, "Marmiton de corvée bis");
+  for (const valeurs of [v, marmiton]) {
+    assert.equal(laCapacite(valeurs, "Jet de sel").facons[0].description, `Lance du sel à 2 pas.\nPuis recommence.${POELE} `, valeurs.nom);
+  }
+  // Rien de ce que la photographie écrit ne porte un demi-codet, et elle se relit telle quelle.
+  for (const resultat of [pj(DEMO, personnage), pj(forgee), adv(forgee, "Marmiton de corvée\uD800bis")]) {
+    const { photo } = resultat;
+    const textes = [
+      photo.valeurs.nom,
+      photo.valeurs.sousTitre,
+      ...photo.valeurs.armes.flatMap((arme) => [arme.nom, arme.libelle]),
+      ...photo.valeurs.capacites.flatMap((c) => [c.nom, c.groupe.titre, ...c.facons.flatMap((f) => [f.description, ...f.elements])]),
+      ...photo.avertissements,
+    ];
+    for (const texte of textes) assert.doesNotMatch(texte, DEMI_CODET, JSON.stringify(texte));
+    const relue = validerPhoto(JSON.parse(JSON.stringify(photo)), { accepter });
+    assert.equal(relue.erreur, undefined, relue.erreur);
+    assert.deepEqual(relue.photo, photo, `${photo.valeurs.nom} : ce qui s'ajoute se reprend`);
+  }
+  // Un nom fait seulement de demi-codets est vide une fois nettoyé : il ne
+  // s'ajoute pas, et ne donne donc jamais au combat une raison proposée vide.
+  const seuls = await monde((banque) => {
+    banque.capacites.push({ nom: "\uDC00\uDC01", variantes: [{ puissance: "0", cout_souffle: "", cout_lien: "", elements: [], description: "" }] });
+    blocDe(banque, "Saucier").capacites.push({ forme: "simple", nom: "\uDC00\uDC01" });
+  });
+  assert.match(pj(seuls).refus, /^Ne s'ajoute pas : le nom de la capacité n° \d+ est vide\.$/);
+});
+
 test("une description au-delà de sa borne est un refus d'ajout, avec sa phrase ; à la borne, elle passe", async () => {
   const longue = (signes) => (banque) => {
     capaciteDe(banque, "Flambage").variantes[0].description = "a".repeat(signes);

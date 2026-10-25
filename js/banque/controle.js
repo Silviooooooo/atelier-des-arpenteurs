@@ -143,16 +143,18 @@ export function controler(banque) {
   // deviennent égaux une fois les signes invisibles retirés (nomCompare),
   // quelles que soient leurs puissances : rien ne les distingue à l'écran.
   // Dans un tel groupe, la première est celle dont la première ligne est la
-  // plus haute ; chaque autre reçoit un E3 à sa propre première ligne, qui
-  // cite celle de la première. Deux noms écrits différents n'ont que ce
-  // message.
+  // plus haute ; chaque autre reçoit un E3 « à la ligne la plus basse »
+  // (complément, § 5.4), lue ici comme la plus basse de ses propres lignes
+  // (choix fait seul, réversible), et le message cite la première ligne de
+  // la première. Deux noms écrits différents n'ont que ce message.
   const premiereLigne = (capacite) => Math.min(...capacite.variantes.map((variante) => variante.brut.ligne));
+  const derniereLigne = (capacite) => Math.max(...capacite.variantes.map((variante) => variante.brut.ligne));
   const capacitesParNomCompare = new Map();
   for (const capacite of banque.capacites) ajouter(capacitesParNomCompare, nomCompare(capacite.nom), capacite);
   for (const groupe of capacitesParNomCompare.values()) {
     const [premiere, ...autres] = [...groupe].sort((a, b) => premiereLigne(a) - premiereLigne(b));
     for (const autre of autres) {
-      signaler("E3", { feuille: "Capacites", ligne: premiereLigne(autre) }, `La capacité « ${autre.nom} » ne diffère de celle de la ligne ${premiereLigne(premiere)} que par un signe invisible.`);
+      signaler("E3", { feuille: "Capacites", ligne: derniereLigne(autre) }, `La capacité « ${autre.nom} » ne diffère de celle de la ligne ${premiereLigne(premiere)} que par un signe invisible.`);
     }
   }
 

@@ -52,6 +52,11 @@ const SIGNES_MAX = { sel: signesDe(OCTETS_SEL), iv: signesDe(OCTETS_IV), chiffre
 // Une classe et sa répétition, sans groupe (voir l'enregistrement du combat) ;
 // les quatre signes par paquet se vérifient par la longueur.
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
+// La date, sous les deux formes qu'écrit toISOString (l'année en quatre
+// chiffres, ou signée en six) : une forme fixe, de 27 signes au plus, se
+// juge avant Date.parse, qui lirait un texte de n'importe quelle longueur
+// (« Oct 25 2026 (… dix millions de signes …) » est une date pour lui).
+const DATE_ISO = /^(?:\d{4}|[+-]\d{6})-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 // Dans l'ordre de l'enveloppe écrite.
 const CHAMPS = ["mode", "format", "sel", "iterations", "iv", "chiffre", "enregistre_le"];
 
@@ -129,7 +134,7 @@ function examiner(enveloppe, mode) {
   if (octets(sel, SIGNES_MAX.sel)?.length !== OCTETS_SEL) return null;
   const octetsIv = octets(iv, SIGNES_MAX.iv);
   if (octetsIv?.length !== OCTETS_IV) return null;
-  if (typeof date !== "string" || Number.isNaN(Date.parse(date))) return null;
+  if (typeof date !== "string" || !DATE_ISO.test(date) || Number.isNaN(Date.parse(date))) return null;
   const octetsChiffre = octets(chiffre, SIGNES_MAX.chiffre);
   if (octetsChiffre === null || octetsChiffre.length <= OCTETS_ETIQUETTE) return null;
   return { mode, sel, iterations, iv: octetsIv, chiffre: octetsChiffre };

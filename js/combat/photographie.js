@@ -30,7 +30,9 @@
 // chacune résolue par capacitesA() (js/adversaire/resolution.js) ; une façon
 // hors maîtrise dit sa cause (« maitrise » : l'objet ou le bloc qui la donne,
 // et son poids) ; le dé de défense d'un personnage dit les types à égalité
-// de dés (« egalite »), parmi lesquels le joueur choisit au combat.
+// de dés (« egalite »), parmi lesquels le joueur choisit au combat. Et, à la
+// relecture du groupe (C-15), un demi-codet isolé d'un texte devient une
+// espace, comme un caractère de contrôle.
 
 import { ecrireTypes } from "../adversaire/carte.js";
 import { defautDe } from "../adversaire/lecture.js";
@@ -45,10 +47,15 @@ import { ACTIONS_PJ, BORNES_PHOTO, ELEMENTS_COMBAT, FACE_CONTRE, GRILLE_PJ, PARA
 // ─── Les textes ─────────────────────────────────────────────────────────────
 
 // Les deux séparateurs de ligne sont fabriqués par leur code : écrits tels
-// quels, ils couperaient la ligne de ce fichier.
+// quels, ils couperaient la ligne de ce fichier. Un demi-codet isolé (la
+// moitié d'un signe astral, seule : \p{Cs}), qu'une cellule forgée peut
+// porter, devient une espace comme un caractère de contrôle : validerPhoto
+// le refuse (js/combat/forme.js), et la photographie fabriquée doit passer
+// sa propre forme (relecture du groupe 2, C-15). Le drapeau « u » lit une
+// paire bien formée comme un seul signe, qui reste.
 const SEPARATEURS = String.fromCodePoint(0x2028, 0x2029);
-const CONTROLES = new RegExp(`[\\p{Cc}${SEPARATEURS}]`, "gu");
-const CONTROLES_HORS_LIGNES = new RegExp(`(?![\\n\\r\\t])[\\p{Cc}${SEPARATEURS}]`, "gu");
+const CONTROLES = new RegExp(`[\\p{Cc}\\p{Cs}${SEPARATEURS}]`, "gu");
+const CONTROLES_HORS_LIGNES = new RegExp(`(?![\\n\\r\\t])[\\p{Cc}\\p{Cs}${SEPARATEURS}]`, "gu");
 
 // Un texte d'une ligne entre au journal, qui tient une ligne par geste : un
 // retour à la ligne venu d'une cellule du classeur y devient une espace.

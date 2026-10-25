@@ -53,17 +53,21 @@
   --largeur-etiquette: 3.5rem;
 
   /* Le simulateur de combat (§ 17 ; lot 4, groupe 2) : la bulle d'options
-     et son jet, le volet qui la remplace sur un téléphone, les infobulles,
-     la flèche (égale à la constante FLECHE de js/ecrans/echelle.js), une
-     ligne de la bulle sous une souris, les dés d'un jet dans la bulle, la
-     hachure de la portée (des traits de 3 px tous les 9, à 135°) et le cadre
-     des dés d'un jet au journal. Aucun de ces noms ne porte « combat » :
-     les contrôles le réservent aux couleurs. La dernière largeur est celle
-     d'une vignette du créateur de personnage (§ 15). */
+     et son jet (sa hauteur : la fenêtre moins 32 px, en pixels, quelle que
+     soit la taille du texte, comme la marge que garde echelle.js), le volet
+     qui la remplace sur un téléphone, les infobulles, la flèche (égale à la
+     constante FLECHE de js/ecrans/echelle.js), une ligne de la bulle sous
+     une souris, les dés d'un jet dans la bulle, la hachure de la portée (des
+     traits de 3 px tous les 9, à 135°), le cadre des dés d'un jet au
+     journal, et la hauteur d'attente d'une ligne du journal hors de la vue :
+     une ligne de texte, la hauteur de son contenu (le navigateur y ajoute
+     son padding et son trait, comme à une ligne vue). Aucun de ces noms ne
+     porte « combat » : les contrôles le réservent aux couleurs. La dernière
+     largeur est celle d'une vignette du créateur de personnage (§ 15). */
   --largeur-bulle: 20rem;
   --largeur-bulle-jet: 29.5rem;
   --largeur-infobulle: 18rem;
-  --hauteur-bulle-max: calc(100vh - var(--espace-6));
+  --hauteur-bulle-max: calc(100vh - 32px);
   --hauteur-volet: 45%;
   --ligne-souris: 36px;
   --fleche-bulle: 8px;
@@ -73,6 +77,7 @@
   --hachure-angle: 135deg;
   --rayon-cadre: 4px;
   --marge-cadre: 3px;
+  --hauteur-ligne-journal: calc(var(--taille-petite) * var(--interligne));
   --largeur-vignette: 180px;
 
   --fond: #ffffff;

@@ -431,7 +431,8 @@ function ligneDeCapacite(r, ligne, apercus) {
   // La raison d'abord, puis l'infobulle : son identifiant suit celui de la raison.
   const option = el("div", { classe: "combat-option" }, noeud, idRaison ? el("span", { id: idRaison, classe: "combat-raison" }, ligne.raison) : null);
   lier(r, noeud, { contenu: () => contenuDuSurvol(ligne.survol), hachures: ligne.survol?.hachures ?? null });
-  apercus.places.set(ligne.cle, { place: option, hachures: ligne.survol?.hachures ?? null, fabriquer: () => apercuDeLaLigne(ligne, jouer) });
+  // La ligne déclare l'aperçu qu'elle ouvre (aria-expanded, aria-controls) tant qu'il est ouvert.
+  apercus.places.set(ligne.cle, { place: option, hachures: ligne.survol?.hachures ?? null, fabriquer: () => apercuDeLaLigne(ligne, jouer), declencheur: noeud });
   return option;
 }
 
@@ -476,24 +477,40 @@ function piedDesPassifs(r, passifs, apercus) {
  * groupe ; les passifs en pied. Rend des nœuds.
  *
  * Un seul aperçu à la fois ; sa clé (r.memoire.apercu) survit à un corps
- * refait : il se rouvre, avec ses hachures, tant que sa ligne est là.
+ * refait : il se rouvre, avec ses hachures, tant que sa ligne est là. Ouvert
+ * sous une ligne, il a un identifiant, et la ligne le dit (aria-expanded,
+ * aria-controls) jusqu'à ce qu'il se ferme : un lecteur d'écran sait que
+ * l'appui a ouvert quelque chose (WCAG 4.1.2) ; un passif ne porte rien.
+ * Ouvert, il se montre dans la partie vue de la bulle (r.actions.montrer,
+ * que la zone n'a pas).
  */
 export function composerListe(r, vue) {
   const memoire = r.memoire ?? {};
   const apercus = {
     places: new Map(),
-    ouvert: { cle: null, noeud: null },
+    ouvert: { cle: null, noeud: null, declencheur: null },
     fermer() {
-      this.ouvert.noeud?.remove();
-      this.ouvert = { cle: null, noeud: null };
+      const { noeud, declencheur } = this.ouvert;
+      noeud?.remove();
+      declencheur?.removeAttribute("aria-expanded");
+      declencheur?.removeAttribute("aria-controls");
+      this.ouvert = { cle: null, noeud: null, declencheur: null };
     },
     ouvrir(cle) {
       const apercu = this.places.get(cle);
       if (!apercu) return;
       this.fermer();
       const noeud = apercu.fabriquer();
+      const declencheur = apercu.declencheur ?? null;
+      if (declencheur !== null) {
+        const id = identifiant(r, "apercu");
+        noeud.setAttribute("id", id);
+        declencheur.setAttribute("aria-expanded", "true");
+        declencheur.setAttribute("aria-controls", id);
+      }
       apercu.place.append(noeud);
-      this.ouvert = { cle, noeud };
+      r.actions?.montrer?.(noeud);
+      this.ouvert = { cle, noeud, declencheur };
       memoire.apercu = cle;
       hachurer(r, apercu.hachures);
     },

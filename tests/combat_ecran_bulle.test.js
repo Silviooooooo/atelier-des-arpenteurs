@@ -12,7 +12,9 @@
 // lui donne la vue qui suit. La place se lit dans les propriétés que le
 // document simulé relève ; la fenêtre fait 1 280 × 800 px. Chaque règle est
 // vue des deux côtés : la bulle montrée et cachée, le geste qui ferme et
-// celui qui réduit, le placement qui vient et celui qui ne vient pas.
+// celui qui réduit, le placement qui vient et celui qui ne vient pas. Les
+// nœuds se comparent par identité (memeNoeud), pour qu'un contrôle déçu se
+// dise tout de suite, en une ligne (relecture du groupe 2, C-07).
 
 import { mock, test } from "node:test";
 import assert from "node:assert/strict";
@@ -55,6 +57,24 @@ const infobulleDe = (lieu, declencheur) => {
 const proprietes = (noeud) => Object.fromEntries(["--bulle-gauche", "--bulle-haut", "--bulle-fleche"].map((nom) => [nom, noeud.style.getPropertyValue(nom)]));
 const dernierFocus = () => globalThis.document.focalisations.at(-1);
 const classesDe = (noeud) => noeud.className.split(/\s+/);
+/**
+ * Deux nœuds identiques, deux listes des mêmes nœuds, ou un nœud qui a
+ * changé. Un assert.equal raté entre deux nœuds déroule toute la page dans
+ * son message, puis compare ligne à ligne ce qu'il a déroulé : sur l'écran
+ * du combat, de quinze secondes à plus d'une minute, et des Go (relecture du
+ * groupe 2, C-07). Ici, l'échec se dit tout de suite, en une ligne.
+ */
+const decrire = (n) => (n === null || n === undefined ? String(n) : typeof n.tagName === "string" ? `${forme(n)} « ${texteDe(n).slice(0, 60)} »` : JSON.stringify(String(n.textContent ?? n)));
+function memeNoeud(vu, attendu, quoi = "le nœud") {
+  if (vu !== attendu) assert.fail(`${quoi} : ${decrire(vu)} au lieu de ${decrire(attendu)}`);
+}
+function memesNoeuds(vus, attendus, quoi = "les nœuds") {
+  const liste = [...vus];
+  if (liste.length !== attendus.length || liste.some((n, rang) => n !== attendus[rang])) assert.fail(`${quoi} : [${liste.map(decrire).join(", ")}] au lieu de [${attendus.map(decrire).join(", ")}]`);
+}
+function autreNoeud(vu, ancien, quoi = "le nœud") {
+  if (vu === ancien) assert.fail(`${quoi} : toujours ${decrire(vu)}`);
+}
 const FERMER = String.fromCodePoint(0x2715);
 const REDUIRE = String.fromCodePoint(0x2013);
 
@@ -94,7 +114,7 @@ const LIGNES = {
   fournaise1: ligneVue({ cle: "4:0", libelle: "Fournaise [1]", degats: null, cout: "1 souffle, 1 lien", commande: capacite(4, 0), jouer: "Jouer Fournaise [1]", survol: survolDe("Fournaise", { origine: "Saucier", portee: "Cible au choix, sans condition de portée", cout: "Coût : 1 action, 1 souffle, 1 lien" }) }),
   fournaise2: ligneVue({ cle: "4:1", libelle: "Fournaise [2]", degats: null, cout: "2 souffle, 1 lien", actif: false, raison: "il manque du souffle (2)", commande: capacite(4, 1), jouer: "Jouer Fournaise [2]", survol: survolDe("Fournaise", { origine: "Saucier", cout: "Coût : 1 action, 2 souffle, 1 lien" }) }),
   pas1: ligneVue({ cle: "9:0", libelle: "Pas chassé [1]", degats: "1 case", commande: capacite(9, 0), jouer: "Jouer Pas chassé [1]", survol: survolDe("Pas chassé", { origine: "Gestes de cuisine", portee: "Arrivée : les cases à une distance de 1 à 1, hachurées sur la carte.", hachures: ["A2", "B1", "B2"] }) }),
-  taloche: ligneVue({ cle: "15:0", libelle: "Taloche [1]", degats: "2/4/8", commande: capacite(15, 0), jouer: "Jouer Taloche [1]", survol: survolDe("Taloche", { origine: "Taloche", portee: "Portée 0 : sa case seule, hachurée sur la carte.", hachures: ["A1"] }) }),
+  taloche: ligneVue({ cle: "15:0", libelle: "Taloche [1]", degats: "2/4/8", commande: capacite(15, 0), jouer: "Jouer Taloche [1]", survol: survolDe("Taloche", { origine: "Gestes de cuisine", portee: "Portée 0 : sa case seule, hachurée sur la carte.", hachures: ["A1"] }) }),
 };
 const CLES = ["0:0", "1:0", "4:0", "4:1", "9:0", "15:0"];
 
@@ -239,11 +259,15 @@ const FENETRE = { largeur: 1280, hauteur: 800 };
  * origineDeLaCible…), puis, à une ouverture, la replace et la focalise ;
  * executer relève la commande, puis rend la vue que banc.ensuite(commande)
  * donne (rien : la séance a refusé, l'écran ne redessine pas). Relève les
- * hachures, les focus au jeton, les fermetures de la liste d'une case, les
- * écrans refaits ; tient les écouteurs de la fenêtre.
+ * hachures, les focus au jeton et au « +k », les fermetures de la liste
+ * d'une case, les écrans refaits ; tient les écouteurs de la fenêtre. Comme
+ * l'écran sur sa racine, il retient sur le cadre le genre du dernier appui
+ * (pointerdown, keydown), que la bulle lit (dernierAppui) ; le jeton de qui
+ * joue est dans la case active. focusFidele : le document simulé déclenche
+ * blur et focus à chaque focus().
  */
-function monter({ etroit = false, espion = false } = {}) {
-  const retirerDom = installerDom();
+function monter({ etroit = false, espion = false, focusFidele = false } = {}) {
+  const retirerDom = installerDom({ focusFidele });
   const avant = { add: globalThis.addEventListener, remove: globalThis.removeEventListener };
   const ecoutes = [];
   globalThis.addEventListener = (type, f) => ecoutes.push([type, f]);
@@ -251,13 +275,22 @@ function monter({ etroit = false, espion = false } = {}) {
     const i = ecoutes.findIndex(([t, g]) => t === type && g === f);
     if (i >= 0) ecoutes.splice(i, 1);
   };
-  const banc = { ensuite: null, appels: [], hachures: [], jetons: [], rafraichis: [], ecoutes, contextes: [] };
+  const banc = { ensuite: null, appels: [], hachures: [], jetons: [], cases: [], rafraichis: [], ecoutes, contextes: [], appui: null };
   const cadre = globalThis.document.createElement("div");
   cadre.className = "combat-cadre";
   cadre.rectangle = { ...CADRE };
+  cadre.addEventListener("pointerdown", (evenement) => {
+    banc.appui = evenement.pointerType || null;
+  });
+  cadre.addEventListener("keydown", () => {
+    banc.appui = "clavier";
+  });
   const caseActive = globalThis.document.createElement("div");
   caseActive.className = "combat-case";
   caseActive.rectangle = { ...CASE };
+  const jeton = globalThis.document.createElement("button");
+  jeton.className = "combat-jeton";
+  caseActive.append(jeton);
   let champs = {};
   let bulle = null;
   const afficher = (vue, autres = {}) => {
@@ -284,6 +317,7 @@ function monter({ etroit = false, espion = false } = {}) {
     },
     hachurer: (noms) => banc.hachures.push(noms),
     focusSurLeJeton: (id) => banc.jetons.push(id),
+    focusSurLaCase: (nomDeCase) => banc.cases.push(nomDeCase),
     fermerLaCase: () => banc.appels.push({ fermerLaCase: true }),
     rafraichir: () => banc.rafraichis.push(true),
   };
@@ -292,7 +326,8 @@ function monter({ etroit = false, espion = false } = {}) {
     banc.contextes.push({ r, entree: { ...r } });
     return composer(r, vue);
   };
-  bulle = creer(actions, espion ? { composerListe: releve(composerListe), composerGeste: releve(composerGeste) } : { composerListe, composerGeste });
+  const dernierAppui = () => banc.appui;
+  bulle = creer(actions, espion ? { composerListe: releve(composerListe), composerGeste: releve(composerGeste), dernierAppui } : { composerListe, composerGeste, dernierAppui });
   bulle.noeud.rectangle = { ...BULLE };
   bulle.onglet.rectangle = { ...ONGLET };
   cadre.append(caseActive, bulle.noeud, bulle.onglet);
@@ -301,7 +336,7 @@ function monter({ etroit = false, espion = false } = {}) {
     Object.assign(globalThis, { addEventListener: avant.add, removeEventListener: avant.remove });
     retirerDom();
   };
-  return Object.assign(banc, bulle, { bulle, afficher, cadre, caseActive, retirer, defile: bulle.noeud.querySelector(".combat-bulle-defile"), couche: bulle.noeud.querySelector(".combat-infobulles") });
+  return Object.assign(banc, bulle, { bulle, afficher, cadre, caseActive, jeton, retirer, defile: bulle.noeud.querySelector(".combat-bulle-defile"), couche: bulle.noeud.querySelector(".combat-infobulles") });
 }
 
 function avecLaBulle(faire, options) {
@@ -331,7 +366,7 @@ test("bulle — sur un ordinateur, montrée pour une action non réduite : la li
     assert.deepEqual(monte.afficher(vueJet()), { montree: true, ouverture: true }, "le jet : un autre genre de contenu");
     assert.ok(classesDe(noeud).includes("combat-bulle-jet"), "29,5rem pour le jet");
     assert.notEqual(defile.querySelector("ol.combat-etapes"), null);
-    assert.equal(defile.querySelector("[data-ligne]"), null, "le jet, sans la liste");
+    memeNoeud(defile.querySelector("[data-ligne]"), null, "le jet, sans la liste");
     assert.equal(onglet.hidden, true);
 
     for (const vue of [QUI_JOUE, TERMINE, PREPARATION]) {
@@ -351,7 +386,7 @@ test("bulle — « +k » pendant le combat : la liste d'une case prend la place 
 
     // Sur une case, personne ne jouant encore : la bulle s'ouvre pour elle seule.
     assert.deepEqual(monte.afficher(QUI_JOUE, { caseOuverte: "D4" }), { montree: true, ouverture: true });
-    assert.deepEqual(defile.children, [listeDeCase]);
+    memesNoeuds(defile.children, [listeDeCase], "ce qui défile");
     assert.equal(noeud.querySelector(".combat-bulle-tete").hidden, true, "la liste porte son propre titre");
     assert.equal(leFermer(monte).getAttribute("aria-label"), "Fermer");
     // L'écran la remplit, puis la bulle se nomme par son titre et y met le focus.
@@ -362,20 +397,20 @@ test("bulle — « +k » pendant le combat : la liste d'une case prend la place 
     jeton.append("Marmiton de corvée n° 1");
     listeDeCase.append(titreDeLaCase, jeton);
     assert.equal(monte.focaliser(), true);
-    assert.equal(dernierFocus().noeud, titreDeLaCase);
+    memeNoeud(dernierFocus().noeud, titreDeLaCase, "le focus");
     assert.notEqual(titreDeLaCase.id, "");
     assert.equal(noeud.getAttribute("aria-labelledby"), titreDeLaCase.id);
     assert.equal(noeud.getAttribute("aria-label"), null);
 
     // Une bulle montrée prend la liste à sa place, et la rend quand elle se ferme.
     assert.deepEqual(monte.afficher(vueListe()), { montree: true, ouverture: true });
-    assert.equal(listeDeCase.parentNode, null);
+    memeNoeud(listeDeCase.parentNode, null, "la liste a quitté la bulle");
     assert.equal(noeud.getAttribute("aria-label"), "Aubépine Crèmebrûlée : ses actions");
     assert.equal(noeud.getAttribute("aria-labelledby"), null);
     assert.equal(noeud.querySelector(".combat-bulle-tete").hidden, false);
     assert.deepEqual(monte.afficher(vueListe(), { caseOuverte: "D4" }), { montree: true, ouverture: true });
-    assert.deepEqual(defile.children, [listeDeCase]);
-    assert.deepEqual(listeDeCase.children, [titreDeLaCase, jeton], "la bulle ne touche pas à ce que l'écran y a mis");
+    memesNoeuds(defile.children, [listeDeCase], "ce qui défile");
+    memesNoeuds(listeDeCase.children, [titreDeLaCase, jeton], "la bulle ne touche pas à ce que l'écran y a mis");
     assert.deepEqual(monte.afficher(vueListe(), { caseOuverte: "E5" }).ouverture, true, "une autre case : une ouverture");
     assert.deepEqual(monte.afficher(vueListe()).ouverture, true, "le contenu d'avant revient");
     assert.equal(laLigne(defile, "0:0").getAttribute("data-focus"), "ligne:0:0");
@@ -485,7 +520,7 @@ test("bulle — un dialogue non modal nommé par la vue : son en-tête, ce qui d
     assert.equal(fermer.getAttribute("type"), "button");
     assert.equal(fermer.textContent, FERMER);
     assert.equal(fermer.getAttribute("aria-label"), "Fermer");
-    assert.equal(noeud.children.at(-1), fermer, "✕ en dernier : Tab sort après lui");
+    memeNoeud(noeud.children.at(-1), fermer, "✕ en dernier : Tab sort après lui");
 
     // Le geste payé : son en-tête, et « – » pour réduire.
     monte.afficher(vueJet());
@@ -493,7 +528,7 @@ test("bulle — un dialogue non modal nommé par la vue : son en-tête, ce qui d
     assert.equal(sous.textContent, "Aubépine · dernière action · souffle 6/10");
     assert.equal(fermer.textContent, REDUIRE);
     assert.equal(fermer.getAttribute("aria-label"), "Réduire");
-    assert.deepEqual([...noeud.children], enfants, "les nœuds de la bulle ne sont jamais refaits");
+    memesNoeuds(noeud.children, enfants, "les nœuds de la bulle ne sont jamais refaits");
     assert.equal(tous(noeud, "[aria-live]").length, 0, "la seule région polie est celle de la zone");
 
     // Un signe qui renverse l'écriture ne s'affiche pas, et n'entre pas dans le nom.
@@ -626,6 +661,41 @@ test("bulle — Maj+Tab depuis son premier élément (ou son titre) rend le focu
   });
 });
 
+test("bulle — la liste d'une case : Maj+Tab depuis son premier jeton rend le focus au « +k » qui l'a ouverte, non au jeton de qui joue ; sans protagoniste ni case, l'appui n'est pas pris", () => {
+  avecLaBulle((monte) => {
+    const { noeud, listeDeCase } = monte;
+    const majTab = (cible) => {
+      let empeche = false;
+      noeud.declencher("keydown", { key: "Tab", shiftKey: true, target: cible, preventDefault: () => (empeche = true) });
+      return empeche;
+    };
+    // La liste d'une case, depuis « Qui joue ? » : personne ne joue, la vue n'a pas de « Passer son tour ».
+    monte.afficher(QUI_JOUE, { caseOuverte: "D4" });
+    const titreDeLaCase = globalThis.document.createElement("h3");
+    titreDeLaCase.setAttribute("tabindex", "-1");
+    titreDeLaCase.append("Case D4");
+    const premier = globalThis.document.createElement("button");
+    premier.append("Marmiton de corvée n° 1");
+    const second = globalThis.document.createElement("button");
+    second.append("Marmiton de corvée n° 2");
+    listeDeCase.append(titreDeLaCase, premier, second);
+    assert.equal(majTab(premier), true, "l'appui est pris : il n'est pas avalé");
+    assert.deepEqual(monte.cases, ["D4"], "le focus au « +k » de la case ouverte");
+    assert.deepEqual(monte.jetons, []);
+    assert.equal(majTab(second), false, "depuis le deuxième jeton, le navigateur fait");
+    // Ouverte pendant une action : la liste prend la place, et Maj+Tab mène encore au « +k », non au jeton de l'acteur.
+    monte.afficher(vueListe(), { caseOuverte: "D4" });
+    assert.equal(majTab(premier), true);
+    assert.deepEqual(monte.cases, ["D4", "D4"]);
+    assert.deepEqual(monte.jetons, []);
+    assert.equal(noeud.hidden, false, "la bulle reste ouverte");
+    // Sans protagoniste (aucun « Passer son tour ») et sans case : rien n'est retenu, le navigateur fait.
+    monte.afficher(vueListe({ passer: null }));
+    assert.equal(majTab(laLigne(noeud, "0:0")), false, "sans protagoniste, l'appui n'est pas pris");
+    assert.deepEqual([monte.cases, monte.jetons], [["D4", "D4"], []]);
+  });
+});
+
 test("bulle — Échap en deux temps : l'infobulle ouverte d'abord, sans bouger le focus ; puis la bulle se ferme avant le premier dé ; cachée, Échap n'est pas pris", () => {
   avecLaBulle((monte) => {
     monte.afficher(vueListe());
@@ -644,6 +714,35 @@ test("bulle — Échap en deux temps : l'infobulle ouverte d'abord, sans bouger 
     assert.equal(monte.noeud.hidden, true);
     assert.deepEqual(monte.jetons, [], "après Échap, c'est l'écran qui met le focus au jeton");
     assert.equal(monte.echap(), null, "cachée, Échap n'est pas pris");
+  });
+});
+
+test("bulle — fermerLInfobulle : l'infobulle ouverte, ou les seules hachures de « Jet d'attaque », se ferment sans bouger le focus ni la bulle ; rien d'ouvert, faux", () => {
+  avecLaBulle((monte) => {
+    const { noeud } = monte;
+    monte.afficher(vueListe());
+    assert.equal(monte.fermerLInfobulle(), false, "rien d'ouvert");
+    const taloche = laLigne(noeud, "15:0");
+    taloche.declencher("pointerenter", { pointerType: "mouse" });
+    const info = infobulleDe(noeud, taloche);
+    assert.equal(info.hidden, false);
+    const focalisations = globalThis.document.focalisations.length;
+    assert.equal(monte.fermerLInfobulle(), true);
+    assert.equal(info.hidden, true);
+    assert.equal(noeud.hidden, false, "la bulle reste");
+    assert.equal(globalThis.document.focalisations.length, focalisations, "le focus ne bouge pas");
+    assert.deepEqual(monte.appels, []);
+
+    // « Jet d'attaque » survolé : ses seules hachures. Échap les efface d'abord ; la bulle se ferme ensuite.
+    monte.afficher(vueAvantLeDe({ geste: gesteVu({ chaine: [], bilan: null, lettres: [], choix: [], jetPrete: { arme: "Couteau d'office", presse: false, actif: true, raison: null, commande: regler("jet_prete", true), hachures: ["C3"] } }) }));
+    monte.ensuite = (commande) => (commande.choisir === null ? QUI_JOUE : null);
+    leBouton(noeud, "Jet d'attaque").declencher("pointerenter", { pointerType: "mouse" });
+    assert.deepEqual(monte.hachures.at(-1), ["C3"]);
+    assert.equal(monte.echap(), "infobulle", "les hachures d'abord");
+    assert.equal(monte.hachures.at(-1), null);
+    assert.equal(noeud.hidden, false);
+    assert.equal(monte.echap(), "fermee", "puis la bulle");
+    assert.equal(noeud.hidden, true);
   });
 });
 
@@ -937,12 +1036,20 @@ test("infobulle — fermer() rend vrai si une infobulle était ouverte, sans bou
     assert.equal(globalThis.document.focalisations.length, focalisations, "le focus ne bouge pas");
     assert.equal(infobulles.fermer(), false, "plus rien d'ouvert");
 
-    // Les hachures seules : fermer() les efface, mais il n'y avait rien à voir.
+    // Les hachures seules (« Jet d'attaque ») se voient sur la carte : fermer() les efface, et le dit, comme une infobulle.
     const jet = declencheur();
     infobulles.lier(jet, { contenu: null, hachures: ["B2"] });
     jet.declencher("focus");
-    assert.equal(infobulles.fermer(), false);
+    assert.equal(infobulles.fermer(), true, "Échap efface d'abord les hachures");
     assert.equal(hachures.at(-1), null);
+    assert.equal(infobulles.fermer(), false, "puis plus rien d'ouvert");
+    // Ni contenu ni hachure : il n'y avait rien à voir, Échap passe à la suite.
+    for (const sans of [null, []]) {
+      const rien = declencheur();
+      infobulles.lier(rien, { contenu: null, hachures: sans });
+      rien.declencher("focus");
+      assert.equal(infobulles.fermer(), false, JSON.stringify(sans));
+    }
 
     // vider() : la couche part, la fermeture qui attendait aussi ; les hachures sont à l'appelant.
     a.declencher("blur");
@@ -1085,13 +1192,13 @@ test("bulle — le corps refait : infobulles vidées et hachures effacées avant
 
     const posees = monte.hachures.length;
     monte.afficher(vueListe());
-    assert.equal(laLigne(noeud, "0:0"), frappe, "un rendu égal ne refait rien");
+    memeNoeud(laLigne(noeud, "0:0"), frappe, "un rendu égal ne refait rien");
     monte.afficher(vueListe({ annonce: { pas: 3, texte: "1er dé : 9, réussi." } }));
-    assert.equal(laLigne(noeud, "0:0"), frappe, "l'annonce n'est pas dans la bulle : elle ne refait rien");
+    memeNoeud(laLigne(noeud, "0:0"), frappe, "l'annonce n'est pas dans la bulle : elle ne refait rien");
     assert.equal(monte.hachures.length, posees);
 
     monte.afficher(vueListe({ entete: { titre: "Aubépine Crèmebrûlée", sous: "actions restantes : 2 sur 2 · souffle 9/10" } }));
-    assert.notEqual(laLigne(noeud, "0:0"), frappe, "la vue a changé : le corps refait");
+    autreNoeud(laLigne(noeud, "0:0"), frappe, "la vue a changé : le corps refait");
     assert.deepEqual(monte.hachures.slice(posees), [null, ["A1", "A2", "B1", "B2"]], "effacées d'abord, puis reposées par l'aperçu rouvert");
     assert.notEqual(laLigne(noeud, "0:0").parentNode.querySelector(".combat-apercu"), null);
     // Les infobulles du corps neuf, et elles seules.
@@ -1114,7 +1221,7 @@ test("bulle — le contexte du contenu : origine « bulle », l'origine de la ci
       assert.equal(typeof entree.lier, "function");
       assert.ok(entree.cles instanceof Map);
       assert.deepEqual(Object.keys(entree.memoire).sort(), ["apercu", "causesOuvertes", "reglagesOuverts"]);
-      assert.deepEqual(Object.keys(entree.actions).sort(), ["executer", "hachurer", "lancerLeDe"]);
+      assert.deepEqual(Object.keys(entree.actions).sort(), ["executer", "hachurer", "lancerLeDe", "montrer"]);
       assert.equal(r.pose, true, "la commande qui attend a été marquée");
       assert.equal(texteDe(monte.noeud.querySelector(".combat-origine")), "choisie sur la carte");
 
@@ -1122,7 +1229,7 @@ test("bulle — le contexte du contenu : origine « bulle », l'origine de la ci
       monte.afficher(vueJet(), { origineDeLaCible: "bulle" });
       assert.equal(texteDe(monte.noeud.querySelector(".combat-origine")), "choisie ici");
       monte.afficher(vueJet(), { origineDeLaCible: null });
-      assert.equal(monte.noeud.querySelector(".combat-origine"), null);
+      memeNoeud(monte.noeud.querySelector(".combat-origine"), null, "sans origine, rien");
 
       // Un dé lancé depuis la bulle passe par l'écran.
       monte.afficher(vueJet({ geste: gesteVu({ aLancer: { libelle: "d8", motif: "jet" }, chaine: [{ titre: "1er dé", etat: "a_lancer", de: "d8" }] }), focus: "de" }));
@@ -1157,7 +1264,7 @@ test("bulle — la mémoire du contenu (aperçu, réglages, causes) tient le tem
 
     // Le geste fini : l'aperçu d'avant ne revient pas ; le geste suivant repart replié.
     monte.afficher(vueListe());
-    assert.equal(apercu(), null);
+    memeNoeud(apercu(), null, "l'aperçu d'avant");
     monte.afficher(avecReglages("Un autre geste."));
     assert.equal(details().hasAttribute("open"), false);
     assert.equal(cause().getAttribute("aria-expanded"), "false");
@@ -1177,7 +1284,7 @@ test("bulle — la mémoire du contenu (aperçu, réglages, causes) tient le tem
     appuyer(laLigne(noeud, "15:0"), "touch");
     monte.oublier();
     monte.afficher(vueListe());
-    assert.equal(apercu(), null, "l'aperçu oublié");
+    memeNoeud(apercu(), null, "l'aperçu oublié");
   });
 });
 
@@ -1196,7 +1303,7 @@ test("bulle — un réglage qui ne fait pas avancer le geste garde le focus ; pa
     monte.ensuite = () => avec(["force", "agilite"]);
     caracteristique("Agilité").click();
     assert.deepEqual(marques(), ["caracteristique:agilite"]);
-    assert.equal(dernierFocus().noeud, caracteristique("Agilité"), "le focus revient au réglage, sans défiler");
+    memeNoeud(dernierFocus().noeud, caracteristique("Agilité"), "le focus revient au réglage, sans défiler");
     assert.deepEqual(dernierFocus().options, { preventScroll: true });
 
     // Le réglage n'est plus dans le corps refait : la commande qui attend.
@@ -1273,7 +1380,7 @@ test("bulle — l'infobulle d'une ligne : survol, hachures, tenue 300 ms, côté
     frappe.rectangle = { left: 220, top: 150, width: 288, height: 36 };
     const info = infobulleDe(noeud, frappe);
     info.rectangle = { width: 288, height: 120 };
-    assert.equal(info.parentNode, monte.couche, "dans la couche de la bulle, hors de ce qui défile");
+    memeNoeud(info.parentNode, monte.couche, "dans la couche de la bulle, hors de ce qui défile");
     mock.timers.enable({ apis: ["setTimeout"] });
     try {
       frappe.declencher("pointerenter", { pointerType: "mouse" });
@@ -1338,6 +1445,105 @@ test("bulle — au doigt, ni le focus qui suit l'appui ni le survol n'ouvrent l'
   });
 });
 
+test("bulle — ouverte par un appui du doigt sur le jeton, le focus posé sur sa première ligne n'ouvre ni infobulle ni hachure, sur un téléphone comme au-delà de 56rem ; ouverte au clavier, il l'ouvre (focus fidèle)", () => {
+  const montrees = (monte) => tous(monte.couche, "div.combat-infobulle").filter((info) => !info.hidden);
+  const hachures = (monte) => monte.hachures.filter((noms) => noms !== null);
+  for (const etroit of [true, false]) {
+    const quand = etroit ? "sous 56rem, le volet" : "à 56rem et plus, la bulle";
+    avecLaBulle(
+      (monte) => {
+        // L'appui du doigt sur le jeton, puis son clic : l'écran ouvre la bulle et met le focus à sa première ligne.
+        monte.cadre.declencher("pointerdown", { pointerType: "touch", target: monte.jeton });
+        monte.afficher(vueListe());
+        const frappe = laLigne(monte.noeud, "0:0");
+        memeNoeud(globalThis.document.activeElement, frappe, `${quand} : le focus à la première ligne`);
+        assert.deepEqual(montrees(monte), [], `${quand} : aucune infobulle au doigt`);
+        assert.deepEqual(hachures(monte), [], `${quand} : aucune hachure au doigt`);
+
+        // Fermée, puis rouverte par Entrée sur le jeton : le focus qui suit ouvre l'infobulle de la première ligne.
+        monte.afficher(QUI_JOUE);
+        monte.jeton.focus({ preventScroll: true });
+        monte.cadre.declencher("keydown", { key: "Enter", target: monte.jeton });
+        monte.afficher(vueListe());
+        assert.equal(infobulleDe(monte.noeud, laLigne(monte.noeud, "0:0")).hidden, false, `${quand} : au clavier, l'infobulle de la première ligne`);
+        assert.deepEqual(monte.hachures.at(-1), ["A1", "A2", "B1", "B2"]);
+      },
+      { etroit, focusFidele: true },
+    );
+  }
+});
+
+test("bulle — ce qui défile en elle repart du haut à chaque ouverture (✕ puis le jeton, l'onglet), mais pas à un dé ; le focus posé et l'aperçu qui s'ouvre y sont amenés dans la partie vue", () => {
+  avecLaBulle((monte) => {
+    const { defile } = monte;
+    monte.afficher(vueListe());
+    defile.scrollTop = 450;
+    monte.ensuite = (commande) => (commande.choisir === null ? QUI_JOUE : null);
+    leFermer(monte).click();
+    assert.equal(monte.noeud.hidden, true);
+    monte.afficher(vueListe());
+    assert.equal(defile.scrollTop, 0, "rouverte par le jeton : du haut, la première ligne se voit");
+
+    // Réduite après le premier dé, défilée, puis rouverte par l'onglet : du haut.
+    monte.afficher(vueJet());
+    assert.equal(monte.echap(), "reduite");
+    defile.scrollTop = 300;
+    monte.onglet.click();
+    assert.equal(defile.scrollTop, 0, "rouverte par l'onglet : du haut");
+    // Un dé (le corps refait, sans ouverture) ne la fait pas défiler.
+    defile.scrollTop = 120;
+    assert.equal(monte.afficher(vueJet({ annonce: { pas: 13, texte: "3e dé : 7, réussi." }, geste: gesteVu({ bilan: "Bilan 13." }) })).ouverture, false);
+    assert.equal(defile.scrollTop, 120, "un dé ne fait pas défiler la bulle");
+  });
+
+  // Ce qui reçoit le focus : amené dans la partie vue (464 à 769 px), par le plus court.
+  avecLaBulle((monte) => {
+    const { defile, noeud } = monte;
+    monte.afficher(vueListe({ focus: "ligne:15:0" }));
+    defile.rectangle = { left: 204, top: 464, width: 320, height: 305 };
+    laLigne(noeud, "15:0").rectangle = { left: 204, top: 800, width: 320, height: 36 };
+    defile.scrollTop = 0;
+    assert.equal(monte.focaliser(), true);
+    assert.equal(defile.scrollTop, 67, "sous la partie vue : son bas amené au bas de la partie vue");
+    laLigne(noeud, "15:0").rectangle = { left: 204, top: 400, width: 320, height: 36 };
+    defile.scrollTop = 200;
+    monte.focaliser();
+    assert.equal(defile.scrollTop, 136, "au-dessus : son haut amené au haut de la partie vue");
+    laLigne(noeud, "15:0").rectangle = { left: 204, top: 500, width: 320, height: 36 };
+    monte.focaliser();
+    assert.equal(defile.scrollTop, 136, "déjà vue : rien ne bouge");
+    assert.equal(globalThis.document.documentElement.scrollTop, 0, "la page ne défile pas");
+    // Le titre de la bulle, hors de ce qui défile, reçoit le focus (aucune ligne active) : rien ne défile pour lui.
+    const inactive = (ligne) => ({ ...ligne, actif: false, raison: "il manque du souffle (5)" });
+    noeud.querySelector(".combat-bulle-titre").rectangle = { left: 204, top: 80, width: 320, height: 30 };
+    monte.afficher(vueListe({ focus: null, groupes: [{ titre: "Couteau d'office (précise)", lignes: [inactive(LIGNES.frappe)] }], passer: passerDe("pj1", false) }));
+    assert.equal(forme(dernierFocus().noeud), "h2.combat-bulle-titre");
+    assert.equal(defile.scrollTop, 136, "le titre n'est pas dans ce qui défile");
+  });
+
+  // L'aperçu de la dernière ligne, ouvert au doigt sous la partie vue : amené dans la bulle.
+  avecLaBulle((monte) => {
+    const { defile, noeud } = monte;
+    const creerAvant = globalThis.document.createElement;
+    // La boîte de l'aperçu, prêtée dès sa fabrication : 900 à 1 000 px.
+    globalThis.document.createElement = (balise) => {
+      const cree = creerAvant(balise);
+      Object.defineProperty(cree, "rectangle", { get: () => (cree.className === "combat-apercu" ? { left: 204, top: 900, width: 320, height: 100 } : null), set: () => {}, configurable: true });
+      return cree;
+    };
+    try {
+      monte.afficher(vueListe());
+      defile.rectangle = { left: 204, top: 464, width: 320, height: 305 };
+      defile.scrollTop = 0;
+      appuyer(laLigne(noeud, "15:0"), "touch");
+      assert.notEqual(noeud.querySelector(".combat-apercu"), null);
+      assert.equal(defile.scrollTop, 231, "le bas de l'aperçu au bas de la partie vue");
+    } finally {
+      globalThis.document.createElement = creerAvant;
+    }
+  });
+});
+
 // ——— f) Le module ———
 
 test("combat_bulle.js — dom.js et echelle.js seuls ; tout focus sans défiler, aucun défilement ; aucun style écrit ; ni modale ni région ; les signes neufs par leur code ; son en-tête dit le § 17 et le contrat", () => {
@@ -1345,15 +1551,28 @@ test("combat_bulle.js — dom.js et echelle.js seuls ; tout focus sans défiler,
   const entete = source.slice(0, source.search(/^import /m));
   assert.match(entete, /SPECIFICATION\.md, § 17/);
   assert.match(entete, /§ 9\.3 à § 9\.5/);
+  // L'en-tête dit quand elle se place (C-25) et ce qui seul la fait défiler (C-03).
+  assert.match(entete, /et quand la fenêtre\r?\n\/\/ change de taille ; une infobulle se place à sa propre ouverture\./);
+  assert.doesNotMatch(entete, /à l'ouverture d'une\s+(?:\/\/\s+)?infobulle/);
+  assert.match(entete, /une\r?\n\/\/ seule fonction, montrerDansLaBulle, et par son seul scrollTop/);
   assert.deepEqual([...source.matchAll(/^import .* from "(.*)";\r?$/gm)].map(([, chemin]) => chemin), ["./dom.js", "./echelle.js"]);
   assert.doesNotMatch(source, /\bimport\s*\(/);
-  assert.match(source, /^export function creer\(actions, \{ composerListe, composerGeste \}\) \{/m);
+  assert.match(source, /^export function creer\(actions, \{ composerListe, composerGeste, dernierAppui = null \}\) \{/m);
   assert.match(source, /^export function creerInfobulles\(\{ couche, repere = null, actions = \{\}, services = \{\} \} = \{\}\) \{/m);
   // Tout focus sans défiler (compl. § 4.5), écrit en toutes lettres ; aucun défilement de la page.
   const focus = [...source.matchAll(/\.focus\(([^)]*)\)/g)].map(([, options]) => options);
   assert.ok(focus.length > 0);
   for (const options of focus) assert.equal(options, "{ preventScroll: true }");
-  assert.doesNotMatch(source, /scrollIntoView|scrollTo\b|scrollBy|window\.scroll|scrollTop\s*=/);
+  assert.doesNotMatch(source, /scrollIntoView|scrollTo\b|scrollBy|window\.scroll/);
+  // Le défilement propre de la bulle s'écrit dans montrerDansLaBulle seule, et n'y touche que ce qui défile en elle.
+  const debut = source.indexOf("function montrerDansLaBulle(");
+  assert.ok(debut > 0, "montrerDansLaBulle existe");
+  const fin = source.indexOf("\n  }", debut) + 4;
+  const corps = source.slice(debut, fin);
+  const ecritures = (texte) => [...texte.matchAll(/(\S*)scrollTop\s*[-+*/]?=(?!=)/g)].map(([, objet]) => objet);
+  assert.deepEqual(ecritures(source.slice(0, debut) + source.slice(fin)), [], "hors de montrerDansLaBulle, aucun scrollTop écrit");
+  assert.ok(ecritures(corps).length >= 3);
+  for (const objet of ecritures(corps)) assert.equal(objet, "defile.", "seul ce qui défile dans la bulle");
   assert.doesNotMatch(source, /["']scroll["']/, "aucun écouteur de défilement");
   // La place s'écrit dans echelle.js : ici, ni style ni propriété.
   assert.doesNotMatch(source, /\.style\b|\bstyle\s*[:=]|setAttribute\(\s*["']style|cssText|setProperty|removeProperty/);

@@ -125,9 +125,16 @@ const regler = (champ, valeur) => ({ evenement: { type: "regler", champ, valeur 
 const gabaritDe = (champ) => ({ evenement: { type: "regler", champ } });
 
 // La raison qu'une saisie propose : le nom de la capacité jouée. Une raison
-// tient en LONGUEUR_RAISON signes, sans blanc de bord ; un nom peut être plus
-// long.
-const raisonDepuis = (nom) => String(nom ?? "").slice(0, LONGUEUR_RAISON).trim();
+// tient en LONGUEUR_RAISON signes, sans blanc de bord ni demi-codet isolé ;
+// un nom peut être plus long, et porter des demi-codets isolés (une donnée
+// hostile). Ils s'ôtent d'abord ; puis, si la coupe tombe au milieu d'un
+// signe astral, sa première moitié s'ôte aussi : le moteur accepte ainsi
+// toujours la raison proposée, dégâts directs compris.
+const raisonDepuis = (nom) => {
+  let texte = String(nom ?? "").replace(/\p{Cs}/gu, "").slice(0, LONGUEUR_RAISON);
+  if (/[\uD800-\uDBFF]$/.test(texte)) texte = texte.slice(0, -1);
+  return texte.trim();
+};
 
 // « Taloche [1] » : la puissance ne s'écrit que pour une capacité qui évolue.
 const libelleDe = (capacite, facon) => `${capacite.nom}${capacite.evolue && facon !== null ? ` [${facon.puissance}]` : ""}`;
@@ -453,9 +460,11 @@ const MARQUES = { joue: "joue", cible: "ciblee", mort: "morte" };
  * sur 2 »), ses jauges, la table de ses zones dans l'ordre du d20, ses
  * valeurs d'attaque et de défense, ses jauges de lien (une jauge de taille 0
  * n'y est pas), ses passifs câblés, actifs ou non avec leur raison.
- * « jouer » porte la commande qui le choisit, s'il peut l'être ; « avant »,
- * le champ « Case » et « Retirer » d'avant le lancement. null pour qui n'est
- * pas dans le combat.
+ * « jouer » porte la commande qui le choisit, s'il peut l'être, exactement
+ * comme son jeton (vuePlateau) : tant que rien n'est payé, hors d'un choix de
+ * cible ou d'arrivée ; celui qui joue n'en a pas. « avant », le champ
+ * « Case » et « Retirer » d'avant le lancement. null pour qui n'est pas dans
+ * le combat.
  */
 export function vueFiche(etat, id, choisi) {
   const photo = photoDe(etat, id);
@@ -464,6 +473,8 @@ export function vueFiche(etat, id, choisi) {
   const acteur = acteurCourant(etat, choisi);
   const situation = situationDe(etat, id, acteur);
   const estUnPj = courant.camp === "pj";
+  const geste = gesteEnCours(etat);
+  const libre = (geste === null || geste.paye !== true) && choixSurLePlateau(etat) === null;
 
   return {
     id,
@@ -493,7 +504,7 @@ export function vueFiche(etat, id, choisi) {
     liens: photo.liens.map((lien, rang) => ({ nom: lien.nom, valeur: courant.liens[rang].points, max: courant.liens[rang].max })).filter((lien) => lien.max > 0),
     passifs: passifsDe(etat, id).map(({ nom, effet, actif, raison }) => ({ texte: `${nom} : ${effet}`, actif, raison })),
     effets: [],
-    jouer: gesteEnCours(etat) === null && id !== acteur && candidats(etat).includes(id) ? { commande: { choisir: id } } : null,
+    jouer: libre && id !== acteur && candidats(etat).includes(id) ? { commande: { choisir: id } } : null,
     avant:
       etat.phase === "preparation"
         ? { case: courant.case, poser: { gabarit: { preparer: { type: "poser", id } } }, retirer: { commande: { preparer: { type: "retirer", id } } } }
@@ -640,12 +651,14 @@ function hachuresDeLaLigne(mode, facon, depart, hachures) {
 }
 
 // L'origine qu'un survol écrit après le titre : pour un PJ, l'arme qui donne
-// la façon, sinon le titre de son groupe ; pour un adversaire, le libellé de
-// la façon (son arme), sinon rien.
+// la façon, sinon le titre de son groupe ; l'arme des mains nues porte le nom
+// de sa capacité (« Taloche · Taloche ») : c'est donc le titre du groupe
+// (« Taloche · Gestes de cuisine »). Pour un adversaire, le libellé de la
+// façon (son arme), sinon rien.
 function origineDe(photo, capacite, facon, camp) {
   if (camp !== "pj") return facon?.libelle ?? null;
   const arme = facon === null ? null : element(photo.armes, facon.arme);
-  return arme?.libelle ?? capacite.groupe.titre;
+  return arme && !arme.mainsNues ? arme.libelle : capacite.groupe.titre;
 }
 
 // Le survol d'une ligne (contrat du groupe 2, § 8.2).

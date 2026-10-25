@@ -1,7 +1,7 @@
 // Contrôles du journal du combat et du bandeau « Dernier événement », dans
 // un document simulé (SPECIFICATION.md, § 17.7 et § 17.9 ; contrat du lot 4,
-// groupe 2, § 3.1, § 8.7, § 9.8 et § 14, É3 ; complément, § 4.4 et § 4.8) :
-// js/ecrans/combat_journal.js.
+// groupe 2, § 3.1, § 8.7, § 9.8 et § 14, É3 ; complément, § 4.4 et § 4.8 ;
+// relecture du groupe 2, point à trancher 6) : js/ecrans/combat_journal.js.
 //
 // La partie se contrôle seule, sur des lignes écrites à la main à la forme du
 // contrat (§ 3.1) et des vues du journal écrites ici à la forme de vueJournal
@@ -18,7 +18,8 @@
 //    journal reposé en entier, la dernière ligne montrée ;
 // d) le bandeau : caché avant le lancement, sa forme, sa ligne en cours, la
 //    vue inchangée qui ne refait rien ;
-// e) la coupe, à 2, 3 et 6 phrases, par un budget de signes ;
+// e) la coupe, à 2, 3 et 6 phrases, par un budget de signes ; le nom de qui
+//    agit gardé, entier, quand rien ne tient ;
 // f) la mesure refaite à la largeur seule ; « Journal ↓ » et le clic à la
 //    souris, jamais au doigt ;
 // g) les noms hostiles et piégés ; h) le module lui-même.
@@ -647,8 +648,8 @@ test("la coupe : la première phrase coupée par « … », en unités entières
   const coupe = (budget) => couperSous(EMINCER, budget).morceaux;
   assert.deepEqual(coupe(140), [{ phrase: 0, jusqua: 21 }, C, P(2), C], "« Aubépine : Émincer (4… » : par mots");
   assert.deepEqual(coupe(125), [{ phrase: 0, jusqua: 8 }, C, P(2), C], "« Aubépine… » : le nom entier, « : » ne tient pas");
-  assert.deepEqual(coupe(120), [{ phrase: 0, jusqua: 3 }, C, P(2), C], "« Aub… » : par points de code d'un nom");
-  assert.deepEqual(coupe(100), [{ phrase: 0, jusqua: 0 }, C, P(2), C], "rien ne tient : la feuille rogne");
+  // Sous 125, le nom de qui agit ne se coupe pas : voir le contrôle « quand
+  // même le minimum ne tient pas ».
 
   // Deux phrases (30 et 45 signes) : la première et le jet sont toutes les
   // phrases ; rien n'est ôté, aucune coupe « […] ».
@@ -701,11 +702,9 @@ test("le bandeau coupé à 2, 3 et 6 phrases : « […] » entouré d'une espace
 
     const coupee = montrer(EMINCER, 140);
     assert.equal(coupee.textContent, `Aubépine : Émincer (4${SUITE} ${COUPE} d10+1 contre 5 → 5 ✓, 9 ✓, 4 ✗ : 2 réussites, B = 8, ajusté à 20 (Émincer), +2 contre l'armure (Réduction). ${COUPE}`);
-    const nom = montrer(EMINCER, 120);
-    assert.deepEqual(arbre(nom).slice(0, 3), [{ "span.combat-seg-pj": ["Aub"] }, SUITE, " "], "un nom coupé garde sa couleur");
-
     const trois = montrer(FOURNAISE, 118);
     assert.equal(trois.textContent, `Aubépine : Fournaise [1] (1 souffle, 1 lien) contre Che${SUITE} d10 contre 7, 1 avantage → 9 ✓, 5 ✗ : 1 réussite, touché. ${COUPE}`);
+    assert.deepEqual(arbre(trois).slice(4, 7), [{ "span.combat-seg-adv": ["Che"] }, SUITE, " "], "un nom coupé garde sa couleur");
 
     const deux = montrer(MANQUEE, 70);
     assert.equal(deux.textContent, `Aubépine : Frappe${SUITE} d10 contre 7 → 6 ✗ : aucune réussite, manqué.`);
@@ -723,6 +722,53 @@ test("le bandeau coupé à 2, 3 et 6 phrases : « […] » entouré d'une espace
     const localisation = ligne("geste", [...EMINCER.phrases.slice(0, 4).map((genre, k) => [genre, EMINCER.segments.filter((segment) => segment.phrase === k)])], { enCours: true });
     const apresLeJet = montrer(localisation, 175, true);
     assert.equal(apresLeJet.textContent.endsWith(`(Réduction). ${COUPE}${SUITE}`), true, apresLeJet.textContent);
+  });
+});
+
+test("quand même le minimum ne tient pas, la première phrase garde le nom de qui agit, entier, suivi de « … » ; sans lui, la règle première", () => {
+  // Six phrases : sous 125 signes, même « Aubépine… » suivi de « […] », du
+  // jet et de « […] » ne tient pas. Le nom reste, et la feuille rogne.
+  const coupe = (budget) => couperSous(EMINCER, budget).morceaux;
+  assert.deepEqual(coupe(120), [{ phrase: 0, jusqua: 8 }, C, P(2), C], "« Aubépine… » : le nom de qui agit ne se coupe pas");
+  assert.deepEqual(coupe(100), [{ phrase: 0, jusqua: 8 }, C, P(2), C], "rien ne tient : « Aubépine… » reste, et la feuille rogne");
+  assert.deepEqual(coupe(0), [{ phrase: 0, jusqua: 8 }, C, P(2), C]);
+  const essaisCoupes = couperSous(EMINCER, 100).essais.flat().filter((morceau) => morceau.jusqua !== undefined);
+  assert.ok(essaisCoupes.length > 0 && essaisCoupes.every((morceau) => morceau.jusqua >= 8), "aucun essai ne descend sous le nom");
+
+  // Deux phrases, une défense (qui agit est un adversaire), une passe et un
+  // jet de caractéristique : chacune s'ouvre sur qui agit, et le garde.
+  assert.deepEqual(couperSous(MANQUEE, 50).morceaux, [{ phrase: 0, jusqua: 8 }, P(1)]);
+  assert.deepEqual(couperSous(DEFENSE, 10).morceaux, [{ phrase: 0, jusqua: 13 }, C, P(2), C], "« Marmiton n° 1… »");
+  assert.deepEqual(couperSous(PASSE, 5).morceaux, [{ phrase: 0, jusqua: 13 }]);
+  assert.deepEqual(couperSous(GOUTER, 10).morceaux, [{ phrase: 0, jusqua: 8 }]);
+
+  // Une ligne sans qui agit garde la règle première : par mots, et, si rien
+  // ne tient, rien n'en reste.
+  assert.deepEqual(couperSous(LANCEMENT, 20).morceaux, [{ phrase: 0, jusqua: 16 }], "« Combat lancé : 1… »");
+  assert.deepEqual(couperSous(LANCEMENT, 0).morceaux, [{ phrase: 0, jusqua: 0 }]);
+
+  // Au bandeau, par la mesure donnée : « Aubépine… » en tête, dans sa
+  // couleur ; le texte dépasse le budget, la feuille le rogne.
+  avecDom(() => {
+    const montrer = (faite, budget, enCours = false) => {
+      const { bandeau, texte: coupee } = monterLeBandeau({ budget });
+      bandeau.rendre({ enCours, ligne: vue(faite) });
+      return coupee;
+    };
+    const emincer = montrer(EMINCER, 100);
+    assert.equal(emincer.textContent, `Aubépine${SUITE} ${COUPE} d10+1 contre 5 → 5 ✓, 9 ✓, 4 ✗ : 2 réussites, B = 8, ajusté à 20 (Émincer), +2 contre l'armure (Réduction). ${COUPE}`);
+    assert.ok([...emincer.textContent].length > 100, "le minimum ne tient pas : la feuille rogne");
+    assert.deepEqual(arbre(emincer).slice(0, 3), [{ "span.combat-seg-pj": ["Aubépine"] }, SUITE, " "], "le nom gardé garde sa couleur");
+
+    const defense = montrer(DEFENSE, 10);
+    assert.deepEqual(arbre(defense).slice(0, 4), [{ "span.combat-seg-adv": ["Marmiton n° 1"] }, SUITE, " ", { "span.combat-bandeau-coupe": [COUPE] }]);
+
+    // La ligne en cours : le nom en tête, son « … » toujours en dernier.
+    const enCours = montrer(TALOCHE_EN_COURS, 10, true);
+    assert.equal(enCours.textContent, `Aubépine${SUITE} d8+1 (Force + Agilité) contre 5, 1 avantage → 8 ✓, 4 ✗${SUITE}`);
+    assert.equal(enCours.childNodes.at(-1).textContent, SUITE);
+
+    assert.equal(montrer(LANCEMENT, 0).textContent, SUITE, "sans qui agit, rien ne reste");
   });
 });
 
@@ -851,11 +897,20 @@ test("des noms piégés restent entiers dans leur segment, et rien de ce qu'ils 
     bandeau.rendre({ enCours: false, ligne: vue(piegee, 4) });
     assert.equal(coupe.textContent, piegee.texte);
     assert.equal(coupe.querySelectorAll(".combat-bandeau-coupe").length, 0);
-    // Coupé, il se coupe par ses points de code, comme tout nom.
+    // Coupé, le nom de la cible se coupe par ses points de code, comme tout
+    // nom ; son « … » et son « […] » restent dans son segment.
+    const large = monterLeBandeau({ budget: 130 });
+    large.bandeau.rendre({ enCours: false, ligne: vue(piegee, 4) });
+    const debut = [...PIEGE].slice(0, 40).join("");
+    assert.equal(large.texte.textContent, `${BRULOT} : Taloche [1] contre ${debut}${SUITE} d8 contre 5 → 4 ✗ : aucune réussite, manqué.`);
+    assert.deepEqual(colores(large.texte)[2], ["combat-seg-adv", debut]);
+    assert.equal(large.texte.querySelectorAll(".combat-bandeau-coupe").length, 0);
+    // Serré, le nom de qui agit reste entier, quoi qu'il porte (« → »,
+    // « ✓ », « contre ») : la coupe le prend par son segment.
     const serre = monterLeBandeau({ budget: 60 });
     serre.bandeau.rendre({ enCours: false, ligne: vue(piegee, 4) });
     assert.equal(serre.texte.querySelectorAll(".combat-bandeau-coupe").length, 0);
-    assert.ok(serre.texte.textContent.endsWith(`${SUITE} d8 contre 5 → 4 ✗ : aucune réussite, manqué.`), serre.texte.textContent);
+    assert.equal(serre.texte.textContent, `${BRULOT}${SUITE} d8 contre 5 → 4 ✗ : aucune réussite, manqué.`);
   });
 });
 

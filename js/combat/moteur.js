@@ -53,9 +53,20 @@
 // changé : annuler coûte comme un clic, et le rejeu reste linéaire. La pile
 // ne se garde pas : elle se refait au rejeu, et ne passe jamais par JSON.
 //
-// Le rejeu (groupe 2 ; contrat, § 4.3, § 4.4) : un générateur qui rend la
-// main toutes les REJEU_TRANCHE ; et le journal n'est recopié qu'une fois par
-// événement, gelé par appliquer() à la fin.
+// Le rejeu (groupe 2 ; contrat, § 4.3, § 4.4 ; relecture du groupe, C-09) :
+// un générateur qui rend la main toutes les REJEU_TRANCHE. appliquer()
+// recopie le journal une fois par événement qui écrit, et gèle la copie :
+// rejouer ainsi N événements recopiait N fois une liste qui s'allonge, un coût
+// quadratique. Or le rejeu ne garde aucun état intermédiaire : il ne cède que
+// { pas }, et les instantanés de l'annulation n'ont pas de journal. Il passe
+// donc par appliquerJournalOuvert(), le chemin même d'appliquer() sans le gel
+// du journal, qui laisse la liste ouverte d'un événement à l'autre ; il ne la
+// gèle qu'à la fin. Ce chemin n'est pas exporté, et seul le rejeu en garde la
+// liste ouverte : appliquer() la gèle aussitôt, et l'écran et la séance n'en
+// voient rien. Mesuré dos à dos (Node 24, le poste chargé) : 15 000 passes,
+// de 21 à 22 s à moins de 3 s ; 7 499 paires « geste, annuler », de 12 à
+// 15 s à un peu plus de 1 s ; la tranche de 1 000 la plus longue, de 3,2 s à
+// 0,3 s.
 
 import { CARACTERISTIQUES } from "../personnage/regles.js";
 import { circonstances } from "./circonstances.js";
@@ -147,13 +158,15 @@ const changer = (etat, id, champs) => ({ ...etat, protagonistes: { ...etat.prota
 // groupe 2, § 4.4) : la liste d'un état rendu est gelée, et la première
 // écriture d'un événement la recopie dans une liste neuve, non gelée, que les
 // écritures suivantes du même événement prolongent ; appliquer() la gèle en
-// surface, une fois, à la fin. Au groupe 1, chaque écriture recopiait et
-// gelait la liste : une passe qui finit le tour la recopiait deux fois, et le
-// rejeu de 15 000 passes demandait 13,4 s. Une ligne de plus ne fait regarder
-// aucune de celles qui la précèdent : elles sont gelées, et geler() ne
-// redescend pas dans ce qui l'est déjà. La recopie s'écrit par étalement, que
-// le moteur de JavaScript sait faire vite (mesuré : dix fois plus vite que
-// slice()).
+// surface, une fois, à la fin. Le rejeu, lui, ne la gèle qu'après son dernier
+// événement : chacun prolonge la liste du précédent, recopiée une fois pour
+// tout le combat, à sa première écriture (C-09). Au groupe 1, chaque écriture
+// recopiait et gelait la liste : une passe qui finit le tour la recopiait
+// deux fois, et le rejeu de 15 000 passes demandait 13,4 s. Une ligne de plus
+// ne fait regarder aucune de celles qui la précèdent : elles sont gelées, et
+// geler() ne redescend pas dans ce qui l'est déjà. La recopie s'écrit par
+// étalement, que le moteur de JavaScript sait faire vite (mesuré : dix fois
+// plus vite que slice()).
 function ecrire(etat, ...neuves) {
   const prolonge = !Object.isFrozen(etat.journal);
   const journal = prolonge ? etat.journal : [...etat.journal];
@@ -518,10 +531,14 @@ const empiler = (pile, avant, quoi, plage) => geler({ attente: null, pile: { ava
  *   lancement ni ses suites ne se défont.
  * Un geste empilé sur un autre (groupe 3) n'est pas suivi : seul compte un
  * geste seul sur la pile.
+ *
+ * « lignesAvant » est la longueur du journal avant l'événement, lue avant le
+ * réducteur : au rejeu, l'état reçu et l'état d'après partagent la même liste
+ * ouverte, et la longueur de la première serait déjà celle de la seconde.
  */
-function suivreLAnnulation(etat, lu, suivant, geste) {
+function suivreLAnnulation(etat, lu, suivant, geste, lignesAvant) {
   const courante = etat.annulation ?? SANS_ANNULATION;
-  const plage = [etat.journal.length, suivant.journal.length];
+  const plage = [lignesAvant, suivant.journal.length];
   if (lu.type === "passer") return empiler(courante.pile, instantane(sansGesteNonPaye(etat)), { genre: "passer", qui: lu.qui }, plage);
   if (lu.type === "fin_de_tour") return empiler(courante.pile, instantane(sansGesteNonPaye(etat)), { genre: "fin_de_tour", camp: etat.tour.camp }, plage);
   const racine = etat.pile.length === 1 ? gesteEnCours(etat) : null;
@@ -532,6 +549,42 @@ function suivreLAnnulation(etat, lu, suivant, geste) {
 }
 
 // ─── Appliquer, rejouer ─────────────────────────────────────────────────────
+
+// Gèle en profondeur l'état d'après un événement, hors sa liste du journal,
+// que geler() figerait en passant : chaque autre champ par geler(), qui ne
+// reparcourt pas ce qui l'est déjà, puis l'objet, en surface. regles.js
+// défend de geler ainsi à la main un objet dont une partie ne l'est pas
+// encore (geler() le croirait fini) : l'état fait ici ne sort donc jamais du
+// moteur tant que sa liste reste ouverte. appliquer() la gèle aussitôt, le
+// rejeu après son dernier événement.
+function gelerHorsDuJournal(etat) {
+  for (const [champ, valeur] of Object.entries(etat)) if (champ !== "journal") geler(valeur);
+  return Object.freeze(etat);
+}
+
+/**
+ * Ce que fait appliquer(), la liste du journal laissée ouverte : { etat }, ou
+ * { etat, refus }. L'état rendu est gelé en profondeur, hors cette liste, que
+ * l'événement suivant prolongera au lieu de la recopier (voir ecrire). Non
+ * exporté : appliquer() la gèle aussitôt, et seul le rejeu, qui ne garde
+ * aucun état intermédiaire, la laisse ouverte d'un événement à l'autre.
+ */
+function appliquerJournalOuvert(etat, evenement) {
+  const verdict = accepte(etat, evenement);
+  if (!verdict.ok) return { etat, refus: { code: verdict.code, message: verdict.message } };
+  // La copie gelée de l'événement, aux seuls champs connus : c'est elle que
+  // le geste garde (les opérations des dégâts, par exemple).
+  const lu = validerEvenement(evenement).evenement;
+  // Lue avant le réducteur : au rejeu, l'état reçu et l'état d'après
+  // partagent la liste ouverte, dont la longueur ne dit plus, ensuite, où
+  // l'événement a commencé d'écrire (la plage d'un maillon, l'annonce).
+  const lignesAvant = etat.journal.length;
+  const { etat: suivant, geste } = avancer(REDUCTEURS[lu.type](etat, lu));
+  const annulation = lu.type === "annuler" ? suivant.annulation : suivreLAnnulation(etat, lu, suivant, geste, lignesAvant);
+  const pas = etat.pas + 1;
+  const texte = annonce(suivant, geste, lu, lignesAvant);
+  return { etat: gelerHorsDuJournal({ ...suivant, annonce: texte === null ? etat.annonce : { pas, texte }, pas, annulation }) };
+}
 
 /**
  * Applique un événement à un état, et rend { etat }, ou { etat, refus }.
@@ -545,21 +598,17 @@ function suivreLAnnulation(etat, lu, suivant, geste) {
  * l'événement n'a rien à dire, celle d'avant reste, l'objet même. De même
  * l'annulation (voir suivreLAnnulation) et le journal, quand l'événement n'y
  * écrit rien.
+ *
+ * Une recopie du journal par événement qui écrit (contrat du groupe 2,
+ * § 4.4) : la liste reçue est gelée, sa première écriture la recopie, et la
+ * liste neuve se gèle ici.
  */
 export function appliquer(etat, evenement) {
-  const verdict = accepte(etat, evenement);
-  if (!verdict.ok) return { etat, refus: { code: verdict.code, message: verdict.message } };
-  // La copie gelée de l'événement, aux seuls champs connus : c'est elle que
-  // le geste garde (les opérations des dégâts, par exemple).
-  const lu = validerEvenement(evenement).evenement;
-  const { etat: suivant, geste } = avancer(REDUCTEURS[lu.type](etat, lu));
-  const annulation = lu.type === "annuler" ? suivant.annulation : suivreLAnnulation(etat, lu, suivant, geste);
-  const pas = etat.pas + 1;
-  const texte = annonce(suivant, geste, lu, etat.journal.length);
+  const rendu = appliquerJournalOuvert(etat, evenement);
   // La liste neuve du journal, gelée en surface, une fois : ses lignes le sont
   // déjà, et geler() ne la reparcourt donc pas.
-  Object.freeze(suivant.journal);
-  return { etat: geler({ ...suivant, annonce: texte === null ? etat.annonce : { pas, texte }, pas, annulation }) };
+  if (rendu.refus === undefined) Object.freeze(rendu.etat.journal);
+  return rendu;
 }
 
 const VERSION_INCONNUE = "Ce combat a été commencé avec une autre version des règles.";
@@ -567,14 +616,22 @@ const CONTENU_ILLISIBLE = "Le contenu de ce combat ne se lit pas.";
 
 /**
  * Refait l'état d'un combat gardé, en rendant la main (contrat du groupe 2,
- * § 4.3) : ouvrirCombat() sur sa mise en place, puis appliquer() pour chacun
- * de ses événements, par le chemin même du jeu. Un générateur pur : il cède
+ * § 4.3) : ouvrirCombat() sur sa mise en place, puis chacun de ses
+ * événements, par le chemin même du jeu. Un générateur pur : il cède
  * { pas } après chaque tranche de « tranche » événements (le nombre de ceux
  * déjà appliqués), et celui qui le mène rend la main au navigateur entre
  * deux. Il rend { etat }, ou { erreur: { pas, code, message } } au premier
  * refus (« pas » est le numéro de l'événement refusé, 0 pour le contenu
  * lui-même) : la suite n'est jamais tronquée en silence, un combat qui ne se
  * rejoue pas est une donnée abîmée.
+ *
+ * Linéaire (compl. § 4.10 ; relecture du groupe 2, C-09) : il applique
+ * chaque événement par appliquerJournalOuvert(), comme appliquer() mais sans
+ * geler la liste du journal, que l'événement suivant prolonge ; elle n'est
+ * recopiée qu'à la première écriture, et gelée après le dernier événement.
+ * Aucun état intermédiaire n'en sort : il ne cède que { pas }, et un refus
+ * ne rend que l'erreur. L'état rendu est celui qu'appliquer() aurait fait,
+ * pas à pas, gelé en profondeur.
  *
  * Le contenu a déjà été jugé pour sa forme (validerContenu, js/combat/forme.js).
  */
@@ -588,11 +645,14 @@ export function* rejeu(contenu, tranche = REJEU_TRANCHE) {
     return { erreur: { pas: 0, code: "forme", message: CONTENU_ILLISIBLE } };
   }
   for (const [rang, evenement] of contenu.evenements.entries()) {
-    const { etat: suivant, refus } = appliquer(etat, evenement);
+    const { etat: suivant, refus } = appliquerJournalOuvert(etat, evenement);
     if (refus) return { erreur: { pas: rang + 1, ...refus } };
     etat = suivant;
     if ((rang + 1) % tranche === 0) yield { pas: rang + 1 };
   }
+  // La liste du journal, ouverte depuis sa première écriture, gelée une fois,
+  // en surface : ses lignes le sont déjà.
+  Object.freeze(etat.journal);
   return { etat };
 }
 

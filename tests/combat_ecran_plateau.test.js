@@ -58,6 +58,8 @@ function vueDe({ phase = "combat", places = { pj1: "D4", adv2: "F6", adv3: "D4",
       nom: [entier, camp === "pj" ? "personnage" : "adversaire", ...etats, `case ${nomDeCase}`].join(", "),
       choix: null,
       inactif: false,
+      // Comme vuePlateau : la raison d'un jeton qui attend la fin d'une action, nulle sinon (contrat, § 8.5).
+      raison: null,
       ...retouche,
     };
   }

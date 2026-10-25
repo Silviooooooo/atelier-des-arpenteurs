@@ -257,8 +257,11 @@ const CONTROLE = new RegExp(`[\\p{Cc}${String.fromCodePoint(0x2028, 0x2029)}]`, 
 
 /**
  * Une raison saisie à la main : de 1 à LONGUEUR_RAISON signes, sans blanc de
- * bord ni caractère de contrôle. C'est le moteur qui la vérifie, pas l'écran :
- * elle est une donnée hostile comme une autre.
+ * bord, ni caractère de contrôle, ni demi-codet isolé (la moitié d'un signe
+ * astral, seule : le JSON l'écrit en six octets, et un journal qui en serait
+ * fait dépasserait la borne de l'enregistrement). Un signe astral entier
+ * compte deux unités. C'est le moteur qui la vérifie, pas l'écran : elle est
+ * une donnée hostile comme une autre.
  */
 export function raisonValide(texte) {
   return (
@@ -266,7 +269,8 @@ export function raisonValide(texte) {
     texte.length >= 1 &&
     texte.length <= LONGUEUR_RAISON &&
     texte === texte.trim() &&
-    !CONTROLE.test(texte)
+    !CONTROLE.test(texte) &&
+    !/\p{Cs}/u.test(texte)
   );
 }
 

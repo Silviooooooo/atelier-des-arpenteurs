@@ -327,8 +327,9 @@ const E3_ANNONCEES = ANNONCEES.filter(([code]) => code === "E3").length;
 // doublons se range, comme elle se lit, sous le nom comparé. Et les lignes de
 // deux capacités de même nom peuvent s'entrelacer dans la feuille : le
 // doublon est toujours la capacité dont la première ligne est la plus basse,
-// à cette ligne, et la ligne citée la première de l'autre, quelle que soit
-// celle qui porte le signe (compl. § 5.4).
+// à la plus basse de ses lignes (ici sa seule), et la ligne citée la
+// première de l'autre, quelle que soit celle qui porte le signe (compl.
+// § 5.4).
 test("E3 — le signe invisible sur la première définition, et des variantes entrelacées : le doublon est la définition qui commence le plus bas, la plus haute est citée", async () => {
   const lignes = {};
   const { banque, anomalies } = await importer(
@@ -365,7 +366,7 @@ test("E3 — le signe invisible sur la première définition, et des variantes e
     ["Blanchir", [lignes.milieu]],
   ]);
   assert.deepEqual(de("Capacites", lignes.haute).map(([code]) => code), ["A3"]);
-  // La capacité qui commence le plus bas est le doublon, à sa première ligne ; elle cite la plus haute,
+  // La capacité qui commence le plus bas est le doublon, à sa ligne la plus basse (sa seule) ; elle cite la plus haute,
   // celle qui porte le signe. La ligne basse, une autre puissance du nom écrit en haut, n'en est pas un.
   assert.deepEqual(de("Capacites", lignes.milieu), [
     ["E3", `La capacité « Blanchir » ne diffère de celle de la ligne ${lignes.haute} que par un signe invisible.`],
@@ -483,10 +484,11 @@ test("E3 élargi — « Goûter » suivi de U+00AD, puissance 1, à côté de «
 // Trois noms écrits d'un même groupe : « Sauce piquante » (lignes 5 à 8 du
 // classeur d'essai, puissances 1, 2, 3 et un doublon de la 2), puis le même
 // nom avec U+200B au milieu, puis avec U+00AD au bout. Chacune des deux
-// autres reçoit un E3 à sa propre première ligne, qui cite la ligne 5 ; une
-// autre puissance d'un nom écrit n'en reçoit pas, une même puissance garde
-// le message d'avant, qui cite la ligne de ce nom écrit.
-test("E3 élargi — trois noms d'un groupe : deux E3, chacun à la première ligne de sa capacité, citant la première ; une même puissance d'un même nom écrit garde l'ancien message", async () => {
+// autres reçoit un E3 à la plus basse de ses propres lignes (compl. § 5.4,
+// « à la ligne la plus basse » ; relecture du groupe 2, C-22), qui cite la
+// ligne 5 ; une autre puissance d'un nom écrit n'en reçoit pas, une même
+// puissance garde le message d'avant, qui cite la ligne de ce nom écrit.
+test("E3 élargi — trois noms d'un groupe : deux E3, chacun à la plus basse des lignes de sa capacité, citant la première ; une même puissance d'un même nom écrit garde l'ancien message", async () => {
   const lignes = {};
   const { anomalies } = await importer(
     variante((feuilles) => {
@@ -501,21 +503,59 @@ test("E3 élargi — trois noms d'un groupe : deux E3, chacun à la première li
     }),
   );
   const de = surLaLigne(anomalies);
-  assert.deepEqual(de("Capacites", lignes.milieu), [
-    ["E3", "La capacité « Sauce\u200B piquante » ne diffère de celle de la ligne 5 que par un signe invisible."],
-    ["A3", "La capacité « Sauce\u200B piquante » n'est rattachée à aucun bloc."],
-  ]);
+  // « Sauce\u200B piquante » a trois lignes (milieu, autrePuissance, doublon) :
+  // son E3 va à la plus basse, avec celui du doublon de puissance ; A3 reste
+  // à sa première.
+  assert.deepEqual(de("Capacites", lignes.milieu), [["A3", "La capacité « Sauce\u200B piquante » n'est rattachée à aucun bloc."]]);
+  // « Sauce piquante\u00AD » n'en a qu'une : la plus basse est la première.
   assert.deepEqual(de("Capacites", lignes.bout), [
     ["E3", "La capacité « Sauce piquante\u00AD » ne diffère de celle de la ligne 5 que par un signe invisible."],
     ["A3", "La capacité « Sauce piquante\u00AD » n'est rattachée à aucun bloc."],
   ]);
   assert.deepEqual(de("Capacites", lignes.autrePuissance), []);
-  assert.deepEqual(de("Capacites", lignes.doublon), [["E3", `La capacité « Sauce\u200B piquante » a déjà une variante de puissance « 1 », ligne ${lignes.milieu}.`]]);
+  assert.deepEqual(de("Capacites", lignes.doublon), [
+    ["E3", `La capacité « Sauce\u200B piquante » a déjà une variante de puissance « 1 », ligne ${lignes.milieu}.`],
+    ["E3", "La capacité « Sauce\u200B piquante » ne diffère de celle de la ligne 5 que par un signe invisible."],
+  ]);
   // La première ne reçoit rien de plus que le doublon que le classeur d'essai annonce (ligne 8).
   assert.deepEqual(de("Capacites", 5), []);
   assert.deepEqual(de("Capacites", 8), [["E3", "La capacité « Sauce piquante » a déjà une variante de puissance « 2 », ligne 6."]]);
   assert.equal(nombreDE3(anomalies), E3_ANNONCEES + 3);
   assert.equal(anomalies.length, ANNONCEES.length + 5);
+});
+
+// « Le message, à la ligne la plus basse » (compl. § 5.4), lu comme la plus
+// basse des lignes de la capacité signalée (choix fait seul, réversible ;
+// relecture du groupe 2, C-22) : pour une capacité d'une seule ligne, c'est
+// la même que la première ; pour une capacité à plusieurs variantes, non.
+// « Goûter » suivi de U+061C, aux lignes n et n + 5 ; entre elles, quatre
+// autres puissances de « Goûter » (ligne 22). Le message cite la première
+// ligne de « Goûter », non la plus basse.
+test("E3 — à la plus basse des lignes de la capacité signalée : « Goûter » suivi de U+061C aux lignes n et n + 5 ; le message cite la première ligne de l'autre", async () => {
+  const lignes = {};
+  const { banque, anomalies } = await importer(
+    variante((feuilles) => {
+      feuilles[3].lignes.push(["Goûter\u061C", 1, null, null, null, "La puissance 1.", "Le nom suivi de U+061C : sa première ligne"]);
+      lignes.n = feuilles[3].lignes.length;
+      for (const puissance of [2, 3, 4, 5]) {
+        feuilles[3].lignes.push(["Goûter", puissance, null, null, null, `La puissance ${puissance}.`, "Pas d'E3 : une autre puissance du même nom écrit"]);
+      }
+      feuilles[3].lignes.push(["Goûter\u061C", 2, null, null, null, "La puissance 2.", "E3 : le nom suivi de U+061C, à sa ligne la plus basse"]);
+      lignes.basse = feuilles[3].lignes.length;
+    }),
+  );
+  assert.equal(lignes.basse, lignes.n + 5);
+  assert.deepEqual(banque.capacites.filter((c) => cle(c.nom) === "gouter").map((c) => [c.nom, c.variantes.map((v) => v.brut.ligne)]), [
+    ["Goûter", [22, lignes.n + 1, lignes.n + 2, lignes.n + 3, lignes.n + 4]],
+    ["Goûter\u061C", [lignes.n, lignes.basse]],
+  ]);
+  const de = surLaLigne(anomalies);
+  assert.deepEqual(de("Capacites", lignes.n), [["A3", "La capacité « Goûter\u061C » n'est rattachée à aucun bloc."]], "rien d'autre à sa première ligne");
+  for (let ligne = lignes.n + 1; ligne < lignes.basse; ligne += 1) assert.deepEqual(de("Capacites", ligne), [], `ligne ${ligne}`);
+  assert.deepEqual(de("Capacites", lignes.basse), [["E3", "La capacité « Goûter\u061C » ne diffère de celle de la ligne 22 que par un signe invisible."]]);
+  assert.deepEqual(de("Capacites", 22), []);
+  assert.equal(nombreDE3(anomalies), E3_ANNONCEES + 1);
+  assert.equal(anomalies.length, ANNONCEES.length + 2);
 });
 
 test("A1 — un renvoi qui ne diffère que d'un signe invisible est résolu, et signalé : capacité, élément, paramètre", async () => {

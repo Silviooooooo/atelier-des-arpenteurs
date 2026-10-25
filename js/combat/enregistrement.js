@@ -55,6 +55,11 @@ const SIGNES_MAX = { sel: signesDe(OCTETS_SEL), iv: signesDe(OCTETS_IV), chiffre
 // levait au lieu de rendre « illisible ». Les quatre signes par paquet se
 // vérifient par la longueur.
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
+// La date, sous les deux formes qu'écrit toISOString (l'année en quatre
+// chiffres, ou signée en six) : une forme fixe, de 27 signes au plus, se
+// juge avant Date.parse, qui lirait un texte de n'importe quelle longueur
+// (« Oct 25 2026 (… dix millions de signes …) » est une date pour lui).
+const DATE_ISO = /^(?:\d{4}|[+-]\d{6})-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 // Dans l'ordre de la mission : c'est celui de l'enregistrement écrit.
 const CHAMPS = ["mode", "format", "sel", "iterations", "iv", "chiffre", "revision", "enregistre_le"];
 
@@ -142,7 +147,8 @@ function formeValide(e, mode) {
   if (!Number.isSafeInteger(e.revision) || e.revision < 1 || e.revision > REVISION_MAX) return false;
   if (!Number.isInteger(e.iterations) || e.iterations < 1 || e.iterations > ITERATIONS_MAX) return false;
   if (octets(e.sel, SIGNES_MAX.sel)?.length !== OCTETS_SEL || octets(e.iv, SIGNES_MAX.iv)?.length !== OCTETS_IV) return false;
-  if (typeof e.enregistre_le !== "string" || Number.isNaN(Date.parse(e.enregistre_le))) return false;
+  const date = e.enregistre_le;
+  if (typeof date !== "string" || !DATE_ISO.test(date) || Number.isNaN(Date.parse(date))) return false;
   const chiffre = octets(e.chiffre, SIGNES_MAX.chiffre);
   return chiffre !== null && chiffre.length > OCTETS_ETIQUETTE;
 }

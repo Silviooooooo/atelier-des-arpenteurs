@@ -1,7 +1,7 @@
 // Le journal du combat et le bandeau « Dernier événement », à l'écran
 // (SPECIFICATION.md, § 17, « Le simulateur de combat (lot 4) », § 17.7 et
 // § 17.9 ; contrat du lot 4, groupe 2, § 3.1, § 8.7 et § 9.8 ; complément,
-// § 4.4 et § 4.8).
+// § 4.4 et § 4.8 ; relecture du groupe 2, point à trancher 6).
 //
 // Chaque ligne du journal naît en segments typés (js/combat/journal.js) :
 // qui agit, la capacité, la cible, les dés d'un jet, la lettre des dégâts, la
@@ -264,7 +264,11 @@ function dernierQuiTient(nombre, tient) {
 
 // La première phrase coupée par « … », suivie du « reste » (les coupes et la
 // phrase du jet) : la plus longue qui tient, en unités entières, puis dans
-// l'unité suivante. Si rien ne tient, rien n'en reste, et la feuille rogne.
+// l'unité suivante. Une phrase qui s'ouvre sur le nom de qui agit (le segment
+// « acteur ») le garde au moins, entier, suivi de « … » : la coupe ne descend
+// jamais sous lui, et, si même lui ne tient pas, il reste, et la feuille rogne
+// (relecture du groupe 2, point à trancher 6). Une phrase sans lui garde la
+// règle première : si rien ne tient, rien n'en reste, et la feuille rogne.
 function couperLaPremiere(ligne, reste, essayer) {
   const unites = unitesDe(segmentsDeLaPhrase(ligne, 0));
   const debuts = [];
@@ -273,9 +277,14 @@ function couperLaPremiere(ligne, reste, essayer) {
     debuts.push(somme);
     somme += unite.longueur;
   }
+  // Les unités gardées quoi qu'il arrive : le nom de qui agit, s'il ouvre la
+  // phrase, et rien d'autre ; le plancher : leur longueur, en points de code.
+  const gardees = unites[0]?.segments[0].type === "acteur" ? 1 : 0;
+  const plancher = gardees === 1 ? unites[0].longueur : 0;
   const essai = (jusqua) => essayer([{ phrase: 0, jusqua }, ...reste]);
-  const entieres = dernierQuiTient(unites.length, (m) => essai(debuts[m]));
-  if (entieres === -1) return [{ phrase: 0, jusqua: 0 }, ...reste];
+  const audela = dernierQuiTient(unites.length - gardees, (m) => essai(debuts[gardees + m]));
+  if (audela === -1) return [{ phrase: 0, jusqua: plancher }, ...reste];
+  const entieres = gardees + audela;
   const coupures = coupuresDe(unites[entieres]);
   const dedans = dernierQuiTient(coupures.length, (k) => essai(debuts[entieres] + coupures[k]));
   return [{ phrase: 0, jusqua: debuts[entieres] + (dedans === -1 ? 0 : coupures[dedans]) }, ...reste];
@@ -286,7 +295,8 @@ function couperLaPremiere(ligne, reste, essayer) {
  * phrases : essayer(morceaux) dit si des morceaux tiennent. Toutes, si elles
  * tiennent ; sinon la première phrase et celle du jet, puis, en partant de la
  * fin, autant des phrases suivantes qu'il en tient. Si la première et le jet
- * ne tiennent pas ensemble, la première se coupe par « … ».
+ * ne tiennent pas ensemble, la première se coupe par « … », sans jamais
+ * perdre le nom de qui agit qui l'ouvre.
  *
  * Morceau = { phrase } | { coupe: true } (une suite de phrases ôtées,
  * « […] ») | { phrase: 0, jusqua } (la première, coupée après « jusqua »

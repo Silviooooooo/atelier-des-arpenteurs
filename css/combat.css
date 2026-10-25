@@ -2,9 +2,11 @@
    complément du lot 4, groupe 2, § 4).
 
    Cette feuille habille l'écran #/combat et lui seul : chaque règle commence
-   par une classe « combat », pour ne rien changer au reste du site. Elle
-   existe à part d'ecran.css parce que l'écran a ses propres dispositions et
-   ses deux couleurs de camp.
+   par une classe « combat », pour ne rien changer au reste du site. Une seule
+   part de la racine, qui seule porte la marge de défilement de la page, et
+   seulement tant que le volet du combat est montré. Elle existe à part
+   d'ecran.css parce que l'écran a ses propres dispositions et ses deux
+   couleurs de camp.
 
    L'ordre du document est celui du téléphone : le bandeau, la carte, la
    bulle (sur un téléphone, le volet qui monte du bas), la zone sous la
@@ -364,6 +366,15 @@
   border-color: var(--combat-portee-bord);
 }
 
+/* Sur une case hachurée, un jeton et le « +k » posent sous eux une plaque du
+   fond : leur nom, leurs initiales et leurs ronds ne se dessinent plus à
+   même les traits, où le texte tombait à 2,34:1 en sombre et les ronds à
+   1,02:1. Le jeton de qui joue, ou tenu en main, a déjà la sienne. */
+.combat-case.portee .combat-jeton:not(.joue):not([aria-pressed="true"]),
+.combat-case.portee .combat-case-plus {
+  background-color: var(--fond);
+}
+
 .combat-case.active {
   border-color: var(--accent);
   background-color: var(--accent-doux);
@@ -619,6 +630,15 @@
   font-size: var(--taille-petite);
 }
 
+/* Le volet ne retient pas le focus : il peut couvrir ce qui l'a (WCAG
+   2.4.11). Tant qu'il est montré, la page garde en bas une marge de
+   défilement de sa hauteur au plus, et ce que Tab atteint se montre
+   au-dessus de lui. À 56rem, la bulle posée n'en demande aucune, plus bas.
+   La feuille seule le fait : le code n'écrit aucun style. */
+html:has(.combat-bulle:not([hidden])) {
+  scroll-padding-bottom: var(--hauteur-volet);
+}
+
 /* La poignée du volet n'est qu'un repère : rien ne la saisit. */
 .combat-bulle-poignee {
   display: block;
@@ -688,7 +708,12 @@
   font-weight: var(--graisse-forte);
 }
 
+/* Un passif est une cible comme une autre : 44 px de haut, à la souris comme
+   au doigt (§ 9). Seules les lignes de la bulle descendent à 36 px. */
 .combat-passif {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--cible-tactile);
   border-bottom: var(--trait) dotted var(--texte-2);
   color: var(--texte);
   cursor: help;
@@ -711,6 +736,30 @@
 .combat-bulle .combat-capacite {
   width: 100%;
   min-height: var(--cible-tactile);
+}
+
+/* Une ligne est une rangée plate (vue 1) : ni bord ni fond au repos, aucun
+   écart entre deux lignes d'un groupe ; au survol et au focus, le fond doux
+   et un trait d'accent en dedans. Son bord existe, transparent : une ligne
+   inactive y garde son trait discontinu, l'aspect d'un bouton inactif du
+   site, et rien ne bouge. Elle ne s'éclaire pas au survol. */
+.combat-bulle .combat-groupe {
+  row-gap: 0;
+}
+
+.combat-bulle .combat-capacite[data-ligne] {
+  border-color: transparent;
+  background: transparent;
+}
+
+.combat-bulle .combat-capacite[data-ligne][aria-disabled="true"] {
+  border-color: var(--bordure);
+}
+
+.combat-bulle .combat-capacite[data-ligne]:not([aria-disabled="true"]):hover,
+.combat-bulle .combat-capacite[data-ligne]:not([aria-disabled="true"]):focus-visible {
+  background: var(--accent-doux);
+  box-shadow: inset 0 0 0 var(--trait) var(--accent);
 }
 
 .combat-bulle .combat-cout {
@@ -853,6 +902,17 @@
   height: 0;
   border: var(--fleche-bulle) solid transparent;
   pointer-events: none;
+}
+
+/* Les quatre bords de la flèche de la bulle, transparents, avant les règles
+   de côté qui en colorent un. Rien d'autre ici : son contenu, sa place, le
+   style et la largeur de ses bords n'existent qu'à 56rem, plus bas (le volet
+   n'a pas de flèche), et rien de ce qui suit les côtés n'y repose une
+   couleur : un raccourci « border » à 56rem les remettait toutes
+   transparentes, et la flèche ne se dessinait jamais. */
+.combat-bulle::before,
+.combat-bulle::after {
+  border-color: transparent;
 }
 
 .combat-bulle-droite::before,
@@ -1435,7 +1495,9 @@
 }
 
 /* Un dé relancé est toujours un échec : il en garde le rouge, en trait
-   discontinu, et sa valeur, grisée, est barrée. */
+   discontinu, et sa valeur, grisée, est barrée. Le trait est un fond, à
+   mi-hauteur de la valeur et de sa largeur : Firefox ne barrait pas (par
+   text-decoration) la valeur, bloc d'un bouton souple. */
 .combat-de.relance {
   border-style: dashed;
   border-color: var(--combat-echec);
@@ -1443,7 +1505,9 @@
 }
 
 .combat-de.relance .combat-de-valeur {
-  text-decoration: line-through;
+  width: fit-content;
+  margin-inline: auto;
+  background: linear-gradient(currentColor, currentColor) center / 100% var(--trait) no-repeat;
 }
 
 .combat-de.a-lancer {
@@ -1883,10 +1947,17 @@
   font-size: var(--taille-petite);
 }
 
+/* Une ligne hors de la vue ne se met pas en page : à 45 000 lignes, chaque
+   changement de l'écran payait celle du journal entier (annuler à 15 000
+   événements : 131,8 ms en médiane dans Edge). Tant qu'elle n'a pas été
+   vue, elle a la hauteur d'une ligne sur une ligne de texte ; vue, le
+   navigateur garde la sienne. */
 .combat-lignes li {
   padding: var(--espace-1) 0;
   border-bottom: var(--trait) solid var(--separateur);
   overflow-wrap: anywhere;
+  content-visibility: auto;
+  contain-intrinsic-size: auto var(--hauteur-ligne-journal);
 }
 
 .combat-lignes li.tour {
@@ -2089,13 +2160,21 @@
     display: none;
   }
 
+  /* Posée sur le cadre, la bulle ne couvre pas le bas de la page. */
+  html:has(.combat-bulle:not([hidden])) {
+    scroll-padding-bottom: auto;
+  }
+
+  /* Sa flèche : le style et la largeur des bords seuls ; leurs couleurs
+     sont posées avant les règles de côté, plus haut. */
   .combat-bulle::before,
   .combat-bulle::after {
     content: "";
     position: absolute;
     width: 0;
     height: 0;
-    border: var(--fleche-bulle) solid transparent;
+    border-style: solid;
+    border-width: var(--fleche-bulle);
     pointer-events: none;
   }
 
@@ -2319,11 +2398,15 @@
   }
 }
 
-/* Avec une souris, les lignes de la bulle font 36 px de haut ; au doigt,
-   44 (complément, § 4.1). Cela amende « toute cible fait 44 px hors des
-   cases » pour elles seules : toute autre cible garde ses 44 px. */
+/* Avec une souris, les lignes de la bulle (une capacité à une puissance,
+   seules à porter data-ligne) font 36 px de haut ; au doigt, 44 (complément,
+   § 4.1). Cela amende « toute cible fait 44 px hors des cases » pour elles
+   seules : « Passer son tour » et les rangées du jet (« Jet d'attaque », les
+   armes, les cases d'arrivée, les caractéristiques, les difficultés, les
+   jauges, les dégâts, les natures) gardent leurs 44 px, comme toute autre
+   cible. */
 @media (pointer: fine) {
-  .combat-bulle .combat-capacite {
+  .combat-bulle .combat-capacite[data-ligne] {
     min-height: var(--ligne-souris);
   }
 }
