@@ -3,7 +3,8 @@
 //
 // Le bouton « Publier » de l'espace auteur, toujours présent, et la raison
 // qu'il porte tant qu'il est inactif ; la veille du chargement ; l'aide pour
-// l'écran d'accueil. Aucun appel réel à GitHub : fetch est simulé.
+// l'écran d'accueil ; ce qu'application.js doit au combat et à la rencontre,
+// lu dans son texte. Aucun appel réel à GitHub : fetch est simulé.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -529,11 +530,52 @@ test("combat — application.js importe l'écran, l'affiche une fois la banque o
   // La ligne de la route, remontée avant celle du mot de passe.
   fautive(/(  if \(!etat\.banque\) return motDePasse\.afficher\(contexte\);\r?\n)([\s\S]*?)(  if \(route\.ecran === "combat"\) return combat\.afficher\(contexte\);\r?\n)/, "$3$1$2", /sans attendre la banque/);
   fautive(/\s*combat\.oublier\(\);/, "", /n'efface pas le combat/);
-  // L'appel, descendu après la remise à zéro de l'état : une accolade fermante le précède.
-  fautive(/(\s*combat\.oublier\(\);)(\s*Object\.assign\(etat, \{[^\n]*\n)/, "$2$1", /n'efface pas le combat/);
+  // L'appel, descendu après la remise à zéro de l'état (et l'oubli de la rencontre, qui le suit) : une accolade fermante le précède.
+  fautive(/(\s*combat\.oublier\(\);)([\s\S]*?\s*Object\.assign\(etat, \{[^\n]*\n)/, "$2$1", /n'efface pas le combat/);
   fautive(/(\s*espaceAuteur\.oublier\(\);)([\s\S]*?)(\s*combat\.oublier\(\);)/, "$3$2$1", /n'efface pas le combat/);
   fautive('if (route.ecran === "combat") return', 'if (route.ecran === "combat" && !etat.secret) return el("p", { "data-chargement": true }, "Chargement du combat…");\n  if (route.ecran === "combat") return', /sous la veille/);
   fautive('import * as combat from "./ecrans/combat.js";', 'import * as combat from "./ecrans/combat.js";\nimport { ouvrirMagasinCombat } from "./combat/enregistrement.js";', /hors de son écran/);
+});
+
+// Ce qu'application.js doit à la rencontre gardée (§ 16.6), lu dans son texte :
+// « Oublier le mot de passe » l'efface de la mémoire, juste après le combat et
+// avant que l'état ne se vide ; la composition gardée ne s'ouvre ni ne se lit
+// au démarrage, mais à la première visite d'un de ses écrans. Rend la liste
+// des défauts.
+function defautsDuCablageDeLaRencontre(application) {
+  const defauts = [];
+  if (!/^import \* as rencontre from "\.\/ecrans\/rencontre\.js";\r?$/m.test(application)) defauts.push("l'écran de la rencontre n'est pas importé");
+  const appels = [...application.matchAll(/rencontre\.afficher\(([^)]*)\)/g)];
+  if (appels.length !== 1 || appels[0][1] !== "contexte") defauts.push("la route « rencontre » n'affiche pas l'écran, une fois, avec le seul contexte");
+  // Juste après le combat, des lignes de commentaire entre eux permises ; avant la remise à zéro de l'état. Chaque appel
+  // en tête de sa ligne : un appel mis en commentaire ne compte pas.
+  if (!/async oublier\(\) \{[^}]*\n[ \t]*combat\.oublier\(\);\r?\n(?:[ \t]*\/\/[^\n]*\n)*[ \t]*rencontre\.oublier\(\);\r?\n(?:[ \t]*\/\/[^\n]*\n)*[ \t]*Object\.assign\(etat, \{/.test(application)) {
+    defauts.push("« Oublier le mot de passe » n'efface pas la rencontre de la mémoire, juste après le combat");
+  }
+  if (/rencontre_gardee|ouvrirMagasinRencontre|creerGardeRencontre/.test(application)) defauts.push("la rencontre gardée s'ouvre hors de ses écrans");
+  if (/\brencontre\.charger\b/.test(application)) defauts.push("la rencontre gardée se lit avant la première visite");
+  return defauts;
+}
+
+test("rencontre — application.js : « Oublier le mot de passe » l'efface de la mémoire, juste après le combat ; la composition gardée ne s'ouvre ni ne se lit au démarrage (§ 16.6)", () => {
+  const application = lire("js/application.js");
+  assert.deepEqual(defautsDuCablageDeLaRencontre(application), []);
+  const fautive = (avant, apres, motif) => {
+    const texte = application.replace(avant, apres);
+    assert.notEqual(texte, application, String(avant));
+    assert.match(defautsDuCablageDeLaRencontre(texte).join("\n"), motif, String(avant));
+  };
+  // L'oubli retiré ; descendu après la remise à zéro de l'état ; remonté avant le combat.
+  fautive(/\s*rencontre\.oublier\(\);/, "", /n'efface pas la rencontre/);
+  fautive("    rencontre.oublier();", "    // rencontre.oublier();", /n'efface pas la rencontre/);
+  fautive(/(\s*rencontre\.oublier\(\);)(\s*Object\.assign\(etat, \{[^\n]*\n)/, "$2$1", /n'efface pas la rencontre/);
+  fautive(/(\s*combat\.oublier\(\);)((?:\s*\/\/[^\n]*)*)(\s*rencontre\.oublier\(\);)/, "$3$2$1", /n'efface pas la rencontre/);
+  // La base ouverte, ou la composition lue, au démarrage.
+  fautive('import * as rencontre from "./ecrans/rencontre.js";', 'import * as rencontre from "./ecrans/rencontre.js";\nimport { ouvrirMagasinRencontre } from "./adversaire/rencontre_gardee.js";', /hors de ses écrans/);
+  fautive('  addEventListener("hashchange", afficher);', '  rencontre.charger(contexte);\n  addEventListener("hashchange", afficher);', /avant la première visite/);
+  // L'écran importé autrement, ou affiché avec d'autres services que les siens.
+  fautive('import * as rencontre from "./ecrans/rencontre.js";', 'const rencontre = await import("./ecrans/rencontre.js");', /n'est pas importé/);
+  fautive("rencontre.afficher(contexte)", "rencontre.afficher(contexte, { magasin })", /avec le seul contexte/);
 });
 
 test("dom — aucun gestionnaire en texte, ni style, ni srcdoc ; une adresse est locale ou https (§ 10.1)", async () => {

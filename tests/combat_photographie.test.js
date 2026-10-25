@@ -86,8 +86,9 @@ test("Aubépine — ses valeurs de départ sont celles du combat de référence"
   assert.deepEqual(v.zones.map((zone) => [zone.code, zone.ecrit]), [["tete", "Tête"], ["torse", "Torse"], ["jambe_gauche", "Jambe gauche"], ["jambe_droite", "Jambe droite"], ["bras_gauche", "Bras gauche"], ["bras_droit", "Bras droit"]]);
   assert.deepEqual(v.caracteristiques, { force: 4, agilite: 5, precision: 5, sens: 3, culture_neruvienne: 4, savoir_sauvage: 3, parole: 4, empathie: 4, creativite: 4 });
   assert.deepEqual([v.attaque, v.defense], [null, null], "un personnage lance des dés : il n'a pas les deux nombres d'un adversaire");
-  // Trois pièces agiles et une précise : le dé de l'agile, et les types mêlés.
-  assert.deepEqual(v.deDefense, { faces: 8, type: "agile", caracteristiques: ["agilite", "creativite"], meles: true });
+  // Trois pièces agiles et une précise : le dé de l'agile, et les types mêlés ;
+  // l'agile et la précise donnent toutes deux un d8 : elles sont à égalité.
+  assert.deepEqual(v.deDefense, { faces: 8, type: "agile", caracteristiques: ["agilite", "creativite"], meles: true, egalite: ["agile", "precise"] });
   assert.deepEqual(v.armes, [
     { nom: "Couteau d'office", libelle: "Couteau d'office", poids: "precise", faces: 10, caracteristiques: ["precision", "agilite"], degats: [3, 8, 20], portee: 1, locMultiple: 1, mainsNues: false },
     { nom: "Taloche", libelle: "Taloche", poids: null, faces: null, caracteristiques: null, degats: [2, 4, 8], portee: 0, locMultiple: 1, mainsNues: true },
@@ -144,20 +145,23 @@ test("Aubépine — chaque façon : coût, description, éléments, attaque, dé
   const v = valeursDe(pj(DEMO));
   const facon = (nom, k = 0) => laCapacite(v, nom).facons[k];
   // Son couteau est précis, et elle n'a que la maîtrise de l'agile : ses deux
-  // capacités sont hors maîtrise.
+  // capacités sont hors maîtrise, et le couteau en est la cause.
+  const COUTEAU_PRECIS = { origine: "Couteau d'office", poids: "precise" };
   assert.deepEqual(facon("Frappe"), {
     puissance: 0, arme: 0, libelle: null, cout: { souffle: 0, lien: 0 }, description: "Une attaque qui inflige 3/8/20.", elements: [],
-    passif: false, intervention: false, attaque: true, degats: [3, 8, 20], portee: 1, locMultiple: 1, desavantage: true,
+    passif: false, intervention: false, attaque: true, degats: [3, 8, 20], portee: 1, locMultiple: 1, desavantage: true, maitrise: COUTEAU_PRECIS,
   });
   assert.deepEqual(facon("Émincer"), {
     puissance: 0, arme: 0, libelle: null, cout: { souffle: 4, lien: 0 }, description: "Une réussite de plus si vous en avez une.", elements: [],
-    passif: false, intervention: false, attaque: true, degats: [3, 8, 20], portee: 1, locMultiple: 1, desavantage: true,
+    passif: false, intervention: false, attaque: true, degats: [3, 8, 20], portee: 1, locMultiple: 1, desavantage: true, maitrise: COUTEAU_PRECIS,
   });
   // L'attaque à mains nues : les dégâts que dit sa description à la puissance jouée, sans portée écrite.
   assert.deepEqual(facon("Taloche"), {
     puissance: 1, arme: 1, libelle: null, cout: { souffle: 0, lien: 0 }, description: "Une taloche qui inflige 2/4/8.", elements: ["Dégâts"],
-    passif: false, intervention: false, attaque: true, degats: [2, 4, 8], portee: 0, locMultiple: 1, desavantage: false,
+    passif: false, intervention: false, attaque: true, degats: [2, 4, 8], portee: 0, locMultiple: 1, desavantage: false, maitrise: null,
   });
+  // Une cause de maîtrise exactement quand la façon porte un désavantage.
+  assert.ok(v.capacites.every((c) => c.facons.every((f) => (f.maitrise !== null) === f.desavantage)), "maitrise suit desavantage");
   // Le coût et la description suivent la puissance.
   assert.deepEqual(laCapacite(v, "Flambage").facons.map((f) => [f.puissance, f.cout, f.description, f.attaque]), [
     [1, { souffle: 5, lien: 0 }, "Multiplie les dégâts par 2.", false],
@@ -489,26 +493,31 @@ test("le Chef de partie et le Marmiton de corvée — leurs valeurs de départ s
   assert.deepEqual(chef.zones[2], { nom: "Jambe droite", ecrit: "Jambre droite", code: "jambe_droite", debut: 14, fin: 15, armure: 0, resistance: 5 }, "reconnue à deux lettres près : le nom des personnages, et ce qui est écrit");
   assert.deepEqual(chef.armes, [{ nom: "Spatule souple", libelle: "Spatule souple", poids: "agile", faces: null, caracteristiques: null, degats: [6, 12, 19], portee: 0, locMultiple: 1, mainsNues: false }]);
   assert.deepEqual([chef.caracteristiques, chef.deDefense, chef.armePretee, chef.bouclier, chef.liens, chef.passifs], [null, null, null, null, [], []]);
-  const resume = (v) => v.capacites.map((c) => [c.nom, c.role, c.niveau, c.evolue, c.groupe.genre, c.groupe.titre, c.facons.map((f) => [f.puissance, f.arme, f.libelle, f.cout, f.attaque, f.degats, f.portee, f.desavantage])]);
+  const resume = (v) => v.capacites.map((c) => [c.nom, c.role, c.niveau, c.evolue, c.groupe.genre, c.groupe.titre, c.facons.map((f) => [f.puissance, f.arme, f.libelle, f.cout, f.attaque, f.degats, f.portee, f.desavantage, f.maitrise])]);
   const SPATULE = "Spatule souple";
-  // Sa maîtrise de l'agile, au rang 3, couvre ses deux capacités de spatule ; son Pas chassé [2] coûte 1 souffle.
+  // Sa maîtrise de l'agile, au rang 3, couvre ses deux capacités de spatule. Il joue Pas chassé à chacune de
+  // ses puissances, de 1 à son rang (complément, § 6.1) : [1] gratuit, [2] 1 souffle ; son niveau reste son rang.
   assert.deepEqual(resume(chef), [
-    ["Frappe", null, 0, false, "arme", SPATULE, [[0, 0, SPATULE, { souffle: 0, lien: 0 }, true, [6, 12, 19], 0, false]]],
-    ["Moulinet farineux", null, 1, true, "arme", SPATULE, [[1, 0, SPATULE, { souffle: 5, lien: 0 }, true, [6, 12, 19], 0, false]]],
-    ["Pas chassé", "deplacement", 2, true, "capacites", "Capacités", [[2, null, null, { souffle: 1, lien: 0 }, false, null, 0, false]]],
+    ["Frappe", null, 0, false, "arme", SPATULE, [[0, 0, SPATULE, { souffle: 0, lien: 0 }, true, [6, 12, 19], 0, false, null]]],
+    ["Moulinet farineux", null, 1, true, "arme", SPATULE, [[1, 0, SPATULE, { souffle: 5, lien: 0 }, true, [6, 12, 19], 0, false, null]]],
+    ["Pas chassé", "deplacement", 2, true, "capacites", "Capacités", [
+      [1, null, null, { souffle: 0, lien: 0 }, false, null, 0, false, null],
+      [2, null, null, { souffle: 1, lien: 0 }, false, null, 0, false, null],
+    ]],
   ]);
-  assert.equal(laCapacite(chef, "Pas chassé").facons[0].description, "Se déplace de 2 cases.");
+  assert.deepEqual(laCapacite(chef, "Pas chassé").facons.map((f) => f.description), ["Se déplace de 1 cases.", "Se déplace de 2 cases."]);
   assert.equal(laCapacite(chef, "Frappe").facons[0].description, "Une attaque qui inflige 6/12/19.");
 
   const marmiton = valeursDe(adv(DEMO, "Marmiton de corvée"));
   assert.deepEqual([marmiton.nom, marmiton.sousTitre], ["Marmiton de corvée", "Commis, Rôtisseur"]);
   assert.deepEqual([marmiton.actions, marmiton.souffle, marmiton.corps, marmiton.attaque, marmiton.defense], [1, 5, 10, 4, 5]);
   assert.deepEqual(marmiton.zones.map((zone) => zone.armure), [30, 0, 0, 15, 15, 5]);
-  // Sa maîtrise, au rang 1, ne couvre que la première capacité de sa spatule ; son Pas chassé [1] est gratuit.
+  // Sa maîtrise, au rang 1, ne couvre que la première capacité de sa spatule, agile, qui est la cause du
+  // désavantage de la seconde ; son Pas chassé [1] est gratuit.
   assert.deepEqual(resume(marmiton), [
-    ["Frappe", null, 0, false, "arme", SPATULE, [[0, 0, SPATULE, { souffle: 0, lien: 0 }, true, [5, 10, 15], 0, false]]],
-    ["Moulinet farineux", null, 1, true, "arme", SPATULE, [[1, 0, SPATULE, { souffle: 5, lien: 0 }, true, [5, 10, 15], 0, true]]],
-    ["Pas chassé", "deplacement", 1, true, "capacites", "Capacités", [[1, null, null, { souffle: 0, lien: 0 }, false, null, 0, false]]],
+    ["Frappe", null, 0, false, "arme", SPATULE, [[0, 0, SPATULE, { souffle: 0, lien: 0 }, true, [5, 10, 15], 0, false, null]]],
+    ["Moulinet farineux", null, 1, true, "arme", SPATULE, [[1, 0, SPATULE, { souffle: 5, lien: 0 }, true, [5, 10, 15], 0, true, { origine: SPATULE, poids: "agile" }]]],
+    ["Pas chassé", "deplacement", 1, true, "capacites", "Capacités", [[1, null, null, { souffle: 0, lien: 0 }, false, null, 0, false, null]]],
   ]);
   // Les maîtrises ne sont pas des capacités ici : leur effet est figé dans le désavantage.
   assert.ok(![...noms(chef), ...noms(marmiton)].includes("Maîtrise de l'agile"));
@@ -558,13 +567,15 @@ test("le Homard furieux — deux armes : une suite de capacités par arme, et de
   ]);
   assert.deepEqual(groupes(homard), ["arme : Pinces de homard", "arme : Couteau d'office"]);
   assert.deepEqual(noms(homard), ["Frappe", "Choc sourd", "Émincer"]);
-  // Les pinces n'ont pas de poids : aucun désavantage. Le couteau est précis, et le Homard n'a aucune maîtrise.
-  assert.deepEqual(laCapacite(homard, "Frappe").facons.map((f) => [f.arme, f.libelle, f.degats, f.portee, f.desavantage, f.description]), [
-    [0, "Pinces de homard", [4, 8, 12], 0, false, "Une attaque qui inflige 4/8/12."],
-    [1, "Couteau d'office", [3, 8, 20], 1, true, "Une attaque qui inflige 3/8/20."],
+  // Les pinces n'ont pas de poids : aucun désavantage. Le couteau est précis, et le Homard n'a aucune maîtrise :
+  // la cause est l'objet de l'entrée, le couteau.
+  const COUTEAU_PRECIS = { origine: "Couteau d'office", poids: "precise" };
+  assert.deepEqual(laCapacite(homard, "Frappe").facons.map((f) => [f.arme, f.libelle, f.degats, f.portee, f.desavantage, f.maitrise, f.description]), [
+    [0, "Pinces de homard", [4, 8, 12], 0, false, null, "Une attaque qui inflige 4/8/12."],
+    [1, "Couteau d'office", [3, 8, 20], 1, true, COUTEAU_PRECIS, "Une attaque qui inflige 3/8/20."],
   ]);
   assert.deepEqual(laCapacite(homard, "Frappe").groupe, { genre: "arme", titre: "Pinces de homard" }, "le groupe de la première");
-  assert.deepEqual(laCapacite(homard, "Émincer").facons.map((f) => [f.arme, f.cout, f.desavantage]), [[1, { souffle: 4, lien: 0 }, true]]);
+  assert.deepEqual(laCapacite(homard, "Émincer").facons.map((f) => [f.arme, f.cout, f.desavantage, f.maitrise]), [[1, { souffle: 4, lien: 0 }, true, COUTEAU_PRECIS]]);
 });
 
 test("un adversaire ne s'ajoute pas — incomplet, ou sans nombre d'actions ; avec zéro action écrite, il s'ajoute", async () => {
@@ -640,7 +651,7 @@ test("des dégâts propres — une capacité qui porte l'élément Dégâts est 
   const goeland = valeursDe(adv(m, "Goéland"));
   assert.deepEqual(laCapacite(goeland, "Coup de bec").facons, [{
     puissance: 0, arme: null, libelle: null, cout: { souffle: 0, lien: 0 }, description: "Un coup de bec qui inflige 4/8/12.", elements: ["Dégâts", "Portée"],
-    passif: false, intervention: false, attaque: true, degats: [4, 8, 12], portee: 3, locMultiple: 1, desavantage: false,
+    passif: false, intervention: false, attaque: true, degats: [4, 8, 12], portee: 3, locMultiple: 1, desavantage: false, maitrise: null,
   }]);
   assert.deepEqual(laCapacite(goeland, "Coup de bec").groupe, { genre: "capacites", titre: "Capacités" });
   assert.equal(laCapacite(goeland, "Nez fin").facons[0].attaque, false);
@@ -669,9 +680,11 @@ test("le coût — négatif, il vaut 0 ; illisible, il est nul ; X reste X", asy
   assert.equal(laCapacite(v, "Guetter").facons[0].cout, null, "un seul des deux coûts illisible suffit");
   assert.deepEqual(laCapacite(v, "Pas de côté").facons[0].cout, { souffle: "X", lien: 0 });
   const goeland = valeursDe(adv(m, "Goéland"));
+  // Pas chassé, au rang 2, se joue à ses deux puissances : « N-3 » y vaut 0 les deux fois, sans descendre sous 0.
+  assert.deepEqual(laCapacite(goeland, "Pas chassé").facons.map((f) => [f.puissance, f.cout]), [[1, { souffle: 0, lien: 0 }], [2, { souffle: 0, lien: 0 }]]);
   assert.deepEqual(noms(goeland).map((nom) => laCapacite(goeland, nom).facons[0].cout), [{ souffle: 0, lien: 0 }, null, { souffle: "X", lien: 0 }, { souffle: 0, lien: 0 }]);
-  // Au rang 3, « N-3 » vaut 0 sans plancher ; « N-1 », dans la démonstration, vaut 1 au rang 2.
-  assert.deepEqual(laCapacite(valeursDe(adv(DEMO, "Chef de partie")), "Pas chassé").facons[0].cout, { souffle: 1, lien: 0 });
+  // « N-1 », dans la démonstration, vaut 0 à la puissance 1 et 1 à la puissance 2.
+  assert.deepEqual(laCapacite(valeursDe(adv(DEMO, "Chef de partie")), "Pas chassé").facons.map((f) => f.cout), [{ souffle: 0, lien: 0 }, { souffle: 1, lien: 0 }]);
 });
 
 test("une capacité à venir — nommée, inactive, sans façon ; une capacité dont la puissance ne se lit pas garde une façon au coût illisible", async () => {
@@ -1112,4 +1125,158 @@ test("deux armes que leur nom nettoyé confond — le groupe de la seconde porte
   assert.deepEqual(groupes(v), ["arme : Spatule souple", "arme : Spatule souple (2)"]);
   assert.deepEqual(laCapacite(v, "Goûter").facons.map((f) => [f.arme, f.libelle]), [[1, "Spatule souple (2)"]]);
   assert.deepEqual(laCapacite(v, "Goûter").groupe, { genre: "arme", titre: "Spatule souple (2)" });
+});
+
+// ─── Le groupe 2 : la puissance d'un adversaire, la cause de maîtrise, l'égalité de défense ───
+//
+// Le contrat du groupe 2 (§ 5.1 à § 5.4) et le complément (§ 6.1 à § 6.3).
+
+test("capacitesA — sur chaque adversaire de la démonstration, au rang, la résolution même ; ailleurs, null ; les constats ne changent pas", () => {
+  let comparees = 0;
+  for (const ligne of DEMO.adversaires.adversaires.values()) {
+    const avant = JSON.stringify(DEMO.adversaires.resoudre(ligne));
+    const resolu = DEMO.adversaires.resoudre(ligne);
+    const par = [0, 1, 2, 3, 4].map((puissance) => DEMO.adversaires.capacitesA(ligne, puissance));
+    resolu.capacites.forEach((capacite, k) => {
+      for (const [puissance, liste] of par.entries()) {
+        assert.equal(liste.length, resolu.capacites.length, `${ligne.nom} : parallèle à la résolution`);
+        if (!capacite.absente && puissance === capacite.rang && puissance >= 1) {
+          assert.deepEqual(liste[k], capacite, `${ligne.nom}, ${capacite.nom}, au rang`);
+          comparees += 1;
+        } else if (capacite.absente || puissance === 0 || puissance > capacite.rang) assert.equal(liste[k], null, `${ligne.nom}, ${capacite.nom}, à la puissance ${puissance}`);
+      }
+    });
+    assert.equal(JSON.stringify(DEMO.adversaires.resoudre(ligne)), avant, `${ligne.nom} : sa résolution et ses constats ne changent pas`);
+  }
+  // Moulinet farineux (deux fois), Pas chassé (trois fois), et le Chef seul à rang 2.
+  assert.equal(comparees, 5);
+  // Pas chassé du Chef : à la puissance 1, ce que dit sa variante à 1 ; le rang reste le sien.
+  const chef = DEMO.adversaires.adversaires.get("Chef de partie");
+  const pas = DEMO.adversaires.resoudre(chef).capacites.findIndex((capacite) => capacite.nom === "Pas chassé");
+  const un = DEMO.adversaires.capacitesA(chef, 1)[pas];
+  assert.deepEqual([un.rang, un.cout, un.descriptions], [2, { souffle: "0", lien: "0" }, [{ source: null, texte: "Se déplace de 1 cases." }]]);
+});
+
+test("les puissances d'un adversaire — par puissance, puis par arme ; une puissance sans variante est sautée ; aucune ne se lit : son rang seul", async () => {
+  const m = await monde((banque) => {
+    const fournaise = capaciteDe(banque, "Fournaise");
+    fournaise.variantes = fournaise.variantes.filter((variante) => variante.puissance !== "2");
+    capaciteDe(banque, "Vif").variantes[0].puissance = "beaucoup";
+    banque.adversaires.push(ligneAdversaire("Goéland", { equipement: "Spatule souple, Spatule souple[3]", capacites: "Moulinet farineux[2], Fournaise[3], Vif, Frappe" }));
+  });
+  const v = valeursDe(adv(m, "Goéland"));
+  // Deux spatules, deux puissances : la puissance d'abord, puis l'arme ; le coût et la description suivent la puissance.
+  assert.deepEqual(laCapacite(v, "Moulinet farineux").facons.map((f) => [f.puissance, f.arme, f.libelle, f.cout, f.degats, f.description]), [
+    [1, 0, "Spatule souple", { souffle: 5, lien: 0 }, [5, 10, 15], "Tourbillonne 1 fois."],
+    [1, 1, "Spatule souple (2)", { souffle: 5, lien: 0 }, [6, 13, 20], "Tourbillonne 1 fois."],
+    [2, 0, "Spatule souple", { souffle: 10, lien: 0 }, [5, 10, 15], "Tourbillonne 2 fois."],
+    [2, 1, "Spatule souple (2)", { souffle: 10, lien: 0 }, [6, 13, 20], "Tourbillonne 2 fois."],
+  ]);
+  // Sans variante de puissance 2 : les puissances 1 et 3, chacune avec ses éléments et sa portée propre.
+  assert.deepEqual(laCapacite(v, "Fournaise").facons.map((f) => [f.puissance, f.cout, f.elements, f.portee, f.description]), [
+    [1, { souffle: 1, lien: 1 }, [], 0, "Réchauffe la case."],
+    [3, { souffle: 7, lien: 1 }, ["Portée"], 2, "Aveugle une cible à 2 cases."],
+  ]);
+  // Une puissance illisible : aucune variante ne se joue, la façon de son rang reste, au coût illisible.
+  assert.deepEqual(laCapacite(v, "Vif").facons.map((f) => [f.puissance, f.cout]), [[1, null]]);
+  // Une capacité qui n'évolue pas garde une façon, à sa seule puissance ; le niveau reste le rang.
+  assert.deepEqual(laCapacite(v, "Frappe").facons.map((f) => [f.puissance, f.arme]), [[0, 0], [0, 1]]);
+  assert.deepEqual(["Moulinet farineux", "Fournaise", "Vif", "Frappe"].map((nom) => laCapacite(v, nom).niveau), [2, 3, 1, 0]);
+});
+
+test("les bornes restent — plus de vingt façons pour une capacité : l'adversaire ne s'ajoute pas", async () => {
+  const spatules = (combien) => Array(combien).fill("Spatule souple").join(", ");
+  const m = await monde((banque) => {
+    banque.adversaires.push(
+      ligneAdversaire("Goéland", { equipement: spatules(7), capacites: "Moulinet farineux[3]" }),
+      ligneAdversaire("Mouette rieuse", { equipement: spatules(6), capacites: "Moulinet farineux[3]" }),
+    );
+  });
+  // Sept spatules, trois puissances : vingt et une façons.
+  assert.deepEqual(adv(m, "Goéland"), { refus: "Ne s'ajoute pas : la liste des façons de « Moulinet farineux » compte plus de 20 façons." });
+  assert.equal(laCapacite(valeursDe(adv(m, "Mouette rieuse")), "Moulinet farineux").facons.length, 18);
+});
+
+test("la cause de maîtrise d'un personnage — l'objet qui donne la capacité, sinon son bloc, et son poids ; nulle sans désavantage", async () => {
+  // La démonstration : Frappe et Émincer, hors maîtrise par le couteau précis ; rien d'autre.
+  const causes = (v) => v.capacites.flatMap((c) => c.facons.filter((f) => f.maitrise !== null).map((f) => [c.nom, f.maitrise]));
+  const COUTEAU = { origine: "Couteau d'office", poids: "precise" };
+  assert.deepEqual(causes(valeursDe(pj(DEMO))), [["Frappe", COUTEAU], ["Émincer", COUTEAU]]);
+  // La maîtrise du précis, au niveau 1, couvre Frappe, la première capacité du couteau : Émincer seule garde sa cause.
+  const precis = await monde((banque) => {
+    blocDe(banque, "Saucier").capacites.find((entree) => entree.options?.includes("Maîtrise de l'agile")).options.push("Maîtrise du précis");
+  });
+  assert.deepEqual(causes(valeursDe(pj(precis, personnageEssai((p) => {
+    p.archetype.choix = ["Solo du chef", "Maîtrise du précis"];
+  })))), [["Émincer", COUTEAU]]);
+  // Le rouleau tenu : l'arme lourde est la cause ; le plastron porté : la pièce d'armure.
+  const rouleau = valeursDe(pj(DEMO, personnageEssai((p) => {
+    p.equipement[0].place = "sac";
+    p.equipement[1].place = "arme";
+  })));
+  assert.deepEqual(causes(rouleau), [["Frappe", { origine: "Rouleau de fonte", poids: "lourde" }], ["Choc sourd", { origine: "Rouleau de fonte", poids: "lourde" }]]);
+  const armure = await monde((banque) => {
+    blocDe(banque, "Plastron de fonte").capacites.push({ forme: "simple", nom: "Boire le bouillon" });
+    blocDe(banque, "Bouillon revigorant").capacites = [];
+  });
+  const plastron = valeursDe(pj(armure, personnageEssai((p) => {
+    p.equipement[3].place = "equipe";
+    p.equipement[2].place = "sac";
+  })));
+  assert.deepEqual(laCapacite(plastron, "Boire le bouillon").facons[0].maitrise, { origine: "Plastron de fonte", poids: "lourde" });
+});
+
+test("la cause de maîtrise — un bloc à deux poids : celui dont la maîtrise est la plus basse, chez un personnage comme chez un adversaire", async () => {
+  // Le Saucier porte Lourde et Agile : ses capacités demandent les deux maîtrises.
+  const m = await monde((banque) => {
+    blocDe(banque, "Saucier").elements.push({ nom: "Lourde" }, { nom: "Agile" });
+    banque.blocs.push({ nom: "Batte double", type: "Arme", elements: [{ nom: "Arme" }, { nom: "Agile" }, { nom: "Lourde" }], capacites: [{ forme: "simple", nom: "Frappe" }], parametres: [{ nom: "degats", valeur: "1/2/3", cible: null }], notes: "" });
+    banque.adversaires.push(
+      ligneAdversaire("Goéland", { equipement: "Batte double", capacites: "Maîtrise de l'agile[2]" }),
+      ligneAdversaire("Mouette rieuse", { equipement: "Batte double", capacites: "Maîtrise du lourd[2]" }),
+    );
+  });
+  const reduction = (choix) => laCapacite(valeursDe(pj(m, personnageEssai((p) => {
+    p.archetype.choix = ["Solo du chef", choix];
+  }))), "Réduction").facons[0].maitrise;
+  // La maîtrise de l'agile au niveau 1 : il manque celle du lourd ; et l'inverse.
+  assert.deepEqual(reduction("Maîtrise de l'agile"), { origine: "Saucier", poids: "lourde" });
+  assert.deepEqual(reduction("Maîtrise du lourd"), { origine: "Saucier", poids: "agile" });
+  const frappe = (nom) => laCapacite(valeursDe(adv(m, nom)), "Frappe").facons.map((f) => [f.desavantage, f.maitrise]);
+  assert.deepEqual(frappe("Goéland"), [[true, { origine: "Batte double", poids: "lourde" }]]);
+  assert.deepEqual(frappe("Mouette rieuse"), [[true, { origine: "Batte double", poids: "agile" }]]);
+});
+
+test("la cause de maîtrise d'un adversaire — l'objet de chaque façon armée ; sans façon armée, le premier objet qui la gêne", async () => {
+  const louche = (nom, elements) => ({ nom, type: "Arme", elements: elements.map((element) => ({ nom: element })), capacites: [{ forme: "simple", nom: "Goûter" }], parametres: [], notes: "" });
+  const m = await monde((banque) => {
+    banque.blocs.push(louche("Louche creuse", ["Arme", "Agile"]), louche("Louche plate", ["Arme"]));
+    banque.adversaires.push(
+      ligneAdversaire("Goéland", { equipement: "Couteau d'office, Spatule souple, Louche creuse" }),
+      ligneAdversaire("Mouette rieuse", { equipement: "Louche creuse, Louche plate" }),
+    );
+  });
+  const goeland = valeursDe(adv(m, "Goéland"));
+  // Deux armes gênent Frappe : chaque façon dit la sienne.
+  assert.deepEqual(laCapacite(goeland, "Frappe").facons.map((f) => [f.libelle, f.maitrise]), [
+    ["Couteau d'office", { origine: "Couteau d'office", poids: "precise" }],
+    ["Spatule souple", { origine: "Spatule souple", poids: "agile" }],
+  ]);
+  assert.deepEqual(laCapacite(goeland, "Goûter").facons.map((f) => [f.arme, f.desavantage, f.maitrise]), [[null, true, { origine: "Louche creuse", poids: "agile" }]]);
+  // La louche plate, sans poids, la donne sans gêne : ni désavantage, ni cause.
+  assert.deepEqual(laCapacite(valeursDe(adv(m, "Mouette rieuse")), "Goûter").facons.map((f) => [f.desavantage, f.maitrise]), [[false, null]]);
+});
+
+test("l'égalité de défense — écrite dans la photographie : mêlée à égalité, sans armure, un seul type", () => {
+  assert.deepEqual(valeursDe(pj(DEMO)).deDefense.egalite, ["agile", "precise"]);
+  // Sans armure : l'agile, le plus avantageux, est retenue ; la précise donne le même d8.
+  const nue = valeursDe(pj(DEMO, personnageEssai((p) => {
+    for (const rang of [2, 4, 5, 6]) p.equipement[rang].place = "sac";
+  })));
+  assert.deepEqual([nue.deDefense.type, nue.deDefense.faces, nue.deDefense.egalite], ["agile", 8, ["agile", "precise"]]);
+  // Les seules pièces agiles : rien à départager.
+  const agile = valeursDe(pj(DEMO, personnageEssai((p) => {
+    p.equipement[4].place = "sac";
+  })));
+  assert.deepEqual([agile.deDefense.type, agile.deDefense.meles, agile.deDefense.egalite], ["agile", false, []]);
 });

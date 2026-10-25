@@ -10,8 +10,10 @@
 // et la rencontre se lisent avec ce même mot de passe de table : il n'y a
 // pas de mot de passe du meneur (§ 16). Le simulateur de combat (§ 17)
 // attend la banque comme eux, et ouvre lui-même son enregistrement, à sa
-// première visite : le démarrage n'attend rien de plus. Une erreur
-// inattendue s'affiche, jamais une page blanche.
+// première visite : le démarrage n'attend rien de plus. La rencontre de
+// même : sa composition, gardée chiffrée, se lit à la première visite de
+// l'écran Rencontre, de l'écran Combat ou d'une fiche d'adversaire, jamais
+// ici (§ 16.6). Une erreur inattendue s'affiche, jamais une page blanche.
 
 import { demanderStockageDurable, modeDe, ouvrirAvecCoffre, ouvrirParMotDePasse, telecharger } from "./banque/chargement.js";
 import { indexer } from "./banque/consultation.js";
@@ -120,6 +122,9 @@ const contexte = {
     // Le combat en mémoire porte des valeurs de la banque : il part avec la
     // clé. Son enregistrement chiffré reste, illisible sans elle (§ 17).
     combat.oublier();
+    // La rencontre en mémoire part aussi ; sa version chiffrée reste,
+    // illisible sans la clé (§ 16.6).
+    rencontre.oublier();
     Object.assign(etat, { banque: null, index: null, secret: null, depot: null, nouvelles: null, motDePasse: etat.chargement?.enveloppe ? "requis" : null });
     afficher();
   },

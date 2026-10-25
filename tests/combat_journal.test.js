@@ -5,7 +5,9 @@
 // Trois témoins :
 // - les trente-six lignes du combat de référence fictif (Aubépine Crèmebrûlée
 //   contre le Chef de partie et deux Marmitons de corvée), arrêtées avant le
-//   code : chacune doit sortir des fonctions du journal ;
+//   code : chacune doit sortir des fonctions du journal, en texte comme en
+//   segments (lignes.*, groupe 2), le genre et le texte de chaque ligne
+//   inchangés ;
 // - chaque gabarit du § 17, un cas chacun, et sa règle vue dans les deux sens
 //   (le singulier et le pluriel, la parenthèse écrite et absente, le segment
 //   écrit et tu) ;
@@ -42,7 +44,9 @@ import {
   ligneDePasse,
   ligneDeTour,
   ligneDuGeste,
+  lignes,
   nomDuFichier,
+  phrasesDuGeste,
   segmentsDuGeste,
   texteDuJournal,
 } from "../js/combat/journal.js";
@@ -190,10 +194,33 @@ const brioche = () =>
 
 // ─── Le combat de référence ─────────────────────────────────────────────────
 
-// Les trente-six lignes, dans l'ordre du combat. Les circonstances de chaque
-// jet (modificateurs, sources) sont celles que le calcul à la main a arrêtées ;
-// les dés sont ceux du scénario, bruts.
-function lignesDeReference() {
+// La façon d'une capacité à une puissance donnée, retrouvée par sa puissance :
+// le Chef a une façon de Pas chassé par puissance, de 1 à son rang.
+function faconDePuissance(etat, id, nom, puissance) {
+  const rang = photoDe(etat, id).capacites[indice(etat, id, nom)].facons.findIndex((facon) => facon.puissance === puissance);
+  assert.notEqual(rang, -1, `${id} n'a pas « ${nom} » à la puissance ${puissance}`);
+  return rang;
+}
+
+// Les deux écritures d'une ligne : le texte du groupe 1 (ligneDuGeste et les
+// lignes du cadre), et la ligne entière du groupe 2, faite par les fabriques
+// lignes.* (les mêmes noms de méthodes).
+const PAR_LE_TEXTE = Object.freeze({
+  lancement: ligneDeLancement,
+  tour: ligneDeTour,
+  finDeTour: ligneDeFinDeTour,
+  fin: ligneDeFin,
+  passe: ligneDePasse,
+  geste: ligneDuGeste,
+});
+
+// Les trente-six lignes, dans l'ordre du combat, écrites par « ecrivain »
+// (PAR_LE_TEXTE ou lignes). Les circonstances de chaque jet (modificateurs,
+// sources) sont celles que le calcul à la main a arrêtées ; les dés sont ceux
+// du scénario, bruts.
+const lignesDeReference = () => referenceEcritePar(PAR_LE_TEXTE);
+
+function referenceEcritePar(ecrivain) {
   const etat = demonstration();
   const [AUBEPINE, CHEF, MARMITON_1, MARMITON_2] = etat.ordre;
   const joue = (acteur, nom, champs = {}) => gesteEssai({ acteur, capacite: indice(etat, acteur, nom), ...champs });
@@ -212,11 +239,11 @@ function lignesDeReference() {
   });
 
   return [
-    ligneDeLancement(etat),
-    ligneDeTour({ numero: 1, camp: "pj" }),
+    ecrivain.lancement(etat),
+    ecrivain.tour({ numero: 1, camp: "pj" }),
     // Aubépine est en C3, le Marmiton en D4 : sans corps-à-corps, il ne lui
     // reste que le désavantage de maîtrise.
-    ligneDuGeste(
+    ecrivain.geste(
       etat,
       joue(AUBEPINE, "Frappe", {
         cible: MARMITON_1,
@@ -226,10 +253,10 @@ function lignesDeReference() {
         resultat: resultat([touche(MARMITON_1, "bras_gauche", { armure: [15, 11] })]),
       }),
     ),
-    ligneDuGeste(etat, joue(AUBEPINE, "Pas chassé", { mode: "deplacement", depart: "C3", arrivee: "D4" })),
-    ligneDeFinDeTour("pj"),
-    ligneDeTour({ numero: 1, camp: "adv" }),
-    ligneDuGeste(
+    ecrivain.geste(etat, joue(AUBEPINE, "Pas chassé", { mode: "deplacement", depart: "C3", arrivee: "D4" })),
+    ecrivain.finDeTour("pj"),
+    ecrivain.tour({ numero: 1, camp: "adv" }),
+    ecrivain.geste(
       etat,
       joue(MARMITON_1, "Frappe", {
         cible: AUBEPINE,
@@ -239,11 +266,11 @@ function lignesDeReference() {
         resultat: resultat([touche(AUBEPINE, "jambe_gauche", { armure: [10, 0] })]),
       }),
     ),
-    ligneDuGeste(etat, joue(CHEF, "Pas chassé", { mode: "deplacement", prix: prix({ souffle: 1 }), depart: "F6", arrivee: "D4" })),
-    ligneDuGeste(etat, joue(MARMITON_2, "Frappe", { cible: AUBEPINE, jet: chaineFinie(defense({ difficulte: 4 }), [3], [7], [5]) })),
-    ligneDeFinDeTour("adv"),
-    ligneDeTour({ numero: 2, camp: "pj" }),
-    ligneDuGeste(
+    ecrivain.geste(etat, joue(CHEF, "Pas chassé", { mode: "deplacement", facon: faconDePuissance(etat, CHEF, "Pas chassé", 2), prix: prix({ souffle: 1 }), depart: "F6", arrivee: "D4" })),
+    ecrivain.geste(etat, joue(MARMITON_2, "Frappe", { cible: AUBEPINE, jet: chaineFinie(defense({ difficulte: 4 }), [3], [7], [5]) })),
+    ecrivain.finDeTour("adv"),
+    ecrivain.tour({ numero: 2, camp: "pj" }),
+    ecrivain.geste(
       etat,
       joue(AUBEPINE, "Émincer", {
         prix: prix({ souffle: 4 }),
@@ -254,7 +281,7 @@ function lignesDeReference() {
         resultat: resultat([touche(MARMITON_1, "tete", { armure: [5, 0], resistance: [5, 0], corps: [10, 0], blessure: true, blessures: 1 })], true),
       }),
     ),
-    ligneDuGeste(
+    ecrivain.geste(
       etat,
       joue(AUBEPINE, "Taloche", {
         cible: MARMITON_2,
@@ -272,9 +299,9 @@ function lignesDeReference() {
         resultat: resultat([touche(MARMITON_2, "jambe_droite", { resistance: [5, 0], corps: [10, 7], blessure: true, blessures: 1 })]),
       }),
     ),
-    ligneDeFinDeTour("pj"),
-    ligneDeTour({ numero: 2, camp: "adv" }),
-    ligneDuGeste(
+    ecrivain.finDeTour("pj"),
+    ecrivain.tour({ numero: 2, camp: "adv" }),
+    ecrivain.geste(
       etat,
       joue(CHEF, "Frappe", {
         cible: AUBEPINE,
@@ -285,7 +312,7 @@ function lignesDeReference() {
         resultat: resultat([touche(AUBEPINE, "bras_gauche", { armure: [10, 1] })]),
       }),
     ),
-    ligneDuGeste(
+    ecrivain.geste(
       etat,
       joue(MARMITON_2, "Moulinet farineux", {
         prix: prix({ souffle: 5 }),
@@ -296,9 +323,9 @@ function lignesDeReference() {
         resultat: resultat([touche(AUBEPINE, "jambe_gauche", { resistance: [5, 0], blessure: true, blessures: 1 })]),
       }),
     ),
-    ligneDeFinDeTour("adv"),
-    ligneDeTour({ numero: 3, camp: "pj" }),
-    ligneDuGeste(
+    ecrivain.finDeTour("adv"),
+    ecrivain.tour({ numero: 3, camp: "pj" }),
+    ecrivain.geste(
       etat,
       joue(AUBEPINE, "Goûter", {
         mode: "caracteristique",
@@ -325,11 +352,11 @@ function lignesDeReference() {
         ),
       }),
     ),
-    ligneDeFinDeTour("pj"),
-    ligneDeTour({ numero: 3, camp: "adv" }),
+    ecrivain.finDeTour("pj"),
+    ecrivain.tour({ numero: 3, camp: "adv" }),
     // La face de contre-attaque annule l'attaque, mais le bilan du jet reste
     // écrit, et rien ne suit la localisation.
-    ligneDuGeste(
+    ecrivain.geste(
       etat,
       joue(CHEF, "Moulinet farineux", {
         prix: prix({ souffle: 5 }),
@@ -339,12 +366,12 @@ function lignesDeReference() {
         localisation: [d20(20)],
       }),
     ),
-    ligneDePasse(etat, MARMITON_2),
-    ligneDeFinDeTour("adv"),
-    ligneDeTour({ numero: 4, camp: "pj" }),
+    ecrivain.passe(etat, MARMITON_2),
+    ecrivain.finDeTour("adv"),
+    ecrivain.tour({ numero: 4, camp: "pj" }),
     // Le jet prêté par le couteau : sans désavantage de maîtrise, et le
     // deuxième dé gardé malgré la relance qui restait.
-    ligneDuGeste(
+    ecrivain.geste(
       etat,
       joue(AUBEPINE, "Fournaise", {
         mode: "jet_prete",
@@ -357,16 +384,16 @@ function lignesDeReference() {
         resultat: resultat([touche(CHEF, "torse", { armure: [38, 38] })]),
       }),
     ),
-    ligneDuGeste(
+    ecrivain.geste(
       etat,
       joue(AUBEPINE, "Frappe", {
         cible: CHEF,
         jet: chaineFinie(attaque({ difficulte: 7, modificateurs: [VIF, blessures(1)], avantages: [SOLO], desavantages: [horsMaitrise("Frappe")] }), [6]),
       }),
     ),
-    ligneDeFinDeTour("pj"),
-    ligneDeTour({ numero: 4, camp: "adv" }),
-    ligneDuGeste(
+    ecrivain.finDeTour("pj"),
+    ecrivain.tour({ numero: 4, camp: "adv" }),
+    ecrivain.geste(
       etat,
       joue(CHEF, "Frappe", {
         cible: AUBEPINE,
@@ -376,9 +403,9 @@ function lignesDeReference() {
         resultat: resultat([touche(AUBEPINE, "bras_gauche", { armure: [1, 0], resistance: [5, 0], corps: [10, 4], blessure: true, blessures: 2 })]),
       }),
     ),
-    ligneDeFinDeTour("adv"),
-    ligneDeTour({ numero: 5, camp: "pj" }),
-    ligneDuGeste(
+    ecrivain.finDeTour("adv"),
+    ecrivain.tour({ numero: 5, camp: "pj" }),
+    ecrivain.geste(
       etat,
       joue(AUBEPINE, "Frappe", {
         cible: MARMITON_2,
@@ -388,7 +415,7 @@ function lignesDeReference() {
         resultat: resultat([touche(MARMITON_2, "jambe_droite", { resistance: [0, 0], corps: [7, 0], blessures: 1 })], true),
       }),
     ),
-    ligneDuGeste(
+    ecrivain.geste(
       etat,
       joue(AUBEPINE, "Frappe", {
         cible: CHEF,
@@ -398,15 +425,114 @@ function lignesDeReference() {
         resultat: resultat([touche(CHEF, "jambe_gauche", { resistance: [5, 0], corps: [10, 0], blessure: true, blessures: 1 })], true),
       }),
     ),
-    ligneDeFin("pj"),
+    ecrivain.fin("pj"),
   ];
 }
 
 test("le combat de référence : ses trente-six lignes sortent mot pour mot des fonctions du journal", () => {
-  const lignes = lignesDeReference();
+  const textes = lignesDeReference();
   assert.equal(journalAttendu.length, 36);
-  assert.equal(lignes.length, journalAttendu.length);
-  lignes.forEach((ligne, rang) => assert.equal(ligne, journalAttendu[rang], `ligne ${rang + 1} du combat de référence`));
+  assert.equal(textes.length, journalAttendu.length);
+  textes.forEach((texte, rang) => assert.equal(texte, journalAttendu[rang], `ligne ${rang + 1} du combat de référence`));
+});
+
+// ─── Le combat de référence, en segments (groupe 2) ─────────────────────────
+
+// Le genre de chaque ligne du combat de référence, tel que le moteur l'écrit
+// depuis le groupe 1 ; les lignes 12, 34 et 35 portent une mort.
+const GENRES_DE_REFERENCE = [
+  ...["cadre", "tour", "geste", "geste", "cadre", "tour", "geste", "geste", "geste", "cadre", "tour"],
+  ...["geste", "geste", "cadre", "tour", "geste", "geste", "cadre", "tour", "geste", "cadre", "tour"],
+  ...["geste", "geste", "cadre", "tour", "geste", "geste", "cadre", "tour", "geste", "cadre", "tour"],
+  ...["geste", "geste", "fin"],
+];
+
+const TYPES = ["texte", "acteur", "capacite", "cible", "reussi", "echoue", "lettre", "ajuste", "mort", "fin_de_tour", "tour", "suite"];
+
+// Ce que toute ligne fabriquée tient (contrat du groupe 2, § 3.1) : gelée ;
+// ses segments redonnent son texte (la règle d'or) ; aucun n'est vide ;
+// leurs phrases se suivent, jointes par une espace hors phrase ; « acteur » en
+// tête d'une ligne de geste ou de passe, et nulle part ailleurs ; « acteur »
+// et « cible » avec leur camp ; « ✓ » et « ✗ » dans un dé, et seulement là ;
+// la mort en dernier.
+function verifierLaLigne(ligne, quoi) {
+  const { segments, phrases } = ligne;
+  assert.ok(Object.isFrozen(ligne) && Object.isFrozen(segments) && segments.every(Object.isFrozen), `${quoi} : gelée`);
+  assert.equal(segments.map((segment) => segment.texte).join(""), ligne.texte, `${quoi} : la règle d'or`);
+  let attendue = 0;
+  segments.forEach((segment, rang) => {
+    const ici = `${quoi}, segment ${rang} (« ${segment.texte} »)`;
+    assert.ok(TYPES.includes(segment.type), `${ici} : type ${segment.type}`);
+    assert.ok(typeof segment.texte === "string" && segment.texte !== "", `${ici} : vide`);
+    if (segment.phrase === null) {
+      if (segment.type === "suite") assert.equal(rang, segments.length - 1, `${ici} : la suite est en dernier`);
+      else assert.ok(segment.type === "texte" && segment.texte === " " && rang > 0 && rang < segments.length - 1, `${ici} : hors phrase, une espace entre deux phrases`);
+      if (segment.type === "texte") attendue += 1;
+    } else {
+      assert.equal(segment.phrase, attendue, `${ici} : sa phrase`);
+    }
+    if (segment.type === "acteur") assert.ok(rang === 0 && ligne.genre === "geste" && ["ouverture", "passe", "jet"].includes(phrases[0]), `${ici} : l'acteur ailleurs qu'en tête d'un geste`);
+    if (segment.type === "acteur" || segment.type === "cible") assert.ok(["pj", "adv"].includes(segment.camp), `${ici} : son camp`);
+    else assert.equal(segment.camp, undefined, `${ici} : un camp hors d'un nom`);
+    if (segment.type === "reussi" || segment.type === "echoue") {
+      assert.ok(Number.isInteger(segment.de) && segment.jet === 0, `${ici} : un signe hors d'un dé`);
+      assert.equal(segment.texte, segment.type === "reussi" ? SIGNES.reussi : SIGNES.echoue);
+    } else {
+      assert.ok(!segment.texte.includes(SIGNES.reussi) && !segment.texte.includes(SIGNES.echoue), `${ici} : « ✓ » ou « ✗ » hors d'un dé`);
+    }
+    if (segment.type === "mort") assert.ok(rang === segments.length - 1 && phrases[segment.phrase] === "mort", `${ici} : la mort en dernier`);
+  });
+  assert.equal(attendue, phrases.length - 1, `${quoi} : une phrase par genre`);
+}
+
+test("le combat de référence, fabriqué par lignes.* : le genre et le texte de chaque ligne inchangés, ses segments les redonnent", () => {
+  const faites = referenceEcritePar(lignes);
+  assert.equal(faites.length, 36);
+  assert.deepEqual(
+    faites.map(({ genre, texte }) => ({ genre, texte })),
+    journalAttendu.map((texte, rang) => ({ genre: GENRES_DE_REFERENCE[rang], texte })),
+  );
+  assert.deepEqual(
+    faites.flatMap((ligne, rang) => (ligne.mort === true ? [rang + 1] : [])),
+    [12, 34, 35],
+    "mort: true sur les trois lignes qui tuent",
+  );
+  faites.forEach((ligne, rang) => verifierLaLigne(ligne, `ligne ${rang + 1}`));
+
+  // Les segments typés du combat : un acteur par ligne de geste, une cible
+  // par geste qui en a une, les dés, la lettre, le nombre saisi, les morts.
+  const types = faites.flatMap((ligne) => ligne.segments.map((segment) => segment.type));
+  const combien = (type) => types.filter((un) => un === type).length;
+  assert.equal(combien("acteur"), 17);
+  assert.equal(combien("cible"), 13);
+  assert.equal(combien("reussi") + combien("echoue"), 35, "un signe par essai");
+  assert.equal(combien("lettre"), 10);
+  assert.equal(combien("ajuste"), 1, "l'Émincer ajusté à 20");
+  assert.equal(combien("mort"), 3);
+  assert.equal(combien("tour"), 9);
+  assert.equal(combien("fin_de_tour"), 8);
+  assert.equal(combien("suite"), 0);
+});
+
+test("le combat de référence : les phrases de chaque ligne de geste sont celles de segmentsDuGeste, et ses genres leur ordre", () => {
+  const vues = [];
+  const temoin = { ...lignes, geste: (etat, geste) => vues.push({ ligne: lignes.geste(etat, geste), textes: segmentsDuGeste(etat, geste), phrases: phrasesDuGeste(etat, geste) }) };
+  referenceEcritePar(temoin);
+  assert.equal(vues.length, 16, "les seize gestes du combat, passe exclue");
+  for (const { ligne, textes, phrases } of vues) {
+    assert.deepEqual(phrases.map((phrase) => phrase.genre), ligne.phrases);
+    assert.deepEqual(
+      phrases.map((phrase) => phrase.segments.map((segment) => segment.texte).join("")),
+      textes,
+    );
+    assert.equal(textes.join(" "), ligne.texte);
+  }
+  assert.deepEqual(vues[0].ligne.phrases, ["ouverture", "jet", "localisation", "degats"]);
+  assert.deepEqual(vues[1].ligne.phrases, ["ouverture"], "le déplacement");
+  assert.deepEqual(vues[5].ligne.phrases, ["ouverture", "sources", "jet", "localisation", "degats", "mort"], "l'Émincer qui tue");
+  assert.deepEqual(vues[7].ligne.phrases, ["ouverture", "sources", "jet", "localisation", "intervention", "degats"], "la défense au Pas de côté");
+  assert.deepEqual(vues[9].ligne.phrases, ["jet"], "le jet de caractéristique tient en une phrase");
+  assert.deepEqual(vues[10].ligne.phrases, ["ouverture", "sources", "jet", "localisation"], "la face de contre-attaque");
 });
 
 // ─── Le cadre ───────────────────────────────────────────────────────────────
@@ -1790,7 +1916,9 @@ test("aucune espace insécable : ni dans le source du journal, ni dans ce qu'il 
   sansInsecable(journalAttendu.join("\n"), "le journal de référence");
 
   const etat = demonstration();
-  const ecrits = [...lignesDeReference(), ...enTete(etat), texteDuJournal(etat, "\r\n"), nomDuFichier(etat.lanceLe), ecrireHeure("2026-10-12T09:05"), ligneDeFin("adv"), annonce(etat, null, { type: "lancer", le: etat.lanceLe })];
+  const segments = referenceEcritePar(lignes).flatMap((ligne) => ligne.segments.map((segment) => segment.texte));
+  assert.ok(segments.length > 300, "les segments du combat de référence");
+  const ecrits = [...lignesDeReference(), ...segments, ...enTete(etat), texteDuJournal(etat, "\r\n"), nomDuFichier(etat.lanceLe), ecrireHeure("2026-10-12T09:05"), ligneDeFin("adv"), annonce(etat, null, { type: "lancer", le: etat.lanceLe })];
   assert.ok(ecrits.length > 40);
   ecrits.forEach((texte, rang) => sansInsecable(texte, `le texte ${rang + 1}`));
   assert.ok(ecrits.join("\n").includes("n° 1"), "« n° 1 » s'écrit avec une espace ordinaire");
@@ -1813,6 +1941,8 @@ test("le journal de référence porte cinq signes moins, et le journal les écri
   const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   assert.ok(code.includes("SIGNES.fleche") && code.includes("SIGNES.moins"), "le code lu est bien celui du journal");
   for (const [nom, signe] of Object.entries(SIGNES)) assert.ok(!code.includes(signe), `le signe « ${nom} » est écrit en dur`);
+  // Les points de suspension de la ligne en cours (groupe 2) aussi.
+  assert.ok(!code.includes(String.fromCodePoint(0x2026)), "les points de suspension sont écrits en dur");
 });
 
 test("le journal n'importe que le noyau qu'on lui permet, et ne lit rien de l'appareil", () => {

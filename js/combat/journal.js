@@ -1,13 +1,15 @@
 // Le journal du combat : une ligne par geste fini, au présent, en texte
-// simple (SPECIFICATION.md, § 17 « Le simulateur de combat (lot 4) »).
+// simple, et les segments typés dont elle est faite (SPECIFICATION.md, § 17.9
+// « Le journal »).
 //
 // Ce module écrit tout ce que le simulateur dit d'un combat : les lignes du
-// cadre (lancement, tours, fin), la ligne de chaque geste, l'en-tête et le
-// texte que l'on copie ou télécharge, et la phrase que la région d'annonce
-// donne aux lecteurs d'écran après chaque dé, chaque esquive et chaque face
-// décalée. Il existe pour que ce texte n'ait qu'une écriture : le moteur, le
-// rejeu d'un combat gardé, les contrôles et le banc le comparent mot pour
-// mot, au signe près.
+// cadre (lancement, tours, fin), la ligne de chaque geste, la ligne « Annulé »
+// d'un geste défait, la ligne qu'un geste payé est en train d'écrire,
+// l'en-tête et le texte que l'on copie ou télécharge, et la phrase que la
+// région d'annonce donne aux lecteurs d'écran après chaque dé, chaque esquive
+// et chaque face décalée. Il existe pour que ce texte n'ait qu'une écriture :
+// le moteur, le rejeu d'un combat gardé, les contrôles et le banc le
+// comparent mot pour mot, au signe près.
 //
 // Ce que cela impose :
 // - une ligne est une fonction du geste fini, des noms figés au lancement et
@@ -17,11 +19,23 @@
 // - rien ne vient de l'appareil : ni heure, ni langue, ni hasard. L'heure du
 //   lancement est une donnée, découpée comme un texte ;
 // - les signes (flèche, coche, croix, moins, tiret long, point médian)
-//   viennent de SIGNES, par leur code, et toute espace est une espace
-//   ordinaire, « n° 1 » et « 23 h 05 » compris ;
+//   viennent de SIGNES, par leur code, comme les points de suspension de la
+//   ligne en cours, et toute espace est une espace ordinaire, « n° 1 » et
+//   « 23 h 05 » compris ;
 // - les noms (protagonistes, capacités, zones, armes, raisons) sont des
 //   données hostiles, écrites telles quelles : c'est l'écran qui les désarme,
 //   sur le texte entier, au moment de copier ou de télécharger.
+//
+// Les segments (groupe 2). Chaque ligne naît en morceaux typés : le nom de
+// qui agit, la capacité jouée, le nom de la cible, les dés d'un jet dans leur
+// cadre (un dé insécable par essai), la lettre des dégâts, le nombre saisi,
+// la mort… L'écran colore et encadre d'après eux, et coupe le bandeau d'après
+// les phrases qu'ils désignent, sans jamais relire le texte pour y chercher un
+// nom : un nom peut porter « → », « ✓ » ou « contre ». Le texte, lui, ne
+// change pas, et ne peut pas s'écarter des segments : chaque gabarit
+// fabrique ses segments, et le texte en est la concaténation (la règle d'or).
+// Les fonctions qui rendaient du texte au groupe 1 gardent leur nom et leur
+// sortie : elles concatènent les mêmes segments.
 //
 // Une fonction par gabarit, toutes exportées, pour que chacun ait son
 // contrôle. Celles qui écrivent un segment facultatif (les sources, la
@@ -37,12 +51,16 @@
 import { CARACTERISTIQUES } from "../personnage/regles.js";
 import { degatsFixes, imputerEsquive, localiser, nombreDeD20, reussitesDeLAttaque } from "./degats.js";
 import { evaluerEssai, jetFini, modificateurDe, netDe, reussites } from "./jet.js";
-import { LETTRES, SIGNES } from "./regles.js";
+import { LETTRES, SIGNES, geler } from "./regles.js";
 import { campDe, capaciteDe, faconDe, gesteEnCours, photoDe } from "./valeurs.js";
 
 // ─── Les mots ───────────────────────────────────────────────────────────────
 
 const CAMPS = { pj: "PJ", adv: "adversaires" };
+
+// Les points de suspension qui suivent la ligne en cours, par leur code comme
+// les signes du journal.
+const SUITE = String.fromCodePoint(0x2026);
 
 const somme = (nombres) => nombres.reduce((total, nombre) => total + nombre, 0);
 const dernier = (liste) => liste[liste.length - 1];
@@ -84,6 +102,62 @@ const zoneDe = (etat, id, indice) => photoDe(etat, id)?.zones?.[indice]?.nom ?? 
 
 const nomDeCaracteristique = (code) => CARACTERISTIQUES.find((caracteristique) => caracteristique.code === code)?.nom ?? code;
 
+// ─── Les segments ───────────────────────────────────────────────────────────
+//
+// Segment = { type, texte, phrase, camp?, jet?, de? } (le contrat du groupe 2,
+// § 3.1). Pendant qu'une phrase se fabrique, ses segments n'ont pas encore de
+// numéro de phrase : numeroter() le leur donne quand la ligne s'assemble.
+
+// Le texte d'une suite de segments : leur concaténation, et rien d'autre.
+const texteDe = (segments) => segments.map((segment) => segment.texte).join("");
+
+// Ajoute un segment à une suite en construction, et la rend. Un texte vide ne
+// s'écrit pas : un segment n'est jamais vide. Deux segments « texte » qui se
+// suivent au même endroit (hors du cadre, entre deux dés du cadre, ou dans un
+// même dé) n'en font qu'un.
+function pousser(segments, type, texte, champs = {}) {
+  if (texte === "") return segments;
+  const precedent = dernier(segments);
+  if (type === "texte" && precedent?.type === "texte" && precedent.jet === champs.jet && precedent.de === champs.de) {
+    segments[segments.length - 1] = { ...precedent, texte: precedent.texte + texte };
+  } else {
+    segments.push({ type, texte, ...champs });
+  }
+  return segments;
+}
+
+// Ajoute une suite de segments à une autre, en les joignant comme pousser().
+const joindre = (segments, autres) => autres.reduce((suite, { type, texte, ...champs }) => pousser(suite, type, texte, champs), segments);
+
+// Un texte seul, en segments : aucun s'il est vide.
+const enTexte = (texte) => pousser([], "texte", texte);
+
+// Le nom court d'un protagoniste, en segment « acteur » ou « cible », avec son
+// camp. Un identifiant qui n'est pas dans le combat n'a pas de camp : son nom,
+// s'il en a un, reste du texte.
+function pousserLeNom(segments, type, etat, id) {
+  const camp = campDe(etat, id);
+  return camp === null ? pousser(segments, "texte", court(etat, id)) : pousser(segments, type, court(etat, id), { camp });
+}
+
+// Les segments d'une phrase, numérotés : le numéro suit le texte.
+const numeroter = (segments, phrase) => segments.map(({ type, texte, ...champs }) => ({ type, texte, phrase, ...champs }));
+
+// Une ligne entière, gelée : ses phrases jointes par une espace qui n'est
+// d'aucune phrase ; « … » à la fin de la ligne en cours, sans espace avant.
+function assembler(genre, phrases, champs = {}, { suite = false } = {}) {
+  const segments = [];
+  phrases.forEach((phrase, rang) => {
+    if (rang > 0) segments.push({ type: "texte", texte: " ", phrase: null });
+    segments.push(...phrase.segments);
+  });
+  if (suite) segments.push({ type: "suite", texte: SUITE, phrase: null });
+  return geler({ genre, texte: texteDe(segments), segments, phrases: phrases.map((phrase) => phrase.genre), ...champs });
+}
+
+// Une ligne d'une seule phrase, faite d'un seul segment.
+const ligneDUnTenant = (genre, phrase, type, texte) => assembler(genre, [{ genre: phrase, segments: numeroter(pousser([], type, texte), 0) }]);
+
 // ─── Le cadre ───────────────────────────────────────────────────────────────
 
 /** « Combat lancé : 1 personnage contre 3 adversaires. Les PJ commencent. » */
@@ -107,9 +181,12 @@ export function ligneDeFin(vainqueur) {
   return `Combat terminé : victoire des ${CAMPS[vainqueur]}.`;
 }
 
+// « Marmiton n° 2 passe son tour. » : le nom de qui passe, puis le reste.
+const segmentsDeLaPasse = (etat, qui) => pousser(pousserLeNom([], "acteur", etat, qui), "texte", " passe son tour.");
+
 /** « Marmiton n° 2 passe son tour. » */
 export function ligneDePasse(etat, qui) {
-  return `${court(etat, qui)} passe son tour.`;
+  return texteDe(segmentsDeLaPasse(etat, qui));
 }
 
 // ─── L'ouverture ────────────────────────────────────────────────────────────
@@ -135,21 +212,34 @@ function parentheseDeLOuverture(etat, geste, capacite, facon) {
   return [parties.join(", "), ...suite].filter((texte) => texte !== "").join(" ; ");
 }
 
-// « Aubépine : Fournaise [1] (1 souffle, 1 lien) », sans ce qui suit.
-function debutDuGeste(etat, geste) {
+// « Taloche [1] » : le nom de la capacité, et sa puissance entre crochets
+// quand elle évolue.
+function nomDeLaCapacite(etat, geste) {
   const capacite = capaciteDe(etat, geste.acteur, geste.capacite);
-  const facon = faconDe(etat, geste);
-  const puissance = capacite?.evolue ? ` [${facon?.puissance ?? 0}]` : "";
-  const parenthese = capacite ? parentheseDeLOuverture(etat, geste, capacite, facon) : "";
-  return `${court(etat, geste.acteur)} : ${capacite?.nom ?? ""}${puissance}${parenthese === "" ? "" : ` (${parenthese})`}`;
+  const puissance = capacite?.evolue ? ` [${faconDe(etat, geste)?.puissance ?? 0}]` : "";
+  return `${capacite?.nom ?? ""}${puissance}`;
 }
 
-// « contre » un protagoniste de l'autre camp, « sur » un allié ou sur soi ;
-// rien sans cible.
-function cibleDuGeste(etat, geste) {
-  if ((geste.cible ?? null) === null) return "";
-  const lien = campDe(etat, geste.cible) === campDe(etat, geste.acteur) ? "sur" : "contre";
-  return ` ${lien} ${court(etat, geste.cible)}`;
+// « contre » un protagoniste de l'autre camp, « sur » un allié ou sur soi.
+const lienALaCible = (etat, geste) => (campDe(etat, geste.cible) === campDe(etat, geste.acteur) ? "sur" : "contre");
+
+// « Aubépine : Fournaise [1] (1 souffle, 1 lien) », sans ce qui suit : le nom
+// de qui agit, la capacité et sa puissance, la parenthèse.
+function segmentsDuDebut(etat, geste) {
+  const capacite = capaciteDe(etat, geste.acteur, geste.capacite);
+  const parenthese = capacite ? parentheseDeLOuverture(etat, geste, capacite, faconDe(etat, geste)) : "";
+  const segments = pousser(pousserLeNom([], "acteur", etat, geste.acteur), "texte", " : ");
+  pousser(segments, "capacite", nomDeLaCapacite(etat, geste));
+  return pousser(segments, "texte", parenthese === "" ? "" : ` (${parenthese})`);
+}
+
+// La première phrase d'un geste, en segments : le début, puis la cible (son
+// nom, avec son camp) ou, pour un déplacement, le départ et l'arrivée.
+function segmentsDeLOuverture(etat, geste) {
+  const segments = segmentsDuDebut(etat, geste);
+  if (geste.mode === "deplacement") return pousser(segments, "texte", `, ${geste.depart} ${SIGNES.fleche} ${geste.arrivee}.`);
+  if ((geste.cible ?? null) !== null) pousserLeNom(pousser(segments, "texte", ` ${lienALaCible(etat, geste)} `), "cible", etat, geste.cible);
+  return pousser(segments, "texte", ".");
 }
 
 /**
@@ -158,8 +248,7 @@ function cibleDuGeste(etat, geste) {
  * (1 souffle), F6 → D4. »
  */
 export function ecrireOuverture(etat, geste) {
-  if (geste.mode === "deplacement") return `${debutDuGeste(etat, geste)}, ${geste.depart} ${SIGNES.fleche} ${geste.arrivee}.`;
-  return `${debutDuGeste(etat, geste)}${cibleDuGeste(etat, geste)}.`;
+  return texteDe(segmentsDeLOuverture(etat, geste));
 }
 
 // ─── Le jet ─────────────────────────────────────────────────────────────────
@@ -209,6 +298,50 @@ export function ecrireDe(jet) {
   return `d${jet.faces}${modificateur === 0 ? "" : signer(modificateur)}`;
 }
 
+// Un essai, en un dé insécable (de: k) du cadre (jet: 0) : ses lancers et la
+// flèche du désavantage, sa valeur, ses explosions et leur somme, une espace,
+// puis « ✓ » ou « ✗ », qui ne vivent que là. « inacheve » l'écrit tel qu'il
+// est quand il attend une explosion : sans somme ni signe, qui changeront.
+function segmentsDeLEssai(jet, essai, de, inacheve) {
+  const modificateur = modificateurDe(jet);
+  const { premier, somme: total, reussi } = evaluerEssai(jet, essai);
+  const lancers = essai.tirages.length > 1 ? `${essai.tirages.map((tirage) => ecrireValeur(tirage + modificateur)).join("/")} ${SIGNES.fleche} ` : "";
+  const explosions = essai.explosions.length > 0 ? ` explose, ${essai.explosions.map((ajout) => `+ ${ajout}`).join(" explose, ")}` : "";
+  const valeur = `${lancers}${ecrireValeur(premier)}${explosions}`;
+  if (inacheve) return [{ type: "texte", texte: valeur, jet: 0, de }];
+  const addition = essai.explosions.length > 0 ? ` = ${ecrireValeur(total)}` : "";
+  return [
+    { type: "texte", texte: `${valeur}${addition} `, jet: 0, de },
+    reussi ? { type: "reussi", texte: SIGNES.reussi, jet: 0, de } : { type: "echoue", texte: SIGNES.echoue, jet: 0, de },
+  ];
+}
+
+// Une place de la chaîne : ses essais, joints par « , relancé », séparateur
+// du cadre qui n'est d'aucun dé. Ses dés se comptent à partir de « premier ».
+function segmentsDeLaPlace(jet, place, premier, inacheve = false) {
+  const segments = [];
+  place.essais.forEach((essai, rang) => {
+    if (rang > 0) segments.push({ type: "texte", texte: ", relancé ", jet: 0 });
+    segments.push(...segmentsDeLEssai(jet, essai, premier + rang, inacheve && rang === place.essais.length - 1));
+  });
+  return segments;
+}
+
+// Les dés d'un jet, dans leur cadre : les places jointes par « , », hors des
+// dés ; un dé par essai, compté depuis le premier essai du jet. « enCours »
+// laisse inachevé le dernier essai qui attend une explosion.
+function segmentsDuCadre(jet, enCours = false) {
+  const explosionEnAttente = enCours && (jet.attente === "choix_explosion" || jet.attente === "de_explosion");
+  const segments = [];
+  let de = 0;
+  jet.places.forEach((place, rang) => {
+    if (rang > 0) segments.push({ type: "texte", texte: ", ", jet: 0 });
+    segments.push(...segmentsDeLaPlace(jet, place, de, explosionEnAttente && rang === jet.places.length - 1));
+    de += place.essais.length;
+  });
+  return segments;
+}
+
 /**
  * Une place de la chaîne (un élément de jet.places), valeurs modificateur
  * compris : « 7 ✓ » ; une relance, « 4 ✗, relancé 7 ✓ » ; un dé à
@@ -219,15 +352,7 @@ export function ecrireDe(jet) {
  * + 1 = −1 ✗ ».
  */
 export function ecrirePlace(jet, place) {
-  const modificateur = modificateurDe(jet);
-  return place.essais
-    .map((essai) => {
-      const { premier, somme: total, reussi } = evaluerEssai(jet, essai);
-      const lancers = essai.tirages.length > 1 ? `${essai.tirages.map((tirage) => ecrireValeur(tirage + modificateur)).join("/")} ${SIGNES.fleche} ` : "";
-      const explosions = essai.explosions.length > 0 ? ` explose, ${essai.explosions.map((ajout) => `+ ${ajout}`).join(" explose, ")} = ${ecrireValeur(total)}` : "";
-      return `${lancers}${ecrireValeur(premier)}${explosions} ${reussi ? SIGNES.reussi : SIGNES.echoue}`;
-    })
-    .join(", relancé ");
+  return texteDe(segmentsDeLaPlace(jet, place, 0));
 }
 
 // Le nombre saisi à la main pour les dégâts, et sa raison ; null sans saisie.
@@ -237,6 +362,37 @@ const ajustement = (geste) => (geste.degats?.operations ?? []).findLast((operati
 function reussitesDuBilan(jet) {
   const nombre = reussites(jet);
   return nombre === 0 ? "aucune réussite" : compter(nombre, "réussite");
+}
+
+// Le bilan en segments : du texte, sauf chaque « {L} = {v} » (lettre) et le
+// seul nombre qui suit « ajusté à » (ajuste).
+function segmentsDuBilan(etat, geste) {
+  const { jet } = geste;
+  const tete = reussitesDuBilan(jet);
+  if (jet.genre === "caracteristique") return enTexte(tete);
+
+  const enDefense = jet.genre === "defense";
+  if (reussitesDeLAttaque(jet.genre, reussites(jet)) === 0) return enTexte(`${tete}, ${enDefense ? "aucun dégât" : "manqué"}`);
+
+  const fixes = degatsFixes(etat, geste);
+  const saisie = ajustement(geste);
+  const directs = fixes.nature !== "normaux";
+  const lettre = fixes.lettre === null ? "" : `${LETTRES[fixes.lettre]} = ${fixes.deBase}`;
+  const recoit = enDefense ? `${court(etat, jet.lanceur)} reçoit ` : "";
+
+  // Une défense contre une attaque sans dégâts propres, aux dégâts saisis :
+  // ce que reçoit le PJ est le nombre saisi, et la phrase le dit d'un trait,
+  // sans « ajusté à ».
+  if (fixes.base === "aucun" && enDefense && saisie !== null && !directs) return enTexte(`${tete}, ${recoit}${saisie.valeur} (à la main : ${saisie.raison})`);
+
+  const segments = enTexte(`${tete}, `);
+  if (fixes.base === "lettre") pousser(pousser(segments, "texte", recoit), "lettre", lettre);
+  else if (fixes.base === "arme") pousser(pousser(segments, "texte", "touché, dégâts de l'arme : "), "lettre", lettre);
+  else pousser(segments, "texte", "touché");
+  if (saisie !== null && directs) pousser(segments, "texte", `, dégâts directs ${fixes.nature === "corps" ? "au corps" : "à la résistance"} : ${saisie.valeur} (${saisie.raison})`);
+  else if (saisie !== null) pousser(pousser(pousser(segments, "texte", ", ajusté à "), "ajuste", `${saisie.valeur}`), "texte", ` (${saisie.raison})`);
+  if (fixes.surplus !== 0) pousser(segments, "texte", `, +${fixes.surplus} contre l'armure (${fixes.sourceDuSurplus})`);
+  return segments;
 }
 
 /**
@@ -249,31 +405,7 @@ function reussitesDuBilan(jet) {
  * « reçoit … (à la main » et « dégâts directs », le nombre saisi.
  */
 export function ecrireBilan(etat, geste) {
-  const { jet } = geste;
-  const tete = reussitesDuBilan(jet);
-  if (jet.genre === "caracteristique") return tete;
-
-  const enDefense = jet.genre === "defense";
-  if (reussitesDeLAttaque(jet.genre, reussites(jet)) === 0) return `${tete}, ${enDefense ? "aucun dégât" : "manqué"}`;
-
-  const fixes = degatsFixes(etat, geste);
-  const saisie = ajustement(geste);
-  const directs = fixes.nature !== "normaux";
-  const lettre = fixes.lettre === null ? "" : `${LETTRES[fixes.lettre]} = ${fixes.deBase}`;
-  const recoit = enDefense ? `${court(etat, jet.lanceur)} reçoit ` : "";
-
-  // Une défense contre une attaque sans dégâts propres, aux dégâts saisis :
-  // ce que reçoit le PJ est le nombre saisi, et la phrase le dit d'un trait,
-  // sans « ajusté à ».
-  if (fixes.base === "aucun" && enDefense && saisie !== null && !directs) return `${tete}, ${recoit}${saisie.valeur} (à la main : ${saisie.raison})`;
-
-  let suite = "touché";
-  if (fixes.base === "lettre") suite = `${recoit}${lettre}`;
-  if (fixes.base === "arme") suite = `touché, dégâts de l'arme : ${lettre}`;
-  if (saisie !== null && directs) suite += `, dégâts directs ${fixes.nature === "corps" ? "au corps" : "à la résistance"} : ${saisie.valeur} (${saisie.raison})`;
-  else if (saisie !== null) suite += `, ajusté à ${saisie.valeur} (${saisie.raison})`;
-  if (fixes.surplus !== 0) suite += `, +${fixes.surplus} contre l'armure (${fixes.sourceDuSurplus})`;
-  return `${tete}, ${suite}`;
+  return texteDe(segmentsDuBilan(etat, geste));
 }
 
 // Ce qui suit la difficulté, entre parenthèses : son libellé (jet de
@@ -297,6 +429,27 @@ function netDuJet(jet) {
   return `${texte} (${main.nombre === Math.abs(net) ? "" : `dont ${main.nombre} `}à la main : ${main.nom})`;
 }
 
+// Ce qui précède le cadre : qui lance sa défense, le dé et ses
+// caractéristiques, la difficulté et sa parenthèse, le net, la flèche. Rien
+// n'y bouge une fois le jet ouvert.
+function avantLeCadre(etat, jet) {
+  const prefixe = jet.genre === "defense" ? `${court(etat, jet.lanceur)} lance sa défense, ` : "";
+  const caracteristiques = jet.caracteristiques ? ` (${jet.caracteristiques.map(nomDeCaracteristique).join(" + ")})` : "";
+  return `${prefixe}${ecrireDe(jet)}${caracteristiques} contre ${jet.difficulte}${parentheseDeLaDifficulte(jet)}${netDuJet(jet)} ${SIGNES.fleche} `;
+}
+
+// La phrase du jet, en segments. « jusqua » l'arrête plus tôt, pour la ligne
+// en cours : « cadre » après le dernier dé lancé, « reussites » après le
+// compte des réussites (les dégâts peuvent encore changer).
+function segmentsDuJet(etat, geste, jusqua = null) {
+  const { jet } = geste;
+  const segments = enTexte(avantLeCadre(etat, jet));
+  segments.push(...segmentsDuCadre(jet, jusqua === "cadre"));
+  if (jusqua === "cadre") return segments;
+  if (jusqua === "reussites") return pousser(segments, "texte", ` : ${reussitesDuBilan(jet)}`);
+  return pousser(joindre(pousser(segments, "texte", " : "), segmentsDuBilan(etat, geste)), "texte", ".");
+}
+
 /**
  * La phrase du jet : « d10+1 contre 5, 1 désavantage → 7/10 → 7 ✓, 9/3 → 3 ✗ :
  * 1 réussite, A = 3, +1 contre l'armure (Réduction). » Quand un adversaire
@@ -305,14 +458,7 @@ function netDuJet(jet) {
  * l'ordre où le jet les garde, que le moteur a rangé.
  */
 export function ecrireJet(etat, geste) {
-  const { jet } = geste;
-  const prefixe = jet.genre === "defense" ? `${court(etat, jet.lanceur)} lance sa défense, ` : "";
-  const caracteristiques = jet.caracteristiques ? ` (${jet.caracteristiques.map(nomDeCaracteristique).join(" + ")})` : "";
-  const places = jet.places.map((place) => ecrirePlace(jet, place)).join(", ");
-  return (
-    `${prefixe}${ecrireDe(jet)}${caracteristiques} contre ${jet.difficulte}${parentheseDeLaDifficulte(jet)}${netDuJet(jet)} ` +
-    `${SIGNES.fleche} ${places} : ${ecrireBilan(etat, geste)}.`
-  );
+  return texteDe(segmentsDuJet(etat, geste));
 }
 
 // ─── La localisation, les interventions, les dégâts ─────────────────────────
@@ -332,6 +478,13 @@ function ecrireD20(etat, geste, { brut, decalage, contre, face, zone }, separate
   return `${brut}${decalee}${separateur}${minuscule(zoneDe(etat, geste.cible, zone))}`;
 }
 
+// « Localisation d20 → », « Localisation 2 d20 → » : le nombre est celui des
+// d20 du geste, écrit à partir de deux.
+const enteteDeLocalisation = (etat, geste) => {
+  const nombre = nombreDeD20(etat, geste);
+  return `Localisation ${nombre > 1 ? `${nombre} ` : ""}d20 ${SIGNES.fleche} `;
+};
+
 /**
  * « Localisation d20 → 14 : jambe droite. » ; avec plusieurs dés,
  * « Localisation 2 d20 → 6 : torse ; 13 : jambe gauche. » Le nombre est celui
@@ -341,8 +494,7 @@ function ecrireD20(etat, geste, { brut, decalage, contre, face, zone }, separate
 export function ecrireLocalisation(etat, geste) {
   const lances = d20DuGeste(etat, geste);
   if (lances.length === 0) return null;
-  const nombre = nombreDeD20(etat, geste);
-  return `Localisation ${nombre > 1 ? `${nombre} ` : ""}d20 ${SIGNES.fleche} ${lances.map((d20) => ecrireD20(etat, geste, d20, " : ")).join(" ; ")}.`;
+  return `${enteteDeLocalisation(etat, geste)}${lances.map((d20) => ecrireD20(etat, geste, d20, " : ")).join(" ; ")}.`;
 }
 
 /**
@@ -421,27 +573,65 @@ export function ecrireMort(etat, geste) {
 
 // ─── La ligne d'un geste ────────────────────────────────────────────────────
 
+// Une phrase faite d'un texte, ou aucune si le texte est nul.
+const phraseDeTexte = (genre, texte) => (texte === null ? [] : [{ genre, segments: enTexte(texte) }]);
+
+// Le jet de caractéristique tient en une phrase : le début de l'ouverture,
+// puis le jet, joints par une virgule.
+const phraseDeCaracteristique = (etat, geste, jusqua = null) => ({
+  genre: "jet",
+  segments: joindre(pousser(segmentsDuDebut(etat, geste), "texte", ", "), segmentsDuJet(etat, geste, jusqua)),
+});
+
+// Ce que la ligne d'un geste dit avant ses suites : pour une attaque,
+// l'ouverture et la phrase des sources ; rien pour un jet de
+// caractéristique, dont l'ouverture est dans la phrase du jet.
+function phrasesDeTete(etat, geste) {
+  if (geste.mode === "caracteristique") return [];
+  return [{ genre: "ouverture", segments: segmentsDeLOuverture(etat, geste) }, ...phraseDeTexte("sources", ecrireSources(geste.jet))];
+}
+
+// La phrase du jet, entière ou arrêtée plus tôt (voir segmentsDuJet).
+const phraseDuJet = (etat, geste, jusqua = null) =>
+  geste.mode === "caracteristique" ? phraseDeCaracteristique(etat, geste, jusqua) : { genre: "jet", segments: segmentsDuJet(etat, geste, jusqua) };
+
+// Les phrases d'une ligne de geste, sans leur numéro.
+function phrasesBrutes(etat, geste) {
+  const avecJet = (geste.jet ?? null) !== null;
+  if (geste.mode === "caracteristique" && avecJet) return [phraseDeCaracteristique(etat, geste)];
+  if ((geste.mode !== "attaque" && geste.mode !== "jet_prete") || !avecJet) return [{ genre: "ouverture", segments: segmentsDeLOuverture(etat, geste) }];
+  const mort = ecrireMort(etat, geste);
+  return [
+    ...phrasesDeTete(etat, geste),
+    phraseDuJet(etat, geste),
+    ...phraseDeTexte("localisation", ecrireLocalisation(etat, geste)),
+    ...(geste.interventions ?? []).map((intervention) => ({ genre: "intervention", segments: enTexte(ecrireIntervention(etat, geste, intervention)) })),
+    ...phraseDeTexte("degats", ecrireDegats(etat, geste)),
+    ...phraseDeTexte("blessures", ecrireBlessures(etat, geste)),
+    ...(mort === null ? [] : [{ genre: "mort", segments: pousser([], "mort", mort) }]),
+  ];
+}
+
+// Des phrases brutes, numérotées dans leur ordre.
+const numeroterLesPhrases = (phrases) => phrases.map(({ genre, segments }, rang) => ({ genre, segments: numeroter(segments, rang) }));
+
 /**
- * Les phrases de la ligne d'un geste fini, dans l'ordre : l'ouverture ; puis,
- * pour un geste à jet d'attaque, la phrase des sources, le jet, la
- * localisation, les interventions, les dégâts, les blessures, la mort. Un jet
- * de caractéristique tient en une phrase, l'ouverture et le jet joints par
- * une virgule.
+ * Les phrases de la ligne d'un geste fini, dans l'ordre, chacune avec son
+ * genre et ses segments : l'ouverture ; puis, pour un geste à jet d'attaque,
+ * la phrase des sources, le jet, la localisation, les interventions, les
+ * dégâts, les blessures, la mort. Un jet de caractéristique tient en une
+ * phrase, « jet », l'ouverture et le jet joints par une virgule.
+ */
+export function phrasesDuGeste(etat, geste) {
+  return numeroterLesPhrases(phrasesBrutes(etat, geste));
+}
+
+/**
+ * Les phrases de la ligne d'un geste fini, en texte, chacune finie par un
+ * point (voir phrasesDuGeste).
  */
 export function segmentsDuGeste(etat, geste) {
-  const avecJet = (geste.jet ?? null) !== null;
-  if (geste.mode === "caracteristique" && avecJet) return [`${debutDuGeste(etat, geste)}, ${ecrireJet(etat, geste)}`];
-  if ((geste.mode !== "attaque" && geste.mode !== "jet_prete") || !avecJet) return [ecrireOuverture(etat, geste)];
-  return [
-    ecrireOuverture(etat, geste),
-    ecrireSources(geste.jet),
-    ecrireJet(etat, geste),
-    ecrireLocalisation(etat, geste),
-    ...(geste.interventions ?? []).map((intervention) => ecrireIntervention(etat, geste, intervention)),
-    ecrireDegats(etat, geste),
-    ecrireBlessures(etat, geste),
-    ecrireMort(etat, geste),
-  ].filter((segment) => segment !== null);
+  return phrasesDuGeste(etat, geste).map((phrase) => texteDe(phrase.segments));
 }
 
 /** La ligne de journal d'un geste fini : ses phrases, jointes par une espace. */
@@ -449,13 +639,106 @@ export function ligneDuGeste(etat, geste) {
   return segmentsDuGeste(etat, geste).join(" ");
 }
 
+// ─── La ligne en cours ──────────────────────────────────────────────────────
+
+// Les phrases que le geste payé a déjà écrites pour de bon, la dernière
+// pouvant n'être qu'un début ; null quand il n'y a rien à montrer.
+function phrasesEnCours(etat, geste) {
+  if (geste.mode !== "attaque" && geste.mode !== "jet_prete" && geste.mode !== "caracteristique") return null;
+  const tete = phrasesDeTete(etat, geste);
+  if (geste.moment === "jet") return [...tete, phraseDuJet(etat, geste, "cadre")];
+  if (geste.moment === "bilan") return [...tete, phraseDuJet(etat, geste, "reussites")];
+  if (geste.moment !== "localisation" && geste.moment !== "suites") return null;
+
+  // Le premier d20 a fermé le bilan : le jet est écrit en entier. Tant
+  // qu'une face peut se décaler, la localisation s'arrête au premier dé brut.
+  const jusquAuJet = [...tete, phraseDuJet(etat, geste)];
+  const lances = d20DuGeste(etat, geste);
+  if (lances.length === 0) return jusquAuJet;
+  const interventions = geste.interventions ?? [];
+  if (geste.moment === "localisation" || interventions.length === 0) {
+    return [...jusquAuJet, { genre: "localisation", segments: enTexte(`${enteteDeLocalisation(etat, geste)}${lances[0].brut}`) }];
+  }
+  return [
+    ...jusquAuJet,
+    ...phraseDeTexte("localisation", ecrireLocalisation(etat, geste)),
+    ...interventions.map((intervention) => ({ genre: "intervention", segments: enTexte(ecrireIntervention(etat, geste, intervention)) })),
+  ];
+}
+
+/**
+ * La ligne que le geste en cours écrira, telle qu'on la sait déjà : son début
+ * exact, suivi de « … » (un segment « suite », hors phrase, sans espace
+ * avant). null sans geste, avant le paiement, et pour un geste sans jet.
+ *
+ * Elle n'écrit que ce qui ne peut plus changer : pendant la chaîne,
+ * l'ouverture, les sources et le jet jusqu'au dernier dé lancé (un dé qui
+ * attend d'exploser, sans signe ni somme) ; au bilan, les réussites seules ;
+ * à la localisation, et aux suites avant l'esquive, le jet entier et le
+ * premier d20 brut ; après l'esquive, la localisation entière et
+ * l'intervention.
+ */
+export function ligneEnCours(etat) {
+  const geste = gesteEnCours(etat);
+  if (geste === null || geste.paye !== true || (geste.jet ?? null) === null) return null;
+  const phrases = phrasesEnCours(etat, geste);
+  return phrases === null ? null : assembler("geste", numeroterLesPhrases(phrases), { enCours: true }, { suite: true });
+}
+
+// ─── L'annulation ───────────────────────────────────────────────────────────
+
+/**
+ * Le nom d'un geste défait, ou à défaire (quoi : { genre: "capacite", geste },
+ * { genre: "passer", qui } ou { genre: "fin_de_tour", camp }) :
+ * « Aubépine — Taloche [1] », « Aubépine — passer son tour », « la fin du
+ * tour des PJ ». Avec « detail », une capacité dit aussi sa cible, comme son
+ * ouverture (« … contre Marmiton n° 2 »), ou, pour un déplacement, son départ
+ * et son arrivée (« Aubépine — Pas chassé [1], C3 → D4 »).
+ */
+export function nommerLeGeste(etat, quoi, { detail = false } = {}) {
+  if (quoi?.genre === "passer") return `${court(etat, quoi.qui)} ${SIGNES.tiret} passer son tour`;
+  if (quoi?.genre === "fin_de_tour") return `la fin du tour des ${CAMPS[quoi.camp]}`;
+  const geste = quoi?.genre === "capacite" ? (quoi.geste ?? null) : null;
+  if (geste === null) return "";
+  const tete = `${court(etat, geste.acteur)} ${SIGNES.tiret} ${nomDeLaCapacite(etat, geste)}`;
+  if (!detail) return tete;
+  if (geste.mode === "deplacement") return `${tete}, ${geste.depart} ${SIGNES.fleche} ${geste.arrivee}`;
+  return (geste.cible ?? null) === null ? tete : `${tete} ${lienALaCible(etat, geste)} ${court(etat, geste.cible)}`;
+}
+
+// ─── Les lignes, fabriquées ─────────────────────────────────────────────────
+
+/**
+ * Les fabriques des lignes du journal : chacune rend une ligne gelée,
+ * { genre, texte, segments, phrases, mort?, barre? }, dont les segments
+ * redonnent le texte au signe près. C'est par elles que le moteur écrit.
+ *
+ * - lancement(etat), tour(tour), finDeTour(camp), fin(vainqueur) : le cadre ;
+ * - passe(etat, qui) : « Marmiton n° 2 passe son tour. » ;
+ * - geste(etat, geste) : la ligne d'un geste fini, « mort: true » quand sa
+ *   victime meurt ;
+ * - annulation(etat, quoi, plage) : « Annulé : Aubépine — Taloche [1]. »,
+ *   qui ne réécrit aucune ligne : sa « barre » est la plage [début, fin) des
+ *   lignes du geste défait, que l'écran barre.
+ */
+export const lignes = Object.freeze({
+  lancement: (etat) => ligneDUnTenant("cadre", "lancement", "texte", ligneDeLancement(etat)),
+  tour: (tour) => ligneDUnTenant("tour", "tour", "tour", ligneDeTour(tour)),
+  finDeTour: (camp) => ligneDUnTenant("cadre", "fin_de_tour", "fin_de_tour", ligneDeFinDeTour(camp)),
+  fin: (vainqueur) => ligneDUnTenant("fin", "fin", "texte", ligneDeFin(vainqueur)),
+  passe: (etat, qui) => assembler("geste", [{ genre: "passe", segments: numeroter(segmentsDeLaPasse(etat, qui), 0) }]),
+  geste: (etat, geste) => assembler("geste", phrasesDuGeste(etat, geste), geste.resultat?.mort === true ? { mort: true } : {}),
+  annulation: (etat, quoi, plage) => assembler("annule", [{ genre: "annule", segments: numeroter(enTexte(`Annulé : ${nommerLeGeste(etat, quoi)}.`), 0) }], { barre: [plage[0], plage[1]] }),
+});
+
 // ─── Les annonces ───────────────────────────────────────────────────────────
 
 // Les lignes que l'événement a écrites au journal. Le compte des lignes
 // d'avant les donne exactement. Sans lui, l'état d'après ne laisse voir que la
 // queue du journal : tout pour un lancement, depuis la ligne du geste pour un
 // geste fini, depuis la dernière fin de tour pour une fin de tour demandée
-// (celle-là seule quand une fin automatique l'a suivie).
+// (celle-là seule quand une fin automatique l'a suivie), la ligne « Annulé »
+// pour une annulation.
 function lignesEcrites(etat, evenement, lignesAvant) {
   const journal = etat.journal ?? [];
   if (Number.isInteger(lignesAvant)) return journal.slice(Math.max(0, lignesAvant));
@@ -470,6 +753,8 @@ function lignesEcrites(etat, evenement, lignesAvant) {
       return depuis("geste");
     case "fin_de_tour":
       return depuis("cadre");
+    case "annuler":
+      return depuis("annule");
     case "confirmer":
     case "de":
     case "garder":
@@ -524,7 +809,8 @@ function annoncerLeBilan(etat, geste) {
  *   lignesEcrites pour ce qui se passe sans lui).
  *
  * Si l'événement a écrit des lignes (un geste fini, « passer », un tour qui
- * change, la fin du combat), ce sont elles, à la suite. Sinon parlent :
+ * change, la fin du combat, une annulation), ce sont elles, à la suite. Sinon
+ * parlent :
  * - un dé lancé et un dé gardé : le dé de la chaîne qui vient de tomber,
  *   suivi du bilan quand il la finit ; le bilan seul pour un dé gardé ; un
  *   d20, « Localisation : 12, jambe gauche. » ;
@@ -624,7 +910,8 @@ export function enTete(etat) {
 /**
  * Le texte du journal, à copier (fins de ligne « \n ») ou à télécharger
  * (« \r\n ») : l'en-tête, une ligne vide, puis les lignes. La dernière ligne
- * n'est pas suivie d'une fin de ligne.
+ * n'est pas suivie d'une fin de ligne. Les lignes y sont leur seul texte :
+ * ni segments, ni barre.
  */
 export function texteDuJournal(etat, finDeLigne = "\n") {
   return [...enTete(etat), "", ...(etat.journal ?? []).map((ligne) => ligne.texte)].join(finDeLigne);

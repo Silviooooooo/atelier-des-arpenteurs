@@ -1,23 +1,30 @@
 // Contrôles des écrans des adversaires, construits dans un document simulé
 // (SPECIFICATION.md, § 16.6 et § 11, domaine « Adversaires ») : les listes
 // et leur recherche, l'accueil, la fiche d'un adversaire et ses deux vues,
-// la fiche d'un type, la rencontre, une banque publiée avant le lot 3, et
-// l'échelle, seule écriture de style du code. La banque vient du classeur
-// d'essai, fictif ; les cas fautifs se fabriquent au moment de l'essai. La
-// mise en page et l'impression se mesurent dans un vrai navigateur (§ 16.5).
+// la fiche d'un type, la rencontre et sa composition gardée chiffrée, une
+// banque publiée avant le lot 3, et la carte tenue à l'échelle de l'écran
+// (l'unique écriture de style se contrôle dans tests/echelle.test.js). La
+// banque vient du classeur d'essai, fictif ; les cas fautifs se fabriquent au
+// moment de l'essai, et la clé de démonstration se dérive à l'exécution du
+// mot de passe public (§ 9). La mise en page et l'impression se mesurent dans
+// un vrai navigateur (§ 16.5).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { LARGEUR_CARTE } from "../js/adversaire/carte.js";
 import { defautDe, ecrireOrigine } from "../js/adversaire/lecture.js";
+import { NOM_BASE_RENCONTRE, chiffrerRencontre, dechiffrerRencontre, magasinRencontreMemoire } from "../js/adversaire/rencontre_gardee.js";
+import { MOT_DE_PASSE_DEMO } from "../js/banque/chargement.js";
 import { MESSAGE_BANQUE_SANS_ADVERSAIRES, indexer } from "../js/banque/consultation.js";
 import { importerFichier } from "../js/banque/importation.js";
 import { lireRoute } from "../js/routes.js";
+import { ouvrirAvecMotDePasse } from "../js/securite/chiffrement.js";
 import { creerCoffre, magasinMemoire } from "../js/securite/coffre.js";
 import { avecAdversaires, sansAdversaires } from "./outils/adversaires_essai.js";
 import { boutons, installerDom, laisserFiler, texteDe } from "./outils/dom_simule.js";
 import { fabriquerClasseur } from "./outils/fabrique_classeur.js";
+import { fabriqueIndexedDB } from "./outils/indexeddb_simulee.js";
 
 const RACINE = new URL("../", import.meta.url);
 const lire = (chemin) => readFileSync(new URL(chemin, RACINE), "utf8");
@@ -26,19 +33,25 @@ const { banque: IMPORTEE } = await importerFichier(readFileSync(new URL("essais/
 const BANQUE = { ...IMPORTEE, publiee_le: "2026-10-11T10:00:00+02:00" };
 // Une banque publiée avant le lot 3 : ni adversaires, ni types.
 const { types_adversaires: _types, adversaires: _adversaires, ...AVANT_LOT_3 } = BANQUE;
+// La clé de démonstration, dérivée du mot de passe public (§ 9) : la
+// composition gardée se chiffre avec elle.
+const { secret: SECRET_DEMO } = await ouvrirAvecMotDePasse(JSON.parse(lire("essais/banque_demo.chiffree.json")), MOT_DE_PASSE_DEMO);
+// Les adversaires du classeur d'essai, dans l'ordre de la liste.
+const NOMS = ["Chef de partie", "Homard furieux", "Marmiton de corvée", "Mouette chapardeuse", "Plongeur"];
 
 const accueil = await import("../js/ecrans/accueil.js");
 const anomalies = await import("../js/ecrans/anomalies.js");
-const echelle = await import("../js/ecrans/echelle.js");
 const liste = await import("../js/ecrans/liste.js");
 const rencontre = await import("../js/ecrans/rencontre.js");
 
 // La rencontre et les panneaux des listes vivent dans la mémoire de leur
-// module, par banque : chaque contrôle part d'une banque à lui.
-function contexteDe(banque = BANQUE) {
+// module : chaque contrôle part d'une banque à lui, et d'une rencontre
+// oubliée (dansLeDocument). Sans secret, la rencontre ne garde rien : les
+// contrôles du lot 3 restent synchrones.
+function contexteDe(banque = BANQUE, { secret = null, mode = "demo" } = {}) {
   const propre = { ...banque };
   return {
-    etat: { mode: "demo", banque: propre, index: indexer(propre), nouvelles: null, chargement: { enveloppe: null }, coffre: creerCoffre(magasinMemoire()), derivation: null, stockage: null },
+    etat: { mode, banque: propre, index: indexer(propre), secret, nouvelles: null, chargement: { enveloppe: null }, coffre: creerCoffre(magasinMemoire()), derivation: null, stockage: null },
     afficher() {},
     naviguer() {},
     recharger() {},
@@ -56,17 +69,19 @@ async function banqueAvec(lignes, options) {
   return { ...banque, publiee_le: BANQUE.publiee_le };
 }
 
-// L'écran d'une adresse, choisi comme le fait js/application.js.
-function ouvrir(contexte, adresse) {
+// L'écran d'une adresse, choisi comme le fait js/application.js ; les
+// services (le magasin de la rencontre gardée) pour l'écran Rencontre.
+function ouvrir(contexte, adresse, services = {}) {
   const route = lireRoute(adresse);
   const ecran =
-    route.ecran === "rencontre" ? rencontre.afficher(contexte) : route.ecran === "accueil" ? accueil.afficher(contexte) : route.ecran === "anomalies" ? anomalies.afficher(contexte, route) : liste.afficher(contexte, route);
+    route.ecran === "rencontre" ? rencontre.afficher(contexte, services) : route.ecran === "accueil" ? accueil.afficher(contexte) : route.ecran === "anomalies" ? anomalies.afficher(contexte, route) : liste.afficher(contexte, route);
   document.body.replaceChildren(ecran);
   return ecran;
 }
 
 async function dansLeDocument(faire) {
   const retirer = installerDom();
+  rencontre.oublier();
   try {
     return await faire();
   } finally {
@@ -117,7 +132,9 @@ const ligneDe = (ecran, nom) => {
 const cartesDe = (ecran) => textes(ecran, ".cadre-cartes .carte-nom");
 
 // Les souvenirs de l'appareil, simulés : ce qui s'y lit et s'y écrit.
-function simulerStockage(depart = {}) {
+// `indexedDB` : une fabrique (tests/outils/indexeddb_simulee.js), dont les
+// ouvertures sont comptées ; sans elle, un bouchon dont rien ne s'ouvre.
+function simulerStockage(depart = {}, { indexedDB = null } = {}) {
   const journal = { lus: [], ecrits: [], ouvertures: 0 };
   const memoire = new Map(Object.entries(depart));
   const avant = { localStorage: globalThis.localStorage, sessionStorage: globalThis.sessionStorage, indexedDB: globalThis.indexedDB };
@@ -125,7 +142,8 @@ function simulerStockage(depart = {}) {
     getItem: (cle) => (journal.lus.push(cle), memoire.get(cle) ?? null),
     setItem: (cle, valeur) => (journal.ecrits.push([cle, valeur]), memoire.set(cle, String(valeur))),
   };
-  Object.assign(globalThis, { localStorage: magasin, sessionStorage: magasin, indexedDB: { open: () => ((journal.ouvertures += 1), {}) } });
+  const base = { open: (...arguments_) => ((journal.ouvertures += 1), indexedDB ? indexedDB.open(...arguments_) : {}) };
+  Object.assign(globalThis, { localStorage: magasin, sessionStorage: magasin, indexedDB: base });
   journal.retirer = () => {
     for (const [nom, valeur] of Object.entries(avant)) {
       if (valeur === undefined) delete globalThis[nom];
@@ -134,6 +152,20 @@ function simulerStockage(depart = {}) {
   };
   return journal;
 }
+
+// Attend qu'une condition tienne : la garde écrit au tour suivant, et la
+// lecture arrive plus tard encore. Deux cents tours au plus.
+async function attendreQue(condition, quoi) {
+  for (let tour = 0; tour < 200; tour += 1) {
+    if (await condition()) return;
+    await laisserFiler(2);
+  }
+  assert.fail(`jamais : ${quoi}`);
+}
+
+// La composition gardée d'un magasin, déchiffrée avec la clé de démonstration.
+const gardeeDans = async (magasin, mode = "demo") => (await dechiffrerRencontre(await magasin.lire(mode), SECRET_DEMO, { mode })).entrees;
+const pareil = (une, autre) => JSON.stringify(une) === JSON.stringify(autre);
 
 // ─── Les listes, la recherche, l'accueil ────────────────────────────────────
 
@@ -826,7 +858,8 @@ test("rencontre — les boutons + et −, une carte par exemplaire, numérotée 
     // Le mode d'emploi vient après la liste et sa barre : placé en tête, sur un téléphone, il poussait les boutons + sous le pli.
     const haut = ecran.querySelector(".ne-pas-imprimer").children;
     const rang = (condition) => haut.findIndex(condition);
-    const emploi = rang((n) => /imprime une carte par exemplaire.*n'est pas enregistrée/.test(texteDe(n)));
+    const emploi = rang((n) => /imprime une carte par exemplaire.*gardée sur cet appareil, chiffrée, jusqu'à « Vider la rencontre »/.test(texteDe(n)));
+    assert.match(texteDe(haut[emploi]), / cartes en tout\. La composition est gardée sur cet appareil, chiffrée, jusqu'à « Vider la rencontre »\.$/);
     assert.ok(emploi > rang((n) => n.className === "barre-rencontre") && rang((n) => n.className === "barre-rencontre") > rang((n) => n.tagName === "UL"), "le mode d'emploi après la liste et la barre");
     assert.deepEqual([haut[0].tagName, haut[1].tagName, haut[2].tagName], ["H1", "LABEL", "INPUT"]);
     // Au départ : rien, « − » et les deux boutons du bas inactifs.
@@ -874,7 +907,7 @@ test("rencontre — les boutons + et −, une carte par exemplaire, numérotée 
     assert.deepEqual(chef.moins.click(), [], "un bouton inactif ne fait rien");
     assert.deepEqual(cartesDe(ecran), ["Marmiton de corvée"]);
 
-    // La composition vit le temps de la visite : l'écran rouvert la retrouve.
+    // La composition vit dans la mémoire du module : l'écran rouvert la retrouve.
     const rouvert = ouvrir(contexte, "#/rencontre");
     assert.equal(ligneDe(rouvert, "Marmiton de corvée").valeur(), "1");
     assert.deepEqual(cartesDe(rouvert), ["Marmiton de corvée"]);
@@ -958,48 +991,87 @@ test("rencontre — un plafond par adversaire et un plafond de cartes ; la reche
   });
 });
 
-test("rencontre — rien n'est enregistré ; la composition repart de zéro quand la banque change ; seules les cartes s'impriment", () =>
-  dansLeDocument(() => {
-    const stockage = simulerStockage();
-    try {
-      const contexte = contexteDe();
-      const ecran = ouvrir(contexte, "#/rencontre");
+// Le contrôle du lot 3 « la rencontre n'enregistre rien » devient « rien en
+// clair » (compl. § 5.2) : la composition se garde, mais chiffrée, dans sa
+// base à elle, et jamais dans les souvenirs de l'appareil.
+test("rencontre — rien n'est enregistré en clair : sans clé, aucune base ; avec la clé de démonstration, une seule base, chiffrée, sans aucun nom ; seules les cartes s'impriment", () =>
+  dansLeDocument(async () => {
+    rencontre.oublier();
+    // Les mêmes gestes, sans clé puis avec : +, +, une recherche, −, « Vider », +.
+    const gestes = (ecran) => {
       ligneDe(ecran, "Plongeur").plus.click();
       ligneDe(ecran, "Plongeur").plus.click();
       saisir(ecran.querySelector("#recherche-rencontre"), "plon");
       ligneDe(ecran, "Plongeur").moins.click();
       bouton(ecran, "Vider la rencontre").click();
       ligneDe(ecran, "Plongeur").plus.click();
-      // Ni souvenir de l'appareil, ni base : la composition n'est que dans la mémoire du module.
+    };
+    // Une page neuve à chaque fois : sa base n'est pas encore ouverte.
+    let stockage = simulerStockage({}, { indexedDB: fabriqueIndexedDB() });
+    try {
+      const page = await import("../js/ecrans/rencontre.js?page=sans-cle");
+      const contexte = contexteDe();
+      const ecran = page.afficher(contexte);
+      document.body.replaceChildren(ecran);
+      assert.equal(await page.charger(contexte), false);
+      gestes(ecran);
+      await laisserFiler(20);
+      // Sans clé : ni souvenir de l'appareil, ni base ; la composition n'est que dans la mémoire du module.
       assert.deepEqual([stockage.lus, stockage.ecrits, stockage.ouvertures], [[], [], 0]);
-      assert.doesNotMatch(lire("js/ecrans/rencontre.js").replace(/\/\/.*$/gm, ""), /localStorage|sessionStorage|indexedDB|coffre|etagere|cookie/i);
-      assert.equal(rencontre.exemplaires(contexte.etat.banque, "Plongeur"), 1);
-      // Une autre banque (une mise à jour, un mot de passe ressaisi) : la rencontre est vide.
-      const autre = contexteDe();
-      assert.equal(rencontre.exemplaires(autre.etat.banque, "Plongeur"), 0);
-      assert.deepEqual(textes(ouvrir(autre, "#/rencontre"), ".valeur-pas"), ["0", "0", "0", "0", "0"]);
-      // Et l'ancienne ne revient pas avec elle.
-      assert.equal(rencontre.exemplaires(contexte.etat.banque, "Plongeur"), 0);
-
-      // Tout ce qui n'est pas une carte porte « ne-pas-imprimer ».
-      const racine = ouvrir(autre, "#/rencontre");
-      ligneDe(racine, "Plongeur").plus.click();
-      assert.equal(racine.tagName, "SECTION");
-      assert.deepEqual(racine.children.map((n) => n.className), ["ne-pas-imprimer", "cadre-cartes"]);
-      assert.deepEqual(racine.querySelector(".cadre-cartes").children.map((n) => n.className), ["cartes-adversaires"]);
-      for (const selecteur of ["h1", "h2", "input", "button", ".liste-rencontre", ".bilan-rencontre", ".message", "label"]) {
-        assert.equal(racine.querySelectorAll(`.cadre-cartes ${selecteur}`).length, 0, selecteur);
-      }
-      assert.equal(racine.querySelectorAll(".ne-pas-imprimer .carte-adversaire").length, 0);
+      assert.equal(page.exemplaires(contexte.etat.banque, "Plongeur"), 1);
     } finally {
       stockage.retirer();
     }
+
+    const fabrique = fabriqueIndexedDB();
+    stockage = simulerStockage({}, { indexedDB: fabrique });
+    try {
+      const page = await import("../js/ecrans/rencontre.js?page=avec-cle");
+      const contexte = contexteDe(BANQUE, { secret: SECRET_DEMO });
+      const ecran = page.afficher(contexte);
+      document.body.replaceChildren(ecran);
+      assert.equal(await page.charger(contexte), false, "rien de gardé encore");
+      gestes(ecran);
+      const contenu = () => fabrique.contenu(NOM_BASE_RENCONTRE);
+      await attendreQue(async () => pareil((await dechiffrerRencontre(contenu().rencontres?.demo ?? null, SECRET_DEMO, { mode: "demo" })).entrees, [{ nom: "Plongeur", nombre: 1 }]), "la composition gardée");
+      // Rien dans les souvenirs de l'appareil ; une seule base ouverte, la sienne.
+      assert.deepEqual([stockage.lus, stockage.ecrits, stockage.ouvertures], [[], [], 1]);
+      assert.deepEqual([...new Set(fabrique.journal.transactions.map(({ base }) => base))], [NOM_BASE_RENCONTRE]);
+      // Une enveloppe, sous son mode, de sept clés ; ni nom ni nombre en clair, dans la base ni dans rien de ce qui s'y est écrit.
+      assert.deepEqual(Object.keys(contenu()), ["rencontres"]);
+      assert.deepEqual(Object.keys(contenu().rencontres), ["demo"]);
+      assert.deepEqual(Object.keys(contenu().rencontres.demo), ["mode", "format", "sel", "iterations", "iv", "chiffre", "enregistre_le"]);
+      const ecrit = JSON.stringify([contenu(), fabrique.journal.ecritures]);
+      for (const nom of NOMS) assert.equal(ecrit.includes(nom), false, nom);
+      assert.doesNotMatch(ecrit, /"nom"|"nombre"/);
+    } finally {
+      stockage.retirer();
+    }
+    // Les mots du stockage en clair : absents de l'écran ; la rencontre gardée n'a droit qu'à sa base.
+    assert.doesNotMatch(lire("js/ecrans/rencontre.js").replace(/\/\/.*$/gm, ""), /localStorage|sessionStorage|indexedDB|coffre|etagere|cookie/i);
+    assert.doesNotMatch(lire("js/adversaire/rencontre_gardee.js").replace(/\/\/.*$/gm, ""), /localStorage|sessionStorage|etagere|cookie/i);
+
+    // Tout ce qui n'est pas une carte porte « ne-pas-imprimer ».
+    const racine = ouvrir(contexteDe(), "#/rencontre");
+    ligneDe(racine, "Plongeur").plus.click();
+    assert.equal(racine.tagName, "SECTION");
+    assert.deepEqual(racine.children.map((n) => n.className), ["ne-pas-imprimer", "cadre-cartes"]);
+    assert.deepEqual(racine.querySelector(".cadre-cartes").children.map((n) => n.className), ["cartes-adversaires"]);
+    for (const selecteur of ["h1", "h2", "input", "button", ".liste-rencontre", ".bilan-rencontre", ".message", "label"]) {
+      assert.equal(racine.querySelectorAll(`.cadre-cartes ${selecteur}`).length, 0, selecteur);
+    }
+    assert.equal(racine.querySelectorAll(".ne-pas-imprimer .carte-adversaire").length, 0);
   }));
 
 // Le simulateur de combat pose la rencontre préparée sur sa carte (§ 17) :
-// il la lit ici, et cette lecture ne doit rien changer ni rien garder.
-test("rencontre — la rencontre préparée se lit dans l'ordre de la liste, sans rien changer ni rien enregistrer ; pour une autre banque, une liste vide, et la composition reste", () =>
-  dansLeDocument(() => {
+// il la lit ici, et cette lecture ne doit rien changer ni rien garder. Elle
+// se lit par les noms : la comparaison de l'objet banque, que remplacent en
+// mode réel une publication faite d'ici et « Vérifier les mises à jour »,
+// grisait « Placer la rencontre préparée » (compl. § 5.2).
+test("rencontre — la rencontre préparée se lit par les noms, dans l'ordre de la liste, sans rien changer : une banque republiée la garde, un nom absent se perd ; une banque sans ses noms rend une liste vide, sans élaguer ; un nom absent ne s'ajoute pas", async () => {
+  const sansSesNoms = await banqueAvec([]);
+  await dansLeDocument(() => {
+    rencontre.oublier();
     const stockage = simulerStockage();
     try {
       const contexte = contexteDe();
@@ -1030,31 +1102,208 @@ test("rencontre — la rencontre préparée se lit dans l'ordre de la liste, san
       assert.deepEqual(["Chef de partie", "Marmiton de corvée", "Plongeur", "Homard furieux"].map((nom) => rencontre.exemplaires(banque, nom)), [1, 1, 2, 0]);
       assert.deepEqual(textes(ecran, ".valeur-pas"), ["1", "0", "1", "0", "2"]);
       assert.deepEqual(cartesDe(ecran), ["Chef de partie", "Marmiton de corvée", "Plongeur n° 1", "Plongeur n° 2"]);
-      // Rien n'est lu ni écrit sur l'appareil, aucune base n'est ouverte.
-      assert.deepEqual([stockage.lus, stockage.ecrits, stockage.ouvertures], [[], [], 0]);
 
       // Un adversaire retiré jusqu'au dernier exemplaire n'y est plus.
       ligneDe(ecran, "Chef de partie").moins.click();
       ligneDe(ecran, "Plongeur").moins.click();
-      assert.deepEqual(rencontre.rencontrePreparee(banque), [{ nom: "Marmiton de corvée", nombre: 1 }, { nom: "Plongeur", nombre: 1 }]);
-      // Un nom ajouté sans être dans la banque compte dans la composition, mais n'a pas de carte : il n'est pas rendu.
-      assert.equal(rencontre.ajouter(banque, "Fantôme"), true);
-      assert.equal(rencontre.exemplaires(banque, "Fantôme"), 1);
-      assert.deepEqual(rencontre.rencontrePreparee(banque).map(({ nom }) => nom), ["Marmiton de corvée", "Plongeur"]);
+      const restante = [{ nom: "Marmiton de corvée", nombre: 1 }, { nom: "Plongeur", nombre: 1 }];
+      assert.deepEqual(rencontre.rencontrePreparee(banque), restante);
+      // Un nom que la banque n'a pas ne s'ajoute pas : il n'aurait pas de carte.
+      assert.equal(rencontre.ajouter(banque, "Marmiton de corvée bis"), false);
+      assert.equal(rencontre.exemplaires(banque, "Marmiton de corvée bis"), 0);
+      assert.deepEqual(rencontre.rencontrePreparee(banque), restante);
 
-      // Une autre banque : une liste vide, et la rencontre de la première reste entière.
-      const autre = contexteDe().etat.banque;
-      assert.deepEqual(rencontre.rencontrePreparee(autre), []);
-      assert.deepEqual(rencontre.rencontrePreparee(banque).map(({ nom }) => nom), ["Marmiton de corvée", "Plongeur"]);
-      assert.equal(rencontre.exemplaires(banque, "Plongeur"), 1);
-      // Le témoin : compter les exemplaires pour l'autre banque, comme le fait l'écran, repart de zéro. La lecture, elle, ne l'a pas fait.
-      assert.equal(rencontre.exemplaires(autre, "Plongeur"), 0);
-      assert.deepEqual(rencontre.rencontrePreparee(banque), []);
-      assert.deepEqual(rencontre.rencontrePreparee(autre), []);
+      // La banque republiée : un autre objet, les mêmes noms. Le combat la lit avant tout autre écran, et y trouve la même.
+      const republiee = contexteDe();
+      assert.notEqual(republiee.etat.banque, banque);
+      assert.deepEqual(rencontre.rencontrePreparee(republiee.etat.banque), restante);
+      // L'écran qui la voit garde la composition, et l'ancienne banque la lit encore.
+      assert.deepEqual(textes(ouvrir(republiee, "#/rencontre"), ".valeur-pas"), ["0", "0", "1", "0", "1"]);
+      assert.deepEqual(rencontre.rencontrePreparee(banque), restante);
+
+      // Une banque où le Plongeur n'est plus : il se perd, le reste demeure.
+      const sansPlongeur = contexteDe({ ...BANQUE, adversaires: BANQUE.adversaires.filter(({ nom }) => nom !== "Plongeur") });
+      assert.deepEqual(textes(ouvrir(sansPlongeur, "#/rencontre"), ".valeur-pas"), ["0", "0", "1", "0"]);
+      assert.deepEqual(rencontre.rencontrePreparee(republiee.etat.banque), [{ nom: "Marmiton de corvée", nombre: 1 }]);
+      assert.equal(rencontre.exemplaires(republiee.etat.banque, "Plongeur"), 0, "il ne revient pas avec une banque qui l'a");
+
+      // Une banque qui n'a aucun de ses noms : une liste vide, et la composition reste entière : la lecture n'élague pas.
+      assert.deepEqual(rencontre.rencontrePreparee(sansSesNoms), []);
+      assert.deepEqual(rencontre.rencontrePreparee(republiee.etat.banque), [{ nom: "Marmiton de corvée", nombre: 1 }]);
+      // Le témoin : compter les exemplaires pour cette banque, comme le fait un écran, élague. La lecture, elle, ne l'a pas fait.
+      assert.equal(rencontre.exemplaires(sansSesNoms, "Marmiton"), 0);
+      assert.deepEqual(rencontre.rencontrePreparee(republiee.etat.banque), []);
+      // Rien n'est lu ni écrit sur l'appareil, aucune base n'est ouverte : sans clé, rien ne se garde.
       assert.deepEqual([stockage.lus, stockage.ecrits, stockage.ouvertures], [[], [], 0]);
     } finally {
       stockage.retirer();
     }
+  });
+});
+
+// La composition se garde chiffrée, une par mode, dans sa base ; un module
+// importé de nouveau (« ?page=N ») est une page rechargée : sa mémoire est
+// vide, le magasin reste sur l'appareil.
+test("rencontre — la composition gardée survit au rechargement de la page, à part par mode ; chaque + et − l'écrivent, « Vider » l'efface ; une donnée abîmée la rend vide sans rien dire ; « Oublier » ne l'efface que de la mémoire", () =>
+  dansLeDocument(async () => {
+    rencontre.oublier();
+    const magasin = magasinRencontreMemoire();
+    const services = { magasin };
+    let numero = 0;
+    const pageNeuve = async (contexte) => {
+      numero += 1;
+      const page = await import(`../js/ecrans/rencontre.js?page=garde-${numero}`);
+      const ecran = page.afficher(contexte, services);
+      document.body.replaceChildren(ecran);
+      const change = await page.charger(contexte, services);
+      return { page, ecran, change };
+    };
+    const demo = () => contexteDe(BANQUE, { secret: SECRET_DEMO });
+    const reel = () => contexteDe(BANQUE, { secret: SECRET_DEMO, mode: "reel" });
+    const CHEF_ET_PLONGEUR = [{ nom: "Chef de partie", nombre: 1 }, { nom: "Plongeur", nombre: 1 }];
+
+    // Rien de gardé : la lecture ne change rien. Puis +, +, + et − : chaque geste s'écrit, le dernier compris.
+    let { page, ecran, change } = await pageNeuve(demo());
+    assert.equal(change, false);
+    for (const [nom, pas] of [["Chef de partie", "plus"], ["Chef de partie", "plus"], ["Plongeur", "plus"], ["Chef de partie", "moins"]]) ligneDe(ecran, nom)[pas].click();
+    await attendreQue(async () => pareil(await gardeeDans(magasin), CHEF_ET_PLONGEUR), "la composition gardée après « − »");
+
+    // Rechargée : la page part de zéro, la lecture rend la composition, l'écran se rafraîchit.
+    ({ page, ecran, change } = await pageNeuve(demo()));
+    assert.equal(change, true);
+    assert.deepEqual(textes(ecran, ".valeur-pas"), ["1", "0", "0", "0", "1"]);
+    assert.deepEqual(cartesDe(ecran), ["Chef de partie", "Plongeur"]);
+    assert.deepEqual(page.rencontrePreparee(BANQUE), CHEF_ET_PLONGEUR);
+
+    // L'autre mode a la sienne : vide d'abord, puis la Mouette ; chacune se relit sous son mode.
+    ({ ecran, change } = await pageNeuve(reel()));
+    assert.equal(change, false);
+    assert.deepEqual(cartesDe(ecran), []);
+    ligneDe(ecran, "Mouette chapardeuse").plus.click();
+    await attendreQue(async () => pareil(await gardeeDans(magasin, "reel"), [{ nom: "Mouette chapardeuse", nombre: 1 }]), "la composition du mode réel");
+    assert.deepEqual(await gardeeDans(magasin), CHEF_ET_PLONGEUR, "le mode démonstration n'est pas touché");
+    ({ ecran } = await pageNeuve(demo()));
+    assert.deepEqual(cartesDe(ecran), ["Chef de partie", "Plongeur"]);
+
+    // « Vider la rencontre » l'efface : rechargée, la page part de zéro ; l'autre mode garde la sienne.
+    bouton(ecran, "Vider la rencontre").click();
+    await attendreQue(async () => (await magasin.lire("demo")) === null, "la composition effacée");
+    ({ ecran, change } = await pageNeuve(demo()));
+    assert.equal(change, false);
+    assert.deepEqual(cartesDe(ecran), []);
+    assert.deepEqual(await gardeeDans(magasin, "reel"), [{ nom: "Mouette chapardeuse", nombre: 1 }]);
+
+    // Abîmée : une enveloppe d'une autre forme, puis celle de l'autre mode recopiée sous celui-ci. La page part de zéro,
+    // sans rien lever ni rien dire.
+    for (const abimee of [{ mode: "demo", format: 1, sel: "abîmé" }, { ...(await magasin.lire("reel")), mode: "demo" }]) {
+      await magasin.ecrire(abimee);
+      ({ ecran, change } = await pageNeuve(demo()));
+      assert.equal(change, false);
+      assert.deepEqual(cartesDe(ecran), []);
+      assert.equal(ecran.querySelectorAll(".message").length, 0);
+    }
+
+    // « Oublier le mot de passe » : la composition quitte la mémoire, la version chiffrée reste et se relit avec la clé.
+    ({ page, ecran } = await pageNeuve(reel()));
+    assert.deepEqual(cartesDe(ecran), ["Mouette chapardeuse"]);
+    page.oublier();
+    assert.deepEqual(page.rencontrePreparee(BANQUE), []);
+    const ressaisie = reel();
+    assert.equal(page.exemplaires(ressaisie.etat.banque, "Mouette chapardeuse"), 0);
+    await laisserFiler(20);
+    assert.deepEqual(await gardeeDans(magasin, "reel"), [{ nom: "Mouette chapardeuse", nombre: 1 }]);
+    const relue = page.afficher(ressaisie, services);
+    assert.equal(await page.charger(ressaisie, services), true);
+    assert.deepEqual(cartesDe(relue), ["Mouette chapardeuse"]);
+
+    // Sans clé, rien ne s'écrit ; une clé apparue ensuite crée la garde, et le geste suivant écrit la composition entière.
+    const sansCle = contexteDe(BANQUE, { secret: null });
+    ({ ecran } = await pageNeuve(sansCle));
+    await magasin.effacer("demo");
+    ligneDe(ecran, "Chef de partie").plus.click();
+    await laisserFiler(20);
+    assert.equal(await magasin.lire("demo"), null);
+    sansCle.etat.secret = SECRET_DEMO;
+    ligneDe(ecran, "Chef de partie").plus.click();
+    await attendreQue(async () => pareil(await gardeeDans(magasin), [{ nom: "Chef de partie", nombre: 2 }]), "la composition écrite avec la clé apparue");
+  }));
+
+// Un nom de plus de deux cents signes ne se relirait pas : il compte à
+// l'écran, mais ne s'écrit pas, et le reste se garde sans lui.
+test("rencontre — un nom de plus de 200 signes compte à l'écran, mais ne se garde pas ; le reste de la composition, si", async () => {
+  const long = `Marmiton de corvée bis ${"o".repeat(178)}`;
+  assert.equal([...long].length, 201);
+  const banque = await banqueAvec([[long, "Commis"]]);
+  await dansLeDocument(async () => {
+    rencontre.oublier();
+    const magasin = magasinRencontreMemoire();
+    const contexte = contexteDe(banque, { secret: SECRET_DEMO });
+    const ecran = ouvrir(contexte, "#/rencontre", { magasin });
+    await rencontre.charger(contexte, { magasin });
+    ligneDe(ecran, long).plus.click();
+    ligneDe(ecran, "Marmiton").plus.click();
+    assert.equal(ligneDe(ecran, long).valeur(), "1");
+    await attendreQue(async () => pareil(await gardeeDans(magasin), [{ nom: "Marmiton", nombre: 1 }]), "la composition gardée sans le nom trop long");
+  });
+});
+
+// La lecture arrive après l'écran, qui ne l'attend pas : les gestes faits
+// entre-temps ne se perdent pas, et ne s'écrivent qu'après elle.
+test("rencontre — une lecture pour deux visites ; un « + » fait pendant la lecture se rejoue sur ce qu'elle rend, puis s'écrit ; un oubli pendant la lecture la rend vaine", () =>
+  dansLeDocument(async () => {
+    rencontre.oublier();
+    const magasin = magasinRencontreMemoire();
+    // Gardés d'abord : deux Chefs, et un nom que la banque n'a pas.
+    await magasin.ecrire(await chiffrerRencontre([{ nom: "Chef de partie", nombre: 2 }, { nom: "Marmiton de corvée bis", nombre: 1 }], SECRET_DEMO, { mode: "demo" }));
+    // Un magasin dont chaque lecture attend que le contrôle la libère.
+    let lectures = 0;
+    let liberer = null;
+    const retenu = {
+      ...magasin,
+      lire: async (mode) => {
+        lectures += 1;
+        await new Promise((suite) => {
+          liberer = suite;
+        });
+        return magasin.lire(mode);
+      },
+    };
+    const services = { magasin: retenu };
+    const contexte = contexteDe(BANQUE, { secret: SECRET_DEMO });
+    const premier = ouvrir(contexte, "#/rencontre", services);
+    const second = ouvrir(contexte, "#/rencontre", services);
+    await laisserFiler(5);
+    assert.equal(lectures, 1, "une seule lecture pour deux visites");
+    // Un « + » pendant la lecture : il compte tout de suite à l'écran, et rien ne s'écrit avant la fin de la lecture.
+    ligneDe(second, "Plongeur").plus.click();
+    assert.equal(ligneDe(second, "Plongeur").valeur(), "1");
+    await laisserFiler(20);
+    assert.deepEqual(await gardeeDans(magasin), [{ nom: "Chef de partie", nombre: 2 }, { nom: "Marmiton de corvée bis", nombre: 1 }]);
+    liberer();
+    assert.equal(await rencontre.charger(contexte, services), true);
+    // Rejoué sur ce qu'elle rend : les Chefs lus, le Plongeur ajouté, le nom absent perdu ; les deux écrans le montrent.
+    for (const ecran of [premier, second]) assert.deepEqual(textes(ecran, ".valeur-pas"), ["2", "0", "0", "0", "1"]);
+    const attendue = [{ nom: "Chef de partie", nombre: 2 }, { nom: "Plongeur", nombre: 1 }];
+    assert.deepEqual(rencontre.rencontrePreparee(BANQUE), attendue);
+    await attendreQue(async () => pareil(await gardeeDans(magasin), attendue), "la composition rejouée, écrite");
+    assert.equal(lectures, 1);
+
+    // Un oubli pendant la lecture : elle arrive, et ne pose rien ; la lecture d'après, avec la clé ressaisie, se fait.
+    rencontre.oublier();
+    const ouverte = contexteDe(BANQUE, { secret: SECRET_DEMO });
+    const pendant = ouvrir(ouverte, "#/rencontre", services);
+    const enCours = rencontre.charger(ouverte, services);
+    await laisserFiler(5);
+    assert.equal(lectures, 2);
+    rencontre.oublier();
+    liberer();
+    assert.equal(await enCours, false);
+    assert.deepEqual(textes(pendant, ".valeur-pas"), ["0", "0", "0", "0", "0"]);
+    assert.deepEqual(rencontre.rencontrePreparee(BANQUE), []);
+    const ressaisie = contexteDe(BANQUE, { secret: SECRET_DEMO });
+    const apres = ouvrir(ressaisie, "#/rencontre", { magasin });
+    assert.equal(await rencontre.charger(ressaisie, { magasin }), true);
+    assert.deepEqual(textes(apres, ".valeur-pas"), ["2", "0", "0", "0", "1"]);
   }));
 
 test("rencontre — un adversaire incomplet ou en erreur s'imprime quand même, et l'écran le signale", async () => {
@@ -1177,6 +1426,29 @@ test("fiche d'un adversaire — « Ajouter à la rencontre » dit ce qui s'y tro
     assert.equal(texteDe(ouvrir(contexte, "#/adversaire/Plongeur").querySelector(".ecran-adversaire [role=status]")), "Pas encore dans la rencontre.");
   }));
 
+// « Ajouter à la rencontre » écrit la composition entière : la fiche la lit
+// donc d'abord, à sa première visite, sans que l'écran l'attende.
+test("fiche d'un adversaire — elle lit la composition gardée à sa première visite, sans l'attendre, et redit ce qui s'y trouve ; son « Ajouter » écrit la composition entière", () =>
+  dansLeDocument(async () => {
+    rencontre.oublier();
+    const ficheAdversaire = await import("../js/ecrans/fiche_adversaire.js");
+    const magasin = magasinRencontreMemoire();
+    await magasin.ecrire(await chiffrerRencontre([{ nom: "Chef de partie", nombre: 2 }, { nom: "Plongeur", nombre: 1 }], SECRET_DEMO, { mode: "demo" }));
+    const contexte = contexteDe(BANQUE, { secret: SECRET_DEMO });
+    const racine = ficheAdversaire.afficher(contexte, "Chef de partie", { magasin });
+    document.body.replaceChildren(racine);
+    const etat = () => texteDe(racine.querySelector("[role=status]"));
+    // La fiche s'affiche sans attendre la lecture, puis la redit.
+    assert.equal(etat(), "Pas encore dans la rencontre.");
+    assert.equal(await rencontre.charger(contexte, { magasin }), true);
+    assert.equal(etat(), "2 exemplaires dans la rencontre.");
+    bouton(racine, "Ajouter à la rencontre").click();
+    assert.equal(etat(), "3 exemplaires dans la rencontre.");
+    await attendreQue(async () => pareil(await gardeeDans(magasin), [{ nom: "Chef de partie", nombre: 3 }, { nom: "Plongeur", nombre: 1 }]), "l'ajout de la fiche, gardé avec le reste");
+    // L'écran Rencontre, ensuite, ne relit pas : il montre la même.
+    assert.deepEqual(cartesDe(ouvrir(contexte, "#/rencontre", { magasin })), ["Chef de partie n° 1", "Chef de partie n° 2", "Chef de partie n° 3", "Plongeur"]);
+  }));
+
 test("sens de l'écriture — un nom qui porte U+202E s'affiche sans lui dans la liste, la rencontre, sa composition et ses cartes ; son adresse et le nom des boutons le gardent", async () => {
   const renverse = String.fromCodePoint(0x202e);
   const nom = `Chef${renverse} tournant`;
@@ -1221,41 +1493,8 @@ test("anomalies — l'adresse d'une ligne de la feuille Adversaires la met en av
     assert.equal(feuilles.indexOf("Adversaires"), feuilles.length - 3);
   }));
 
-// ─── L'échelle, seule écriture de style du code ─────────────────────────────
-
-test("échelle — un seul module de js/ écrit un style : l'échelle d'un papier, un nombre, que la fiche et la carte partagent", () => {
-  // Tout ce par quoi un script pose un style : la propriété style d'un nœud,
-  // son attribut, une feuille fabriquée.
-  const ECRITURE = /\.style\s*(?:\?\.|\.|\[|=(?!=))|\bsetProperty\s*\(|\bcssText\b|setAttribute\(\s*["'`]style|\binsertRule\b|\bCSSStyleSheet\b|adoptedStyleSheets|createElement(?:NS)?\([^)]*["'`]style["'`]/g;
-  const fichiers = readdirSync(new URL("js/", RACINE), { recursive: true }).map((chemin) => `js/${chemin.replaceAll("\\", "/")}`).filter((chemin) => chemin.endsWith(".js"));
-  assert.ok(fichiers.length > 40, `${fichiers.length} modules lus`);
-  const ecritures = fichiers.flatMap((chemin) => [...lire(chemin).matchAll(ECRITURE)].map(([trouve]) => [chemin, trouve]));
-  assert.deepEqual(ecritures, [["js/ecrans/echelle.js", ".style?."], ["js/ecrans/echelle.js", "setProperty("]]);
-  assert.equal([...lire("js/ecrans/echelle.js").matchAll(/setProperty\(([^,]+),/g)].map(([, nom]) => nom).join(), '"--echelle"');
-  // Le motif voit les écritures qu'il doit voir, et pas une propriété nommée « style ».
-  for (const faute of ['noeud.style.width = "3px"', "noeud.style = x", 'noeud.style["zoom"] = 1', 'noeud.style?.setProperty("--x", 1)', 'noeud.setAttribute("style", x)', "feuille.insertRule(x)", 'document.createElement("style")', "noeud.style.cssText = x"]) {
-    assert.ok(faute.match(ECRITURE), faute);
-  }
-  for (const permis of ["fiche.style, fiche.niveau", "toutes(ELEMENTS.style)", 'nom === "style" || nom === "srcdoc"', "if (a.style === b.style) x()"]) {
-    assert.equal(permis.match(ECRITURE), null, permis);
-  }
-  // La fiche de personnage et le cadre des cartes passent par ce module.
-  assert.match(lire("js/ecrans/fiche_personnage.js"), /import \{ poserEchelle \} from "\.\/echelle\.js";/);
-  assert.match(lire("js/ecrans/fiche_personnage.js"), /poserEchelle\(impression, LARGEUR_FEUILLE\)/);
-  assert.match(lire("js/ecrans/rencontre.js"), /tenirALEchelle\(noeud, LARGEUR_CARTE\)/);
-  assert.match(lire("css/personnage.css"), /zoom:\s*var\(--echelle, 1\);/);
-
-  // La largeur de ce qui contient le papier, rapportée à la sienne ; jamais plus de 1.
-  const poses = [];
-  const papier = (largeur) => ({ parentNode: largeur === null ? null : { clientWidth: largeur }, style: { setProperty: (nom, valeur) => poses.push([nom, valeur]) } });
-  assert.equal(echelle.poserEchelle(papier(397), 794), 0.5);
-  assert.equal(echelle.poserEchelle(papier(2000), 794), 1);
-  assert.equal(echelle.poserEchelle(papier(0), 794), 1, "pas encore mis en page");
-  assert.equal(echelle.poserEchelle(papier(null), 794), 1, "hors de la page");
-  assert.deepEqual(poses, [["--echelle", "0.5"], ["--echelle", "1"], ["--echelle", "1"], ["--echelle", "1"]]);
-  // Un nœud sans style (le document simulé) ne lève rien.
-  assert.equal(echelle.poserEchelle({ parentNode: { clientWidth: 100 } }, 400), 0.25);
-});
+// ─── L'échelle de la carte ──────────────────────────────────────────────────
+// (L'unique écriture de style du code se contrôle dans tests/echelle.test.js.)
 
 test("échelle — la carte se tient à la largeur de l'écran, d'un téléphone de 360 px à un grand écran ; un seul papier écoute la fenêtre", () =>
   dansLeDocument(() => {

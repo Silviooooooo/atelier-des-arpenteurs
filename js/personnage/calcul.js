@@ -14,6 +14,12 @@
 // (quel bloc la donne, et à quel rang de l'équipement, puisque seuls l'arme
 // tenue et ce qui est porté comptent au combat), ses éléments à une
 // puissance (elementsDe) et les dégâts que dit sa description (degatsDecrits).
+//
+// Au groupe 2 du lot 4 (le contrat du groupe, § 5.3 et § 5.4 ; le complément,
+// § 6.2) : la défense dit aussi les types à égalité de dés avec le type
+// retenu (egalite), parmi lesquels le joueur choisit au combat ; le type
+// retenu reste le défaut proposé. typesDuBloc dit les poids d'un bloc, dont
+// la photographie tire la cause d'un désavantage de maîtrise.
 
 import { cle, repertoire } from "../banque/noms.js";
 import { typeDe } from "../banque/types.js";
@@ -82,9 +88,14 @@ function porte(bloc, nomElement) {
   return bloc.elements.some((e) => e.nom && !e.cible && cle(e.nom) === cle(nomElement));
 }
 
+/** Les types d'objet que porte un bloc, par leur code, rangés lourde, agile, précise : aucun, un, ou plusieurs. */
+export function typesDuBloc(bloc) {
+  return Object.entries(TYPES_OBJET).filter(([, t]) => porte(bloc, t.element)).map(([code]) => code);
+}
+
 /** Le type d'objet d'un bloc (lourde, agile, précise) : { type } ou { erreur }. */
 export function typeObjet(bloc) {
-  const types = Object.entries(TYPES_OBJET).filter(([, t]) => porte(bloc, t.element)).map(([code]) => code);
+  const types = typesDuBloc(bloc);
   if (types.length === 1) return { type: types[0] };
   if (types.length === 0) return { erreur: `« ${bloc.nom} » ne porte ni Lourde, ni Agile, ni Précise` };
   return { erreur: `« ${bloc.nom} » porte plusieurs types (${types.map((t) => TYPES_OBJET[t].nom).join(", ")})` };
@@ -668,6 +679,18 @@ function mainsNues(index, personnage, capacites, avertir) {
   return { mainsNues: true, nom: "Mains nues", de: null, degats: null, degatsBruts: "", portee: "", qualite: { applicable: false, texte: "" } };
 }
 
+// Les types que le dé de défense départage, et dont le dé a les mêmes faces
+// que celui du type retenu, rangés lourde, agile, précise ; aucun s'il y en a
+// moins de deux (contrat du groupe 2, § 5.4). Le livret (« Jets de défense »)
+// laisse alors le choix au joueur : le type retenu n'en est que le défaut
+// proposé, et un type sans dé n'est à égalité avec rien.
+function egaliteDe(codes, retenu, des) {
+  const faces = des.defense[retenu]?.faces;
+  if (!faces) return [];
+  const egaux = Object.keys(TYPES_OBJET).filter((code) => codes.includes(code) && des.defense[code]?.faces === faces);
+  return egaux.length >= 2 ? egaux : [];
+}
+
 // Le dé de défense : celui du type des pièces portées ; types mêlés, le plus
 // faible et le désavantage sans la maîtrise de toutes les pièces ; aucune
 // pièce, le plus avantageux des trois (livret, « Jets de défense »).
@@ -681,11 +704,11 @@ function defenseDe(portees, des, avertir) {
   const faces = (code) => des.defense[code]?.faces ?? 0;
   if (portees.length === 0) {
     const codes = Object.keys(TYPES_OBJET).filter((c) => des.defense[c]);
-    if (!codes.length) return { pieces: [], de: null, type: null, mention: "" };
+    if (!codes.length) return { pieces: [], de: null, type: null, mention: "", egalite: [] };
     const meilleur = codes.reduce((a, b) => (faces(b) > faces(a) ? b : a));
-    return { pieces: [], de: des.defense[meilleur], type: meilleur, mention: "sans armure : le plus avantageux" };
+    return { pieces: [], de: des.defense[meilleur], type: meilleur, mention: "sans armure : le plus avantageux", egalite: egaliteDe(codes, meilleur, des) };
   }
-  if (types.size === 0) return { pieces: portees.map((p) => p.nom), de: null, type: null, mention: "" };
+  if (types.size === 0) return { pieces: portees.map((p) => p.nom), de: null, type: null, mention: "", egalite: [] };
   const codes = [...types];
   const pire = codes.reduce((a, b) => (faces(b) < faces(a) ? b : a));
   const meles = codes.length > 1;
@@ -695,6 +718,7 @@ function defenseDe(portees, des, avertir) {
     type: pire,
     meles,
     mention: meles ? "désavantage sans la maîtrise de toutes les pièces" : "",
+    egalite: egaliteDe(codes, pire, des),
   };
 }
 

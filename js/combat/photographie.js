@@ -23,14 +23,22 @@
 // (§ 15.2) ou de la résolution de l'adversaire (§ 16.4). Ce que la banque
 // n'écrit pas prend la valeur neutre que disent les conventions du § 12
 // (« Pour le lot 4 ») : portée 0, un dé de localisation, pas de dégâts.
+//
+// Au groupe 2 du lot 4 (le contrat du groupe, § 5.2 à § 5.4 ; le complément,
+// § 6.1 à § 6.3) : un adversaire a, comme un personnage, une façon par
+// puissance jouable, de 1 à son rang, là où la banque écrit une variante,
+// chacune résolue par capacitesA() (js/adversaire/resolution.js) ; une façon
+// hors maîtrise dit sa cause (« maitrise » : l'objet ou le bloc qui la donne,
+// et son poids) ; le dé de défense d'un personnage dit les types à égalité
+// de dés (« egalite »), parmi lesquels le joueur choisit au combat.
 
 import { ecrireTypes } from "../adversaire/carte.js";
 import { defautDe } from "../adversaire/lecture.js";
 import { horsMaitrise, positionDans, rangsDeMaitrise } from "../adversaire/resolution.js";
 import { cle } from "../banque/noms.js";
-import { calculerFiche, contexte, coutA, decrire, degatsDecrits, elementsDe, estBouclier, indexerCreation, varianteA } from "../personnage/calcul.js";
+import { calculerFiche, contexte, coutA, decrire, degatsDecrits, elementsDe, estBouclier, indexerCreation, typesDuBloc, varianteA } from "../personnage/calcul.js";
 import { accepter } from "../personnage/format.js";
-import { ELEMENTS, PARAMETRES, TYPES_OBJET, ZONES } from "../personnage/regles.js";
+import { ELEMENTS, NIVEAU_MAX, PARAMETRES, TYPES_OBJET, ZONES } from "../personnage/regles.js";
 import { validerPhoto } from "./forme.js";
 import { ACTIONS_PJ, BORNES_PHOTO, ELEMENTS_COMBAT, FACE_CONTRE, GRILLE_PJ, PARAMETRE_LOC, ROLES_PASSIFS, SIGNES } from "./regles.js";
 
@@ -122,6 +130,19 @@ function carnet() {
       return lignes.length > borne ? [...lignes.slice(0, borne - 1), `Et ${lignes.length - borne + 1} autres avertissements.`] : lignes;
     },
   };
+}
+
+/**
+ * La cause d'un désavantage de maîtrise (contrat du groupe 2, § 5.3) : le nom
+ * de l'objet ou du bloc qui donne la capacité, et son poids. Un bloc à deux
+ * poids demande les deux maîtrises (js/adversaire/resolution.js,
+ * horsMaitrise) : celui dont la maîtrise est la plus basse est alors celui
+ * qui manque, le premier dans l'ordre lourde, agile, précise s'ils sont à
+ * égalité. rangs : le rang de maîtrise de chaque poids (rangsDeMaitrise).
+ */
+function causeDeMaitrise(bloc, rangs) {
+  const poids = typesDuBloc(bloc).reduce((retenu, code) => (retenu === null || (rangs.get(code) ?? 0) < (rangs.get(retenu) ?? 0) ? code : retenu), null);
+  return { origine: uneLigne(bloc.nom), poids };
 }
 
 /** L'indice de la première capacité d'une photographie qui porte ce rôle, ou null. */
@@ -303,6 +324,8 @@ export function photographierPersonnage(banque, personnage, { index = indexerCre
       return Array.isArray(entree?.options) && entree.options.some((option) => choisies.has(cle(option)) && nomResolu(option) === capacite.nom);
     });
     const desavantage = horsMaitrise(origine.bloc, position, rangs);
+    // L'objet qui la donne (l'arme tenue comprise), sinon son bloc : c'est l'origine retenue.
+    const maitrise = desavantage ? causeDeMaitrise(origine.bloc, rangs) : null;
     const arme = origine.genre === "arme" ? 0 : aMainsNues ? indiceDesMainsNues : null;
 
     const facons = puissances.map((puissance) => {
@@ -330,6 +353,7 @@ export function photographierPersonnage(banque, personnage, { index = indexerCre
         portee: transmis.portee,
         locMultiple: transmis.locMultiple,
         desavantage,
+        maitrise,
       };
     });
     return {
@@ -367,7 +391,13 @@ export function photographierPersonnage(banque, personnage, { index = indexerCre
     caracteristiques: Object.fromEntries(fiche.caracteristiques.map((caracteristique) => [caracteristique.code, caracteristique.valeur])),
     attaque: null,
     defense: null,
-    deDefense: { faces: fiche.defense.de.faces, type: fiche.defense.type, caracteristiques: [...TYPES_OBJET[fiche.defense.type].defense], meles: fiche.defense.meles === true },
+    deDefense: {
+      faces: fiche.defense.de.faces,
+      type: fiche.defense.type,
+      caracteristiques: [...TYPES_OBJET[fiche.defense.type].defense],
+      meles: fiche.defense.meles === true,
+      egalite: [...fiche.defense.egalite],
+    },
     armes,
     armePretee: armes.length ? 0 : null,
     bouclier: fiche.bouclier ? { nom: uneLigne(fiche.bouclier.nom), defense: fiche.bouclier.defense ?? 0 } : null,
@@ -431,50 +461,85 @@ export function photographierAdversaire(resolution, nom, { banque = resolution?.
     return indice === -1 ? null : indice;
   };
   const rangees = resolu.capacites
-    .map((capacite, rang) => ({ capacite, rang, arme: armeDuGroupe(capacite) }))
-    .sort((a, b) => (a.arme ?? armes.length) - (b.arme ?? armes.length) || a.rang - b.rang);
+    .map((capacite, indice) => ({ capacite, indice, arme: armeDuGroupe(capacite) }))
+    .sort((a, b) => (a.arme ?? armes.length) - (b.arme ?? armes.length) || a.indice - b.indice);
 
-  const capacites = rangees.map(({ capacite, arme }) => {
-    const groupe = arme === null ? { genre: "capacites", titre: TITRE_DES_AUTRES } : { genre: "arme", titre: armes[arme].libelle };
-    const commun = { nom: uneLigne(capacite.nom), role: null, lien: null, groupe };
-    if (capacite.absente) return { ...commun, niveau: 0, evolue: false, inactive: ABSENTE, facons: [] };
+  // Les capacités à chaque puissance, de 1 au plus haut rang : parPuissance[p]
+  // est parallèle à resolu.capacites (contrat du groupe 2, § 5.2).
+  const plusHaut = Math.min(NIVEAU_MAX, resolu.capacites.reduce((haut, capacite) => (capacite.absente ? haut : Math.max(haut, capacite.rang)), 0));
+  const parPuissance = [null];
+  for (let puissance = 1; puissance <= plusHaut; puissance += 1) parPuissance.push(resolution.capacitesA(ligne, puissance));
+  // Ses puissances jouables : de 1 à son rang, là où la banque écrit une
+  // variante, comme un personnage de 1 à son niveau (complément, § 6.1) ;
+  // aucune ne se lit, son rang seul. Une capacité qui n'évolue pas garde sa
+  // seule puissance (spéc. § 12, point 26).
+  const puissancesDe = (capacite, indice) => {
+    if (capacite.evolue !== true || capacite.rang === 0) return [capacite.rang];
+    const jouables = [];
+    for (let puissance = 1; puissance <= capacite.rang; puissance += 1) if (parPuissance[puissance]?.[indice]) jouables.push(puissance);
+    return jouables.length ? jouables : [capacite.rang];
+  };
+
+  // La cause d'un désavantage de maîtrise se lit dans les maîtrises de l'adversaire.
+  const rangs = rangsDeMaitrise(resolu.maitrises.map((maitrise) => ({ capacite: resolution.index.capacite(maitrise.nom), rang: maitrise.rang })));
+  const causeDe = (nomDuBloc) => {
+    const bloc = resolution.index.bloc(nomDuBloc);
+    return bloc ? causeDeMaitrise(bloc, rangs) : { origine: uneLigne(nomDuBloc), poids: null };
+  };
+
+  /** Les façons d'une capacité résolue à une puissance : une par arme qui la dote de dégâts, sinon une seule. */
+  const faconsA = (capacite, puissance) => {
     const lus = lireElements(capacite.elements);
     const description = (objet) => aLignes((capacite.descriptions.find((d) => d.source === objet) ?? capacite.descriptions[0])?.texte);
     const facon = (champs) => ({
-      puissance: capacite.rang,
+      puissance,
       cout: lireCout(capacite.cout),
       elements: lus.elements,
       passif: lus.passif,
       intervention: lus.intervention,
       ...champs,
     });
-    const facons = capacite.parArme.length
-      ? capacite.parArme.map((entree, k) =>
-          facon({
-            arme: entree.arme,
-            // L'objet qui la donne, même quand ce n'est pas une arme.
-            libelle: entree.arme === null ? uneLigne(capacite.armes[k].nom) : armes[entree.arme].libelle,
-            description: description(capacite.armes[k].nom),
-            attaque: !lus.passif && !lus.intervention,
-            degats: bornerDegats(entree.degats),
-            portee: entree.portee,
-            locMultiple: entree.locMultiple,
-            desavantage: entree.desavantage === true,
-          }),
-        )
-      : [
-          facon({
-            arme: null,
-            libelle: null,
-            description: description(null),
-            // Citée sans arme, elle n'attaque que par ses dégâts propres.
-            attaque: !lus.passif && !lus.intervention && (capacite.propres.degats !== null || lus.aDegats),
-            degats: bornerDegats(capacite.propres.degats),
-            portee: capacite.propres.portee,
-            locMultiple: capacite.propres.locMultiple,
-            desavantage: capacite.desavantageEntier === true,
-          }),
-        ];
+    if (capacite.parArme.length) {
+      return capacite.parArme.map((entree, k) =>
+        facon({
+          arme: entree.arme,
+          // L'objet qui la donne, même quand ce n'est pas une arme.
+          libelle: entree.arme === null ? uneLigne(capacite.armes[k].nom) : armes[entree.arme].libelle,
+          description: description(capacite.armes[k].nom),
+          attaque: !lus.passif && !lus.intervention,
+          degats: bornerDegats(entree.degats),
+          portee: entree.portee,
+          locMultiple: entree.locMultiple,
+          desavantage: entree.desavantage === true,
+          // L'objet de l'entrée.
+          maitrise: entree.desavantage === true ? causeDe(capacite.armes[k].nom) : null,
+        }),
+      );
+    }
+    return [
+      facon({
+        arme: null,
+        libelle: null,
+        description: description(null),
+        // Citée sans arme, elle n'attaque que par ses dégâts propres.
+        attaque: !lus.passif && !lus.intervention && (capacite.propres.degats !== null || lus.aDegats),
+        degats: bornerDegats(capacite.propres.degats),
+        portee: capacite.propres.portee,
+        locMultiple: capacite.propres.locMultiple,
+        desavantage: capacite.desavantageEntier === true,
+        // Le premier des objets qui la gênent : tous la gênent.
+        maitrise: capacite.desavantageEntier === true ? causeDe(capacite.desavantage[0]) : null,
+      }),
+    ];
+  };
+
+  const capacites = rangees.map(({ capacite, indice, arme }) => {
+    const groupe = arme === null ? { genre: "capacites", titre: TITRE_DES_AUTRES } : { genre: "arme", titre: armes[arme].libelle };
+    const commun = { nom: uneLigne(capacite.nom), role: null, lien: null, groupe };
+    if (capacite.absente) return { ...commun, niveau: 0, evolue: false, inactive: ABSENTE, facons: [] };
+    // Par puissance, puis par arme ; au rang, la résolution même.
+    const facons = puissancesDe(capacite, indice).flatMap((puissance) => faconsA(puissance === capacite.rang ? capacite : parPuissance[puissance][indice], puissance));
+    // niveau reste le rang : c'est le N d'un passif câblé (spéc. § 12, point 24).
     return { ...commun, role: roles?.parCle?.get(cle(capacite.nom)) ?? null, niveau: capacite.rang, evolue: capacite.evolue === true, inactive: null, facons };
   });
 

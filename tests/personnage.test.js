@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { importerFichier } from "../js/banque/importation.js";
-import { calculerFiche, capacitesDuBloc, coutA, degatsDecrits, elementsDe, evolution, indexerCreation, qualiteDe, valeursParametre } from "../js/personnage/calcul.js";
+import { calculerFiche, capacitesDuBloc, coutA, degatsDecrits, elementsDe, evolution, indexerCreation, qualiteDe, typeObjet, typesDuBloc, valeursParametre } from "../js/personnage/calcul.js";
 import { entierInferieur, evaluer, fraction, lireNombre } from "../js/personnage/expressions.js";
 import { MESSAGE_BANQUE_SANS_TYPES, banqueUtilisable, manques, niveauxPermis, tirerConstellation, tirerIndice } from "../js/personnage/parcours.js";
 import { COUT_NIVEAU, ZONES, deDuJet } from "../js/personnage/regles.js";
@@ -69,6 +69,67 @@ test("défense — sans aucune pièce : le dé le plus avantageux des trois, ave
   assert.deepEqual(f.defense.pieces, []);
   assert.deepEqual([f.defense.type, f.defense.de.de], ["lourde", "d10"]);
   assert.match(f.defense.mention, /plus avantageux/);
+});
+
+// Le groupe 2 du lot 4 (contrat du groupe, § 5.4 ; livret, « Jets de défense ») :
+// à égalité de dés, le joueur choisit ; le type retenu reste le défaut proposé.
+test("défense — l'égalité : les types départagés dont le dé a les faces du type retenu, rangés lourde, agile, précise ; aucun s'il n'y en a qu'un", () => {
+  // Aubépine : des pièces agiles et une précise, Agi+Cré et Pré+Emp font toutes deux 9, un d8.
+  const meles = fiche();
+  assert.deepEqual([meles.defense.type, meles.defense.de.de, meles.defense.meles, meles.defense.egalite], ["agile", "d8", true, ["agile", "precise"]]);
+  // La pièce précise d'abord : le type retenu suit l'ordre des pièces, comme avant ; l'égalité reste rangée.
+  const precise = fiche((p) => {
+    const [guetres] = p.equipement.splice(4, 1);
+    p.equipement.splice(2, 0, guetres);
+  });
+  assert.deepEqual([precise.defense.pieces[0], precise.defense.type, precise.defense.egalite], ["Guêtres de toile", "precise", ["agile", "precise"]]);
+  // Sans armure : les trois se départagent ; le plus avantageux, l'agile, et la précise, à égalité ; la lourde (Fo+Sen 7, un d6) non.
+  const nue = fiche((p) => {
+    for (const rang of [2, 4, 5, 6]) p.equipement[rang].place = "sac";
+  });
+  assert.deepEqual([nue.defense.type, nue.defense.de.de, nue.defense.egalite], ["agile", "d8", ["agile", "precise"]]);
+  // Toutes à 4 : trois d8, et la lourde, la première, est retenue.
+  const ronde = fiche((p) => {
+    p.caracteristiques = Object.fromEntries(Object.keys(p.caracteristiques).map((code) => [code, 4]));
+    for (const rang of [2, 4, 5, 6]) p.equipement[rang].place = "sac";
+  });
+  assert.deepEqual([ronde.defense.type, ronde.defense.egalite], ["lourde", ["lourde", "agile", "precise"]]);
+  // Mêlée sans égalité : la lourde (d10) et la précise (d6) ; la précise est retenue, seule.
+  const sansEgalite = fiche((p) => {
+    p.caracteristiques = { force: 6, agilite: 2, precision: 4, sens: 5, culture_neruvienne: 4, savoir_sauvage: 4, parole: 4, empathie: 3, creativite: 4 };
+    for (const rang of [2, 5, 6]) p.equipement[rang].place = "sac";
+    p.equipement[3].place = "equipe";
+  });
+  assert.deepEqual([sansEgalite.defense.type, sansEgalite.defense.meles, sansEgalite.defense.egalite], ["precise", true, []]);
+  // Sans armure, sans égalité : la lourde (d10) seule en tête.
+  const lourde = fiche((p) => {
+    p.caracteristiques = { force: 6, agilite: 2, precision: 4, sens: 5, culture_neruvienne: 4, savoir_sauvage: 4, parole: 4, empathie: 3, creativite: 4 };
+    for (const rang of [2, 4, 5, 6]) p.equipement[rang].place = "sac";
+  });
+  assert.deepEqual([lourde.defense.type, lourde.defense.egalite], ["lourde", []]);
+  // Un seul type porté : rien à départager, même si un autre type donne le même dé.
+  const agile = fiche((p) => {
+    p.equipement[4].place = "sac";
+  });
+  assert.deepEqual([agile.defense.type, agile.defense.meles, agile.defense.egalite], ["agile", false, []]);
+  // Sans dé (des caractéristiques incomplètes), ou sans pièce lisible : aucune égalité.
+  const incomplete = fiche((p) => {
+    p.caracteristiques.force = null;
+  });
+  assert.deepEqual([incomplete.defense.de, incomplete.defense.egalite], [null, []]);
+  const nueIncomplete = fiche((p) => {
+    p.caracteristiques.force = null;
+    for (const rang of [2, 4, 5, 6]) p.equipement[rang].place = "sac";
+  });
+  assert.deepEqual([nueIncomplete.defense.de, nueIncomplete.defense.egalite], [null, []]);
+});
+
+test("typesDuBloc — les poids d'un bloc, rangés lourde, agile, précise : aucun, un, ou deux", () => {
+  const bloc = (elements) => ({ nom: "Bloc fabriqué", elements });
+  assert.deepEqual(typesDuBloc(INDEX.bloc("Couteau d'office")), ["precise"]);
+  assert.deepEqual(typesDuBloc(INDEX.bloc("Saucier")), []);
+  assert.deepEqual(typesDuBloc(bloc([{ nom: "Précise" }, { nom: "lourde" }, { nom: "Agile", cible: "Frappe" }])), ["lourde", "precise"], "rangés, sans casse ; un élément qui vise une capacité ne vaut pas pour le bloc");
+  assert.deepEqual(typeObjet(bloc([{ nom: "Précise" }, { nom: "Lourde" }])), { erreur: "« Bloc fabriqué » porte plusieurs types (lourde, précise)" });
 });
 
 test("armure — l'ordre des six zones de l'élément Armure, et la plus élevée par zone, jamais la somme", () => {

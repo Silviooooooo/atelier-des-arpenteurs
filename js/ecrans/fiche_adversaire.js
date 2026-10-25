@@ -11,11 +11,16 @@
 //
 // « Imprimer / PDF » sort la seule carte, sans numéro, quelle que soit la
 // vue : la carte reste dans la page, masquée à l'écran seulement.
+//
+// « Ajouter à la rencontre » écrit la composition entière, gardée sur
+// l'appareil, chiffrée (js/ecrans/rencontre.js) : la fiche la lit donc à sa
+// première visite, comme l'écran Rencontre, sans l'attendre, et redit ce
+// qui s'y trouve quand elle arrive.
 
 import { defautDe, lecture } from "../adversaire/lecture.js";
 import { adresseListe } from "../routes.js";
 import { compte, el, introuvable, titre } from "./dom.js";
-import { PLAFOND_CARTES, PLAFOND_EXEMPLAIRES, ajouter, cadreDeCartes, exemplaires, imprimerCartes, peutAjouter } from "./rencontre.js";
+import { PLAFOND_CARTES, PLAFOND_EXEMPLAIRES, ajouter, cadreDeCartes, charger, exemplaires, imprimerCartes, peutAjouter } from "./rencontre.js";
 
 const MEMOIRE_VUE = "atelier.vue-adversaire";
 const VUES = { lecture: "Vue lecture", carte: "Vue carte" };
@@ -40,7 +45,8 @@ function memoriserVue(vue) {
   }
 }
 
-export function afficher(contexte, nom) {
+/** La fiche #/adversaire/<nom>. `services.magasin` : celui des contrôles (js/ecrans/rencontre.js). */
+export function afficher(contexte, nom, services = {}) {
   const { banque, index } = contexte.etat;
   const adversaires = index.entrees("adversaires", nom);
   if (!adversaires.length) return introuvable(index, "adversaires", nom);
@@ -68,8 +74,8 @@ export function afficher(contexte, nom) {
     });
   }
 
-  // La rencontre vit dans la mémoire de son module : la fiche y ajoute, et
-  // dit ce qui s'y trouve déjà.
+  // La rencontre vit dans la mémoire de son module, gardée sur l'appareil :
+  // la fiche y ajoute, et dit ce qui s'y trouve déjà.
   const dansLaRencontre = el("p", { classe: "secondaire-texte", role: "status" });
   const versRencontre = el("a", { href: "#/rencontre" }, "Voir la rencontre");
   const ajout = el(
@@ -94,6 +100,11 @@ export function afficher(contexte, nom) {
     dansLaRencontre.textContent = ajout.disabled ? `${dit} : le plafond est atteint (${PLAFOND_EXEMPLAIRES} exemplaires d'un adversaire, ${PLAFOND_CARTES} cartes en tout).` : `${dit}.`;
   }
   direLaRencontre();
+  // La composition gardée arrive sans que la fiche l'attende : elle la redit
+  // si la lecture l'a changée.
+  charger(contexte, services).then((change) => {
+    if (change) direLaRencontre();
+  });
 
   const defauts = resolus.map(defautDe).filter(Boolean);
   cadre.montrer(resolus.map((resolu) => ({ resolu })));

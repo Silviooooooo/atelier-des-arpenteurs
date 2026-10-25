@@ -1303,3 +1303,74 @@ test("combat — un élément que deux objets transmettent à la même capacité
   assert.deepEqual(capacite(de("Rétiaire"), "Frappe").elements, ["Intervention", "Passif"], "dans l'ordre de rencontre, sans doublon");
   assert.equal(capacite(de("Rétiaire"), "Frappe").parArme.length, 2);
 });
+
+// ─── Le groupe 2 : une capacité à une puissance (contrat du groupe, § 5.1) ───
+
+test("capacitesA — au rang, ce que rend resoudre, pour chaque adversaire du classeur d'essai ; null pour une absente, au-delà du rang, une variante manquante ; les constats ne changent pas", async () => {
+  let comparees = 0;
+  for (const ligne of BANQUE.adversaires) {
+    const avant = JSON.stringify(INDEX.resoudre(ligne));
+    const resolu = INDEX.resoudre(ligne);
+    for (const [k, c] of resolu.capacites.entries()) {
+      if (c.absente || c.rang < 1) continue;
+      assert.deepEqual(INDEX.capacitesA(ligne, c.rang)[k], c, `${ligne.nom}, ${c.nom}`);
+      comparees += 1;
+    }
+    // Une maîtrise n'est pas une capacité de la résolution : la liste reste parallèle.
+    for (const puissance of [1, 2, 3]) assert.equal(INDEX.capacitesA(ligne, puissance).length, resolu.capacites.length, `${ligne.nom}, puissance ${puissance}`);
+    assert.equal(JSON.stringify(INDEX.resoudre(ligne)), avant, `${ligne.nom} : rien ne change, constats compris`);
+  }
+  assert.equal(comparees, 5);
+
+  const { de, index } = await feuille(
+    [["Pêcheur", "Commis", _, _, _, _, _, "Spatule souple", "Fournaise[2], Coup d'aile[3], Recette perdue, Goûter, Maîtrise de l'agile[2]"]],
+    { capacites: [["Coup d'aile", 1, 1, _, _, "Bat de l'aile.", "Puissances 1 et 3"], ["Coup d'aile", 3, 3, _, _, "Bat des deux ailes.", _]] },
+  );
+  const pecheur = index.adversaires.get("Pêcheur");
+  const resolu = de("Pêcheur");
+  assert.deepEqual(noms(resolu.capacites), ["Frappe", "Moulinet farineux", "Fournaise", "Coup d'aile", "Recette perdue", "Goûter"]);
+  assert.deepEqual(noms(resolu.maitrises), ["Maîtrise de l'agile"]);
+  const nuls = (puissance) => index.capacitesA(pecheur, puissance).map((c, k) => (c === null ? resolu.capacites[k].nom : null)).filter(Boolean);
+  // Frappe et Goûter n'évoluent pas ; Moulinet est au rang 1, Fournaise au rang 2 ; Coup d'aile n'a pas de variante 2 ; Recette perdue est absente.
+  assert.deepEqual(nuls(1), ["Frappe", "Recette perdue", "Goûter"]);
+  assert.deepEqual(nuls(2), ["Frappe", "Moulinet farineux", "Coup d'aile", "Recette perdue", "Goûter"]);
+  assert.deepEqual(nuls(3), ["Frappe", "Moulinet farineux", "Fournaise", "Recette perdue", "Goûter"]);
+  // Les entrées non nulles sont celles de leur capacité, à cette puissance.
+  assert.deepEqual(index.capacitesA(pecheur, 1)[3].descriptions, [{ source: null, texte: "Bat de l'aile." }]);
+  assert.deepEqual(index.capacitesA(pecheur, 3)[3].descriptions, [{ source: null, texte: "Bat des deux ailes." }]);
+  // Hors de 1 au rang, ou une puissance qui n'est pas un entier : rien.
+  for (const puissance of [0, 4, -1, 1.5, "2", null]) assert.deepEqual(nuls(puissance), noms(resolu.capacites), String(puissance));
+});
+
+test("capacitesA — à une puissance, son coût, sa description, ses éléments et ce qu'elle porte en propre ; son rang, ses armes et son désavantage restent", async () => {
+  const { de, index } = await feuille(
+    [["Pêcheur", "Commis", _, _, _, _, _, "Spatule souple, Spatule souple[3]", "Tour de main[3], Fournaise[3], Moulinet farineux[3]"]],
+    { capacites: [["Tour de main", "N", "N", "N-1", _, "Tourne [N] fois la main.", "Coûts 1, 2, 3 et une description en N"]] },
+  );
+  const pecheur = index.adversaires.get("Pêcheur");
+  const par = [1, 2, 3].map((puissance) => index.capacitesA(pecheur, puissance));
+  const a = (nom, liste) => liste.find((c) => c?.nom === nom);
+  // Une banque fabriquée : coûts 1, 2, 3 en souffle, 0, 1, 2 en lien, et la description en N ; le rang reste 3.
+  assert.deepEqual(par.map((liste) => [a("Tour de main", liste).rang, a("Tour de main", liste).cout, a("Tour de main", liste).descriptions]), [
+    [3, { souffle: "1", lien: "0" }, [{ source: null, texte: "Tourne 1 fois la main." }]],
+    [3, { souffle: "2", lien: "1" }, [{ source: null, texte: "Tourne 2 fois la main." }]],
+    [3, { souffle: "3", lien: "2" }, [{ source: null, texte: "Tourne 3 fois la main." }]],
+  ]);
+  // Les éléments et la portée propre de la variante de chaque puissance ; la description lit sa portée.
+  assert.deepEqual(par.map((liste) => [a("Fournaise", liste).cout.souffle, a("Fournaise", liste).elements, a("Fournaise", liste).propres.portee, a("Fournaise", liste).descriptions[0].texte]), [
+    ["1", [], 0, "Réchauffe la case."],
+    ["3", ["Portée"], 1, "Brûle trois adversaires à 1 case."],
+    ["7", ["Portée"], 2, "Aveugle une cible à 2 cases."],
+  ]);
+  // Les armes et le désavantage ne tiennent pas à la puissance : deux spatules, la seconde à la qualité 3.
+  for (const liste of par) {
+    const moulinet = a("Moulinet farineux", liste);
+    assert.deepEqual(moulinet.parArme.map((entree) => [entree.arme, entree.degats, entree.desavantage]), [[0, [5, 10, 15], true], [1, [6, 13, 20], true]]);
+    assert.deepEqual([moulinet.rang, moulinet.desavantage, moulinet.desavantageEntier], [3, ["Spatule souple", "Spatule souple"], true]);
+  }
+  assert.deepEqual(par.map((liste) => a("Moulinet farineux", liste).cout.souffle), ["5", "10", "15"]);
+  assert.deepEqual(par.map((liste) => a("Moulinet farineux", liste).armes.map((arme) => arme.degats)), Array(3).fill(["5/10/15", "6/13/20"]));
+  // Au rang, la résolution même ; Frappe, qui n'évolue pas, n'y a pas d'entrée.
+  assert.deepEqual(par[2], de("Pêcheur").capacites.map((c) => (c.rang === 3 ? c : null)));
+  assert.deepEqual(noms(de("Pêcheur").capacites), ["Frappe", "Moulinet farineux", "Tour de main", "Fournaise"]);
+});

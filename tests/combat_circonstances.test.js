@@ -11,13 +11,18 @@
 // le moteur ; les gestes aussi, d'après la forme du § 17. Les cas calculés à
 // la main du combat de référence fictif servent de témoins : Aubépine
 // Crèmebrûlée contre le Chef de partie et deux Marmitons de corvée.
+//
+// Au groupe 2 (contrat du groupe, § 5.4, § 5.5 et § 14, N4) : le rôle et
+// l'indice de capacité d'une source de passif ; les causes sans cible du
+// survol (sourcesSansCible) ; la défense à égalité de dés, au choix du joueur.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { circonstances, modificateursDe, passifsDe } from "../js/combat/circonstances.js";
+import { circonstances, modificateursDe, passifsDe, sourcesSansCible } from "../js/combat/circonstances.js";
 import { modificateurDe, netDe, ouvrirJet } from "../js/combat/jet.js";
 import { DIFFICULTES, ROLES_PASSIFS, SIGNES, geler } from "../js/combat/regles.js";
+import { TYPES_OBJET } from "../js/personnage/regles.js";
 import {
   aJoue,
   alliesSurLaCase,
@@ -68,6 +73,7 @@ function gesteEssai(champs = {}) {
     caracteristiques: null,
     difficulte: null,
     armePretee: null,
+    defense: null,
     reglages: { modificateur: null, avantages: null },
     jet: null,
     degats: null,
@@ -187,7 +193,7 @@ test("valeurs.js et circonstances.js exportent ce que dit le contrat, sans un no
     "vivant",
     "vivantsDe",
   ]);
-  assert.deepEqual(Object.keys(await import("../js/combat/circonstances.js")).sort(), ["circonstances", "modificateursDe", "passifsDe"]);
+  assert.deepEqual(Object.keys(await import("../js/combat/circonstances.js")).sort(), ["circonstances", "modificateursDe", "passifsDe", "sourcesSansCible"]);
 });
 
 test("valeurs.js et circonstances.js : un en-tête qui dit le pourquoi et le § 17 ; ni espace insécable, ni signe invisible", () => {
@@ -229,6 +235,7 @@ test("un identifiant inconnu ou piégé ne lève pas : null, faux, zéro, une li
     assert.equal(capaciteDe(etat, id, 0), null);
     assert.deepEqual(passifsDe(etat, id), []);
     assert.deepEqual(modificateursDe(etat, id, { genre: "attaque", mobilisees: ["force"] }), []);
+    assert.deepEqual(sourcesSansCible(etat, id, 0, 0), { avantages: [], desavantages: [] });
   }
 });
 
@@ -433,7 +440,7 @@ test("attaque d'un adversaire : le PJ visé lance sa défense contre l'attaque d
 });
 
 test("attaque d'un adversaire : le dé suit la défense du PJ visé, la difficulté suit l'attaque courante", () => {
-  const lourde = duel({ pj: (valeurs) => { valeurs.deDefense = { faces: 10, type: "lourde", caracteristiques: ["force", "sens"], meles: false }; } });
+  const lourde = duel({ pj: (valeurs) => { valeurs.deDefense = { faces: 10, type: "lourde", caracteristiques: ["force", "sens"], meles: false, egalite: [] }; } });
   assert.equal(attaqueDeLAdversaire(lourde).faces, 10);
   assert.deepEqual(attaqueDeLAdversaire(lourde).mobilisees, ["force", "sens"]);
 
@@ -561,7 +568,7 @@ test("modificateurs 4 et 5, petit : +N aux jets de défense ; −1 aux jets qui 
   assert.deepEqual(aMainsNues(etat, ["force", "agilite"]).modificateurs, [{ genre: "passif", nom: "Demi-portion", valeur: -1 }], "en attaque, avec la Force");
 
   const lourd = duel({
-    pj: ensemble(passif("petit", "Demi-portion", 3), (valeurs) => { valeurs.deDefense = { faces: 8, type: "lourde", caracteristiques: ["force", "sens"], meles: false }; }),
+    pj: ensemble(passif("petit", "Demi-portion", 3), (valeurs) => { valeurs.deDefense = { faces: 8, type: "lourde", caracteristiques: ["force", "sens"], meles: false, egalite: [] }; }),
   });
   assert.deepEqual(
     attaqueDeLAdversaire(lourd).modificateurs,
@@ -603,22 +610,42 @@ test("modificateur 7, la main : ±N avec sa raison, en dernier ; nul ou absent, 
 });
 
 test("les modificateurs suivent l'ordre écrit, pas celui de la photographie", () => {
-  // Les passifs sont posés à rebours de l'ordre attendu.
+  // Les passifs sont posés à rebours de l'ordre attendu. Aucun jet ne
+  // mobilise les trois caractéristiques ensemble : chaque paire voisine de
+  // l'ordre écrit (Force, Agilité, Précision, petit, puis son malus) est vue
+  // dans un jet au moins.
   const tout = ensemble(passif("petit", "Demi-portion", 2), passif("bonus_precision", "Main sûre", 3), passif("bonus_agilite", "Vif", 1), passif("bonus_force", "Costaud", 2));
   const blesser = (etat) => { etat.protagonistes.pj1.zones[3].resistance = 0; };
   const main = { modificateur: { valeur: 1, raison: "Inspiration" }, avantages: null };
+  const defenseDuType = (type) => (valeurs) => {
+    valeurs.deDefense = { faces: 8, type, caracteristiques: [...TYPES_OBJET[type].defense], meles: false, egalite: [] };
+  };
 
-  const enDefense = duel({ pj: ensemble(tout, (valeurs) => { valeurs.deDefense = { faces: 8, type: "agile", caracteristiques: ["agilite", "force"], meles: false }; }), retoucher: blesser });
-  assert.deepEqual(attaqueDeLAdversaire(enDefense, { reglages: main }).modificateurs, [
+  const enDefenseLourde = duel({ pj: ensemble(tout, defenseDuType("lourde")), retoucher: blesser });
+  assert.deepEqual(attaqueDeLAdversaire(enDefenseLourde, { reglages: main }).modificateurs, [
     { genre: "passif", nom: "Costaud", valeur: 2 },
-    { genre: "passif", nom: "Vif", valeur: 1 },
     { genre: "passif", nom: "Demi-portion", valeur: 2 },
     { genre: "passif", nom: "Demi-portion", valeur: -1 },
     { genre: "blessures", nom: null, valeur: -1 },
     { genre: "main", nom: "Inspiration", valeur: 1 },
   ]);
 
+  const enDefensePrecise = duel({ pj: ensemble(tout, defenseDuType("precise")), retoucher: blesser });
+  assert.deepEqual(attaqueDeLAdversaire(enDefensePrecise, { reglages: main }).modificateurs, [
+    { genre: "passif", nom: "Main sûre", valeur: 3 },
+    { genre: "passif", nom: "Demi-portion", valeur: 2 },
+    { genre: "blessures", nom: null, valeur: -1 },
+    { genre: "main", nom: "Inspiration", valeur: 1 },
+  ]);
+
   const enAttaque = duel({ pj: tout, retoucher: blesser });
+  assert.deepEqual(aMainsNues(enAttaque, ["agilite", "force"], { reglages: main }).modificateurs, [
+    { genre: "passif", nom: "Costaud", valeur: 2 },
+    { genre: "passif", nom: "Vif", valeur: 1 },
+    { genre: "passif", nom: "Demi-portion", valeur: -1 },
+    { genre: "blessures", nom: null, valeur: -1 },
+    { genre: "main", nom: "Inspiration", valeur: 1 },
+  ]);
   assert.deepEqual(attaqueDuPj(enAttaque, { reglages: main }).modificateurs, [
     { genre: "passif", nom: "Vif", valeur: 1 },
     { genre: "passif", nom: "Main sûre", valeur: 3 },
@@ -692,9 +719,18 @@ const brigade = (niveau = 1) => passif("en_meute", "Brigade", niveau);
 const coude = (niveau = 1) => passif("esprit_de_corps", "Coude à coude", niveau);
 const melee = (valeurs) => { valeurs.deDefense.meles = true; };
 
-const SOLO = { genre: "passif", nom: "Solo du chef", nombre: 1, de: null };
-const BRIGADE = { genre: "passif", nom: "Brigade", nombre: 1, de: null };
-const COUDE = { genre: "passif", nom: "Coude à coude", nombre: 1, de: null };
+// Une source de passif porte son rôle et l'indice de sa capacité chez son
+// porteur (contrat du groupe 2, § 5.5). ajouterPassif range un passif après
+// les capacités de son porteur : le premier ajouté a pour indice leur nombre,
+// lu ici, jamais écrit.
+const PREMIER_PASSIF = { pj: pjEssai().valeurs.capacites.length, adv: adversaireEssai().valeurs.capacites.length };
+
+const SOLO = { genre: "passif", nom: "Solo du chef", nombre: 1, de: null, role: "seul_sur_sa_case", capacite: PREMIER_PASSIF.pj };
+const BRIGADE = { genre: "passif", nom: "Brigade", nombre: 1, de: null, role: "en_meute", capacite: PREMIER_PASSIF.pj };
+const COUDE = { genre: "passif", nom: "Coude à coude", nombre: 1, de: null, role: "esprit_de_corps", capacite: PREMIER_PASSIF.pj };
+
+// La même source, premier passif du Marmiton : inversée, elle porte son nom.
+const chezLAdversaire = (source, nombre) => ({ ...source, nombre, de: "Marmiton", capacite: PREMIER_PASSIF.adv });
 
 test("source 1, seul sur sa case (lanceur) : N avantages en attaque et en défense, au corps-à-corps, sans allié vivant sur sa case", () => {
   const alliee = { photo: brioche(), case: "D4" };
@@ -773,7 +809,7 @@ test("source 5, types d'armure mêlés (lanceur) : 1 désavantage en défense, j
 });
 
 test("source 6, seul sur sa case (l'autre) : ses N avantages deviennent N désavantages du PJ", () => {
-  const SOLO_INVERSE = { genre: "passif", nom: "Solo du chef", nombre: 2, de: "Marmiton" };
+  const SOLO_INVERSE = chezLAdversaire(SOLO, 2);
   const allie = { photo: commis(), case: "D4" };
 
   const seul = duel({ adv: solo(2) });
@@ -791,7 +827,7 @@ test("source 6, seul sur sa case (l'autre) : ses N avantages deviennent N désav
 });
 
 test("source 7, en meute (l'autre) : N désavantages du PJ quand l'adversaire attaque avec un allié sur sa case", () => {
-  const BRIGADE_INVERSE = { genre: "passif", nom: "Brigade", nombre: 1, de: "Marmiton" };
+  const BRIGADE_INVERSE = chezLAdversaire(BRIGADE, 1);
   const allie = { photo: commis(), case: "D4" };
 
   const enMeute = duel({ adv: brigade(), autres: [allie] });
@@ -804,7 +840,7 @@ test("source 7, en meute (l'autre) : N désavantages du PJ quand l'adversaire at
 });
 
 test("source 8, esprit de corps (l'autre) : N désavantages du PJ quand l'adversaire se défend avec un allié sur sa case", () => {
-  const COUDE_INVERSE = { genre: "passif", nom: "Coude à coude", nombre: 3, de: "Marmiton" };
+  const COUDE_INVERSE = chezLAdversaire(COUDE, 3);
   const allie = { photo: commis(), case: "D4" };
 
   const serres = duel({ adv: coude(3), autres: [allie] });
@@ -850,11 +886,11 @@ test("l'ordre des sources : celles du lanceur, celles de l'autre, puis la main",
   const seuls = duel({ pj: ensemble(solo(), melee), adv: solo(2) });
   const defenseAvantagee = circonstances(seuls, joue(seuls, "adv2", "Moulinet farineux", { cible: "pj1", reglages: avantage }));
   assert.deepEqual(defenseAvantagee.avantages, [SOLO, { genre: "maitrise", nom: "Moulinet farineux", nombre: 1, de: "Marmiton" }, { genre: "main", nom: "Minutie", nombre: 1, de: null }]);
-  assert.deepEqual(defenseAvantagee.desavantages, [{ genre: "armure_melee", nom: null, nombre: 1, de: null }, { genre: "passif", nom: "Solo du chef", nombre: 2, de: "Marmiton" }]);
+  assert.deepEqual(defenseAvantagee.desavantages, [{ genre: "armure_melee", nom: null, nombre: 1, de: null }, chezLAdversaire(SOLO, 2)]);
   const defenseGenee = circonstances(seuls, joue(seuls, "adv2", "Moulinet farineux", { cible: "pj1", reglages: desavantage }));
   assert.deepEqual(defenseGenee.desavantages, [
     { genre: "armure_melee", nom: null, nombre: 1, de: null },
-    { genre: "passif", nom: "Solo du chef", nombre: 2, de: "Marmiton" },
+    chezLAdversaire(SOLO, 2),
     { genre: "main", nom: "Fumée", nombre: 2, de: null },
   ]);
   assert.equal(netDe(ouvrirJet(defenseGenee)), 2 - 5, "2 avantages, 5 désavantages");
@@ -866,7 +902,7 @@ test("l'ordre des sources : celles du lanceur, celles de l'autre, puis la main",
   assert.deepEqual(attaque.avantages, [{ ...BRIGADE, nombre: 2 }]);
   assert.deepEqual(attaque.desavantages, [
     { genre: "maitrise", nom: "Émincer", nombre: 1, de: null },
-    { genre: "passif", nom: "Coude à coude", nombre: 1, de: "Marmiton" },
+    chezLAdversaire(COUDE, 1),
     { genre: "main", nom: "Fumée", nombre: 2, de: null },
   ]);
   assert.equal(netDe(ouvrirJet(attaque)), 2 - 4);
@@ -875,7 +911,7 @@ test("l'ordre des sources : celles du lanceur, celles de l'autre, puis la main",
 test("l'inversion, dans les deux sens : l'avantage de l'adversaire désavantage le PJ, son désavantage l'avantage", () => {
   const etat = duel({ adv: solo(), noms: { adv2: { court: "Marmiton n° 1" } } });
   const rendu = circonstances(etat, joue(etat, "adv2", "Moulinet farineux", { cible: "pj1" }));
-  assert.deepEqual(rendu.desavantages, [{ genre: "passif", nom: "Solo du chef", nombre: 1, de: "Marmiton n° 1" }], "son avantage : un désavantage du PJ");
+  assert.deepEqual(rendu.desavantages, [{ ...chezLAdversaire(SOLO, 1), de: "Marmiton n° 1" }], "son avantage : un désavantage du PJ");
   assert.deepEqual(rendu.avantages, [{ genre: "maitrise", nom: "Moulinet farineux", nombre: 1, de: "Marmiton n° 1" }], "son désavantage : un avantage du PJ");
   assert.equal(rendu.lanceur, "pj1", "dans le même jet, celui du PJ");
   assert.equal(netDe(ouvrirJet(rendu)), 0);
@@ -893,13 +929,55 @@ test("l'inversion, dans les deux sens : l'avantage de l'adversaire désavantage 
   assert.deepEqual(duPj.desavantages, [{ genre: "maitrise", nom: "Émincer", nombre: 1, de: null }]);
 });
 
+test("une source de passif porte son rôle et l'indice de sa capacité chez son porteur, inversée ou non ; les autres sources, non", () => {
+  // Vif est posé d'abord : l'indice d'un passif n'est ni celui du premier
+  // ajouté, ni son rang dans la liste « passifs ».
+  const avant = passif("bonus_agilite", "Vif");
+  const source = (etat, porteur, nom, role, nombre, de = null) => ({ genre: "passif", nom, nombre, de, role, capacite: indiceDe(etat, porteur, nom) });
+
+  const seuls = duel({ pj: ensemble(avant, solo()), adv: ensemble(avant, solo(2)) });
+  const contreSeul = attaqueDuPj(seuls);
+  assert.deepEqual(contreSeul.avantages, [source(seuls, "pj1", "Solo du chef", "seul_sur_sa_case", 1)]);
+  assert.deepEqual(contreSeul.desavantages, [source(seuls, "adv2", "Solo du chef", "seul_sur_sa_case", 2, "Marmiton")], "inversée : l'indice chez l'adversaire, son porteur");
+  assert.notEqual(indiceDe(seuls, "pj1", "Solo du chef"), PREMIER_PASSIF.pj);
+
+  const entoures = duel({
+    pj: ensemble(avant, brigade(), coude(2)),
+    adv: ensemble(avant, coude(3), brigade()),
+    autres: [{ photo: brioche(), case: "D4" }, { photo: commis(), case: "D4" }],
+  });
+  const attaque = attaqueDuPj(entoures);
+  const defense = attaqueDeLAdversaire(entoures);
+  assert.deepEqual(attaque.avantages, [source(entoures, "pj1", "Brigade", "en_meute", 1)]);
+  assert.deepEqual(attaque.desavantages, [source(entoures, "adv2", "Coude à coude", "esprit_de_corps", 3, "Marmiton")]);
+  assert.deepEqual(defense.avantages, [source(entoures, "pj1", "Coude à coude", "esprit_de_corps", 2)]);
+  assert.deepEqual(defense.desavantages, [source(entoures, "adv2", "Brigade", "en_meute", 1, "Marmiton")]);
+
+  // L'indice désigne la capacité, et l'entrée de « passifs » qui porte le rôle.
+  const vues = [...attaque.avantages.map((un) => ["pj1", un]), ...attaque.desavantages.map((un) => ["adv2", un]), ...defense.avantages.map((un) => ["pj1", un]), ...defense.desavantages.map((un) => ["adv2", un])];
+  for (const [porteur, { nom, role, capacite }] of vues) {
+    assert.equal(capaciteDe(entoures, porteur, capacite).nom, nom);
+    assert.ok(photoDe(entoures, porteur).passifs.some((un) => un.capacite === capacite && un.role === role), `${nom} : son entrée dans « passifs »`);
+  }
+
+  // La maîtrise, l'armure mêlée et la main ne sont pas des passifs : ni rôle, ni indice.
+  const meles = duel({ pj: melee });
+  const autres = circonstances(meles, joue(meles, "adv2", "Moulinet farineux", { cible: "pj1", reglages: { modificateur: null, avantages: { valeur: -1, raison: "Fumée" } } }));
+  for (const un of [...autres.avantages, ...autres.desavantages]) assert.deepEqual(Object.keys(un), ["genre", "nom", "nombre", "de"], un.genre);
+  assert.equal(autres.avantages.length + autres.desavantages.length, 3, "la maîtrise inversée, l'armure mêlée, la main");
+});
+
 test("un jet prêté ne porte pas le désavantage de maîtrise, ni pour qui le lance, ni par inversion ; les passifs y valent", () => {
   // Une capacité sans dégâts d'une arme hors maîtrise : jouée avec le jet de
-  // l'arme, elle ne gêne personne.
+  // l'arme, elle ne gêne personne. Sa maîtrise nomme l'arme et son poids
+  // (contrat du groupe 2, § 5.3). Solo du chef est posé avant elle : il reste
+  // le premier passif ajouté.
   const tourDeLame = (valeurs) => {
-    valeurs.capacites.push(capaciteEssai({ nom: "Tour de lame", groupe: valeurs.capacites[0].groupe, facons: [faconEssai({ arme: 0, libelle: valeurs.caracteristiques ? null : "Spatule souple", desavantage: true })] }));
+    const arme = valeurs.armes[0];
+    const facon = faconEssai({ arme: 0, libelle: valeurs.caracteristiques ? null : "Spatule souple", desavantage: true, maitrise: { origine: arme.nom, poids: arme.poids } });
+    valeurs.capacites.push(capaciteEssai({ nom: "Tour de lame", groupe: valeurs.capacites[0].groupe, facons: [facon] }));
   };
-  const etat = duel({ pj: ensemble(tourDeLame, solo()), adv: tourDeLame });
+  const etat = duel({ pj: ensemble(solo(), tourDeLame), adv: tourDeLame });
 
   const pretePj = circonstances(etat, joue(etat, "pj1", "Tour de lame", { mode: "jet_prete", cible: "adv2", armePretee: 0 }));
   assert.deepEqual(pretePj.desavantages, [], "pas de désavantage de maîtrise pour le PJ");
@@ -937,6 +1015,121 @@ test("circonstances ne change ni l'état ni le geste, et rend des listes qui lui
   assert.deepEqual(circonstances(etat, geste), second, "ce qu'on fait d'un résultat ne revient pas sur le suivant");
 });
 
+// ─── Les causes sans cible : le survol d'une capacité ───────────────────────
+
+const RIEN = { avantages: [], desavantages: [] };
+const horsMaitrise = (nom) => ({ genre: "maitrise", nom, nombre: 1, de: null });
+
+test("sourcesSansCible : la maîtrise d'Émincer, rien pour Frappe ; vue du porteur, sans inversion", () => {
+  const etat = duel();
+  const sansCible = (id, nom, facon = 0) => sourcesSansCible(etat, id, indiceDe(etat, id, nom), facon);
+
+  assert.deepEqual(sansCible("pj1", "Émincer"), { avantages: [], desavantages: [horsMaitrise("Émincer")] });
+  assert.deepEqual(sansCible("pj1", "Émincer").desavantages, circonstances(etat, joue(etat, "pj1", "Émincer", { cible: "adv2" })).desavantages, "le désavantage même du jet");
+  assert.deepEqual(sansCible("pj1", "Frappe"), RIEN, "Frappe est dans sa maîtrise");
+  assert.deepEqual(sansCible("pj1", "Taloche"), RIEN, "les mains nues ne sont l'objet d'aucune maîtrise");
+
+  // Chez l'adversaire, son désavantage reste le sien : au jet, il devient un avantage du PJ.
+  assert.deepEqual(sansCible("adv2", "Moulinet farineux"), { avantages: [], desavantages: [horsMaitrise("Moulinet farineux")] });
+  assert.deepEqual(sansCible("adv2", "Frappe"), RIEN);
+
+  // Une façon qui n'attaque pas ne porte aucune cause, même hors maîtrise.
+  const tourDeLame = (valeurs) => {
+    const facon = faconEssai({ arme: 0, desavantage: true, maitrise: { origine: "Couteau d'office", poids: "precise" } });
+    valeurs.capacites.push(capaciteEssai({ nom: "Tour de lame", groupe: valeurs.capacites[0].groupe, facons: [facon] }));
+  };
+  const avecTour = duel({ pj: tourDeLame });
+  assert.deepEqual(sourcesSansCible(avecTour, "pj1", indiceDe(avecTour, "pj1", "Tour de lame"), 0), RIEN, "une façon sans attaque, hors maîtrise");
+  for (const nom of ["Flambage", "Fournaise", "Goûter", "Pas de côté"]) assert.deepEqual(sansCible("pj1", nom), RIEN, nom);
+  assert.deepEqual(sansCible("pj1", "Pas chassé", 1), RIEN, "Pas chassé [2]");
+
+  // Ce qui n'existe pas n'a aucune cause, et ne lève pas.
+  const emincer = indiceDe(etat, "pj1", "Émincer");
+  for (const facon of [1, -1, null, undefined, "0", 1.5]) assert.deepEqual(sourcesSansCible(etat, "pj1", emincer, facon), RIEN, `façon ${String(facon)}`);
+  for (const capacite of [99, -1, null, "0"]) assert.deepEqual(sourcesSansCible(etat, "pj1", capacite, 0), RIEN, `capacité ${String(capacite)}`);
+});
+
+test("sourcesSansCible : « en meute » avec un allié vivant sur sa case seulement, sans cible ni corps-à-corps", () => {
+  const alliee = { photo: brioche(), case: "D4" };
+  const frappe = (etat, id = "pj1") => sourcesSansCible(etat, id, indiceDe(etat, id, "Frappe"), 0);
+  const BRIGADE2 = { ...BRIGADE, nombre: 2 };
+
+  const enMeute = duel({ pj: brigade(2), autres: [alliee] });
+  assert.deepEqual(frappe(enMeute), { avantages: [BRIGADE2], desavantages: [] });
+  assert.deepEqual(frappe(enMeute).avantages, attaqueDuPj(enMeute).avantages, "l'avantage même du jet");
+
+  assert.deepEqual(frappe(duel({ pj: brigade(2) })), RIEN, "sans allié");
+  assert.deepEqual(frappe(duel({ pj: brigade(2), autres: [alliee], retoucher: tuer("pj3") })), RIEN, "une alliée morte ne compte pas");
+  assert.deepEqual(frappe(duel({ pj: brigade(2), autres: [{ photo: brioche(), case: "E5" }] })), RIEN, "une alliée ailleurs ne compte pas");
+  assert.deepEqual(frappe(duel({ pj: brigade(2), autres: [{ photo: commis(), case: "D4" }] })), RIEN, "un second adversaire sur la case n'est pas un allié");
+  assert.deepEqual(frappe(duel({ pj: brigade(0), autres: [alliee] })), RIEN, "au niveau 0, la source n'entre pas");
+  assert.deepEqual(frappe(duel({ pj: brigade(2), casePj: "A1", autres: [{ photo: brioche(), case: "A1" }] })), { avantages: [BRIGADE2], desavantages: [] }, "loin de tout adversaire : ni la cible ni le corps-à-corps ne comptent");
+
+  // Une façon qui n'attaque pas : rien, même en meute ; une attaque hors maîtrise : les deux.
+  for (const nom of ["Flambage", "Pas chassé", "Goûter"]) assert.deepEqual(sourcesSansCible(enMeute, "pj1", indiceDe(enMeute, "pj1", nom), 0), RIEN, nom);
+  assert.deepEqual(sourcesSansCible(enMeute, "pj1", indiceDe(enMeute, "pj1", "Émincer"), 0), { avantages: [BRIGADE2], desavantages: [horsMaitrise("Émincer")] });
+
+  // Chez l'adversaire, sans inversion : son avantage, au nom de personne.
+  const meute = duel({ adv: brigade(), autres: [{ photo: commis(), case: "D4" }] });
+  assert.deepEqual(frappe(meute, "adv2"), { avantages: [{ ...BRIGADE, capacite: PREMIER_PASSIF.adv }], desavantages: [] });
+  assert.deepEqual(frappe(duel({ adv: brigade() }), "adv2"), RIEN, "seul, rien");
+});
+
+test("sourcesSansCible : rien d'autre ; ni seul sur sa case, ni esprit de corps, ni armure mêlée, ni bonus", () => {
+  const tout = ensemble(solo(3), brigade(), coude(2), melee, passif("bonus_agilite", "Vif", 2), passif("petit", "Demi-portion", 1));
+  for (const autres of [[], [{ photo: brioche(), case: "D4" }]]) {
+    const etat = duel({ pj: tout, adv: ensemble(solo(), coude()), autres });
+    const rendu = sourcesSansCible(etat, "pj1", indiceDe(etat, "pj1", "Frappe"), 0);
+    assert.deepEqual(rendu.avantages.map(({ role }) => role), autres.length > 0 ? ["en_meute"] : [], `${autres.length} alliée sur la case`);
+    assert.deepEqual(rendu.desavantages, [], "rien de l'adversaire, qui n'est pas encore la cible");
+  }
+  const adverse = duel({ adv: ensemble(solo(2), coude(), brigade()) });
+  assert.deepEqual(sourcesSansCible(adverse, "adv2", indiceDe(adverse, "adv2", "Frappe"), 0), RIEN, "seul sur sa case : son Solo du chef attend la cible");
+});
+
+// ─── La défense à égalité de dés ────────────────────────────────────────────
+
+const MAIN_SURE = { genre: "passif", nom: "Main sûre", valeur: 2 };
+const aEgalite = (...types) => (valeurs) => { valeurs.deDefense.egalite = types; };
+
+test("défense à égalité : un PJ agile et précis, porteur de bonus_precision ; le défaut, puis « precise » qui change le modificateur", () => {
+  const etat = duel({ pj: ensemble(aEgalite("agile", "precise"), passif("bonus_precision", "Main sûre", 2)) });
+
+  const parDefaut = attaqueDeLAdversaire(etat);
+  assert.deepEqual([parDefaut.faces, parDefaut.mobilisees, parDefaut.modificateurs], [8, ["agilite", "creativite"], []], "le défaut proposé : le type retenu, agile");
+  assert.equal(modificateurDe(ouvrirJet(parDefaut)), 0);
+  assert.deepEqual(attaqueDeLAdversaire(etat, { defense: "agile" }), parDefaut, "le type retenu, choisi : le même jet");
+
+  const precise = attaqueDeLAdversaire(etat, { defense: "precise" });
+  assert.deepEqual([precise.faces, precise.mobilisees, precise.modificateurs], [8, ["precision", "empathie"], [MAIN_SURE]], "« precise » : la Précision et l'Empathie, donc Main sûre");
+  assert.equal(modificateurDe(ouvrirJet(precise)), 2, "d8+2");
+  const horsDuType = ({ mobilisees, modificateurs, ...reste }) => reste;
+  assert.deepEqual(horsDuType(precise), horsDuType(parDefaut), "le dé, la difficulté et les sources ne changent pas");
+
+  // Un type hors de l'égalité, ou qui n'en est pas un : le défaut.
+  for (const defense of ["lourde", "__proto__", "constructor", "precision", "", 3, null, undefined]) {
+    assert.deepEqual(attaqueDeLAdversaire(etat, { defense }), parDefaut, `défense ${String(defense)}`);
+  }
+  const sansEgalite = duel({ pj: passif("bonus_precision", "Main sûre", 2) });
+  assert.deepEqual(attaqueDeLAdversaire(sansEgalite, { defense: "precise" }), attaqueDeLAdversaire(sansEgalite), "sans égalité, pas de choix : le type retenu");
+
+  // Le jet prêté d'un adversaire aussi ; quand le PJ attaque, le réglage ne joue pas.
+  const prete = (defense) => circonstances(etat, joue(etat, "adv2", "Pas chassé", { mode: "jet_prete", cible: "pj1", armePretee: 0, defense }));
+  assert.deepEqual(prete("precise").modificateurs, [MAIN_SURE]);
+  assert.deepEqual(prete(null).modificateurs, []);
+  assert.deepEqual(attaqueDuPj(etat, { defense: "precise" }), attaqueDuPj(etat), "en attaque, rien ne change");
+});
+
+test("défense à égalité de trois types : « lourde » mobilise la Force et le Sens ; bonus et malus suivent le type choisi", () => {
+  const etat = duel({ pj: ensemble(aEgalite("lourde", "agile", "precise"), passif("bonus_force", "Costaud", 1), passif("petit", "Demi-portion", 2)) });
+  const lourde = attaqueDeLAdversaire(etat, { defense: "lourde" });
+  assert.deepEqual(lourde.mobilisees, ["force", "sens"]);
+  assert.deepEqual(lourde.modificateurs, [{ genre: "passif", nom: "Costaud", valeur: 1 }, { genre: "passif", nom: "Demi-portion", valeur: 2 }, { genre: "passif", nom: "Demi-portion", valeur: -1 }]);
+  assert.deepEqual(attaqueDeLAdversaire(etat).modificateurs, [{ genre: "passif", nom: "Demi-portion", valeur: 2 }], "agile : ni Costaud, ni le malus de Force");
+  assert.deepEqual(attaqueDeLAdversaire(etat, { defense: "precise" }).mobilisees, ["precision", "empathie"]);
+  assert.equal(lourde.faces, 8, "le dé reste celui de la photographie");
+});
+
 // ─── Les témoins : le combat de référence fictif ────────────────────────────
 
 /**
@@ -964,6 +1157,8 @@ const blesserAubepine = (...zones) => (etat) => {
 
 const VIF = { genre: "passif", nom: "Vif", valeur: 1 };
 const MELEE = { genre: "armure_melee", nom: null, nombre: 1, de: null };
+// Solo du chef, à sa place parmi les capacités d'Aubépine, retrouvée par son nom.
+const SOLO_D_AUBEPINE = { ...SOLO, capacite: indiceDe(reference(), "pj1", "Solo du chef") };
 
 // Ce qu'un témoin vérifie : le dé, son modificateur net, la difficulté, le
 // net des avantages, et les deux listes de sources.
@@ -990,13 +1185,13 @@ test("référence, étape 4 : un Marmiton frappe, Solo du chef et les types mêl
   assert.equal(rendu.genre, "defense");
   assert.equal(rendu.lanceur, "pj1");
   assert.deepEqual(rendu.modificateurs, [VIF], "sa défense agile mobilise l'Agilité");
-  verifier(rendu, { faces: 8, modificateur: 1, difficulte: 4, net: 0, avantages: [SOLO], desavantages: [MELEE] });
+  verifier(rendu, { faces: 8, modificateur: 1, difficulte: 4, net: 0, avantages: [SOLO_D_AUBEPINE], desavantages: [MELEE] });
 });
 
 test("référence, étape 8 : Émincer au corps-à-corps, l'avantage et le désavantage de maîtrise s'annulent", () => {
   const etat = reference();
   const rendu = circonstances(etat, joue(etat, "pj1", "Émincer", { cible: "adv3" }));
-  verifier(rendu, { faces: 10, modificateur: 1, difficulte: 5, net: 0, avantages: [SOLO], desavantages: [{ genre: "maitrise", nom: "Émincer", nombre: 1, de: null }] });
+  verifier(rendu, { faces: 10, modificateur: 1, difficulte: 5, net: 0, avantages: [SOLO_D_AUBEPINE], desavantages: [{ genre: "maitrise", nom: "Émincer", nombre: 1, de: null }] });
 });
 
 test("référence, étape 9 : Taloche, « d8+1 (Force + Agilité) contre 5, 1 avantage »", () => {
@@ -1004,7 +1199,7 @@ test("référence, étape 9 : Taloche, « d8+1 (Force + Agilité) contre 5, 1 av
   const rendu = circonstances(etat, joue(etat, "pj1", "Taloche", { cible: "adv4", caracteristiques: ["force", "agilite"] }));
   assert.deepEqual(rendu.caracteristiques, ["force", "agilite"]);
   assert.deepEqual(rendu.modificateurs, [VIF], "le jet mobilise l'Agilité");
-  verifier(rendu, { faces: 8, modificateur: 1, difficulte: 5, net: 1, avantages: [SOLO], desavantages: [] });
+  verifier(rendu, { faces: 8, modificateur: 1, difficulte: 5, net: 1, avantages: [SOLO_D_AUBEPINE], desavantages: [] });
 });
 
 test("référence, étape 12 : Moulinet farineux hors maîtrise, « Ses 2 avantages (…) et son désavantage (…) laissent 1 avantage »", () => {
@@ -1015,7 +1210,7 @@ test("référence, étape 12 : Moulinet farineux hors maîtrise, « Ses 2 avanta
     modificateur: 1,
     difficulte: 4,
     net: 1,
-    avantages: [SOLO, { genre: "maitrise", nom: "Moulinet farineux", nombre: 1, de: "Marmiton n° 2" }],
+    avantages: [SOLO_D_AUBEPINE, { genre: "maitrise", nom: "Moulinet farineux", nombre: 1, de: "Marmiton n° 2" }],
     desavantages: [MELEE],
   });
 });
@@ -1033,14 +1228,14 @@ test("référence, étape 16 : le Chef attaque dans sa maîtrise, « d8 contre 5
   const etat = reference({ retoucher: (courant) => { tuer("adv3")(courant); blesserAubepine(2)(courant); } });
   const rendu = circonstances(etat, joue(etat, "adv2", "Moulinet farineux", { cible: "pj1" }));
   assert.deepEqual(rendu.modificateurs, [VIF, { genre: "blessures", nom: null, valeur: -1 }]);
-  verifier(rendu, { faces: 8, modificateur: 0, difficulte: 5, net: 0, avantages: [SOLO], desavantages: [MELEE] });
+  verifier(rendu, { faces: 8, modificateur: 0, difficulte: 5, net: 0, avantages: [SOLO_D_AUBEPINE], desavantages: [MELEE] });
 });
 
 test("référence, étape 19 : Fournaise avec le jet prêté du couteau, « d10 contre 7, 1 avantage »", () => {
   const etat = reference({ retoucher: (courant) => { tuer("adv3")(courant); blesserAubepine(2)(courant); } });
   const rendu = circonstances(etat, joue(etat, "pj1", "Fournaise", { mode: "jet_prete", cible: "adv2", armePretee: 0 }));
   assert.equal(rendu.genre, "attaque");
-  verifier(rendu, { faces: 10, modificateur: 0, difficulte: 7, net: 1, avantages: [SOLO], desavantages: [] });
+  verifier(rendu, { faces: 10, modificateur: 0, difficulte: 7, net: 1, avantages: [SOLO_D_AUBEPINE], desavantages: [] });
 });
 
 test("référence, étapes 24 et 25 : deux blessures, « d10−1 contre 5 » puis « d10−1 contre 7 »", () => {
@@ -1048,9 +1243,31 @@ test("référence, étapes 24 et 25 : deux blessures, « d10−1 contre 5 » pui
   const maitrise = [{ genre: "maitrise", nom: "Frappe", nombre: 1, de: null }];
   const contreMarmiton = circonstances(etat, joue(etat, "pj1", "Frappe", { cible: "adv4" }));
   assert.deepEqual(contreMarmiton.modificateurs, [VIF, { genre: "blessures", nom: null, valeur: -2 }]);
-  verifier(contreMarmiton, { faces: 10, modificateur: -1, difficulte: 5, net: 0, avantages: [SOLO], desavantages: maitrise });
+  verifier(contreMarmiton, { faces: 10, modificateur: -1, difficulte: 5, net: 0, avantages: [SOLO_D_AUBEPINE], desavantages: maitrise });
   const contreChef = circonstances(etat, joue(etat, "pj1", "Frappe", { cible: "adv2" }));
-  verifier(contreChef, { faces: 10, modificateur: -1, difficulte: 7, net: 0, avantages: [SOLO], desavantages: maitrise });
+  verifier(contreChef, { faces: 10, modificateur: -1, difficulte: 7, net: 0, avantages: [SOLO_D_AUBEPINE], desavantages: maitrise });
+});
+
+test("référence, étape 4 au choix : Aubépine, agile et précise à égalité ; « precise » ôte Vif, « d8+1 contre 4 » devient « d8 contre 4 »", () => {
+  const etat = reference({ cases: { adv2: "F6" } });
+  const marmiton = (defense) => circonstances(etat, joue(etat, "adv3", "Frappe", { cible: "pj1", defense }));
+  assert.deepEqual(marmiton(null).modificateurs, [VIF]);
+  verifier(marmiton(null), { faces: 8, modificateur: 1, difficulte: 4, net: 0, avantages: [SOLO_D_AUBEPINE], desavantages: [MELEE] });
+  const precise = marmiton("precise");
+  assert.deepEqual(precise.mobilisees, ["precision", "empathie"]);
+  assert.deepEqual(precise.modificateurs, [], "Vif ne vaut que pour l'Agilité");
+  verifier(precise, { faces: 8, modificateur: 0, difficulte: 4, net: 0, avantages: [SOLO_D_AUBEPINE], desavantages: [MELEE] });
+});
+
+test("référence : les causes sans cible de la démonstration ; Frappe et Émincer d'Aubépine hors maîtrise, le Moulinet du Marmiton de corvée, non celui du Chef", () => {
+  const etat = reference();
+  const sansCible = (id, nom, facon = 0) => sourcesSansCible(etat, id, indiceDe(etat, id, nom), facon);
+  assert.deepEqual(sansCible("pj1", "Frappe"), { avantages: [], desavantages: [horsMaitrise("Frappe")] });
+  assert.deepEqual(sansCible("pj1", "Émincer"), { avantages: [], desavantages: [horsMaitrise("Émincer")] });
+  assert.deepEqual(sansCible("pj1", "Taloche"), RIEN);
+  assert.deepEqual(sansCible("adv3", "Moulinet farineux"), { avantages: [], desavantages: [horsMaitrise("Moulinet farineux")] });
+  assert.deepEqual(sansCible("adv2", "Moulinet farineux"), RIEN, "la maîtrise du Chef couvre ses deux capacités de spatule");
+  assert.deepEqual(sansCible("adv2", "Pas chassé", 1), RIEN, "Pas chassé [2]");
 });
 
 // ─── passifsDe : la fiche ───────────────────────────────────────────────────

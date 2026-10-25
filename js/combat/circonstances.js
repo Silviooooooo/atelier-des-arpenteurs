@@ -31,8 +31,20 @@
 // L'ordre des modificateurs et celui des sources sont écrits ici, dans des
 // tableaux : le journal les cite dans cet ordre, mot pour mot, et aucun ne
 // doit dépendre du parcours d'un objet.
+//
+// Au groupe 2 (contrat du groupe, § 5.4 et § 5.5 ; complément, § 4.2 et
+// § 6.2) :
+// - une source de passif porte aussi son rôle et l'indice de sa capacité chez
+//   son porteur, pour que l'écran dise sa cause sans chercher un nom dans un
+//   texte ; le journal n'en lit rien ;
+// - sourcesSansCible() donne au survol d'une capacité les causes qui ne
+//   dépendent pas de la cible (la maîtrise, « en meute »), vues de son
+//   porteur, par les mêmes règles que le jet ;
+// - à égalité de dés de défense, le joueur choisit le type (livret, « Jets
+//   de défense ») : le geste le porte, et le jet en prend les
+//   caractéristiques, donc les bonus ; le dé reste celui de la photographie.
 
-import { deDuJet } from "../personnage/regles.js";
+import { TYPES_OBJET, deDuJet } from "../personnage/regles.js";
 import { distance } from "./plateau.js";
 import { DIFFICULTES, SIGNES } from "./regles.js";
 import { alliesSurLaCase, attaqueDe, blessuresDe, campDe, capaciteDe, courantDe, defenseDe, faconDe, photoDe } from "./valeurs.js";
@@ -41,11 +53,17 @@ const manque = (phrase) => ({ manque: phrase });
 const CHOISIR_UNE_CIBLE = "Choisissez une cible.";
 
 // Les passifs d'un protagoniste qui portent un rôle, dans l'ordre de sa
-// photographie, chacun avec le nom que la banque donne à sa capacité.
+// photographie, chacun avec le nom que la banque donne à sa capacité, et
+// l'indice de celle-ci.
 function passifsDuRole(etat, id, role) {
   const passifs = photoDe(etat, id)?.passifs ?? [];
-  return passifs.filter((passif) => passif.role === role).map(({ capacite, niveau }) => ({ nom: capaciteDe(etat, id, capacite)?.nom ?? null, niveau }));
+  return passifs.filter((passif) => passif.role === role).map(({ capacite, niveau }) => ({ nom: capaciteDe(etat, id, capacite)?.nom ?? null, niveau, role, capacite }));
 }
+
+// Une source d'avantage tirée d'un passif : N avantages, N son niveau ; « de »
+// nomme l'autre quand la source est inversée. Le rôle et l'indice de la
+// capacité chez son porteur servent à l'écran (contrat du groupe 2, § 5.5).
+const sourceDuPassif = ({ nom, niveau, role, capacite }, de) => ({ genre: "passif", nom, nombre: niveau, de, role, capacite });
 
 // ─── Les modificateurs ──────────────────────────────────────────────────────
 
@@ -107,16 +125,17 @@ const AVANTAGES = [
 ];
 
 // Les avantages qu'un protagoniste tire de ses passifs dans ce jet. Pour
-// l'adversaire, ce sont eux que l'inversion change en désavantages du PJ.
-function avantagesDesPassifs(etat, id, { sens, corpsACorps }) {
+// l'adversaire, ce sont eux que l'inversion change en désavantages du PJ :
+// « de » porte alors son nom.
+function avantagesDesPassifs(etat, id, { sens, corpsACorps, de }) {
   const accompagne = alliesSurLaCase(etat, id).length > 0;
   const sources = [];
   for (const regle of AVANTAGES) {
     if (regle.seul === accompagne) continue;
     if (regle.sens !== null && regle.sens !== sens) continue;
     if (regle.corpsACorps && !corpsACorps) continue;
-    for (const { nom, niveau } of passifsDuRole(etat, id, regle.role)) {
-      if (niveau > 0) sources.push({ genre: "passif", nom, nombre: niveau });
+    for (const passif of passifsDuRole(etat, id, regle.role)) {
+      if (passif.niveau > 0) sources.push(sourceDuPassif(passif, de));
     }
   }
   return sources;
@@ -143,12 +162,12 @@ function sourcesDuJet(etat, geste, { genre, lanceur, autre }) {
   const jouee = capaciteDe(etat, geste.acteur, geste.capacite)?.nom ?? null;
   const deLAutre = nomCourt(etat, autre);
 
-  for (const source of avantagesDesPassifs(etat, lanceur, { sens: genre, corpsACorps })) avantages.push({ ...source, de: null });
+  avantages.push(...avantagesDesPassifs(etat, lanceur, { sens: genre, corpsACorps, de: null }));
   if (genre === "attaque" && horsMaitrise) desavantages.push({ genre: "maitrise", nom: jouee, nombre: 1, de: null });
   if (genre === "defense" && photoDe(etat, lanceur)?.deDefense?.meles === true) desavantages.push({ genre: "armure_melee", nom: null, nombre: 1, de: null });
 
   const sensDeLAutre = genre === "attaque" ? "defense" : "attaque";
-  for (const source of avantagesDesPassifs(etat, autre, { sens: sensDeLAutre, corpsACorps })) desavantages.push({ ...source, de: deLAutre });
+  desavantages.push(...avantagesDesPassifs(etat, autre, { sens: sensDeLAutre, corpsACorps, de: deLAutre }));
   if (genre === "defense" && horsMaitrise) avantages.push({ genre: "maitrise", nom: jouee, nombre: 1, de: deLAutre });
 
   ajouterLaMain(geste, avantages, desavantages);
@@ -184,6 +203,16 @@ function deDeLArme(photo, indice, geste) {
   const arme = Number.isInteger(indice) ? (photo?.armes?.[indice] ?? null) : null;
   if (arme !== null && arme.faces !== null) return { faces: arme.faces, caracteristiques: null, mobilisees: [...arme.caracteristiques] };
   return deAuChoix(photo, geste);
+}
+
+// Le type d'armure d'un jet de défense (livret, « Jets de défense » ; contrat
+// du groupe 2, § 5.4) : celui que le joueur a choisi s'il est parmi les types
+// à égalité de dés, sinon le type retenu par la photographie, le défaut
+// proposé. Le choix ne change que les caractéristiques du jet, donc ses bonus :
+// à égalité, les faces sont les mêmes. La forme d'une photographie garantit
+// « egalite » : vide, ou deux à trois types dont le type retenu.
+function typeDeLaDefense(deDefense, choisi) {
+  return deDefense.egalite.includes(choisi) ? choisi : deDefense.type;
 }
 
 // ─── Les circonstances ──────────────────────────────────────────────────────
@@ -237,7 +266,8 @@ function dUneAttaque(etat, geste) {
   } else {
     const deDefense = photo?.deDefense ?? null;
     if (deDefense === null) return manque(CHOISIR_UNE_CIBLE);
-    de = { faces: deDefense.faces, caracteristiques: null, mobilisees: [...deDefense.caracteristiques] };
+    const type = typeDeLaDefense(deDefense, geste.defense);
+    de = { faces: deDefense.faces, caracteristiques: null, mobilisees: [...TYPES_OBJET[type].defense] };
   }
 
   const difficulte = attaqueDuPj ? defenseDe(etat, autre).valeur : attaqueDe(etat, autre).valeur;
@@ -265,7 +295,9 @@ function dUneAttaque(etat, geste) {
  * - Une attaque ou un jet prêté d'un PJ : il lance le dé de son arme (ou un
  *   dé au choix, à mains nues) contre la défense de sa cible.
  * - Une attaque ou un jet prêté d'un adversaire : le PJ visé lance sa
- *   défense contre l'attaque de l'adversaire.
+ *   défense contre l'attaque de l'adversaire. Son dé est celui de sa
+ *   photographie ; ses caractéristiques, celles du type que porte
+ *   geste.defense s'il est à égalité de dés, sinon du type retenu.
  * - Un jet de caractéristique : le PJ lance un dé au choix contre la
  *   difficulté qu'il a choisie.
  * Tout autre geste ne lance aucun dé.
@@ -274,6 +306,33 @@ export function circonstances(etat, geste) {
   if (geste.mode === "caracteristique") return duJetDeCaracteristique(etat, geste);
   if (geste.mode === "attaque" || geste.mode === "jet_prete") return dUneAttaque(etat, geste);
   return manque("Ce geste ne lance aucun dé.");
+}
+
+/**
+ * Les causes qui ne dépendent pas de la cible, pour le survol d'une capacité
+ * (complément, § 4.2 ; contrat du groupe 2, § 5.5) : { avantages,
+ * desavantages }, vues de son porteur, sans inversion ni main. « capacite »
+ * et « facon » sont des indices dans sa photographie.
+ * - La maîtrise (source 4) : 1 désavantage, au nom de la capacité, si la
+ *   façon attaque et porte le désavantage.
+ * - « En meute » (source 2) : N avantages par passif de ce rôle, de niveau
+ *   N > 0, si la façon attaque et qu'un allié vivant est sur sa case.
+ * Rien d'autre : le reste se juge au jet, une fois la cible choisie. Une
+ * façon qui n'existe pas, ou qui n'attaque pas, n'a aucune cause.
+ */
+export function sourcesSansCible(etat, id, capacite, facon) {
+  const avantages = [];
+  const desavantages = [];
+  const laFacon = faconDe(etat, { acteur: id, capacite, facon });
+  if (laFacon === null || laFacon.attaque !== true) return { avantages, desavantages };
+
+  if (alliesSurLaCase(etat, id).length > 0) {
+    for (const passif of passifsDuRole(etat, id, "en_meute")) {
+      if (passif.niveau > 0) avantages.push(sourceDuPassif(passif, null));
+    }
+  }
+  if (laFacon.desavantage === true) desavantages.push({ genre: "maitrise", nom: capaciteDe(etat, id, capacite)?.nom ?? null, nombre: 1, de: null });
+  return { avantages, desavantages };
 }
 
 // ─── Les passifs câblés, pour la fiche ──────────────────────────────────────
