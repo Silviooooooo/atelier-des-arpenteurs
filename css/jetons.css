@@ -59,9 +59,8 @@
      constante FLECHE de js/ecrans/echelle.js), une ligne de la bulle sous
      une souris, les dés d'un jet dans la bulle, la hachure de la portée (des
      traits de 3 px tous les 9, à 135°), le cadre des dés d'un jet au
-     journal, et la hauteur d'attente d'une ligne du journal hors de la vue :
-     une ligne de texte, la hauteur de son contenu (le navigateur y ajoute
-     son padding et son trait, comme à une ligne vue). Aucun de ces noms ne
+     journal, et l'écart entre le nom d'un passif et son trait pointillé
+     (une part de la taille de son texte, qu'il suit). Aucun de ces noms ne
      porte « combat » : les contrôles le réservent aux couleurs. La dernière
      largeur est celle d'une vignette du créateur de personnage (§ 15). */
   --largeur-bulle: 20rem;
@@ -77,7 +76,7 @@
   --hachure-angle: 135deg;
   --rayon-cadre: 4px;
   --marge-cadre: 3px;
-  --hauteur-ligne-journal: calc(var(--taille-petite) * var(--interligne));
+  --decalage-soulignement: 0.2em;
   --largeur-vignette: 180px;
 
   --fond: #ffffff;

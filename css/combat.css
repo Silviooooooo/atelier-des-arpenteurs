@@ -709,13 +709,19 @@ html:has(.combat-bulle:not([hidden])) {
 }
 
 /* Un passif est une cible comme une autre : 44 px de haut, à la souris comme
-   au doigt (§ 9). Seules les lignes de la bulle descendent à 36 px. */
+   au doigt (§ 9). Seules les lignes de la bulle descendent à 36 px. Son nom
+   est souligné d'un trait pointillé, sous le texte même (vue 1) : posé en
+   bordure de la boîte de 44 px, le trait tombait une douzaine de pixels
+   plus bas. Le trait et la couleur du texte disent ensemble qu'il s'ouvre :
+   jamais la couleur seule. */
 .combat-passif {
   display: inline-flex;
   align-items: center;
   min-height: var(--cible-tactile);
-  border-bottom: var(--trait) dotted var(--texte-2);
   color: var(--texte);
+  text-decoration: underline dotted var(--texte-2);
+  text-decoration-thickness: var(--trait);
+  text-underline-offset: var(--decalage-soulignement);
   cursor: help;
 }
 
@@ -998,6 +1004,28 @@ html:has(.combat-bulle:not([hidden])) {
 .combat-infobulle[hidden],
 .combat-bandeau[hidden] {
   display: none;
+}
+
+/* « Passer son tour » ferme le dernier groupe de la liste : dans la bulle,
+   une rangée plate comme les lignes (vue 1), sans bord ni fond au repos, le
+   fond doux et le trait d'accent en dedans au survol et au focus. Il n'est
+   pas une capacité à une puissance : sans data-ligne, il garde ses 44 px
+   sous une souris, et c'est le seul bouton d'une .combat-option qui ne le
+   porte pas. Inactif, il garde son trait discontinu, l'aspect d'un bouton
+   inactif du site, et ne s'éclaire pas. */
+.combat-bulle .combat-option > .combat-capacite:not([data-ligne]) {
+  border-color: transparent;
+  background: transparent;
+}
+
+.combat-bulle .combat-option > .combat-capacite:not([data-ligne])[aria-disabled="true"] {
+  border-color: var(--bordure);
+}
+
+.combat-bulle .combat-option > .combat-capacite:not([data-ligne]):not([aria-disabled="true"]):hover,
+.combat-bulle .combat-option > .combat-capacite:not([data-ligne]):not([aria-disabled="true"]):focus-visible {
+  background: var(--accent-doux);
+  box-shadow: inset 0 0 0 var(--trait) var(--accent);
 }
 
 /* Le panneau d'action et la préparation */
@@ -1947,17 +1975,15 @@ html:has(.combat-bulle:not([hidden])) {
   font-size: var(--taille-petite);
 }
 
-/* Une ligne hors de la vue ne se met pas en page : à 45 000 lignes, chaque
-   changement de l'écran payait celle du journal entier (annuler à 15 000
-   événements : 131,8 ms en médiane dans Edge). Tant qu'elle n'a pas été
-   vue, elle a la hauteur d'une ligne sur une ligne de texte ; vue, le
-   navigateur garde la sienne. */
+/* Chaque ligne se met en page, vue ou non. Sautées hors de la vue
+   (content-visibility), les lignes jamais vues prenaient une hauteur
+   d'attente, la liste se calait au bout sur ces hauteurs, et sa dernière
+   ligne tombait sous la partie vue dès que le journal entrait dans la
+   fenêtre (complément, § 4.5 ; captures finales du groupe 2, D-1). */
 .combat-lignes li {
   padding: var(--espace-1) 0;
   border-bottom: var(--trait) solid var(--separateur);
   overflow-wrap: anywhere;
-  content-visibility: auto;
-  contain-intrinsic-size: auto var(--hauteur-ligne-journal);
 }
 
 .combat-lignes li.tour {

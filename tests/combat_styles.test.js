@@ -13,7 +13,11 @@
 // groupe 2 : la flèche de la bulle enfin dessinée, la plaque des jetons d'une
 // case hachurée, les passifs à 44 px, les lignes plates et seules à 36 px
 // (data-ligne, lu aussi dans js/ecrans/combat_action.js), le dé relancé barré
-// d'un fond, le journal hors de la vue, la marge de défilement du volet.
+// d'un fond, la marge de défilement du volet. Depuis les captures finales du
+// groupe 2 : aucune ligne du journal sautée hors de la vue (sa dernière ligne
+// reste vue), le trait pointillé des passifs sous leur nom même, « Passer son
+// tour » en rangée plate dans la bulle (.combat-option, lu aussi dans
+// js/ecrans/combat_action.js).
 //
 // Chaque règle est une fonction qui rend la liste des défauts : vide sur la
 // feuille du dépôt, non vide sur une feuille fautive écrite ici même. Une
@@ -476,7 +480,9 @@ test("jetons.css — les quinze couleurs du combat, dans les deux thèmes, exact
 // nom. La dernière sert au créateur en vignettes (css/ecran.css). À la
 // relecture de fin du groupe : la hauteur de la bulle en pixels (la fenêtre
 // moins 32 px, compl. § 4.1, que « 2rem » ne vaut qu'à la taille de texte par
-// défaut), et la hauteur d'attente d'une ligne du journal (une ligne de texte).
+// défaut). Aux captures finales : la hauteur d'attente d'une ligne du journal
+// est partie avec sa règle (D-1), et l'écart entre le nom d'un passif et son
+// trait pointillé, une part de la taille de son texte, est venu (D-3).
 const LONGUEURS = [
   ["largeur-bulle", "20rem"],
   ["largeur-bulle-jet", "29.5rem"],
@@ -491,7 +497,7 @@ const LONGUEURS = [
   ["hachure-angle", "135deg"],
   ["rayon-cadre", "4px"],
   ["marge-cadre", "3px"],
-  ["hauteur-ligne-journal", "calc(var(--taille-petite) * var(--interligne))"],
+  ["decalage-soulignement", "0.2em"],
   ["largeur-vignette", "180px"],
 ];
 
@@ -519,10 +525,10 @@ test("jetons.css — les quinze longueurs du groupe 2, au bloc clair, sans « co
   const refuse = (css, motif, feuille = COMBAT) => assert.match(defautsDesLongueurs(css, feuille).join("\n"), motif);
   // La hauteur de la bulle écrite d'après une taille de texte : 2rem ne vaut 32 px qu'à 16 px le rem.
   refuse(JETONS.replace("--hauteur-bulle-max: calc(100vh - 32px);", "--hauteur-bulle-max: calc(100vh - var(--espace-6));"), /--hauteur-bulle-max : calc\(100vh - var\(--espace-6\)\)/);
-  // La hauteur d'attente d'une ligne du journal : une ligne de texte de sa taille, ni absente ni inemployée.
-  refuse(JETONS.replace("--hauteur-ligne-journal: calc(var(--taille-petite) * var(--interligne));", "--hauteur-ligne-journal: calc(var(--taille-texte) * var(--interligne));"), /--hauteur-ligne-journal : calc\(var\(--taille-texte\)/);
-  refuse(JETONS.replace(/\r?\n {2}--hauteur-ligne-journal: [^;]+;/, ""), /--hauteur-ligne-journal : undefined/);
-  refuse(JETONS, /--hauteur-ligne-journal ne sert pas/, COMBAT.replaceAll("var(--hauteur-ligne-journal)", "var(--hauteur-volet)"));
+  // L'écart du soulignement d'un passif : une part de la taille de son texte, ni absente ni inemployée.
+  refuse(JETONS.replace("--decalage-soulignement: 0.2em;", "--decalage-soulignement: 12px;"), /--decalage-soulignement : 12px/);
+  refuse(JETONS.replace(/\r?\n {2}--decalage-soulignement: [^;]+;/, ""), /--decalage-soulignement : undefined/);
+  refuse(JETONS, /--decalage-soulignement ne sert pas/, COMBAT.replaceAll("var(--decalage-soulignement)", "var(--trait)"));
   refuse(JETONS.replace("--fleche-bulle: 8px;", "--fleche-bulle: 9px;"), /--fleche-bulle : 9px[\s\S]*diffère de FLECHE \(8\)/);
   refuse(JETONS.replace("--ligne-souris: 36px;", "--ligne-souris: 44px;"), /--ligne-souris : 44px/);
   refuse(JETONS.replace("--largeur-vignette: 180px;", ""), /--largeur-vignette : undefined/);
@@ -1160,38 +1166,7 @@ test("combat.css — toute cible fait 44 px, hors les cases (et les lignes de la
   assert.equal(enRem("calc(var(--espace-6) * 10)", definis), 20);
   assert.equal(enRem("20rem", definis), null);
   assert.equal(valeur(COMBAT, ".combat-lignes", "font-family"), "var(--police-chasse-fixe)");
-
-  // Une ligne hors de la vue ne se met pas en page (annuler sur 15 000 événements, compl. § 9 : 131,8 ms dans Edge, la mise
-  // en page de 45 000 lignes). Tant qu'elle n'a pas été vue, son contenu a la hauteur d'une ligne de texte de sa taille,
-  // à l'interligne du site ; le navigateur y ajoute son padding et son trait : 21 + 8 + 1 = 30 px à la taille par défaut.
-  assert.deepEqual(defautsDuJournalHorsDeLaVue(COMBAT), []);
-  assert.equal(definis["hauteur-ligne-journal"], "calc(var(--taille-petite) * var(--interligne))");
-  const px = (nom) => parseFloat(definis[nom]) * 16;
-  assert.equal(px("taille-petite") * Number(definis.interligne) + 2 * px("espace-1") + parseFloat(definis.trait), 30);
-  const refuseJournal = (css, motif) => assert.match(defautsDuJournalHorsDeLaVue(css).join("\n"), motif);
-  refuseJournal(feuille.replace("  content-visibility: auto;\n", ""), /content-visibility: null/);
-  refuseJournal(feuille.replace("  contain-intrinsic-size: auto var(--hauteur-ligne-journal);", "  contain-intrinsic-size: var(--hauteur-ligne-journal);"), /contain-intrinsic-size: var\(--hauteur-ligne-journal\) \}/);
-  refuseJournal(feuille.replace(".combat-lignes {\n  max-height", ".combat-lignes {\n  line-height: var(--interligne-titre);\n  max-height"), /\.combat-lignes \{ line-height: var\(--interligne-titre\) \}/);
 });
-
-// La ligne du journal hors de la vue : content-visibility, et une hauteur d'attente d'une ligne de texte, que rien ne
-// change (ni la taille ni l'interligne de la liste ou de ses lignes).
-function defautsDuJournalHorsDeLaVue(css) {
-  const defauts = [];
-  for (const [selecteur, propriete, attendue] of [
-    [".combat-lignes li", "content-visibility", "auto"],
-    [".combat-lignes li", "contain-intrinsic-size", "auto var(--hauteur-ligne-journal)"],
-    [".combat-lignes", "font-size", "var(--taille-petite)"],
-  ]) {
-    const lue = valeur(css, selecteur, propriete);
-    if (lue !== attendue) defauts.push(`${selecteur} { ${propriete}: ${lue} } au lieu de ${attendue}`);
-  }
-  for (const regle of selecteursDe(css)) {
-    if (!/^\.combat-lignes(?: li)?$/.test(regle.selecteur)) continue;
-    for (const [propriete, v] of declarations(regle.corps)) if (propriete === "line-height" || (propriete === "font-size" && regle.selecteur !== ".combat-lignes") || propriete === "font") defauts.push(`${[regle.cadre, regle.selecteur].filter(Boolean).join(" ")} { ${propriete}: ${v} }`);
-  }
-  return defauts;
-}
 
 // ——— Le groupe 2 : la bulle, ses lignes, la hachure, le bandeau, le journal ———
 
@@ -1495,6 +1470,162 @@ test("combat.css — les lignes de la bulle sont des rangées plates : ni bord n
   refuse(`${FEUILLE}\n.combat-option {\n  margin-bottom: var(--espace-1);\n}\n`, /\.combat-option \{ margin-bottom: var\(--espace-1\) \}/);
 });
 
+// Le nom d'un passif, souligné d'un trait pointillé sous le texte même (maquette, vue 1). Posé en border-bottom sur sa
+// boîte de 44 px (relecture de fin du groupe 2, C-16), le trait tombait une douzaine de pixels sous le nom (captures
+// finales, D-3). Le trait, du gris du second texte et d'un trait d'épaisseur, s'écarte du nom de --decalage-soulignement ;
+// avec la couleur du texte, il dit qu'un passif s'ouvre : jamais la couleur seule. Aucune règle d'un passif ne lui rend un
+// bord ni ne change son soulignement, dans aucun cadre ; sa boîte de 44 px reste (defautsDuPassif, plus haut).
+const PASSIF_SOULIGNE = [
+  [".combat-passif", "color", "var(--texte)", null],
+  [".combat-passif", "text-decoration", "underline dotted var(--texte-2)", null],
+  [".combat-passif", "text-decoration-thickness", "var(--trait)", null],
+  [".combat-passif", "text-underline-offset", "var(--decalage-soulignement)", null],
+];
+function defautsDuSoulignementDuPassif(css) {
+  const defauts = ecarts(css, PASSIF_SOULIGNE);
+  for (const regle of selecteursDe(css)) {
+    // Un passif, sujet de la règle, avec ou sans pseudo-classe (.combat-passifs, de la préparation, est un autre nœud).
+    if (!/\.combat-passif(?::[\w-]+(?:\([^()]*\))?)*$/.test(regle.selecteur)) continue;
+    const ou = [regle.cadre, regle.selecteur].filter(Boolean).join(" ");
+    const principale = regle.cadre === null && regle.selecteur === ".combat-passif";
+    for (const [propriete, v] of declarations(regle.corps)) {
+      if (/^border(?!-radius$)/.test(propriete)) defauts.push(`${ou} { ${propriete}: ${v} } : un bord sur le passif, loin de son nom`);
+      else if (!principale && /^text-(?:decoration|underline)/.test(propriete)) defauts.push(`${ou} { ${propriete}: ${v} } : le soulignement du passif change`);
+    }
+  }
+  return defauts;
+}
+
+test("combat.css — le nom d'un passif est souligné d'un trait pointillé sous le texte même, écarté d'un jeton ; aucun bord sur sa boîte de 44 px", () => {
+  assert.deepEqual(defautsDuSoulignementDuPassif(COMBAT), []);
+  // Le trait a changé de place, non la boîte : ses 44 px tiennent, sans @media de plus.
+  assert.deepEqual(defautsDuPassif(COMBAT), []);
+  assert.equal(valeur(COMBAT, ".combat-passif", "min-height"), "var(--cible-tactile)");
+  // L'écart suit la taille du texte ; le trait est du second texte, qui tient 4,5:1 sur le fond de la bulle (mesuré plus haut).
+  assert.equal(jetons(JETONS, "clair")["decalage-soulignement"], "0.2em");
+  assert.ok(PAIRES_DE_TEXTE.some(([avant, fond]) => avant === "texte-2" && fond === "fond"));
+  const refuse = (css, motif) => assert.match(defautsDuSoulignementDuPassif(css).join("\n"), motif);
+  // La feuille d'avant : le trait en bordure de la boîte de 44 px.
+  const trait = "  text-decoration: underline dotted var(--texte-2);\n  text-decoration-thickness: var(--trait);\n  text-underline-offset: var(--decalage-soulignement);\n";
+  const boite = ".combat-passif {\n  display: inline-flex;\n  align-items: center;\n  min-height: var(--cible-tactile);\n";
+  const davant = casser(casser(FEUILLE, trait, ""), boite, `${boite}  border-bottom: var(--trait) dotted var(--texte-2);\n`);
+  refuse(davant, /\.combat-passif \{ text-decoration: null \} au lieu de underline dotted var\(--texte-2\)/);
+  refuse(davant, /^\.combat-passif \{ border-bottom: var\(--trait\) dotted var\(--texte-2\) \} : un bord sur le passif/m);
+  // Le trait gardé, un bord en plus ; un bord rendu par une autre règle, au pied ; le soulignement effacé au survol.
+  refuse(casser(FEUILLE, boite, `${boite}  border-bottom: var(--trait) dotted var(--texte-2);\n`), /\.combat-passif \{ border-bottom: .* : un bord sur le passif/);
+  refuse(`${FEUILLE}\n.combat-bulle-pied .combat-passif {\n  border-block-end: var(--trait) dotted var(--texte-2);\n}\n`, /\.combat-bulle-pied \.combat-passif \{ border-block-end: .* : un bord sur le passif/);
+  refuse(`${FEUILLE}\n@media (pointer: fine) {\n  .combat-passif:hover {\n    text-decoration: none;\n  }\n}\n`, /@media \(pointer: fine\) \.combat-passif:hover \{ text-decoration: none \} : le soulignement du passif change/);
+  // Un trait plein, effacé, sans écart, d'une autre épaisseur.
+  refuse(casser(FEUILLE, "  text-decoration: underline dotted var(--texte-2);", "  text-decoration: underline solid var(--texte-2);"), /text-decoration: underline solid var\(--texte-2\) \} au lieu de underline dotted/);
+  refuse(casser(FEUILLE, "  text-decoration: underline dotted var(--texte-2);", "  text-decoration: none;"), /text-decoration: none \} au lieu de underline dotted/);
+  refuse(casser(FEUILLE, "  text-underline-offset: var(--decalage-soulignement);", "  text-underline-offset: auto;"), /text-underline-offset: auto \} au lieu de var\(--decalage-soulignement\)/);
+  refuse(casser(FEUILLE, "  text-decoration-thickness: var(--trait);", "  text-decoration-thickness: var(--trait-epais);"), /text-decoration-thickness: var\(--trait-epais\) \}/);
+  // Le lecteur : border-radius n'est pas un bord ; .combat-passifs n'est pas un passif.
+  assert.deepEqual(defautsDuSoulignementDuPassif(`${FEUILLE}\n.combat-passif {\n  border-radius: var(--rayon);\n}\n\n.combat-passifs {\n  border-bottom: var(--trait) solid var(--bordure);\n}\n`), []);
+});
+
+// « Passer son tour », dans la bulle : une rangée plate comme les lignes (maquette, vue 1 ; captures finales du groupe 2,
+// D-4, après C-20), sans bord ni fond au repos, le fond doux et le trait d'accent en dedans au survol et au focus. Ses
+// règles ne posent que ces couleurs, hors de tout cadre : ses 44 px (C-05 : il ne porte pas data-ligne, la règle de la
+// souris ne le touche pas) et le trait discontinu de l'inactif viennent des capacités ; inactif, il garde l'aspect d'un
+// bouton inactif du site et ne s'éclaire pas. Hors de la bulle, rien ne le vise. Il est, dans js/ecrans/combat_action.js,
+// le seul bouton d'une .combat-option sans data-ligne (defautsDesOptions, plus bas).
+const PASSER = ".combat-bulle .combat-option > .combat-capacite:not([data-ligne])";
+const PASSER_INACTIF = `${PASSER}[aria-disabled="true"]`;
+const PASSER_ECLAIRE = [`${PASSER}:not([aria-disabled="true"]):hover`, `${PASSER}:not([aria-disabled="true"]):focus-visible`];
+function defautsDePasserEnRangee(css) {
+  const defauts = ecarts(css, [
+    [PASSER, "border-color", "transparent", null],
+    [PASSER, "background", "transparent", null],
+    [PASSER_INACTIF, "border-color", "var(--bordure)", null],
+    ...PASSER_ECLAIRE.flatMap((selecteur) => [
+      [selecteur, "background", "var(--accent-doux)", null],
+      [selecteur, "box-shadow", "inset 0 0 0 var(--trait) var(--accent)", null],
+    ]),
+  ]);
+  for (const regle of selecteursDe(css)) {
+    const ou = [regle.cadre, regle.selecteur].filter(Boolean).join(" ");
+    if (/\.combat-capacite:not\(\[data-ligne\]\)/.test(regle.selecteur) && !regle.selecteur.startsWith(PASSER)) defauts.push(`${ou} : « Passer son tour » visé hors de la bulle`);
+    if (!regle.selecteur.startsWith(PASSER)) continue;
+    if (regle.cadre !== null) defauts.push(`${ou} : « Passer son tour » change dans un cadre`);
+    for (const [propriete, v] of declarations(regle.corps)) if (!/^(?:border-color|background|box-shadow)$/.test(propriete)) defauts.push(`${ou} { ${propriete}: ${v} } : plus que les couleurs d'une rangée`);
+  }
+  // L'inactif et l'éclairé l'emportent sur le repos ; le repos, sur le bord et le fond des capacités, et sur une capacité inactive.
+  if (!(pese(poids(PASSER_INACTIF)) > pese(poids(PASSER)))) defauts.push("« Passer son tour » inactif ne l'emporte pas sur le repos");
+  for (const eclaire of PASSER_ECLAIRE) if (!(pese(poids(eclaire)) > pese(poids(PASSER)))) defauts.push(`${eclaire} ne l'emporte pas sur le repos`);
+  for (const sous of [".combat-capacite", ".combat-bulle .combat-capacite", ".combat-capacite[aria-disabled=\"true\"]"]) if (!(pese(poids(PASSER)) > pese(poids(sous)))) defauts.push(`${PASSER} ne l'emporte pas sur ${sous}`);
+  return defauts;
+}
+
+test("combat.css — « Passer son tour », dans la bulle, est une rangée plate comme les lignes ; il garde ses 44 px et, inactif, l'aspect d'un bouton inactif", () => {
+  assert.deepEqual(defautsDePasserEnRangee(COMBAT), []);
+  // Ses 44 px : la règle des capacités de la bulle ; celle de la souris ne vise que data-ligne.
+  assert.equal(valeur(COMBAT, ".combat-bulle .combat-capacite", "min-height"), "var(--cible-tactile)");
+  assert.deepEqual(defautsDesLignes(COMBAT), []);
+  // Inactif : le trait discontinu, le fond transparent et le gris d'une capacité inactive ; le gris du trait d'un bouton
+  // inactif du site, comme une ligne inactive.
+  for (const [propriete, attendue] of [["border-style", "dashed"], ["background", "transparent"], ["color", "var(--texte-2)"]]) {
+    assert.equal(valeur(COMBAT, ".combat-capacite[aria-disabled=\"true\"]", propriete), attendue, propriete);
+  }
+  assert.equal(valeur(COMBAT, PASSER_INACTIF, "border-color"), valeur(COMBAT, ".combat .bouton[aria-disabled=\"true\"]", "border-color"));
+  assert.equal(valeur(COMBAT, PASSER_INACTIF, "border-color"), valeur(COMBAT, LIGNE_INACTIVE, "border-color"));
+  const refuse = (css, motif) => assert.match(defautsDePasserEnRangee(css).join("\n"), motif);
+  // La feuille d'avant : un bouton encadré entre les rangées plates.
+  const repos = `${PASSER} {\n  border-color: transparent;\n  background: transparent;\n}\n\n`;
+  const inactif = `${PASSER_INACTIF} {\n  border-color: var(--bordure);\n}\n\n`;
+  const eclaire = `${PASSER_ECLAIRE[0]},\n${PASSER_ECLAIRE[1]} {\n  background: var(--accent-doux);\n  box-shadow: inset 0 0 0 var(--trait) var(--accent);\n}\n\n`;
+  refuse(casser(casser(casser(FEUILLE, repos, ""), inactif, ""), eclaire, ""), /:not\(\[data-ligne\]\) \{ border-color: null \} au lieu de transparent[\s\S]*:focus-visible \{ box-shadow: null \}/);
+  // Un bord ou un fond au repos ; l'inactif sans trait visible ; éclairé inactif, ou au focus de la souris.
+  refuse(casser(FEUILLE, `${PASSER} {\n  border-color: transparent;`, `${PASSER} {\n  border-color: var(--bordure);`), /:not\(\[data-ligne\]\) \{ border-color: var\(--bordure\) \} au lieu de transparent/);
+  refuse(casser(FEUILLE, `${PASSER} {\n  border-color: transparent;\n  background: transparent;`, `${PASSER} {\n  border-color: transparent;\n  background: var(--fond);`), /:not\(\[data-ligne\]\) \{ background: var\(--fond\) \} au lieu de transparent/);
+  refuse(casser(FEUILLE, `${PASSER_INACTIF} {\n  border-color: var(--bordure);`, `${PASSER_INACTIF} {\n  border-color: transparent;`), /\[aria-disabled="true"\] \{ border-color: transparent \} au lieu de var\(--bordure\)/);
+  refuse(casser(FEUILLE, `${PASSER_ECLAIRE[0]},`, `${PASSER}:hover,`), /:not\(\[aria-disabled="true"\]\):hover \{ background: null \}/);
+  refuse(casser(FEUILLE, `${PASSER_ECLAIRE[1]} {`, `${PASSER}:not([aria-disabled="true"]):focus {`), /:focus-visible \{ background: null \}/);
+  refuse(casser(FEUILLE, eclaire, eclaire.replace("inset 0 0 0", "0 0 0")), /:hover \{ box-shadow: 0 0 0 var\(--trait\) var\(--accent\) \} au lieu de inset/);
+  // Plus que des couleurs : les 36 px des lignes, un style de trait ; une règle dans un cadre ; hors de la bulle.
+  refuse(casser(FEUILLE, `${PASSER} {\n  border-color: transparent;\n  background: transparent;`, `${PASSER} {\n  border-color: transparent;\n  background: transparent;\n  min-height: var(--ligne-souris);`), /\{ min-height: var\(--ligne-souris\) \} : plus que les couleurs d'une rangée/);
+  refuse(`${FEUILLE}\n${PASSER_INACTIF} {\n  border-style: solid;\n}\n`, /\[aria-disabled="true"\] \{ border-style: solid \} : plus que les couleurs d'une rangée/);
+  refuse(`${FEUILLE}\n@media (min-width: 56rem) {\n  ${PASSER} {\n    background: var(--fond-2);\n  }\n}\n`, /^@media \(min-width: 56rem\) \.combat-bulle .* : « Passer son tour » change dans un cadre/m);
+  refuse(`${FEUILLE}\n.combat-option > .combat-capacite:not([data-ligne]) {\n  background: transparent;\n}\n`, /^\.combat-option > \.combat-capacite:not\(\[data-ligne\]\) : « Passer son tour » visé hors de la bulle/m);
+});
+
+// Le sélecteur de « Passer son tour » tient à la forme de la liste : dans js/ecrans/combat_action.js, hors des
+// commentaires, « combat-option » ne s'écrit que dans ligneDeCapacite (une ligne, qui porte data-ligne) et sur la ligne
+// qui fabrique « Passer son tour » (cle: "passer"), qui l'écrit bien. Aucune rangée du jet n'en prend l'aspect.
+function defautsDesOptions(source) {
+  const texte = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\s)\/\/.*$/gm, "$1");
+  const debut = texte.indexOf("function ligneDeCapacite(");
+  const fin = debut < 0 ? -1 : texte.indexOf("\n}", debut);
+  if (debut < 0 || fin < 0) return ["ligneDeCapacite introuvable"];
+  const defauts = [];
+  let passer = 0;
+  for (const trouve of texte.matchAll(/combat-option(?![\w-])/g)) {
+    const i = trouve.index;
+    if (i > debut && i < fin) continue;
+    const coupe = texte.indexOf("\n", i);
+    const ligne = texte.slice(texte.lastIndexOf("\n", i) + 1, coupe < 0 ? undefined : coupe).trim();
+    if (/\bcle: "passer"/.test(ligne)) passer += 1;
+    else defauts.push(`une .combat-option hors des lignes et de « Passer son tour » : ${ligne}`);
+  }
+  if (passer !== 1) defauts.push(`« Passer son tour » dans ${passer} .combat-option au lieu d'une`);
+  return defauts;
+}
+
+test("combat_action.js — une .combat-option ne tient qu'une ligne ou « Passer son tour » : la rangée plate de « Passer son tour » ne vise que lui", () => {
+  assert.deepEqual(defautsDesOptions(ACTION), []);
+  const source = "function ligneDeCapacite(r, ligne) {\n  return el(\"div\", { classe: \"combat-option\" }, el(\"button\", { classe: \"combat-capacite\", \"data-ligne\": ligne.cle }));\n}\n\nfunction composerListe(r, vue) {\n  const passer = el(\"div\", { classe: \"combat-option\" }, bouton(r, { cle: \"passer\", classe: \"combat-capacite\" }));\n  return passer;\n}\n";
+  assert.deepEqual(defautsDesOptions(source), []);
+  assert.deepEqual(defautsDesOptions(source.replaceAll("\n", "\r\n")), []);
+  const refuse = (texte, motif) => assert.match(defautsDesOptions(texte).join("\n"), motif);
+  // « Passer son tour » hors d'une .combat-option : la feuille ne le viserait plus.
+  refuse(source.replace("{ classe: \"combat-option\" }, bouton(", "{ classe: \"combat-groupe\" }, bouton("), /« Passer son tour » dans 0 \.combat-option au lieu d'une/);
+  // Une rangée du jet dans une .combat-option : elle prendrait l'aspect de « Passer son tour ».
+  refuse(`${source}\nfunction rangee(r) {\n  return el("div", { classe: "combat-option combat-degats-bases" }, bouton(r, { cle: "degats:base:0", classe: "combat-capacite" }));\n}\n`, /hors des lignes et de « Passer son tour » : return el\("div", \{ classe: "combat-option combat-degats-bases" \}/);
+  refuse(source.replace("function ligneDeCapacite(", "function uneLigne("), /ligneDeCapacite introuvable/);
+  // Un commentaire qui la nomme ne compte pas ; « combat-options » n'est pas elle.
+  assert.deepEqual(defautsDesOptions(`// Une .combat-option par ligne.\n/* combat-option */\n${source}const autre = "combat-options";\n`), []);
+});
+
 // Contrat § 10.3, la hachure.
 const HACHURE = "repeating-linear-gradient(var(--hachure-angle), var(--combat-portee) 0 var(--hachure-trait), transparent var(--hachure-trait) var(--hachure-pas))";
 function defautsDeLaHachure(css) {
@@ -1684,6 +1815,41 @@ test("combat.css — le journal et le bandeau : les segments colorés, et rien d
   refuse(casser(FEUILLE, ".combat-seg-reussite {\n  color: var(--combat-reussite);", ".combat-seg-reussite {\n  color: var(--combat-reussite);\n  background: var(--combat-pj-doux);"), /\.combat-seg-reussite : background/);
   refuse(casser(FEUILLE, ".combat-de-insecable {\n  white-space: nowrap;", ".combat-de-insecable {\n  white-space: normal;"), /\.combat-de-insecable \{ white-space: normal \}/);
   refuse(casser(FEUILLE, "  border: var(--trait) solid var(--combat-cadre-jet);", "  border: var(--trait) solid var(--bordure);"), /\.combat-cadre-jet \{ border: var\(--trait\) solid var\(--bordure\) \}/);
+});
+
+// La dernière ligne du journal reste vue (compl. § 4.5 : la liste « défile en elle-même pour montrer sa dernière
+// ligne » ; spéc. § 17.7). Une ligne sautée hors de la vue (content-visibility) n'a, tant qu'elle n'a pas été vue, que la
+// hauteur d'attente de contain-intrinsic-size : la liste se calait au bout sur ces hauteurs, puis, le journal amené dans
+// la fenêtre, les lignes reprenaient la leur, et la dernière tombait de 252 à 2 667 px sous la partie vue, dans Edge et
+// dans Firefox (captures finales du groupe 2, D-1). La feuille n'en pose donc nulle part : sur une ligne, par quelque
+// sélecteur qui l'atteigne, comme sur la liste ou ce qui la contient, l'effet serait le même. Le jeton de la hauteur
+// d'attente est parti avec la règle.
+const SAUTE_HORS_DE_LA_VUE = /^(?:content-visibility|contain-intrinsic-(?:size|width|height|block-size|inline-size))$/;
+function defautsDuJournalVu(css, jetonsCss) {
+  const defauts = [];
+  for (const regle of selecteursDe(css)) {
+    for (const [propriete, v] of declarations(regle.corps)) {
+      if (SAUTE_HORS_DE_LA_VUE.test(propriete)) defauts.push(`${[regle.cadre, regle.selecteur].filter(Boolean).join(" ")} { ${propriete}: ${v} } : la dernière ligne du journal ne resterait pas vue`);
+    }
+  }
+  if ("hauteur-ligne-journal" in jetons(jetonsCss, "clair")) defauts.push("--hauteur-ligne-journal déclaré dans jetons.css : la hauteur d'attente d'une ligne du journal");
+  return defauts;
+}
+
+test("combat.css — la dernière ligne du journal reste vue : ni content-visibility ni contain-intrinsic-size, sur ses lignes ni ailleurs dans la feuille ; plus de jeton de hauteur d'attente", () => {
+  assert.deepEqual(defautsDuJournalVu(COMBAT, JETONS), []);
+  const refuse = (css, motif, jetonsCss = JETONS) => assert.match(defautsDuJournalVu(css, jetonsCss).join("\n"), motif);
+  // La règle des lignes d'avant les captures finales (C-08), et son jeton.
+  const ligne = ".combat-lignes li {\n  padding: var(--espace-1) 0;\n  border-bottom: var(--trait) solid var(--separateur);\n  overflow-wrap: anywhere;\n";
+  refuse(casser(FEUILLE, ligne, `${ligne}  content-visibility: auto;\n  contain-intrinsic-size: auto var(--hauteur-ligne-journal);\n`), /^\.combat-lignes li \{ content-visibility: auto \} : [^\n]*\n\.combat-lignes li \{ contain-intrinsic-size: auto var\(--hauteur-ligne-journal\) \}/m);
+  refuse(FEUILLE, /--hauteur-ligne-journal déclaré dans jetons\.css/, JETONS.replace("--marge-cadre: 3px;", "--marge-cadre: 3px;\n  --hauteur-ligne-journal: calc(var(--taille-petite) * var(--interligne));"));
+  // L'une sans l'autre ; sur la liste ; sur une ligne d'un tour, dans un cadre ; sur une ligne annulée.
+  refuse(casser(FEUILLE, ligne, `${ligne}  contain-intrinsic-size: auto var(--espace-6);\n`), /^\.combat-lignes li \{ contain-intrinsic-size: auto var\(--espace-6\) \}/m);
+  refuse(casser(FEUILLE, ".combat-lignes {\n  max-height", ".combat-lignes {\n  content-visibility: auto;\n  max-height"), /^\.combat-lignes \{ content-visibility: auto \}/m);
+  refuse(`${FEUILLE}\n@media (min-width: 56rem) {\n  .combat-lignes li.tour {\n    content-visibility: auto;\n  }\n}\n`, /^@media \(min-width: 56rem\) \.combat-lignes li\.tour \{ content-visibility: auto \}/m);
+  refuse(`${FEUILLE}\n.combat-annulee {\n  contain-intrinsic-height: auto var(--espace-6);\n}\n`, /^\.combat-annulee \{ contain-intrinsic-height: auto var\(--espace-6\) \}/m);
+  // Le texte d'un commentaire ne compte pas : la feuille dit pourquoi elle n'en pose pas.
+  assert.deepEqual(defautsDuJournalVu("/* Sautée hors de la vue (content-visibility: auto;) */\n.combat-lignes li {\n  overflow-wrap: anywhere;\n}\n", JETONS), []);
 });
 
 // Contrat § 10.3 : ni transform, ni filter, ni container-type sur .combat et .combat-cadre (ni rien qui ferait d'eux le

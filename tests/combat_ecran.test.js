@@ -3044,6 +3044,125 @@ dansUnePage("la bulle — Maj+Tab depuis sa première ligne revient au jeton ; T
   assert.equal(bulleMontree(ecran), true);
 });
 
+// La bulle se place sur la carte telle que le rendu la laisse (captures
+// finales du groupe 2, D-2). Rouverte au rechargement en plein jet, elle
+// pointait 61 px au-dessus de sa case, la hauteur du bandeau : placée avant
+// que le bandeau et la zone d'avis se rendent, elle restait où la carte était
+// avant qu'ils la poussent.
+//
+// Le document simulé ne met rien en page : ces boîtes prêtées font ce que
+// fait la feuille. Le cadre commence sous la barre, une ligne plus bas pour
+// la phrase de la limite montrée et pour chaque paragraphe de la zone d'avis ;
+// dans le cadre, la carte descend sous le bandeau montré ; chaque case fait
+// 60 px de côté, comptée depuis A1 ; la bulle a sa taille (celle du jet, plus
+// grande) ; rien d'autre n'a de boîte. Chaque boîte se lit quand le code la
+// demande : elle bouge quand le bandeau ou l'avis paraît, comme dans la page.
+const BOITES = { cadre: { gauche: 40, haut: 100, largeur: 1200, hauteur: 1400 }, ligneAuDessus: 48, bandeau: 62, cote: 60, liste: { width: 320, height: 400 }, jet: { width: 472, height: 520 } };
+// La marge de calculerPlace (js/ecrans/echelle.js) : « entière » se juge à elle.
+const MARGE_DE_LA_FENETRE = 16;
+
+/** La première classe d'un nœud : ce qu'il est dans l'écran. */
+const premiereClasse = (noeud) => String(noeud?.className ?? "").split(" ")[0];
+const enfantDe = (noeud, classe) => noeud?.children.find((enfant) => premiereClasse(enfant) === classe) ?? null;
+
+function boiteDuCadre(noeud) {
+  const ecran = noeud.parentNode;
+  const limite = enfantDe(ecran, "combat-limite");
+  const lignes = (limite !== null && !limite.hidden ? 1 : 0) + (enfantDe(ecran, "combat-avis")?.children.length ?? 0);
+  return { left: BOITES.cadre.gauche, top: BOITES.cadre.haut + lignes * BOITES.ligneAuDessus, width: BOITES.cadre.largeur, height: BOITES.cadre.hauteur };
+}
+
+function boiteDeLaCase(noeud) {
+  let leCadre = noeud.parentNode;
+  while (leCadre && premiereClasse(leCadre) !== "combat-cadre") leCadre = leCadre.parentNode;
+  if (!leCadre) return null;
+  const bandeau = enfantDe(leCadre, "combat-bandeau");
+  const nom = noeud.getAttribute("data-case");
+  const colonne = nom.codePointAt(0) - "A".codePointAt(0);
+  const rangee = Number(nom.slice(1)) - 1;
+  const { left, top } = boiteDuCadre(leCadre);
+  const pousse = bandeau !== null && !bandeau.hidden ? BOITES.bandeau : 0;
+  return { left: left + colonne * BOITES.cote, top: top + pousse + rangee * BOITES.cote, width: BOITES.cote, height: BOITES.cote };
+}
+
+function boitePretee(noeud) {
+  const classes = String(noeud.className ?? "").split(" ");
+  if (classes[0] === "combat-cadre") return boiteDuCadre(noeud);
+  if (classes[0] === "combat-case") return boiteDeLaCase(noeud);
+  if (classes[0] === "combat-bulle") return { left: 0, top: 0, ...(classes.includes("combat-bulle-jet") ? BOITES.jet : BOITES.liste) };
+  return null;
+}
+
+/** Prête ces boîtes à chaque élément que la page créera désormais : son « rectangle » se lit au moment où on le demande. */
+function preterLesBoites() {
+  const creer = document.createElement;
+  document.createElement = (balise) => {
+    const noeud = creer(balise);
+    Object.defineProperty(noeud, "rectangle", { configurable: true, get: () => boitePretee(noeud) });
+    return noeud;
+  };
+}
+
+/**
+ * Ce que vise la bulle, lu dans ce que le code a écrit (--bulle-haut,
+ * --bulle-fleche, relatifs au cadre), contre les boîtes de la fin du rendu :
+ * l'écart de la pointe de sa flèche au milieu de la case, et si elle est
+ * entière dans la fenêtre.
+ */
+function viseeDeLaBulle(ecran, nomDeCase) {
+  const bulle = laBulle(ecran);
+  const px = (nom) => {
+    const valeur = bulle.style.getPropertyValue(nom);
+    assert.match(valeur, /^-?\d+px$/, `${nom} : « ${valeur} »`);
+    return Number.parseInt(valeur, 10);
+  };
+  const duCadre = cadre(ecran).getBoundingClientRect();
+  const visee = laCase(ecran, nomDeCase).getBoundingClientRect();
+  const taille = bulle.getBoundingClientRect();
+  const { clientWidth, clientHeight } = document.documentElement;
+  const gauche = duCadre.left + px("--bulle-gauche");
+  const haut = duCadre.top + px("--bulle-haut");
+  return {
+    ecartDeLaFleche: px("--bulle-haut") + px("--bulle-fleche") - ((visee.top + visee.bottom) / 2 - duCadre.top),
+    entiere: gauche >= MARGE_DE_LA_FENETRE && gauche + taille.width <= clientWidth - MARGE_DE_LA_FENETRE && haut >= MARGE_DE_LA_FENETRE && haut + taille.height <= clientHeight - MARGE_DE_LA_FENETRE,
+  };
+}
+
+dansUnePage("la bulle — rouverte d'elle-même au rechargement en plein jet, elle se place après le bandeau qui paraît au même rendu : sa flèche vise le milieu de la case que le bandeau a poussée ; un dé ne la replace pas (captures finales, D-2)", async (page) => {
+  const lieu = lieuSimule();
+  // Le combat de référence gardé en plein premier geste, deux dés lancés : la Frappe d'Aubépine, sur C3.
+  await poserEnBase(lieu, texteDuCombat({ geste: 1, des: 2 }, 3));
+  preterLesBoites();
+  const { ecran, des } = await ouvrirLEcran(page, { magasin: await lieu.onglet(), des: [8] });
+  const bulle = laBulle(ecran);
+  assert.equal(bulleMontree(ecran), true, "la bulle se rouvre d'elle-même");
+  assert.ok(bulle.className.split(" ").includes("combat-bulle-jet"), `sur le jet : ${bulle.className}`);
+  assert.ok(un(laCase(ecran, "C3"), ".combat-jeton").className.split(" ").includes("joue"), "C3 est la case de qui joue");
+  assert.equal(cache(un(ecran, "div.combat-bandeau")), false, "le bandeau paraît au même rendu, au-dessus de la carte");
+  assert.deepEqual(bulle.style.ecritures.map(([nom]) => nom), ["--bulle-gauche", "--bulle-haut", "--bulle-fleche"], "placée une fois, au rendu qui l'ouvre");
+  assert.ok(bulle.className.split(" ").includes("combat-bulle-droite"), bulle.className);
+  assert.deepEqual(viseeDeLaBulle(ecran, "C3"), { ecartDeLaFleche: 0, entiere: true }, "la flèche vise le milieu de la case, sous le bandeau ; placée avant lui, l'écart valait sa hauteur");
+  // Le dé suivant refait le corps de la bulle sans la replacer : jamais à un dé (contrat, § 9.3).
+  await cliquer(deACliquer(ecran));
+  assert.deepEqual(des.reste(), [], "le troisième dé est tombé");
+  assert.equal(bulleMontree(ecran), true);
+  assert.equal(bulle.style.ecritures.length, 3, "un dé ne replace pas la bulle");
+});
+
+dansUnePage("la bulle — rouverte au rechargement à 13 500 événements, elle se place après la zone d'avis qui dit la limite au même rendu : entière dans la fenêtre, sa flèche au milieu de la case", async (page) => {
+  const lieu = lieuSimule();
+  // Le long combat finit sur la Frappe d'Aubépine ouverte : le jet attend, et la limite se dit à l'ouverture.
+  await poserEnBase(lieu, texteDuLongCombat(EVENEMENTS_ALERTE + 2));
+  preterLesBoites();
+  const { ecran } = await ouvrirLEcran(page, { magasin: await lieu.onglet() });
+  const bulle = laBulle(ecran);
+  assert.deepEqual(tous(avis(ecran), "p").map(texteDe), [LIMITE], "la limite, dite dans la zone d'avis au même rendu : elle pousse le cadre");
+  assert.equal(bulleMontree(ecran), true, "la bulle se rouvre d'elle-même");
+  assert.ok(bulle.className.split(" ").includes("combat-bulle-jet"), `sur le jet : ${bulle.className}`);
+  assert.deepEqual(bulle.style.ecritures.map(([nom]) => nom), ["--bulle-gauche", "--bulle-haut", "--bulle-fleche"], "placée une fois, au rendu qui l'ouvre");
+  assert.deepEqual(viseeDeLaBulle(ecran, "C3"), { ecartDeLaFleche: 0, entiere: true }, "placée après l'avis, la bulle tient dans la fenêtre ; avant lui, l'avis la poussait sous son bord");
+});
+
 // ─── Au groupe 2 : le journal, le bandeau ───────────────────────────────────
 
 // Les corrections de la relecture du groupe 2 (C-01, C-02, C-06, C-14).

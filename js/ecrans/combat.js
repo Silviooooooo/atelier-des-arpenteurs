@@ -1434,12 +1434,19 @@ function monter(visite) {
     });
     bulleMontree = rendu.montree;
     protagonisteMontre = vueDeLaBulle === vueDuPanneau ? protagonisteDe(vueDuPanneau) : null;
-    if (rendu.ouverture) bulle.replacer();
 
     if (ficheOuverte !== null && !etat.ordre.includes(ficheOuverte)) fermerLaFiche({ focus: false });
     rendreLeJournal(etat);
     bandeau.rendre(vueBandeau(etat));
     rendreAvis();
+    // La bulle se place sur la carte telle que ce rendu la laisse, après tout
+    // ce qui la déplace en changeant de hauteur : le panneau « Fiche
+    // complète » et la zone d'avis, au-dessus du cadre ; le bandeau, au-dessus
+    // de la carte (le journal, dessous, ne la déplace pas). Placée avant eux,
+    // elle restait où la carte était avant qu'ils la poussent : rouverte au
+    // rechargement en plein jet, sa flèche visait 61 px plus haut que sa case,
+    // la hauteur du bandeau (captures finales du groupe 2, D-2).
+    if (rendu.ouverture) bulle.replacer();
 
     if (change && (deplacer || focusPerdu)) focusSurLaPartie();
     else if (deplacer) {
