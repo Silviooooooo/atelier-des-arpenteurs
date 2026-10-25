@@ -1,13 +1,20 @@
 // Contrôles de l'écran assemblé du simulateur de combat (SPECIFICATION.md,
-// § 17 et § 11, domaine « Combat » ; § 7.2 pour l'enregistrement) :
-// js/ecrans/combat.js, dans le document simulé.
+// § 17 et § 11, domaine « Combat » ; § 7.2 pour l'enregistrement ; contrat du
+// lot 4, groupe 2, § 9 et § 14 É5) : js/ecrans/combat.js, dans le document
+// simulé.
 //
-// Les quatre parties de l'écran ont chacune leurs contrôles, sur des vues
-// écrites à la main. Ici tout est vrai : la banque de la démonstration, ses
+// Les parties de l'écran ont chacune leurs contrôles, sur des vues écrites à
+// la main. Ici tout est vrai : la banque de la démonstration, ses
 // photographies, le moteur, la séance, le gardien et son chiffrement. Seuls
 // sont simulés le document, les dés (imposés), l'heure, le presse-papiers, le
-// téléchargement et la base de l'appareil. Le combat de référence fictif s'y
-// joue du premier clic au dernier, et son journal se compare mot pour mot.
+// téléchargement, la base de l'appareil et le fichier du personnage de
+// démonstration. Le combat de référence fictif s'y joue du premier clic au
+// dernier, par la bulle, et son journal se compare mot pour mot.
+//
+// Un clic s'y joue comme dans un navigateur : il donne le focus au bouton,
+// et l'écran le voit d'abord en capture (le clic au-dehors de la bulle), puis
+// le bouton. Le document simulé relève chaque focus et chaque scrollIntoView :
+// l'écran ne fait jamais défiler la page de lui-même.
 //
 // Chaque contrôle ouvre une page neuve (le module, rechargé), pour que la
 // mémoire d'un combat ne passe pas de l'un à l'autre : c'est aussi ainsi que
@@ -17,9 +24,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { chiffrerRencontre, magasinRencontreMemoire } from "../js/adversaire/rencontre_gardee.js";
 import { MOT_DE_PASSE_DEMO } from "../js/banque/chargement.js";
 import { indexer } from "../js/banque/consultation.js";
 import { PHRASES_DE_GARDE, chiffrerCombat, creerGardien, dechiffrerCombat, magasinCombatIndexedDB, magasinCombatMemoire } from "../js/combat/enregistrement.js";
+import { EVENEMENTS_ALERTE } from "../js/combat/regles.js";
 import { creerSeance } from "../js/combat/seance.js";
 import { accepter, lirePersonnage } from "../js/personnage/format.js";
 import { CARACTERISTIQUES } from "../js/personnage/regles.js";
@@ -41,7 +50,8 @@ const rencontre = await import("../js/ecrans/rencontre.js");
 
 // La démonstration, telle qu'elle est publiée : sa banque, sa clé, Aubépine.
 const { banque: BANQUE, secret: SECRET } = await ouvrirAvecMotDePasse(JSON.parse(lire("essais/banque_demo.chiffree.json")), MOT_DE_PASSE_DEMO);
-const AUBEPINE = lirePersonnage(lire("essais/personnage_demo.arpenteur.json"), { mode: "demo" }).personnage;
+const FICHIER_AUBEPINE = lire("essais/personnage_demo.arpenteur.json");
+const AUBEPINE = lirePersonnage(FICHIER_AUBEPINE, { mode: "demo" }).personnage;
 // Une autre clé de table : celle d'après un changement de mot de passe.
 const AUTRE = await nouveauSecret(crypto.randomUUID());
 
@@ -51,10 +61,15 @@ const SOIR = () => new Date(2026, 9, 12, 21, 30);
 // signe invisible ne s'écrit dans les sources.
 const RENVERSE = String.fromCodePoint(0x202e);
 const MARQUE_D_ORDRE = String.fromCodePoint(0xfeff);
+// Les signes de l'écran, par leur code.
+const ANNULER_LE_DERNIER = `${String.fromCodePoint(0x21b6)} Annuler le dernier geste`;
+const POINTS = String.fromCodePoint(0x2026);
 
 const NE_SE_LIT_PLUS = "Le combat gardé ne se lit plus (mot de passe de table changé, ou donnée abîmée).";
 const QUESTION = "Effacer ce combat et son journal ?";
 const JOURNAL_VIDE = "Le combat n'est pas lancé : le journal est vide.";
+const PHRASE_DE_LA_ZONE = "Le jet se joue dans la bulle, à côté des jetons.";
+const LIMITE = "Ce combat approche de sa limite (13 500 événements sur 15 000) : copiez ou téléchargez le journal ; au-delà, il faudra en commencer un nouveau.";
 
 // ─── La page, la base, l'appareil ───────────────────────────────────────────
 
@@ -71,17 +86,33 @@ function indexDe(banque) {
   return index.get(banque);
 }
 
-/** Ce que l'étagère donne à lire, sans rien écrire ; elle compte ses lectures, et peut se faire attendre. */
-function etagereDe(personnages, { retard = null } = {}) {
-  const journal = { lectures: 0 };
+/**
+ * L'étagère de l'appareil : elle donne à lire, compte ses lectures, peut se
+ * faire attendre ; elle garde aussi ce qu'on lui confie (le personnage de
+ * démonstration), et le relève.
+ */
+function etagereDe(personnages, { retard = null, garderLeve = null } = {}) {
+  const journal = { lectures: 0, gardes: [] };
+  const tenus = structuredClone(personnages);
   return {
     journal,
     async lister() {
       journal.lectures += 1;
       if (retard) await retard;
-      return { personnages: structuredClone(personnages), illisibles: 0 };
+      return { personnages: structuredClone(tenus), illisibles: 0 };
     },
     listerNotes: async () => [],
+    async lire(id) {
+      const trouve = tenus.find((personnage) => personnage.id === id);
+      return trouve ? structuredClone(trouve) : null;
+    },
+    async garder(personnage) {
+      if (garderLeve) throw new Error(garderLeve);
+      journal.gardes.push(personnage.id);
+      const rang = tenus.findIndex((tenu) => tenu.id === personnage.id);
+      if (rang >= 0) tenus[rang] = structuredClone(personnage);
+      else tenus.push(structuredClone(personnage));
+    },
   };
 }
 
@@ -97,6 +128,18 @@ function pressePapiers({ refuse = false } = {}) {
           copies.push(texte);
         },
       },
+    },
+  };
+}
+
+/** Le fichier du personnage de démonstration, servi par un fetch simulé : chaque demande relevée. */
+function serveur({ statut = 200, texte = FICHIER_AUBEPINE } = {}) {
+  const demandes = [];
+  return {
+    demandes,
+    fetch: async (adresse, init) => {
+      demandes.push([adresse, init]);
+      return new Response(texte, { status: statut });
     },
   };
 }
@@ -142,7 +185,20 @@ async function lireLaBase(lieu, secret = SECRET) {
 // Le combat de référence, sur des photographies écrites à la main (leur
 // source est nulle) : de quoi poser un combat en base sans passer par l'écran.
 const PHOTOS_D_ESSAI = { "Aubépine Crèmebrûlée": aubepineEssai(), "Chef de partie": chefDePartieEssai(), "Marmiton de corvée": marmitonDeCorveeEssai() };
-const texteDuCombat = (jusqua, revision, retoucher = (contenu) => contenu) => JSON.stringify(retoucher({ ...versContenu(scenario, PHOTOS_D_ESSAI, { jusqua }).contenu, revision }));
+const contenuDuCombat = (jusqua) => versContenu(scenario, PHOTOS_D_ESSAI, { jusqua }).contenu;
+const texteDuCombat = (jusqua, revision, retoucher = (contenu) => contenu) => JSON.stringify(retoucher({ ...contenuDuCombat(jusqua), revision }));
+
+/**
+ * Un combat long qui n'écrit rien après son lancement : Aubépine ouvre sa
+ * Frappe et revient, autant de fois qu'il faut pour compter « combien »
+ * événements, lancement compris.
+ */
+function texteDuLongCombat(combien, revision = 3) {
+  const [lancer, ouvrirLaFrappe] = contenuDuCombat(1).evenements;
+  assert.deepEqual([lancer.type, ouvrirLaFrappe.type], ["lancer", "capacite"]);
+  const allerRetour = Array.from({ length: combien - 1 }, (_rien, rang) => (rang % 2 === 0 ? ouvrirLaFrappe : { type: "revenir" }));
+  return JSON.stringify({ ...contenuDuCombat(0), evenements: [lancer, ...allerRetour], revision });
+}
 
 const ATTENTE_MAX = 5000;
 /** Attend qu'une condition soit vraie : une écriture qui finit, une lecture qui revient. */
@@ -161,22 +217,43 @@ async function attendre(condition, quoi) {
 /**
  * Ouvre l'écran dans le document simulé, comme le fait js/application.js, et
  * attend que le combat soit ouvert. « des » : les valeurs qui tomberont, dans
- * l'ordre, ou une source déjà faite. Rend l'écran et ce que le contrôle peut
- * observer : les téléchargements demandés, la source de dés, l'étagère.
+ * l'ordre, ou une source déjà faite. « etroit » : la largeur demandée (un
+ * booléen, ou une fonction relue à chaque demande). Les autres options sont
+ * des services passés tels quels (fenetre, tient, surveiller, minuteur,
+ * rendreLaMain, fetch). Rend l'écran et ce que le contrôle peut observer :
+ * les téléchargements demandés, la source de dés, l'étagère.
  */
-async function ouvrirLEcran(page, { banque = BANQUE, secret = SECRET, magasin, des = [], personnages = [AUBEPINE], etagere = etagereDe(personnages), depot = null, etroit = false, navigateur = pressePapiers().navigateur, horloge = SOIR, pose = true } = {}) {
+async function ouvrirLEcran(
+  page,
+  {
+    banque = BANQUE,
+    secret = SECRET,
+    magasin,
+    des = [],
+    personnages = [AUBEPINE],
+    etagere = etagereDe(personnages),
+    depot = null,
+    etroit = false,
+    navigateur = pressePapiers().navigateur,
+    horloge = SOIR,
+    pose = true,
+    magasinRencontre = magasinRencontreMemoire(),
+    ...autres
+  } = {},
+) {
   const source = Array.isArray(des) ? desImposes(des) : des;
   const telecharges = [];
   // Les largeurs que l'écran demande : il n'a pas d'autre moyen de savoir s'il est sur un téléphone.
   const requetes = new Set();
   const contexte = { etat: { mode: "demo", banque, index: indexDe(banque), secret, etagere, depot } };
-  const services = { telecharger: (...parametres) => telecharges.push(parametres) };
-  // « des: null », « navigateur: null », « horloge: null », « etroit: null » : aucun service de ce nom, comme dans la page.
-  if (etroit !== null) services.media = (requete) => (requetes.add(requete), etroit);
+  const services = { telecharger: (...parametres) => telecharges.push(parametres), ...autres };
+  // « des: null », « navigateur: null », « horloge: null », « etroit: null », « magasinRencontre: null » : aucun service de ce nom, comme dans la page.
+  if (etroit !== null) services.media = (requete) => (requetes.add(requete), typeof etroit === "function" ? etroit() : etroit);
   if (navigateur !== null) services.navigateur = navigateur;
   if (horloge !== null) services.maintenant = horloge;
   if (source !== null) services.des = source;
   if (magasin !== undefined) services.magasin = magasin;
+  if (magasinRencontre !== null) services.magasinRencontre = magasinRencontre;
   const ecran = page.afficher(contexte, services);
   if (pose) {
     document.body.replaceChildren(ecran);
@@ -186,13 +263,12 @@ async function ouvrirLEcran(page, { banque = BANQUE, secret = SECRET, magasin, d
   return { ecran, contexte, services, des: source, telecharges, etagere, requetes };
 }
 
-/** Joue un contrôle dans un document simulé, la rencontre vidée, puis range tout. */
+/** Joue un contrôle dans un document simulé, la rencontre oubliée, puis range tout. */
 function dansUnePage(titre, corps) {
   test(titre, async () => {
     const retirer = installerDom();
-    // La rencontre vit dans la mémoire de son module : interrogée pour une
-    // autre banque, elle repart de zéro.
-    rencontre.exemplaires({}, "");
+    // La rencontre vit dans la mémoire de son module : elle repart de zéro.
+    rencontre.oublier();
     const page = await pageNeuve();
     try {
       await corps(page);
@@ -212,10 +288,45 @@ const un = (noeud, selecteur) => {
   return trouves[0];
 };
 const inactif = (bouton) => bouton.getAttribute("aria-disabled") === "true";
+const cache = (noeud) => noeud.hasAttribute("hidden");
+/** L'écran qui porte un nœud : section.combat. */
+const ecranDe = (noeud) => {
+  for (let courant = noeud; courant; courant = courant.parentNode) if (courant.tagName === "SECTION" && courant.className.split(" ").includes("combat")) return courant;
+  return null;
+};
+/**
+ * Un clic, comme dans un navigateur : le bouton prend le focus (Chromium et
+ * Firefox le donnent au bouton cliqué), l'écran voit le clic en capture, puis
+ * le bouton le reçoit.
+ */
 const cliquer = async (bouton) => {
   assert.ok(bouton, "le bouton à cliquer existe");
+  globalThis.document.activeElement = bouton;
+  const ecran = ecranDe(bouton);
+  if (ecran) await Promise.all(ecran.declencher("click", { target: bouton }));
   await Promise.all(bouton.click());
 };
+/** Le même clic, sans attendre ce qu'il lance : « Ajouter le personnage de démonstration » attend la réponse à sa question. */
+const cliquerSansAttendre = (bouton) => {
+  globalThis.document.activeElement = bouton;
+  const ecran = ecranDe(bouton);
+  if (ecran) ecran.declencher("click", { target: bouton });
+  bouton.click();
+};
+/** Un clic sur ce qui n'est pas un bouton (un fond, un titre) : seul l'écran, en capture, le voit. */
+const cliquerSur = (ecran, noeud) => Promise.all(ecran.declencher("click", { target: noeud }));
+/** Échap, là où est le focus ; rend vrai si l'écran l'a pris. */
+function echap(ecran) {
+  let pris = false;
+  ecran.declencher("keydown", {
+    key: "Escape",
+    target: globalThis.document.activeElement,
+    preventDefault() {
+      pris = true;
+    },
+  });
+  return pris;
+}
 function boutonOu(noeud, convient, quoi) {
   const trouves = tous(noeud, "button").filter(convient);
   assert.equal(trouves.length, 1, `un seul bouton ${quoi}, trouvé ${trouves.length} parmi : ${tous(noeud, "button").map(texteDe).join(" | ")}`);
@@ -224,11 +335,10 @@ function boutonOu(noeud, convient, quoi) {
 const boutonDit = (noeud, texte) => boutonOu(noeud, (b) => texteDe(b) === texte, `« ${texte} »`);
 const boutonCommencant = (noeud, debut) => boutonOu(noeud, (b) => texteDe(b).startsWith(debut), `qui commence par « ${debut} »`);
 const repere = (noeud, nom) => un(noeud, `[data-repere=${nom}]`);
-/** La raison liée à un bouton inactif, telle qu'un lecteur d'écran la dit. */
 /** La raison liée à un bouton inactif : son texte. Elle se voit : un texte caché ne dirait rien à qui regarde l'écran. */
 const raisonDe = (ecran, bouton) => {
   const raison = un(ecran, `#${bouton.getAttribute("aria-describedby")}`);
-  if (texteDe(raison) !== "") assert.equal(raison.hidden === true || raison.hasAttribute("hidden"), false, "la raison d'un bouton inactif se voit");
+  if (texteDe(raison) !== "") assert.equal(cache(raison), false, "la raison d'un bouton inactif se voit");
   return texteDe(raison);
 };
 
@@ -236,8 +346,26 @@ const barre = (ecran) => un(ecran, "header.combat-barre");
 const etatDuCombat = (ecran) => texteDe(un(ecran, "p.combat-etat"));
 const garde = (ecran) => texteDe(un(ecran, "p.combat-garde"));
 const avis = (ecran) => un(ecran, "div.combat-avis");
-const corps = (ecran) => un(ecran, ".combat-action-corps");
-const titreDuPanneau = (ecran) => texteDe(un(corps(ecran), "h2.combat-qui"));
+const cadre = (ecran) => un(ecran, ".combat-cadre");
+/** Ce que porte le cadre, dans l'ordre : la première classe de chacun. */
+const formeDuCadre = (ecran) => cadre(ecran).children.map((noeud) => noeud.className.split(" ")[0]);
+/** La partie qui tient la place sous la carte : la zone, la préparation ou le bloc d'arrêt. */
+const sousLaCarte = (ecran) => cadre(ecran).children[4];
+const laBulle = (ecran) => un(ecran, "div.combat-bulle");
+const onglet = (ecran) => un(ecran, "button.combat-onglet");
+const bulleMontree = (ecran) => !cache(laBulle(ecran));
+/** Le nom de la bulle : « Aubépine Crèmebrûlée : ses actions ». */
+const nomDeLaBulle = (ecran) => laBulle(ecran).getAttribute("aria-label");
+const zone = (ecran) => un(ecran, ".combat-action-corps");
+/** Là où se joue l'action : la bulle (le volet sur un téléphone) quand elle est montrée, sinon la zone sous la carte. */
+const corps = (ecran) => (bulleMontree(ecran) ? un(laBulle(ecran), ".combat-bulle-defile") : zone(ecran));
+/** Le titre de la zone sous la carte : « Qui joue ? », le vainqueur, le jet sur un téléphone. */
+const titreDeLaZone = (ecran) => texteDe(un(zone(ecran), "h2.combat-qui"));
+/** L'en-tête de ce qui se joue : celui de la bulle, sinon celui du jet sous la carte. */
+function enTete(ecran) {
+  if (bulleMontree(ecran)) return [texteDe(un(laBulle(ecran), "h2.combat-bulle-titre")), texteDe(un(laBulle(ecran), "p.combat-bulle-sous"))];
+  return [titreDeLaZone(ecran), ...tous(zone(ecran), "p.combat-sous").map(texteDe)];
+}
 const annonce = (ecran) => texteDe(un(ecran, "p.combat-annonce"));
 const journal = (ecran) => tous(un(ecran, "ol.combat-lignes"), "li").map(texteDe);
 const fiche = (ecran, id) => {
@@ -259,9 +387,12 @@ const laCase = (ecran, nom) => {
 };
 /** Les jetons que la carte montre, par case : { D4: ["Marmiton 1", "Marmiton 2"] }. */
 const jetons = (ecran) => Object.fromEntries(tous(ecran, ".combat-case").filter((noeud) => tous(noeud, ".combat-jeton").length > 0).map((noeud) => [noeud.getAttribute("data-case"), tous(noeud, ".combat-jeton").map((j) => texteDe(un(j, ".combat-nom-court")))]));
-const jeton = (ecran, entier) => boutonOu(un(ecran, ".combat-plateau"), (b) => b.getAttribute("title") === entier, `le jeton de ${entier}`);
+/** Le jeton d'un protagoniste, par la première ligne de son titre (la seconde dit sa raison, s'il en a une). */
+const jeton = (ecran, entier) => boutonOu(un(ecran, ".combat-plateau"), (b) => (b.getAttribute("title") ?? "").split("\n")[0] === entier, `le jeton de ${entier}`);
 /** Les régions qu'un lecteur d'écran dit d'elles-mêmes, et leur texte. */
 const regions = (ecran) => [...ecran.descendants()].filter((noeud) => noeud.hasAttribute("aria-live") || ["status", "alert", "log"].includes(noeud.getAttribute("role"))).map((noeud) => [noeud, texteDe(noeud)]);
+/** Les focus posés depuis un relevé, qui n'ont pas demandé à ne pas défiler : leur balise. */
+const focusQuiDefilent = (depuis = 0) => document.focalisations.slice(depuis).filter(({ options }) => options?.preventScroll !== true).map(({ noeud }) => `${noeud.tagName}.${noeud.className}`);
 
 function saisir(champ, valeur, evenement) {
   champ.value = String(valeur);
@@ -315,8 +446,10 @@ const ENTIERS = { "Aubépine": "Aubépine Crèmebrûlée", "Chef": "Chef de part
 const NOM_DE_CARACTERISTIQUE = Object.fromEntries(CARACTERISTIQUES.map(({ code, nom }) => [code, nom]));
 const RANG_DU_DE = { "1er": 1, "2e": 2, "3e": 3 };
 
-/** Le bouton d'une capacité, par son libellé exact (« Frappe », « Pas chassé [1] »). */
-const boutonDeCapacite = (ecran, libelle) => boutonOu(corps(ecran), (b) => b.className === "combat-capacite" && b.parentNode.className === "combat-groupe" && texteDe(b.children[0] ?? b) === libelle, `de la capacité « ${libelle} »`);
+/** La ligne d'une capacité, par son libellé exact (« Frappe », « Pas chassé [1] »). */
+const boutonDeCapacite = (ecran, libelle) => boutonOu(corps(ecran), (b) => b.className === "combat-capacite" && b.hasAttribute("data-ligne") && texteDe(b.children[0] ?? b) === libelle, `de la capacité « ${libelle} »`);
+/** La première ligne active de la liste : la commande qui attend. */
+const premiereLigne = (ecran) => tous(corps(ecran), "button.combat-capacite").find((b) => b.hasAttribute("data-ligne") && !inactif(b)) ?? null;
 
 /** Le dé qui attend son clic, ou null. */
 const deACliquer = (ecran) => tous(corps(ecran), "button.combat-de").find((b) => !inactif(b)) ?? null;
@@ -328,15 +461,19 @@ function saisieDuPanneau(ecran, action) {
 }
 const saisie = saisieDuPanneau;
 
+/** Fait jouer un protagoniste : « Qui joue ? » s'il le propose, sinon « Jouer » sur sa fiche. La bulle s'ouvre sur ses actions. */
 async function choisirQuiJoue(ecran, entier) {
-  if (titreDuPanneau(ecran) === "Qui joue ?") await cliquer(boutonDit(corps(ecran), entier));
-  else if (!titreDuPanneau(ecran).startsWith(`${entier} joue `)) {
+  const nom = `${entier} : ses actions`;
+  if (bulleMontree(ecran) && nomDeLaBulle(ecran) === nom) return;
+  if (tous(zone(ecran), "h2.combat-qui").map(texteDe).includes("Qui joue ?")) await cliquer(boutonDit(zone(ecran), entier));
+  else {
     // Un autre a encore la main : on en change par « Jouer », sur la fiche.
     const laFiche = tous(ecran, "details").find((noeud) => texteDe(un(noeud, ".combat-nom")) === entier);
     assert.ok(laFiche, `la fiche de ${entier}`);
     await cliquer(repere(laFiche, "jouer"));
   }
-  assert.ok(titreDuPanneau(ecran).startsWith(`${entier} joue `), `c'est à ${entier} : ${titreDuPanneau(ecran)}`);
+  assert.equal(bulleMontree(ecran), true, `la bulle de ${entier} est montrée`);
+  assert.equal(nomDeLaBulle(ecran), nom);
 }
 
 /**
@@ -397,13 +534,38 @@ async function jouerLeGeste(ecran, geste, { apresChaqueDe = () => {} } = {}) {
 /** Les dés d'un geste, dans l'ordre où l'écran les demande : la chaîne, puis les d20. */
 const desDe = (gestes) => gestes.flatMap((geste) => [...(geste.des ?? []), ...(geste.localisation ?? [])]);
 
+/** La fenêtre qui change de taille : l'écouteur « resize » que la bulle a posé, relevé. */
+function guetterLaFenetre() {
+  const avant = { ajouter: globalThis.addEventListener, retirer: globalThis.removeEventListener };
+  const ecoutes = [];
+  globalThis.addEventListener = (type, f) => ecoutes.push([type, f]);
+  globalThis.removeEventListener = (type, f) => {
+    const rang = ecoutes.findIndex(([t, g]) => t === type && g === f);
+    if (rang >= 0) ecoutes.splice(rang, 1);
+  };
+  return {
+    ecoutes,
+    redimensionner(largeur) {
+      globalThis.document.documentElement.clientWidth = largeur;
+      for (const [type, f] of [...ecoutes]) if (type === "resize") f();
+    },
+    retirer() {
+      if (avant.ajouter === undefined) delete globalThis.addEventListener;
+      else globalThis.addEventListener = avant.ajouter;
+      if (avant.retirer === undefined) delete globalThis.removeEventListener;
+      else globalThis.removeEventListener = avant.retirer;
+    },
+  };
+}
+
 // ─── Le texte du module ─────────────────────────────────────────────────────
 
 test("le module — un en-tête qui dit le pourquoi et le § 17 ; rien de ce que le site interdit", () => {
-  const enTete = SOURCE.slice(0, SOURCE.indexOf("import "));
-  assert.match(enTete, /^\/\/ L'écran du simulateur de combat/);
-  assert.match(enTete, /SPECIFICATION\.md, § 17/);
-  assert.match(enTete, /Pourquoi il existe/);
+  const enTeteDuModule = SOURCE.slice(0, SOURCE.indexOf("import "));
+  assert.match(enTeteDuModule, /^\/\/ L'écran du simulateur de combat/);
+  assert.match(enTeteDuModule, /SPECIFICATION\.md, § 17/);
+  assert.match(enTeteDuModule, /Pourquoi il existe/);
+  assert.match(enTeteDuModule, /groupe 2, § 9/);
 
   // Ce que la veille de la page, la politique de sécurité et les règles du
   // site refusent, commentaires compris.
@@ -440,11 +602,18 @@ test("le module — un en-tête qui dit le pourquoi et le § 17 ; rien de ce que
   assert.match(SOURCE, /telecharger: services\.telecharger \?\? telecharger,/);
   assert.match(SOURCE, /import \{[^}]*\btelecharger\b[^}]*\} from "\.\/dom\.js";/);
   assert.match(SOURCE, /services\.magasin \?\? \(magasinDeLaPage \?\?= ouvrirMagasinCombat\(\)\)/);
-  // Au groupe 1 : ni « Intervenir… », ni palette, ni menu du clic droit.
+  // Au groupe 2, les parties neuves (contrat, § 1) : la bulle, le journal, la démonstration partagée, la rencontre gardée.
+  for (const module of ["./combat_bulle.js", "./combat_journal.js", "./partage.js", "./personnages.js", "./rencontre.js"]) assert.match(SOURCE, new RegExp(`from "${module.replace(".", "\\.")}";`), module);
+  assert.match(SOURCE, /import \{ garderRecu \} from "\.\/personnages\.js";/);
+  assert.doesNotMatch(SOURCE, /vueLigne/, "vueLigne a disparu (contrat, § 8.7)");
+  // Le clic au-dehors se voit en capture, sur l'écran ; Échap aussi.
+  assert.match(SOURCE, /racine\.addEventListener\("click", \(evenement\) => auClicDansLaPage\(evenement\), true\);/);
+  assert.match(SOURCE, /racine\.addEventListener\("keydown", /);
+  // Ni « Intervenir… », ni palette, ni menu du clic droit : au groupe 3.
   assert.doesNotMatch(SOURCE, /Intervenir|contextmenu|palette/i);
 
   // Ni signe invisible, ni espace insécable ; des fins de ligne d'un seul genre.
-  for (const code of [0xa0, 0x202f, 0xad, 0xfeff, 0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x2028, 0x2029, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2060]) {
+  for (const code of [0xa0, 0x202f, 0xad, 0xfeff, 0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x2028, 0x2029, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2060, 0x21b6]) {
     assert.equal(SOURCE.includes(String.fromCodePoint(code)), false, `le signe U+${code.toString(16)}`);
   }
   const fins = SOURCE.match(/\r?\n/g);
@@ -477,22 +646,31 @@ dansUnePage("ouverture — afficher() rend son nœud tout de suite : le titre et
   assert.equal(tous(ecran, "[role=status]").length, 0, "l'attente a quitté la page : elle ne côtoie pas la région d'annonce");
   assert.equal(tous(ecran, "[data-chargement]").length, 0);
   assert.equal(etatDuCombat(ecran), "Préparation");
-  // L'ordre du document est celui du téléphone : la carte, la préparation, les camps, puis le journal.
-  assert.deepEqual(ecran.children.map((noeud) => noeud.className), ["combat-barre", "combat-aide", "combat-avis", "combat-panneau", "combat-cadre", "combat-journal", "combat-annonce"]);
+  // L'arbre du contrat (§ 9.1), dans l'ordre du téléphone : la barre, la limite, l'aide, l'avis, la fiche complète, le cadre, le journal, puis la région polie.
+  assert.deepEqual(ecran.children.map((noeud) => noeud.className), ["combat-barre", "combat-limite", "combat-aide", "combat-avis", "combat-panneau", "combat-cadre", "combat-journal", "combat-annonce"]);
+  assert.equal(cache(un(ecran, "p.combat-limite")), true, "la limite est cachée tant qu'elle est vide");
   // La région polie est là dès le premier rendu, vide : un lecteur d'écran la connaît avant qu'elle parle.
   const region = un(ecran, "p.combat-annonce");
   assert.deepEqual([region.getAttribute("aria-live"), region.parentNode, region.childNodes.length], ["polite", ecran, 0]);
   // La barre, dans l'ordre du téléphone : l'état et les commandes sur une ligne, ce que « ⋯ » ouvre, puis l'enregistrement.
   assert.deepEqual(barre(ecran).children.map((noeud) => noeud.className || noeud.tagName), ["H1", "combat-etat", "combat-commandes", "combat-autres", "combat-garde"]);
-  // Le journal est une région que son titre nomme.
+  // Le journal est une région que son titre nomme ; le titre reçoit le focus sans entrer dans l'ordre du clavier.
   const zoneDuJournal = un(ecran, "section.combat-journal");
-  assert.equal(texteDe(un(ecran, `#${zoneDuJournal.getAttribute("aria-labelledby")}`)), "Journal");
-  assert.equal(un(ecran, `#${zoneDuJournal.getAttribute("aria-labelledby")}`).tagName, "H2");
+  const titreDuJournal = un(ecran, `#${zoneDuJournal.getAttribute("aria-labelledby")}`);
+  assert.deepEqual([titreDuJournal.tagName, texteDe(titreDuJournal), titreDuJournal.getAttribute("tabindex")], ["H2", "Journal", "-1"]);
+  assert.deepEqual(un(zoneDuJournal, ".combat-journal-tete").children.map((noeud) => texteDe(noeud)), ["Journal", "Copier", "Télécharger"]);
   // Sa hauteur est limitée et il défile : la liste de ses lignes s'atteint au clavier.
-  assert.equal(un(zoneDuJournal, "ol.combat-lignes").getAttribute("tabindex"), "0");
-  assert.deepEqual(un(ecran, ".combat-cadre").children.map((noeud) => noeud.className), ["combat-plateau", "combat-preparation", "combat-camps"]);
+  const lignes = un(zoneDuJournal, "ol.combat-lignes");
+  assert.deepEqual([lignes.getAttribute("tabindex"), lignes.getAttribute("aria-label")], ["0", "Journal du combat"]);
+  // Le cadre : le bandeau, la carte, la bulle et son onglet juste après elle, la préparation, puis les camps.
+  assert.deepEqual(formeDuCadre(ecran), ["combat-bandeau", "combat-plateau", "combat-bulle", "combat-onglet", "combat-preparation", "combat-camps"]);
+  assert.deepEqual([cache(un(ecran, "div.combat-bandeau")), cache(laBulle(ecran)), cache(onglet(ecran))], [true, true, true], "avant le lancement, ni bandeau, ni bulle, ni onglet");
+  assert.equal(laBulle(ecran).getAttribute("role"), "dialog");
+  assert.equal(laBulle(ecran).hasAttribute("aria-modal"), false, "un dialogue non modal");
   assert.equal(tous(ecran, ".combat-case").length, 100);
   assert.match(texteDe(un(ecran, "p.combat-aide")), /^Un protagoniste ajouté se pose d'office/);
+  // « Annuler le dernier geste » n'est pas montré avant le lancement.
+  assert.equal(cache(un(barre(ecran), "button.combat-annuler-geste")), true);
 });
 
 dansUnePage("ouverture — un nœud qui a quitté la page n'est pas rempli ; la visite suivante trouve le combat en mémoire, sans attente ni relecture", async (page) => {
@@ -578,6 +756,31 @@ dansUnePage("ouverture — une ouverture qui échoue le dit, au lieu d'attendre 
   const { ecran: suivante } = await ouvrirLEcran(page, { magasin: magasinCombatMemoire() });
   assert.equal(tous(suivante, "p.message").length, 0);
   assert.equal(etatDuCombat(suivante), "Préparation");
+});
+
+dansUnePage("ouverture — un combat gardé de plus de mille événements : l'attente dure tout le rejeu, qui rend la main par tranches de mille", async (page) => {
+  const lieu = lieuEnMemoire();
+  await poserEnBase(lieu, texteDuLongCombat(2500));
+  // Chaque tranche rend la main : le contrôle retient la deuxième, et regarde l'écran pendant ce temps.
+  let tranches = 0;
+  let lacher = null;
+  const rendreLaMain = () => {
+    tranches += 1;
+    if (tranches !== 2) return Promise.resolve();
+    return new Promise((resoudre) => {
+      lacher = resoudre;
+    });
+  };
+  const { ecran } = await ouvrirLEcran(page, { magasin: await lieu.onglet(), pose: false, rendreLaMain });
+  document.body.replaceChildren(ecran);
+  await attendre(() => lacher !== null, "la deuxième tranche du rejeu");
+  assert.equal(texteDe(un(ecran, ".attente")), "Ouverture du combat…", "« Ouverture du combat… » pendant tout le rejeu");
+  assert.equal(tous(ecran, ".combat-plateau").length, 0, "rien n'est installé avant la fin du rejeu");
+  lacher();
+  await attendre(() => ecran.querySelector(".attente") === null, "la fin du rejeu");
+  assert.equal(tranches, 2, "2 500 événements : la main rendue ⌊2 500 / 1 000⌋ fois");
+  assert.equal(etatDuCombat(ecran), "Tour 1 · camp des PJ");
+  assert.deepEqual(journal(ecran), journalAttendu.slice(0, 2), "rien n'est écrit après le lancement");
 });
 
 // ─── La préparation ─────────────────────────────────────────────────────────
@@ -685,12 +888,12 @@ dansUnePage("préparation — ajouter, poser, retirer, qui commence, lancer : ch
   await lancerLeCombat(ecran);
   assert.equal(etatDuCombat(ecran), "Tour 1 · camp des adversaires");
   assert.deepEqual(journal(ecran), ["Combat lancé : 1 personnage contre 2 adversaires. Les adversaires commencent.", "— Tour 1 · camp des adversaires —"]);
-  // Le combat lancé, la préparation a laissé la place au panneau d'action, et les fiches n'ont plus ni champ ni « Retirer ».
-  assert.deepEqual(un(ecran, ".combat-cadre").children.map((noeud) => noeud.className), ["combat-plateau", "combat-action", "combat-camps"]);
+  // Le combat lancé, la préparation a laissé la place à la zone sous la carte, et les fiches n'ont plus ni champ ni « Retirer ».
+  assert.deepEqual(formeDuCadre(ecran), ["combat-bandeau", "combat-plateau", "combat-bulle", "combat-onglet", "combat-action", "combat-camps"]);
   assert.equal(tous(ecran, "[data-repere=case]").length, 0);
   assert.equal(tous(ecran, "[data-repere=retirer]").length, 0);
-  assert.equal(titreDuPanneau(ecran), "Qui joue ?");
-  assert.deepEqual(tous(corps(ecran), "button").map(texteDe), ["Chef de partie", "Marmiton de corvée"]);
+  assert.equal(titreDeLaZone(ecran), "Qui joue ?");
+  assert.deepEqual(tous(zone(ecran), "button").map(texteDe), ["Chef de partie", "Marmiton de corvée"]);
 });
 
 dansUnePage("préparation — qui ne s'ajoute pas le dit ; les câblés absents de la banque se nomment", async (page) => {
@@ -747,6 +950,7 @@ dansUnePage("préparation — la carte : toucher un jeton puis une case ; la lis
   assert.deepEqual(jetons(ecran).B2, ["Aubépine"]);
   assert.equal(repere(groupe(ecran, "pj1"), "case").value, "B2", "la fiche suit");
   assert.equal(document.activeElement, jeton(ecran, "Aubépine Crèmebrûlée"), "l'écran ne déplace pas le focus après une pose venue de la carte");
+  assert.equal(cache(laBulle(ecran)), true, "avant le lancement, la bulle ne s'ouvre pas");
 
   // Trois jetons sur J1 : le « +1 » du téléphone ouvre la liste de la case, sous la préparation.
   const liste = un(un(ecran, ".combat-preparation"), ".combat-case-liste");
@@ -758,6 +962,7 @@ dansUnePage("préparation — la carte : toucher un jeton puis une case ; la lis
   assert.equal(texteDe(un(liste, "h3")), "Case J1");
   assert.equal(document.activeElement, un(liste, "h3"));
   assert.deepEqual(tous(liste, "button").map(texteDe), ["Marmiton de corvée n° 1", "Marmiton de corvée n° 2", "Marmiton de corvée n° 3", "Fermer"]);
+  assert.equal(tous(laBulle(ecran), ".combat-case-liste").length, 0, "avant le lancement, la liste reste sous la préparation, jamais dans la bulle");
   // « Fermer » vide la liste et rend le focus au « +1 ».
   await cliquer(boutonDit(liste, "Fermer"));
   assert.equal(liste.children.length, 0);
@@ -807,16 +1012,18 @@ dansUnePage("préparation — une banque sans adversaires le dit, comme l'écran
 
 // ─── La rencontre ───────────────────────────────────────────────────────────
 
-dansUnePage("rencontre — vide, le bouton le dit ; préparée, elle se pose d'un clic, à la suite ; un plafond refuse tout", async (page) => {
+dansUnePage("rencontre — vide, le bouton le dit et mène à l'écran Rencontre ; préparée, elle se pose d'un clic, à la suite ; un plafond refuse tout", async (page) => {
   const { ecran } = await ouvrirLEcran(page, { magasin: magasinCombatMemoire() });
   const placer = () => repere(ecran, "rencontre");
   assert.equal(inactif(placer()), true);
-  // Le texte de la mission (§ 10.7), tel quel : sans point final.
-  assert.equal(raisonDe(ecran, placer()), "Composez d'abord une rencontre");
+  // La raison du complément (§ 5.2), dont « écran Rencontre » est un lien vers #/rencontre, jamais un bouton.
+  assert.equal(raisonDe(ecran, placer()), "Composez d'abord une rencontre à l'écran Rencontre.");
+  const lien = un(un(ecran, `#${placer().getAttribute("aria-describedby")}`), "a");
+  assert.deepEqual([lien.getAttribute("href"), texteDe(lien)], ["#/rencontre", "écran Rencontre"]);
   await cliquer(placer());
   assert.deepEqual(fiches(ecran), []);
 
-  // L'écran Rencontre compose : un Chef de partie, deux Marmitons de corvée.
+  // L'écran Rencontre compose, après l'ouverture de celui-ci : un Chef de partie, deux Marmitons de corvée.
   assert.equal(rencontre.ajouter(BANQUE, "Marmiton de corvée"), true);
   assert.equal(rencontre.ajouter(BANQUE, "Marmiton de corvée"), true);
   assert.equal(rencontre.ajouter(BANQUE, "Chef de partie"), true);
@@ -846,10 +1053,42 @@ dansUnePage("rencontre — vide, le bouton le dit ; préparée, elle se pose d'u
   assert.equal(fiches(revenue).length, 18, "rien ne se pose, pas même le Chef de partie");
 });
 
+dansUnePage("rencontre — une banque republiée, de mêmes noms, garde la rencontre composée : le bouton reste actif", async (page) => {
+  assert.equal(rencontre.ajouter(BANQUE, "Marmiton de corvée"), true);
+  // La banque republiée (ou rechargée) : un autre objet, les mêmes noms. Le bouton grisé de l'auteur venait de là.
+  const republiee = { ...BANQUE, publiee_le: "2026-11-02T09:00:00+01:00" };
+  const { ecran } = await ouvrirLEcran(page, { banque: republiee, magasin: magasinCombatMemoire() });
+  assert.equal(inactif(repere(ecran, "rencontre")), false, "une banque republiée garde la rencontre");
+  await cliquer(repere(ecran, "rencontre"));
+  assert.deepEqual(fiches(ecran), [["adv1", "Marmiton de corvée"]]);
+});
+
+dansUnePage("rencontre — une composition déjà gardée sur l'appareil : lue sans que l'ouverture l'attende, elle rend le bouton actif", async (page) => {
+  // La composition gardée, chiffrée par la clé de table, comme l'écran Rencontre l'aurait écrite.
+  const magasinRencontre = magasinRencontreMemoire();
+  await magasinRencontre.ecrire(await chiffrerRencontre([{ nom: "Chef de partie", nombre: 1 }, { nom: "Marmiton de corvée", nombre: 2 }], SECRET, { mode: "demo", maintenant: SOIR() }));
+  let lacher;
+  const retenue = new Promise((resoudre) => {
+    lacher = resoudre;
+  });
+  const lent = { ...magasinRencontre, lire: async (mode) => (await retenue, magasinRencontre.lire(mode)) };
+  const { ecran } = await ouvrirLEcran(page, { magasin: magasinCombatMemoire(), magasinRencontre: lent });
+  // L'écran est ouvert : la lecture de la rencontre ne l'a pas retenu.
+  assert.equal(etatDuCombat(ecran), "Préparation");
+  assert.equal(inactif(repere(ecran, "rencontre")), true, "la lecture n'est pas finie");
+  lacher();
+  await attendre(() => !inactif(repere(ecran, "rencontre")), "la lecture de la composition gardée");
+  await cliquer(repere(ecran, "rencontre"));
+  assert.deepEqual(fiches(ecran), [
+    ["adv1", "Chef de partie"],
+    ["adv2", "Marmiton de corvée n° 1"],
+    ["adv3", "Marmiton de corvée n° 2"],
+  ]);
+});
+
 dansUnePage("rencontre — un adversaire qui ne s'ajoute pas reste hors du combat, les autres se posent, et l'écran dit lequel", async (page) => {
   const banque = structuredClone(BANQUE);
   banque.adversaires.push({ nom: "Commis égaré", types: "", localisation: "Corps(2)", actions: "", souffle: "3", attaque: "2", defense: "3", equipement: "", capacites: "" });
-  rencontre.exemplaires({}, "");
   assert.equal(rencontre.ajouter(banque, "Commis égaré"), true);
   assert.equal(rencontre.ajouter(banque, "Plongeur"), true);
   const { ecran } = await ouvrirLEcran(page, { banque, magasin: magasinCombatMemoire() });
@@ -863,9 +1102,86 @@ dansUnePage("rencontre — un adversaire qui ne s'ajoute pas reste hors du comba
   assert.equal(avis(ecran).children.length, 0);
 });
 
+// ─── Le personnage de démonstration ─────────────────────────────────────────
+
+dansUnePage("démonstration — « Ajouter le personnage de démonstration » : le fichier lu sans cache, la question sans défiler, gardé, la liste relue ; rien n'entre au combat", async (page) => {
+  const site = serveur();
+  const { ecran, etagere } = await ouvrirLEcran(page, { magasin: await lieuSimule().onglet(), fetch: site.fetch });
+  assert.equal(etagere.journal.lectures, 1);
+  const bloc = un(ecran, ".combat-preparation-demonstration");
+  const bouton = repere(bloc, "ajouter-demonstration");
+  assert.equal(texteDe(bouton), "Ajouter le personnage de démonstration");
+  const question = un(bloc, ".combat-preparation-question");
+  const focusAvant = document.focalisations.length;
+  cliquerSansAttendre(bouton);
+  // Le fichier de la démonstration, relu à chaque fois.
+  await attendre(() => question.children.length > 0, "la question du doublon");
+  assert.deepEqual(site.demandes, [["essais/personnage_demo.arpenteur.json", { cache: "no-store" }]]);
+  // Aubépine est déjà sur l'appareil : la question s'ouvre sous le bouton, le focus sur « Annuler », sans défiler.
+  assert.match(texteDe(question), /^Ce personnage est déjà sur cet appareil\./);
+  assert.deepEqual(tous(question, "button").map(texteDe), ["Remplacer", "Garder les deux", "Annuler"]);
+  assert.equal(document.activeElement, boutonDit(question, "Annuler"));
+  assert.deepEqual(focusQuiDefilent(focusAvant), [], "la question prend le focus sans faire défiler la page");
+  assert.deepEqual(document.defilements, []);
+
+  // « Garder les deux » : un second exemplaire est gardé, sa phrase se dit sous le bouton, la liste se relit.
+  await cliquer(boutonDit(question, "Garder les deux"));
+  await attendre(() => tous(bloc, "p.combat-preparation-phrase").length === 1, "la phrase du personnage gardé");
+  assert.equal(texteDe(un(bloc, "p.combat-preparation-phrase")), "Le personnage « Aubépine Crèmebrûlée » est sur cet appareil.");
+  assert.equal(etagere.journal.gardes.length, 1);
+  assert.notEqual(etagere.journal.gardes[0], AUBEPINE.id, "gardé sous un nouvel identifiant");
+  await attendre(() => tous(repere(ecran, "personnage"), "option").length === 2, "la liste relue");
+  assert.equal(etagere.journal.lectures, 2);
+  assert.equal(un(ecran, ".combat-preparation-question"), question, "la zone de la question est restée le même nœud");
+  // Le personnage n'entre pas au combat d'office.
+  assert.deepEqual(fiches(ecran), []);
+  assert.deepEqual(jetons(ecran), {});
+  assert.equal(avis(ecran).children.length, 0);
+
+  // « Annuler » : rien n'est gardé, aucune phrase neuve.
+  cliquerSansAttendre(bouton);
+  await attendre(() => question.children.length > 0, "la seconde question");
+  await cliquer(boutonDit(question, "Annuler"));
+  await laisserFiler(10);
+  assert.equal(etagere.journal.gardes.length, 1);
+  assert.deepEqual(fiches(ecran), []);
+});
+
+dansUnePage("démonstration — un fichier introuvable (404), une étagère qui refuse : la zone d'avis le dit, rien n'est gardé", async (page) => {
+  const absent = serveur({ statut: 404, texte: "introuvable" });
+  const { ecran, etagere } = await ouvrirLEcran(page, { magasin: await lieuSimule().onglet(), fetch: absent.fetch, personnages: [] });
+  cliquerSansAttendre(repere(ecran, "ajouter-demonstration"));
+  await attendre(() => avis(ecran).children.length > 0, "l'avis du fichier introuvable");
+  assert.deepEqual(tous(avis(ecran), "p").map(texteDe), ["Le personnage de démonstration est introuvable sur ce site."]);
+  assert.deepEqual(etagere.journal.gardes, []);
+  assert.equal(tous(ecran, "p.combat-preparation-phrase").length, 0);
+
+  // Une étagère qui lève en gardant (quota) : la phrase de l'écran, avec la raison.
+  const { ecran: second } = await ouvrirLEcran(await pageNeuve(), { magasin: await lieuSimule().onglet(), fetch: serveur().fetch, etagere: etagereDe([], { garderLeve: "quota dépassé" }) });
+  cliquerSansAttendre(repere(second, "ajouter-demonstration"));
+  await attendre(() => avis(second).children.length > 0, "l'avis de l'étagère qui refuse");
+  assert.deepEqual(tous(avis(second), "p").map(texteDe), ["Le personnage n'a pas pu être gardé : quota dépassé"]);
+  assert.equal(tous(second, "p.combat-preparation-phrase").length, 0);
+  assert.deepEqual(fiches(second), []);
+});
+
+dansUnePage("démonstration — sans question : le personnage absent de l'appareil s'y garde d'un clic, et se montre dans la liste ; il s'ajoute ensuite comme les autres", async (page) => {
+  const { ecran, etagere } = await ouvrirLEcran(page, { magasin: await lieuSimule().onglet(), fetch: serveur().fetch, personnages: [] });
+  assert.match(texteDe(un(ecran, ".combat-preparation")), /Aucun personnage enregistré à ajouter/);
+  // Le bloc de la démonstration est là, même sans personnage à ajouter.
+  cliquerSansAttendre(repere(ecran, "ajouter-demonstration"));
+  await attendre(() => tous(ecran, "p.combat-preparation-phrase").length === 1, "la phrase du personnage gardé");
+  assert.deepEqual(etagere.journal.gardes, [AUBEPINE.id]);
+  await attendre(() => tous(ecran, "[data-repere=personnage]").length === 1, "la liste relue");
+  assert.deepEqual(tous(repere(ecran, "personnage"), "option").map(texteDe), ["Aubépine Crèmebrûlée"]);
+  assert.deepEqual(fiches(ecran), [], "rien n'entre au combat d'office");
+  await ajouterLePersonnage(ecran, "Aubépine Crèmebrûlée");
+  assert.deepEqual(fiches(ecran), [["pj1", "Aubépine Crèmebrûlée"]]);
+});
+
 // ─── Le combat ──────────────────────────────────────────────────────────────
 
-dansUnePage("combat — le combat de référence, joué à l'écran du premier clic au dernier : la préparation, les tours, la mort, la fin, le journal mot pour mot", async (page) => {
+dansUnePage("combat — le combat de référence, joué par la bulle du premier clic au dernier : la préparation, les tours, la mort, la fin, le journal mot pour mot, sans jamais défiler", async (page) => {
   const lieu = lieuSimule();
   const { ecran, des } = await ouvrirLEcran(page, { magasin: await lieu.onglet(), des: desDe(scenario.gestes) });
   await preparerLaReference(ecran);
@@ -876,15 +1192,15 @@ dansUnePage("combat — le combat de référence, joué à l'écran du premier c
   // Le lancement : l'état de la barre, « Qui joue ? », le focus sur la commande qui attend.
   assert.equal(etatDuCombat(ecran), "Tour 1 · camp des PJ");
   assert.match(texteDe(un(ecran, "p.combat-aide")), /^Les PJ jouent dans l'ordre de leur choix\./);
-  assert.equal(titreDuPanneau(ecran), "Qui joue ?");
-  assert.equal(document.activeElement, boutonDit(corps(ecran), "Aubépine Crèmebrûlée"));
+  assert.equal(titreDeLaZone(ecran), "Qui joue ?");
+  assert.equal(document.activeElement, boutonDit(zone(ecran), "Aubépine Crèmebrûlée"));
   assert.equal(annonce(ecran), "Combat lancé : 1 personnage contre 3 adversaires. Les PJ commencent. — Tour 1 · camp des PJ —");
   const finDeTour = boutonDit(barre(ecran), "Fin de tour");
   assert.equal(finDeTour.hidden, false);
   assert.equal(inactif(finDeTour), false);
   // Le bouton principal de la barre (mission § 10.3) : lui seul n'est pas « secondaire ».
   assert.equal(finDeTour.className, "bouton");
-  assert.deepEqual(tous(barre(ecran), "button").filter((b) => b !== finDeTour).map((b) => b.className.split(" ").includes("secondaire")), [true, true]);
+  assert.deepEqual(tous(barre(ecran), "button").filter((b) => b !== finDeTour).map((b) => b.className.split(" ").includes("secondaire")), [true, true, true]);
   // « Jouer » : sur la fiche du camp qui a la main, et sur elle seule.
   assert.deepEqual(tous(ecran, "[data-repere=jouer]").map((b) => b.getAttribute("aria-label")), ["Jouer : Aubépine Crèmebrûlée"]);
 
@@ -892,11 +1208,11 @@ dansUnePage("combat — le combat de référence, joué à l'écran du premier c
   const lignes = un(ecran, "ol.combat-lignes");
   lignes.scrollHeight = 480;
   lignes.scrollTop = 0;
-  const [premiereLigne] = tous(lignes, "li");
-  // Le groupe 1 n'a pas d'« Intervenir… » dans sa barre.
-  assert.deepEqual(tous(barre(ecran), "button").map(texteDe), ["Fin de tour", "⋯", "Nouveau combat"]);
+  const [premiereLigneDuJournal] = tous(lignes, "li");
+  // Le groupe 1 n'a pas d'« Intervenir… » dans sa barre ; le groupe 2 y ajoute « Annuler le dernier geste ».
+  assert.deepEqual(tous(barre(ecran), "button").map(texteDe), ["Fin de tour", "⋯", ANNULER_LE_DERNIER, "Nouveau combat"]);
 
-  // Le premier geste, pas à pas : Aubépine frappe le Marmiton n° 1.
+  // Le premier geste, pas à pas : Aubépine frappe le Marmiton n° 1, dans la bulle.
   const premier = scenario.gestes[0];
   let desCliques = 0;
   await jouerLeGeste(ecran, premier, {
@@ -912,7 +1228,9 @@ dansUnePage("combat — le combat de référence, joué à l'écran du premier c
         assert.equal(raisonDe(ecran, finDeTour), "Une action est en cours.");
         // L'état de l'enregistrement change, lui, sans rien annoncer.
         assert.equal(garde(ecran), "Enregistrement…");
-        assert.equal(document.activeElement, deACliquer(ecran), "le focus va au dé suivant");
+        assert.equal(document.activeElement, deACliquer(ecran), "le focus va au dé suivant, dans la bulle");
+        assert.equal(bulleMontree(ecran), true, "le jet se joue dans la bulle");
+        assert.equal(texteDe(zone(ecran)), PHRASE_DE_LA_ZONE);
       }
       if (desCliques === 2) assert.equal(annonce(ecran), "2e dé : 9 et 3, on garde 3, échec. 1 réussite, A = 3, +1 contre l'armure (Réduction).");
       if (desCliques === 3) {
@@ -926,19 +1244,23 @@ dansUnePage("combat — le combat de référence, joué à l'écran du premier c
   assert.deepEqual(journal(ecran), journalAttendu.slice(0, 3));
   assert.equal(annonce(ecran), journalAttendu[2], "la fin d'un geste s'annonce par sa ligne");
   assert.equal(lignes.scrollTop, 480, "la dernière ligne reste visible");
-  assert.equal(tous(lignes, "li")[0], premiereLigne, "les lignes déjà posées restent : seules les nouvelles s'ajoutent");
-  assert.equal(titreDuPanneau(ecran), "Aubépine Crèmebrûlée joue — 1 action sur 2, souffle 10");
+  assert.equal(tous(lignes, "li")[0], premiereLigneDuJournal, "les lignes déjà posées restent : seules les nouvelles s'ajoutent");
+  // Aubépine peut encore agir : la bulle revient à sa liste, le focus sur la première ligne active.
+  assert.deepEqual(enTete(ecran), ["Aubépine Crèmebrûlée", "actions restantes : 1 sur 2 · souffle 10/10"]);
+  assert.equal(document.activeElement, premiereLigne(ecran));
   assert.equal(inactif(finDeTour), false);
   assert.equal(raisonDe(ecran, finDeTour), "");
   // La fiche du Marmiton touché le montre.
   assert.match(texteDe(fiche(ecran, "adv3")), /11\/15/);
 
-  // Le deuxième geste finit le tour : les adversaires prennent la main.
+  // Le deuxième geste finit le tour : les adversaires prennent la main ; la bulle se ferme, le focus va au jeton d'Aubépine.
   await jouerLeGeste(ecran, scenario.gestes[1]);
   assert.equal(etatDuCombat(ecran), "Tour 1 · camp des adversaires");
   assert.match(texteDe(un(ecran, "p.combat-aide")), /^Les adversaires jouent dans l'ordre de votre choix\./);
   assert.deepEqual(jetons(ecran), { D4: ["Aubépine", "Marmiton 1", "Marmiton 2"], F6: ["Chef"] });
-  assert.equal(titreDuPanneau(ecran), "Qui joue ?");
+  assert.equal(bulleMontree(ecran), false);
+  assert.equal(titreDeLaZone(ecran), "Qui joue ?");
+  assert.equal(document.activeElement, jeton(ecran, "Aubépine Crèmebrûlée"), "le geste fini, la bulle fermée : le focus au jeton");
   assert.deepEqual(tous(ecran, "[data-repere=jouer]").map((b) => b.getAttribute("aria-label")), ["Jouer : Chef de partie", "Jouer : Marmiton de corvée n° 1", "Jouer : Marmiton de corvée n° 2"]);
 
   // Jusqu'au dernier dé du combat : après chacun, une seule région change de texte, celle de l'annonce.
@@ -972,11 +1294,15 @@ dansUnePage("combat — le combat de référence, joué à l'écran du premier c
   assert.equal(texteDe(mortes[0].parentNode), journalAttendu[11]);
   assert.equal(mortes[0].parentNode.childNodes.at(-1), mortes[0]);
   assert.deepEqual(tous(lignes, "li").map((li) => li.className).filter((classe) => classe !== "" && classe !== "tour"), [], "aucune ligne n'est marquée en entier");
-  // La liste de la case : les morts viennent en dernier, comme sur la carte. Le Marmiton n° 1 a été ajouté avant le n° 2.
+  // La liste de la case, dans la bulle d'Aubépine, qui peut encore agir : les morts viennent en dernier, comme sur la carte.
+  assert.equal(nomDeLaBulle(ecran), "Aubépine Crèmebrûlée : ses actions");
   await cliquer(un(ecran, ".combat-plus-large"));
-  const listeDeD4 = un(un(ecran, ".combat-action"), ".combat-case-liste");
+  const listeDeD4 = un(laBulle(ecran), ".combat-case-liste");
   assert.deepEqual(tous(listeDeD4, "button").map(texteDe), ["Aubépine Crèmebrûlée", "Chef de partie", "Marmiton de corvée n° 2", "Marmiton de corvée n° 1", "Fermer"]);
+  assert.equal(laBulle(ecran).getAttribute("aria-labelledby"), un(listeDeD4, "h3").id, "la liste d'une case se nomme par son titre");
   await cliquer(boutonDit(listeDeD4, "Fermer"));
+  assert.equal(nomDeLaBulle(ecran), "Aubépine Crèmebrûlée : ses actions", "« Fermer » rend à la bulle ce qu'elle montrait");
+  assert.equal(document.activeElement, premiereLigne(ecran));
   assert.deepEqual(tous(lignes, "li").filter((li) => li.className === "tour").map(texteDe), ["— Tour 1 · camp des PJ —", "— Tour 1 · camp des adversaires —", "— Tour 2 · camp des PJ —"]);
 
   // La suite, jusqu'au dernier dé.
@@ -985,11 +1311,16 @@ dansUnePage("combat — le combat de référence, joué à l'écran du premier c
   assert.ok(desAnnonces > 30, "plus de trente dés annoncés");
   assert.equal(avis(ecran).children.length, 0, "d'un bout à l'autre du combat, la zone d'avis n'a rien eu à dire");
   assert.deepEqual(des.reste(), [], "tous les dés du scénario sont tombés, et aucun autre");
+  // D'un bout à l'autre, l'écran n'a jamais fait défiler la page : aucun scrollIntoView, chaque focus sans défiler.
+  assert.deepEqual(document.defilements, [], "aucun scrollIntoView");
+  assert.ok(document.focalisations.length > 40, `${document.focalisations.length} focus posés`);
+  assert.deepEqual(focusQuiDefilent(), [], "chaque focus est posé sans faire défiler la page");
 
   // La fin : on ne joue plus, mais le journal se copie et se télécharge toujours.
   assert.equal(etatDuCombat(ecran), "Combat terminé");
-  assert.equal(titreDuPanneau(ecran), "Combat terminé : victoire des PJ.");
-  assert.equal(tous(corps(ecran), "button").length, 0);
+  assert.equal(bulleMontree(ecran), false);
+  assert.equal(titreDeLaZone(ecran), "Combat terminé : victoire des PJ.");
+  assert.equal(tous(zone(ecran), "button").length, 0);
   assert.equal(finDeTour.hidden, true);
   assert.equal(tous(ecran, "[data-repere=jouer]").length, 0);
   assert.match(texteDe(un(ecran, "p.combat-aide")), /^Le combat est terminé\./);
@@ -1029,18 +1360,20 @@ dansUnePage("combat — la cible : « choisie sur la carte », « choisie ici »
   await cliquer(chef);
   assert.deepEqual(cibleChoisie(), []);
 
-  // Par son jeton : « choisie sur la carte ».
+  // Par son jeton : « choisie sur la carte » ; un clic sur la carte ne ferme pas la bulle, et le focus va à la commande qui attend.
   await cliquer(jeton(ecran, "Marmiton de corvée n° 2"));
+  assert.equal(bulleMontree(ecran), true, "un clic dans la carte n'est pas un clic au-dehors");
   assert.deepEqual(cibleChoisie(), ["Marmiton de corvée n° 2"]);
   assert.deepEqual(origines(), [["choisie sur la carte", "combat-cibles"]]);
   assert.ok(jeton(ecran, "Marmiton de corvée n° 2").className.split(" ").includes("cible"));
+  assert.equal(document.activeElement, deACliquer(ecran), "la cible choisie sur la carte : le focus au dé, dans la bulle");
   // Par son bouton : « choisie ici ».
   await cliquer(boutonDit(un(corps(ecran), ".combat-cibles"), "Marmiton de corvée n° 1"));
   assert.deepEqual(cibleChoisie(), ["Marmiton de corvée n° 1"]);
   assert.deepEqual(origines(), [["choisie ici", "combat-cibles"]]);
   // « Revenir » avant le premier dé : rien n'est dépensé, et l'origine ne suit pas le geste suivant.
   await cliquer(boutonDit(corps(ecran), "Revenir"));
-  assert.equal(titreDuPanneau(ecran), "Aubépine Crèmebrûlée joue — 2 actions sur 2, souffle 10");
+  assert.deepEqual(enTete(ecran), ["Aubépine Crèmebrûlée", "actions restantes : 2 sur 2 · souffle 10/10"]);
   await cliquer(boutonDeCapacite(ecran, "Frappe"));
   assert.deepEqual(origines(), []);
   await cliquer(jeton(ecran, "Marmiton de corvée n° 1"));
@@ -1049,16 +1382,18 @@ dansUnePage("combat — la cible : « choisie sur la carte », « choisie ici »
   await attendre(() => garde(ecran) === PHRASES_DE_GARDE.garde, "la fin de l'écriture");
 
   // Un rechargement avant le premier dé : le geste est là, sa cible aussi, rien n'est payé ;
-  // mais ni l'événement ni l'état ne disent d'où venait le clic.
+  // mais ni l'événement ni l'état ne disent d'où venait le clic. La bulle montre le jet, sans prendre le focus.
+  const focusAvant = document.focalisations.length;
   const { ecran: rechargee, des: debut } = await ouvrirLEcran(await pageNeuve(), { magasin: await lieu.onglet(), des: [6, 9] });
   assert.equal(etatDuCombat(rechargee), "Tour 1 · camp des PJ");
-  assert.equal(titreDuPanneau(rechargee), "Aubépine Crèmebrûlée joue — 2 actions sur 2, souffle 10");
+  assert.deepEqual(enTete(rechargee), ["Frappe contre Marmiton de corvée n° 1", "Aubépine · action 1 sur 2 · souffle 10/10"]);
+  assert.equal(document.focalisations.length, focusAvant, "une ouverture n'est pas une commande : le focus ne bouge pas");
   assert.deepEqual(ciblesChoisies(rechargee), ["Marmiton de corvée n° 1"]);
   assert.deepEqual(originesDe(rechargee), [], "après un rechargement, rien ne dit d'où venait la cible");
   // Le premier dé : le geste est payé. La rangée « Cible : » reste montrée, avec la seule cible choisie, qui ne se change plus. La page se recharge là.
   await cliquer(deACliquer(rechargee));
   assert.deepEqual(debut.reste(), []);
-  assert.equal(titreDuPanneau(rechargee), "Aubépine Crèmebrûlée joue — 1 action sur 2, souffle 10");
+  assert.deepEqual(enTete(rechargee), ["Frappe contre Marmiton de corvée n° 1", "Aubépine · action 1 sur 2 · souffle 10/10"]);
   const pendantLeJet = tous(un(corps(rechargee), ".combat-cibles"), "button");
   assert.deepEqual(pendantLeJet.map((b) => [texteDe(b), b.getAttribute("aria-pressed"), inactif(b)]), [["Marmiton de corvée n° 1", "true", true]]);
   assert.equal(raisonDe(rechargee, pendantLeJet[0]), "Une action est en cours.");
@@ -1069,7 +1404,7 @@ dansUnePage("combat — la cible : « choisie sur la carte », « choisie ici »
 
   // La page neuve n'a que les dés qui restent à lancer : un dé déjà lancé qu'elle relancerait la ferait lever.
   const { ecran: reprise, des: suite } = await ouvrirLEcran(await pageNeuve(), { magasin: await lieu.onglet(), des: [8, 2, 16] });
-  assert.equal(titreDuPanneau(reprise), "Aubépine Crèmebrûlée joue — 1 action sur 2, souffle 10");
+  assert.deepEqual(enTete(reprise), ["Frappe contre Marmiton de corvée n° 1", "Aubépine · action 1 sur 2 · souffle 10/10"]);
   const chaine = tous(corps(reprise), "button.combat-de");
   assert.equal(inactif(chaine[0]), true, "le premier dé est lancé : il ne se clique plus");
   assert.match(chaine[0].getAttribute("aria-label"), /^1er dé : 7 .*réussi$/);
@@ -1084,7 +1419,7 @@ dansUnePage("combat — la cible : « choisie sur la carte », « choisie ici »
   assert.deepEqual(suite.reste(), []);
 });
 
-dansUnePage("combat — la liste « +k » d'une case : la commande du jeton, « choisie ici » ; un jeton sans choix ne fait rien ; « Fermer »", async (page) => {
+dansUnePage("combat — sur un téléphone, la liste « +k » d'une case reste sous la carte : la commande du jeton, « choisie ici » ; un jeton sans choix ne fait rien ; « Fermer »", async (page) => {
   const gestes = scenario.gestes.slice(0, 2);
   const { ecran } = await ouvrirLEcran(page, { magasin: magasinCombatMemoire(), des: desDe(gestes), etroit: true });
   await preparerLaReference(ecran);
@@ -1097,21 +1432,22 @@ dansUnePage("combat — la liste « +k » d'une case : la commande du jeton, « 
 
   // Qui joue se choisit aussi par « Jouer », sur sa fiche, et par son jeton ; on en change tant que rien n'est payé.
   await cliquer(repere(fiche(ecran, "adv2"), "jouer"));
-  assert.equal(titreDuPanneau(ecran), "Chef de partie joue — 1 action sur 1, souffle 7");
+  assert.deepEqual(enTete(ecran), ["Chef de partie", "actions restantes : 1 sur 1 · souffle 7/7"]);
   assert.equal(tous(fiche(ecran, "adv2"), "[data-repere=jouer]").length, 0, "celui qui joue n'a plus de « Jouer »");
   await cliquer(jeton(ecran, "Marmiton de corvée n° 2"));
-  assert.equal(titreDuPanneau(ecran), "Marmiton de corvée n° 2 joue — 1 action sur 1, souffle 5");
+  assert.deepEqual(enTete(ecran), ["Marmiton de corvée n° 2", "actions restantes : 1 sur 1 · souffle 5/5"]);
   // Aubépine, dont ce n'est pas le tour, ne se choisit pas : son jeton ne fait rien.
   assert.equal(inactif(jeton(ecran, "Aubépine Crèmebrûlée")), true);
   await cliquer(jeton(ecran, "Aubépine Crèmebrûlée"));
-  assert.equal(titreDuPanneau(ecran), "Marmiton de corvée n° 2 joue — 1 action sur 1, souffle 5");
+  assert.deepEqual(enTete(ecran), ["Marmiton de corvée n° 2", "actions restantes : 1 sur 1 · souffle 5/5"]);
   // Revenir à « Qui joue ? » : le Marmiton n° 2 passe son tour.
   await cliquer(boutonDit(corps(ecran), "Passer son tour"));
-  assert.equal(titreDuPanneau(ecran), "Qui joue ?");
+  assert.equal(titreDeLaZone(ecran), "Qui joue ?");
 
   // Rien n'est en cours : la liste choisit qui joue.
   await cliquer(plus());
   assert.equal(texteDe(un(liste, "h3")), "Case D4");
+  assert.equal(bulleMontree(ecran), false, "sur un téléphone, la liste reste sous la carte");
   const dansLaListe = () => tous(liste, "button").map((b) => [texteDe(b), inactif(b)]);
   assert.deepEqual(dansLaListe(), [
     ["Aubépine Crèmebrûlée", true],
@@ -1121,13 +1457,13 @@ dansUnePage("combat — la liste « +k » d'une case : la commande du jeton, « 
   ]);
   // Le Marmiton n° 2 a joué : son bouton ne fait rien non plus.
   await cliquer(boutonDit(liste, "Marmiton de corvée n° 2"));
-  assert.equal(titreDuPanneau(ecran), "Qui joue ?");
+  assert.equal(titreDeLaZone(ecran), "Qui joue ?");
   // Aubépine ne joue pas pendant le tour des adversaires : son bouton ne fait rien.
   await cliquer(boutonDit(liste, "Aubépine Crèmebrûlée"));
-  assert.equal(titreDuPanneau(ecran), "Qui joue ?");
+  assert.equal(titreDeLaZone(ecran), "Qui joue ?");
   assert.equal(liste.children.length, 5, "la liste reste ouverte");
   await cliquer(boutonDit(liste, "Marmiton de corvée n° 1"));
-  assert.equal(titreDuPanneau(ecran), "Marmiton de corvée n° 1 joue — 1 action sur 1, souffle 5");
+  assert.deepEqual(enTete(ecran), ["Marmiton de corvée n° 1", "actions restantes : 1 sur 1 · souffle 5/5"]);
   assert.equal(liste.children.length, 0, "un choix fait, la liste se ferme");
 
   // Pendant le choix d'une cible : seule la cible possible s'y choisit, et c'est un choix du panneau.
@@ -1153,7 +1489,7 @@ dansUnePage("combat — la liste « +k » d'une case : la commande du jeton, « 
   assert.deepEqual(tous(corps(ecran), ".combat-origine").map(texteDe), ["choisie ici"]);
 });
 
-dansUnePage("combat — ce que le combat de référence ne joue pas : la puissance, les réglages à la main, un refus du moteur, les dégâts directs, la face décalée, deux armes, sans arme, X", async (page) => {
+dansUnePage("combat — ce que le combat de référence ne joue pas : une ligne par puissance, les réglages à la main, un refus du moteur, les dégâts directs, la face décalée, deux armes, sans arme, X", async (page) => {
   // Aubépine, un Marmiton de corvée, le Homard furieux (deux armes) et la Mouette chapardeuse (aucune), tous sur A1.
   const { ecran, des } = await ouvrirLEcran(page, { magasin: magasinCombatMemoire(), des: [5, 6, 7, 14, 8, 8, 8, 1, 12] });
   await ajouterLePersonnage(ecran, "Aubépine Crèmebrûlée");
@@ -1168,21 +1504,17 @@ dansUnePage("combat — ce que le combat de référence ne joue pas : la puissan
     await cliquer(bouton);
   };
 
-  // La puissance : le bouton, le coût et la description la suivent.
-  await cliquer(boutonDeCapacite(ecran, "Flambage [2]"));
+  // La puissance : une ligne par puissance, chacune avec son coût ; ni + ni −.
   assert.equal(texteDe(boutonDeCapacite(ecran, "Flambage [2]")), "Flambage [2] 10 souffle");
-  assert.match(texteDe(un(corps(ecran), ".combat-description")), /par 3\.$/);
-  await cliquer(boutonOu(corps(ecran), (b) => b.getAttribute("aria-label") === "Baisser la puissance (actuelle : 2)", "« − »"));
   assert.equal(texteDe(boutonDeCapacite(ecran, "Flambage [1]")), "Flambage [1] 5 souffle");
-  // Ce réglage ne fait pas avancer le geste : le focus reste sur le pas actionné, refait, dont le nom dit la puissance obtenue.
-  assert.equal(document.activeElement.getAttribute("aria-label"), "Baisser la puissance (actuelle : 1)");
-  assert.equal(document.activeElement.isConnected, true);
+  assert.equal(tous(laBulle(ecran), "button").filter((b) => /puissance/.test(b.getAttribute("aria-label") ?? "")).length, 0, "plus de boutons + et −");
+  await cliquer(boutonDeCapacite(ecran, "Flambage [1]"));
   assert.match(texteDe(un(corps(ecran), ".combat-description")), /par 2\.$/);
   // Une capacité sans jet : sa cible est facultative, et « Confirmer » la paie.
   assert.equal(boutonDit(corps(ecran), "Sans cible").getAttribute("aria-pressed"), "true");
   await cliquer(boutonDit(corps(ecran), "Confirmer"));
   assert.equal(journal(ecran).at(-1), "Aubépine : Flambage [1] (5 souffle).");
-  assert.equal(titreDuPanneau(ecran), "Aubépine Crèmebrûlée joue — 1 action sur 2, souffle 5");
+  assert.deepEqual(enTete(ecran), ["Aubépine Crèmebrûlée", "actions restantes : 1 sur 2 · souffle 5/10"]);
 
   // Les réglages à la main, avant le premier dé : le contexte du jet les montre.
   await cliquer(boutonDeCapacite(ecran, "Frappe"));
@@ -1193,9 +1525,12 @@ dansUnePage("combat — ce que le combat de référence ne joue pas : la puissan
   // Le dé nu, puis chaque modificateur avec sa source, une seule fois : « d10+3 » devant eux se lisait d10+3+3.
   assert.match(contexte, /Dé d10 \(Précision \d \+ Agilité \d\) \+1 \(Vif\) \+2 \(à la main : Inspiration\) · difficulté /);
   assert.doesNotMatch(contexte, /d10\+/);
-  // Avant le premier dé, les réglages à la main viennent entre le contexte et la chaîne.
-  assert.deepEqual(un(corps(ecran), ".combat-des").children.map((bloc) => bloc.className), ["combat-contexte", "combat-reglages", "combat-jet", "combat-assiste"]);
-  assert.match(contexte, /1 avantage · Avantages : Solo du chef, à la main : Minutie · Désavantages : Frappe hors maîtrise/);
+  // Le pied du jet : le texte de la capacité, toujours, puis les réglages à la main tant qu'ils existent.
+  assert.deepEqual(un(corps(ecran), ".combat-des").children.map((bloc) => bloc.className), ["combat-contexte", "combat-jet", "combat-assiste", "combat-reglages"]);
+  // Le nombre des avantages porte sa cause : la main en est une.
+  const cause = un(corps(ecran), "button.combat-cause");
+  assert.equal(cause.getAttribute("aria-label"), "1 avantage : voir la cause");
+  assert.ok(tous(un(corps(ecran), ".combat-cause-explication"), "p").map(texteDe).includes("À la main : Minutie."));
   for (let lance = 0; lance < 3; lance += 1) await cliquer(deACliquer(ecran));
   // Pendant le jet : plus de réglage, et la cible, choisie par son bouton, reste montrée avec son origine.
   assert.deepEqual(un(corps(ecran), ".combat-des").children.map((bloc) => bloc.className), ["combat-contexte", "combat-jet", "combat-assiste"]);
@@ -1225,16 +1560,17 @@ dansUnePage("combat — ce que le combat de référence ne joue pas : la puissan
   assert.match(frappe, /d10\+3 contre 5 \(\+2 à la main : Inspiration\), 1 avantage → 8 ✓, 9 ✓, 10 ✓ : 3 réussites, C = 20, dégâts directs au corps : 4 \(Coup bas\)\./);
   assert.match(frappe, /Localisation d20 → 14, décalée à 12 \(Minutie\) : jambe gauche\. Corps 10 → 6\.$/);
 
-  // Le tour des adversaires. Le Homard furieux a deux armes : la capacité qu'elles donnent toutes deux a un bouton sous chacune.
+  // Le tour des adversaires. Le Homard furieux a deux armes : la capacité qu'elles donnent toutes deux a une ligne sous chacune.
   assert.equal(etatDuCombat(ecran), "Tour 1 · camp des adversaires");
   await choisirQuiJoue(ecran, "Homard furieux");
-  assert.deepEqual(tous(corps(ecran), ".combat-groupe").map((groupe) => [texteDe(un(groupe, "h3")), tous(groupe, "button").map((b) => texteDe(b.children[0] ?? b))]), [
+  assert.deepEqual(tous(corps(ecran), ".combat-groupe").map((groupeDeLignes) => [texteDe(un(groupeDeLignes, "h3")), tous(groupeDeLignes, "button").map((b) => texteDe(b.children[0] ?? b))]), [
     ["Pinces de homard", ["Frappe", "Choc sourd"]],
     ["Couteau d'office", ["Frappe", "Émincer", "Passer son tour"]],
   ]);
   await cliquer(boutonOu(tous(corps(ecran), ".combat-groupe")[0], (b) => texteDe(b).startsWith("Frappe"), "Frappe, par les pinces"));
   await cliquer(boutonDit(un(corps(ecran), ".combat-cibles"), "Aubépine Crèmebrûlée"));
-  assert.match(texteDe(un(corps(ecran), ".combat-contexte")), /^Jet de défense · Frappe contre Aubépine Crèmebrûlée/);
+  assert.deepEqual(enTete(ecran), ["Frappe contre Aubépine Crèmebrûlée", "Homard · action 1 sur 2 · souffle 4/4"]);
+  assert.equal(texteDe(un(corps(ecran), "p.combat-defenseur")), "Aubépine lance sa défense · souffle 5/10");
   for (let lance = 0; lance < 3; lance += 1) await cliquer(deACliquer(ecran));
   assert.match(journal(ecran).at(-1), /^Homard : Frappe \(Pinces de homard\) contre Aubépine\. .* : 3 réussites, aucun dégât\.$/);
 
@@ -1261,7 +1597,7 @@ dansUnePage("combat — ce que le combat de référence ne joue pas : la puissan
   await regler("Régler X", 2);
   await cliquer(boutonDit(corps(ecran), "Confirmer"));
   assert.equal(journal(ecran).at(-1), "Aubépine : Pas de côté (2 souffle).");
-  assert.equal(titreDuPanneau(ecran), "Aubépine Crèmebrûlée joue — 1 action sur 2, souffle 3");
+  assert.deepEqual(enTete(ecran), ["Aubépine Crèmebrûlée", "actions restantes : 1 sur 2 · souffle 3/10"]);
 });
 
 dansUnePage("combat — le lien se paie sur une jauge au choix ; un adversaire à deux armes choisit celle qui prête son jet", async (page) => {
@@ -1360,15 +1696,15 @@ dansUnePage("les dés — sans service, l'écran les tire du générateur du nav
   assert.equal(crypto.getRandomValues, generateur);
 });
 
-dansUnePage("téléphone — seule la fiche de qui joue est ouverte ; le menu « ⋯ » porte « Nouveau combat »", async (page) => {
+dansUnePage("téléphone — seule la fiche de qui joue est ouverte ; le menu « ⋯ » porte « Annuler le dernier geste » et « Nouveau combat »", async (page) => {
   const ouvertes = (ecran) => tous(ecran, "details").filter((noeud) => noeud.hasAttribute("open")).map((noeud) => noeud.getAttribute("data-id"));
   const { ecran, requetes } = await ouvrirLEcran(page, { magasin: magasinCombatMemoire(), etroit: true });
   await preparerLaReference(ecran);
   await lancerLeCombat(ecran);
   assert.deepEqual(ouvertes(ecran), [], "personne ne joue encore");
-  // Qui joue se choisit par son jeton, comme par son nom.
+  // Qui joue se choisit par son jeton, comme par son nom ; le volet s'ouvre sur ses actions.
   await cliquer(jeton(ecran, "Aubépine Crèmebrûlée"));
-  assert.equal(titreDuPanneau(ecran), "Aubépine Crèmebrûlée joue — 2 actions sur 2, souffle 10");
+  assert.deepEqual(enTete(ecran), ["Aubépine Crèmebrûlée", "actions restantes : 2 sur 2 · souffle 10/10"]);
   assert.deepEqual(ouvertes(ecran), ["pj1"]);
   // La largeur se demande au navigateur, sous le seuil de la feuille de style (56rem).
   assert.deepEqual([...requetes], ["(max-width: 55.99rem)"]);
@@ -1380,7 +1716,7 @@ dansUnePage("téléphone — seule la fiche de qui joue est ouverte ; le menu «
   assert.equal(plus.getAttribute("aria-label"), "Autres commandes");
   assert.equal(plus.getAttribute("aria-controls"), autres.id);
   assert.deepEqual([plus.getAttribute("aria-expanded"), autres.className], ["false", "combat-autres"]);
-  assert.deepEqual(tous(autres, "button").map(texteDe), ["Nouveau combat"]);
+  assert.deepEqual(tous(autres, "button").map(texteDe), [ANNULER_LE_DERNIER, "Nouveau combat"]);
   assert.equal(boutonDit(barre(ecran), "Fin de tour").parentNode.className, "combat-commandes");
   // L'état, puis « Fin de tour » et « ⋯ », ce que « ⋯ » ouvre, puis l'enregistrement : l'ordre du document est celui du téléphone.
   assert.deepEqual(tous(un(barre(ecran), ".combat-commandes"), "button").map(texteDe), ["Fin de tour", "⋯"], "le menu n'est pas dans la rangée des commandes : l'ouvrir ne les déplace pas");
@@ -1400,9 +1736,9 @@ dansUnePage("téléphone — seule la fiche de qui joue est ouverte ; le menu «
 dansUnePage("journal — « Copier » et « Télécharger » : inactifs avant le lancement ; l'en-tête, le texte, les fins de ligne, le nom du fichier", async (page) => {
   const presse = pressePapiers();
   const { ecran, telecharges } = await ouvrirLEcran(page, { magasin: magasinCombatMemoire(), navigateur: presse.navigateur, des: desDe(scenario.gestes.slice(0, 1)) });
-  const zone = un(ecran, ".combat-journal");
-  const copier = boutonDit(zone, "Copier");
-  const telecharger = boutonDit(zone, "Télécharger");
+  const zoneDuJournal = un(ecran, ".combat-journal");
+  const copier = boutonDit(zoneDuJournal, "Copier");
+  const telecharger = boutonDit(zoneDuJournal, "Télécharger");
   await preparerLaReference(ecran);
   // Avant le lancement : ni en-tête ni nom de fichier ne s'écrivent, et les deux boutons le disent.
   for (const bouton of [copier, telecharger]) {
@@ -1418,16 +1754,16 @@ dansUnePage("journal — « Copier » et « Télécharger » : inactifs avant le
     assert.equal(inactif(bouton), false);
     assert.equal(bouton.hasAttribute("aria-describedby"), false);
   }
-  assert.doesNotMatch(texteDe(zone), /le journal est vide/);
+  assert.doesNotMatch(texteDe(zoneDuJournal), /le journal est vide/);
   await jouerLeGeste(ecran, scenario.gestes[0]);
 
-  const enTete = ["Simulateur de combat — L'Atelier des Arpenteurs", "Combat lancé le 12/10/2026 à 21 h 30 (démonstration)", "Personnages : Aubépine Crèmebrûlée", "Adversaires : Chef de partie ; Marmiton de corvée n° 1 et n° 2", ""];
-  const attendu = [...enTete, ...journalAttendu.slice(0, 3)];
+  const enTeteDuTexte = ["Simulateur de combat — L'Atelier des Arpenteurs", "Combat lancé le 12/10/2026 à 21 h 30 (démonstration)", "Personnages : Aubépine Crèmebrûlée", "Adversaires : Chef de partie ; Marmiton de corvée n° 1 et n° 2", ""];
+  const attendu = [...enTeteDuTexte, ...journalAttendu.slice(0, 3)];
   await cliquer(copier);
   assert.deepEqual(presse.copies, [attendu.join("\n")]);
   assert.equal(presse.copies[0].includes("\r"), false, "le texte copié est en fins de ligne simples");
-  assert.match(texteDe(un(zone, ".combat-copie")), /^Journal copié\.$/);
-  assert.equal(tous(zone, "textarea").length, 0);
+  assert.match(texteDe(un(zoneDuJournal, ".combat-copie")), /^Journal copié\.$/);
+  assert.equal(tous(zoneDuJournal, "textarea").length, 0);
   // Le focus reste sur « Copier » : la phrase se dit par la seule région polie, que le dé suivant remplacera.
   assert.equal(annonce(ecran), "Journal copié.");
   assert.equal(regions(ecran).filter(([noeud]) => noeud.getAttribute("aria-live") === "polite" || noeud.getAttribute("role") === "status").length, 1);
@@ -1437,12 +1773,13 @@ dansUnePage("journal — « Copier » et « Télécharger » : inactifs avant le
   assert.equal(telecharges[0][1].replaceAll("\r\n", "").includes("\n"), false, "le fichier n'a que des fins de ligne de Windows");
 
   // Le retour de la copie s'efface dès qu'une ligne s'ajoute au journal.
+  await choisirQuiJoue(ecran, "Aubépine Crèmebrûlée");
   await cliquer(boutonDeCapacite(ecran, "Pas chassé [1]"));
-  assert.match(texteDe(un(zone, ".combat-copie")), /^Journal copié\.$/, "un geste en cours n'y touche pas");
+  assert.match(texteDe(un(zoneDuJournal, ".combat-copie")), /^Journal copié\.$/, "un geste en cours n'y touche pas");
   assert.equal(annonce(ecran), "Journal copié.", "tant que le combat n'a rien à dire");
   await cliquer(boutonDit(un(corps(ecran), ".combat-arrivees"), "D4"));
   await cliquer(boutonDit(corps(ecran), "Confirmer"));
-  assert.equal(un(zone, ".combat-copie").children.length, 0);
+  assert.equal(un(zoneDuJournal, ".combat-copie").children.length, 0);
   assert.match(annonce(ecran), /^Aubépine : Pas chassé \[1\], C3 → D4\./, "l'annonce suivante du combat la remplace");
 });
 
@@ -1451,27 +1788,28 @@ dansUnePage("journal — le presse-papiers qui refuse, ou qui manque : le texte 
     const { ecran } = await ouvrirLEcran(await pageNeuve(), { magasin: magasinCombatMemoire(), navigateur });
     await preparerLaReference(ecran);
     await lancerLeCombat(ecran);
-    const zone = un(ecran, ".combat-journal");
+    const zoneDuJournal = un(ecran, ".combat-journal");
     // Le champ n'existe pas encore : la sélection se guette sur tous les champs du document.
-    const prototype = Object.getPrototypeOf(zone);
+    const prototype = Object.getPrototypeOf(zoneDuJournal);
     const selectionnes = [];
     const selectionner = prototype.select;
     prototype.select = function select() {
       selectionnes.push(this);
     };
     try {
-      await cliquer(boutonDit(zone, "Copier"));
+      await cliquer(boutonDit(zoneDuJournal, "Copier"));
     } finally {
       prototype.select = selectionner;
     }
-    const champ = un(zone, "textarea");
+    const champ = un(zoneDuJournal, "textarea");
     assert.equal(champ.value, ["Simulateur de combat — L'Atelier des Arpenteurs", "Combat lancé le 12/10/2026 à 21 h 30 (démonstration)", "Personnages : Aubépine Crèmebrûlée", "Adversaires : Chef de partie ; Marmiton de corvée n° 1 et n° 2", "", ...journalAttendu.slice(0, 2)].join("\n"));
     assert.equal(champ.hasAttribute("readonly"), true);
     assert.ok((champ.getAttribute("aria-label") ?? "").trim() !== "", "le champ a un nom");
     assert.deepEqual(selectionnes, [champ], "le texte est sélectionné");
     assert.equal(document.activeElement, champ);
-    assert.match(texteDe(un(zone, `#${champ.getAttribute("aria-describedby")}`)), /^Copie refusée par le navigateur/);
-    assert.doesNotMatch(texteDe(zone), /Journal copié/);
+    assert.equal(document.focalisations.at(-1).options?.preventScroll, true, "sans défiler");
+    assert.match(texteDe(un(zoneDuJournal, `#${champ.getAttribute("aria-describedby")}`)), /^Copie refusée par le navigateur/);
+    assert.doesNotMatch(texteDe(zoneDuJournal), /Journal copié/);
   }
 });
 
@@ -1491,7 +1829,7 @@ dansUnePage("un nom hostile reste du texte : à l'écran, dans le journal, et sa
   await cliquer(boutonDit(un(corps(ecran), ".combat-cibles"), VISIBLE));
   await cliquer(deACliquer(ecran));
 
-  // Rien du nom n'est devenu un élément, et le signe qui renverse l'écriture ne s'affiche nulle part.
+  // Rien du nom n'est devenu un élément, et le signe qui renverse l'écriture ne s'affiche nulle part : ni au journal, ni au bandeau, ni dans la bulle.
   assert.equal(tous(ecran, "img").length, 0);
   assert.equal(tous(ecran, "[onerror]").length, 0);
   assert.equal(texteDe(un(fiche(ecran, "adv2"), ".combat-nom")), VISIBLE);
@@ -1501,6 +1839,7 @@ dansUnePage("un nom hostile reste du texte : à l'écran, dans le journal, et sa
     for (const nom of ["title", "aria-label"]) assert.equal((noeud.getAttribute(nom) ?? "").includes(RENVERSE), false, `${nom} de ${noeud.tagName}`);
   }
   assert.match(journal(ecran).at(-1), /^Aubépine : Frappe contre <img\. .*manqué\.$/);
+  assert.match(texteDe(un(ecran, ".combat-bandeau-entier")), /^Aubépine : Frappe contre <img\. /);
 
   // Ce qui sort de l'écran : le nom y est, sans son signe de sens.
   await cliquer(boutonDit(un(ecran, ".combat-journal"), "Copier"));
@@ -1523,16 +1862,17 @@ dansUnePage("journal — la dernière ligne reste visible en revenant sur l'écr
 
   // Une autre visite (retour d'une fiche de la banque) : le combat est en mémoire, afficher() monte l'écran tout de
   // suite, et la page pose son nœud aussitôt après, dans le même tour, comme js/application.js. Hors de la page, un
-  // nœud n'a pas de mise en page : le défilement réglé pendant le montage n'a pas pris.
+  // nœud n'a pas de mise en page : la liste ne se pose qu'une fois le nœud dans la page, pour défiler jusqu'à sa fin.
   const revenue = page.afficher(contexte, services);
   assert.equal(revenue.isConnected, false);
-  assert.equal(journal(revenue).length, 2);
+  assert.equal(etatDuCombat(revenue), "Tour 1 · camp des PJ", "l'écran est monté tout de suite");
   document.body.replaceChildren(revenue);
   // Ce que le navigateur donne une fois le nœud posé : une hauteur, et le journal à sa première ligne.
   const lignes = un(revenue, "ol.combat-lignes");
   lignes.scrollHeight = 960;
   lignes.scrollTop = 0;
   await laisserFiler();
+  assert.equal(journal(revenue).length, 2);
   assert.equal(lignes.scrollTop, 960, "le journal se rouvre sur sa dernière ligne");
 
   // Une visite que la page ne pose jamais, ou qu'une autre a remplacée entre-temps, ne règle rien.
@@ -1593,7 +1933,7 @@ dansUnePage("« Nouveau combat » — la confirmation dans la page ; « Annuler 
   await attendre(() => garde(ecran) === PHRASES_DE_GARDE.garde, "la fin de l'écriture");
   const avant = await lireLaBase(lieu);
   assert.equal(JSON.parse(avant.texte).evenements.length, 1);
-  // La région d'annonce reste dans la page quand la préparation prend la place du panneau d'action : c'est le même nœud.
+  // La région d'annonce reste dans la page quand la préparation prend la place de la zone : c'est le même nœud.
   const regionDAnnonce = un(ecran, "p.combat-annonce");
   assert.match(texteDe(regionDAnnonce), /^Combat lancé : 1 personnage contre 3 adversaires\./);
 
@@ -1601,7 +1941,7 @@ dansUnePage("« Nouveau combat » — la confirmation dans la page ; « Annuler 
   const nouveau = boutonDit(autres, "Nouveau combat");
   assert.equal(tous(ecran, ".confirmation").length, 0);
   await cliquer(nouveau);
-  // La question se pose dans la page, à la place du bouton ; rien n'est encore effacé.
+  // La question se pose dans la page, à la place des boutons ; rien n'est encore effacé.
   const question = un(autres, ".confirmation");
   assert.equal(question.getAttribute("role"), "group");
   assert.equal(texteDe(un(question, "p")), QUESTION);
@@ -1627,13 +1967,15 @@ dansUnePage("« Nouveau combat » — la confirmation dans la page ; « Annuler 
   assert.deepEqual(fiches(ecran), []);
   assert.deepEqual(jetons(ecran), {});
   assert.deepEqual(journal(ecran), []);
+  assert.equal(cache(un(ecran, "div.combat-bandeau")), true, "le bandeau se cache avec le combat");
   assert.equal(texteDe(regionDAnnonce), "", "la région d'annonce ne redit rien du combat d'avant");
   assert.equal(un(ecran, "p.combat-annonce"), regionDAnnonce, "elle reste dans la page, vide, et reste la seule");
   assert.equal(regionDAnnonce.parentNode, ecran);
   // Le menu « ⋯ » se referme avec la question : sur un téléphone, « Nouveau combat » restait affiché sous la barre du combat neuf.
   assert.deepEqual([un(barre(ecran), "button.combat-plus-bouton").getAttribute("aria-expanded"), autres.className], ["false", "combat-autres"]);
-  assert.deepEqual(tous(autres, "button").map(texteDe), ["Nouveau combat"]);
-  assert.deepEqual(un(ecran, ".combat-cadre").children.map((noeud) => noeud.className), ["combat-plateau", "combat-preparation", "combat-camps"]);
+  assert.deepEqual(tous(autres, "button").map(texteDe), [ANNULER_LE_DERNIER, "Nouveau combat"]);
+  assert.equal(cache(boutonDit(autres, ANNULER_LE_DERNIER)), true, "avant le lancement, « Annuler le dernier geste » se cache");
+  assert.deepEqual(formeDuCadre(ecran), ["combat-bandeau", "combat-plateau", "combat-bulle", "combat-onglet", "combat-preparation", "combat-camps"]);
   assert.equal(document.activeElement, un(ecran, "h1"));
   assert.equal(inactif(boutonDit(un(ecran, ".combat-journal"), "Copier")), true);
   // La base garde le combat vide, à une révision plus haute : elle ne redescend jamais.
@@ -1789,7 +2131,7 @@ dansUnePage("enregistrement — « Enregistrement… » puis « Combat gardé su
   assert.equal(garde(ecran), "Combat gardé sur cet appareil");
   assert.equal(avis(ecran).getAttribute("role"), "alert");
   assert.equal(avis(ecran).children.length, 0);
-  for (const noeud of [un(ecran, "p.combat-etat"), un(ecran, "p.combat-garde")]) {
+  for (const noeud of [un(ecran, "p.combat-etat"), un(ecran, "p.combat-garde"), un(ecran, "p.combat-limite")]) {
     assert.equal(noeud.hasAttribute("role"), false);
     assert.equal(noeud.hasAttribute("aria-live"), false);
   }
@@ -1805,7 +2147,7 @@ dansUnePage("enregistrement — « Enregistrement… » puis « Combat gardé su
     assert.equal(garde(ecran), "Combat gardé sur cet appareil");
     assert.equal(avis(ecran).children.length, 0);
   }
-  // Le combat lancé, c'est le même nœud qui parle : la seule région polie de l'écran.
+  // Le combat lancé, c'est le même nœud qui parle : la seule région polie de l'écran, bandeau et bulle compris.
   assert.deepEqual(regions(ecran).filter(([noeud]) => noeud.getAttribute("aria-live") === "polite" || noeud.getAttribute("role") === "status").map(([noeud]) => noeud), [regionDesDes]);
   assert.match(texteDe(regionDesDes), /^Combat lancé : 1 personnage contre 1 adversaire\./);
   // Chaque écriture a monté la révision.
@@ -1900,7 +2242,7 @@ dansUnePage("enregistrement — une écriture qui échoue : le combat continue e
   assert.deepEqual(await lieu.gardee(), gardee, "il reste en base l'écriture d'avant");
 });
 
-dansUnePage("enregistrement — « Combat ouvert ailleurs » : on ne joue plus, le panneau le dit ; « Reprendre le combat le plus récent »", async (page) => {
+dansUnePage("enregistrement — « Combat ouvert ailleurs » : on ne joue plus, le bloc d'arrêt le dit ; « Reprendre le combat le plus récent »", async (page) => {
   const lieu = lieuSimule();
   const { ecran } = await ouvrirLEcran(page, { magasin: await lieu.onglet() });
   await preparerLaReference(ecran);
@@ -1922,15 +2264,17 @@ dansUnePage("enregistrement — « Combat ouvert ailleurs » : on ne joue plus, 
   assert.equal(avis(ecran).children.length, 0, "le clic est joué en mémoire");
   assert.equal(tous(corps(ecran), ".combat-cibles").length, 1);
   await attendre(() => garde(ecran) === "Combat ouvert ailleurs", "le refus de l'écriture");
-  // L'état passe par la zone d'avis, avec son bouton ; le panneau d'action cède la place, et le dit.
+  // L'état passe par la zone d'avis, avec son bouton ; la zone sous la carte cède la place au bloc d'arrêt, et la bulle se cache.
   assert.deepEqual(tous(avis(ecran), "p").map(texteDe), ["Combat ouvert ailleurs"]);
   assert.deepEqual(tous(avis(ecran), "button").map(texteDe), ["Reprendre le combat le plus récent"]);
-  assert.deepEqual(un(ecran, ".combat-cadre").children.map((noeud) => noeud.getAttribute("aria-label")), ["Carte", "Combat arrêté", null]);
-  const bloc = un(ecran, ".combat-cadre").children[1];
+  assert.deepEqual(formeDuCadre(ecran), ["combat-bandeau", "combat-plateau", "combat-bulle", "combat-onglet", "combat-action", "combat-camps"]);
+  const bloc = sousLaCarte(ecran);
+  assert.equal(bloc.getAttribute("aria-label"), "Combat arrêté");
+  assert.deepEqual([bulleMontree(ecran), cache(onglet(ecran))], [false, true]);
   assert.equal(texteDe(un(bloc, "h2")), "Combat ouvert ailleurs");
   assert.deepEqual(tous(bloc, "button").map(texteDe), ["Reprendre le combat le plus récent"]);
-  // Le focus était dans le panneau d'action, qui vient de quitter la page sans qu'on ait rien cliqué : il va au bloc qui le remplace.
-  assert.equal(document.activeElement, un(bloc, "h2"), "le focus n'est pas perdu avec le panneau");
+  // Le focus était dans la bulle, qui vient de se cacher sans qu'on ait rien cliqué : il va au bloc qui remplace la zone.
+  assert.equal(document.activeElement, un(bloc, "h2"), "le focus n'est pas perdu avec la bulle");
   // « Nouveau combat » écraserait le combat de l'autre onglet : il est inactif, et le dit.
   const nouveau = boutonDit(barre(ecran), "Nouveau combat");
   assert.equal(inactif(nouveau), true);
@@ -1938,10 +2282,13 @@ dansUnePage("enregistrement — « Combat ouvert ailleurs » : on ne joue plus, 
   await cliquer(nouveau);
   assert.equal(tous(ecran, ".confirmation").length, 0);
 
-  // « Fin de tour » ne jouerait rien : il est inactif lui aussi, et le dit par la même phrase.
+  // « Fin de tour » et « Annuler le dernier geste » ne joueraient rien : ils sont inactifs eux aussi, et le disent par la même phrase.
   const fin = boutonDit(barre(ecran), "Fin de tour");
   assert.equal(inactif(fin), true);
   assert.equal(raisonDe(ecran, fin), "Combat ouvert ailleurs");
+  const annulerLeGeste = boutonDit(barre(ecran), ANNULER_LE_DERNIER);
+  assert.equal(inactif(annulerLeGeste), true);
+  assert.equal(raisonDe(ecran, annulerLeGeste), "Combat ouvert ailleurs");
 
   // La carte montre le combat sans rien offrir : aucun jeton ne porte de commande, aucun n'est écarté par un choix, aucune case ne se choisit.
   const surLaCarte = tous(ecran, ".combat-jeton");
@@ -1963,6 +2310,7 @@ dansUnePage("enregistrement — « Combat ouvert ailleurs » : on ne joue plus, 
   await cliquer(jeton(ecran, "Aubépine Crèmebrûlée"));
   await cliquer(jeton(ecran, "Marmiton de corvée n° 1"));
   assert.deepEqual(journal(ecran), avant);
+  assert.equal(bulleMontree(ecran), false);
   assert.equal(un(avis(ecran), "p"), dit, "le même nœud : un lecteur d'écran ne l'entend qu'une fois");
   await laisserFiler(30);
   assert.deepEqual(await lieu.gardee(), gardee, "la base garde le combat de l'autre onglet");
@@ -1971,7 +2319,8 @@ dansUnePage("enregistrement — « Combat ouvert ailleurs » : on ne joue plus, 
   await cliquer(boutonDit(bloc, "Reprendre le combat le plus récent"));
   await attendre(() => garde(ecran) === PHRASES_DE_GARDE.garde, "la reprise");
   assert.equal(avis(ecran).children.length, 0);
-  assert.deepEqual(un(ecran, ".combat-cadre").children.map((noeud) => noeud.className), ["combat-plateau", "combat-action", "combat-camps"]);
+  assert.deepEqual(formeDuCadre(ecran), ["combat-bandeau", "combat-plateau", "combat-bulle", "combat-onglet", "combat-action", "combat-camps"]);
+  assert.equal(sousLaCarte(ecran).getAttribute("aria-label"), "Action en cours");
   assert.deepEqual(journal(ecran), [...journalAttendu.slice(0, 2), "Aubépine passe son tour.", "Fin du tour des PJ : ils retrouvent leurs actions.", "— Tour 1 · camp des adversaires —"]);
   assert.equal(etatDuCombat(ecran), "Tour 1 · camp des adversaires");
   assert.equal(inactif(boutonDit(barre(ecran), "Nouveau combat")), false);
@@ -1979,8 +2328,8 @@ dansUnePage("enregistrement — « Combat ouvert ailleurs » : on ne joue plus, 
   // La carte et les fiches offrent de nouveau : les adversaires, qui ont la main, se choisissent.
   assert.deepEqual(tous(ecran, ".combat-jeton").filter((pose) => !inactif(pose)).map((pose) => pose.getAttribute("title")).sort(), ["Chef de partie", "Marmiton de corvée n° 1", "Marmiton de corvée n° 2"]);
   assert.equal(tous(ecran, "[data-repere=jouer]").length, 3);
-  await cliquer(boutonDit(corps(ecran), "Chef de partie"));
-  assert.equal(titreDuPanneau(ecran), "Chef de partie joue — 1 action sur 1, souffle 7");
+  await cliquer(boutonDit(zone(ecran), "Chef de partie"));
+  assert.deepEqual(enTete(ecran), ["Chef de partie", "actions restantes : 1 sur 1 · souffle 7/7"]);
   // Et l'on écrit de nouveau : le geste suivant monte la révision de l'autre onglet.
   await cliquer(boutonDeCapacite(ecran, "Frappe"));
   assert.equal(garde(ecran), "Enregistrement…");
@@ -2003,7 +2352,7 @@ dansUnePage("enregistrement — « Combat ouvert ailleurs » : on ne joue plus, 
   assert.equal(tous(ecran, "[data-repere=jouer]").length, 0, "aucune fiche n'offre « Jouer »");
   assert.deepEqual([...new Set(tous(un(ecran, ".combat-camps"), "button").map(texteDe))], ["Fiche complète"]);
   // Repris, le combat offre de nouveau : le Chef joue encore, les deux Marmitons se choisissent.
-  await cliquer(boutonDit(un(ecran, ".combat-cadre").children[1], "Reprendre le combat le plus récent"));
+  await cliquer(boutonDit(sousLaCarte(ecran), "Reprendre le combat le plus récent"));
   await attendre(() => garde(ecran) === PHRASES_DE_GARDE.garde, "la seconde reprise");
   assert.equal(tous(ecran, ".combat-jeton").filter((pose) => !inactif(pose)).length, 3);
   assert.ok(tous(ecran, "[data-repere=jouer]").length >= 2);
@@ -2018,12 +2367,12 @@ dansUnePage("enregistrement — le mot de passe changé, la donnée abîmée : �
     const lieu = lieuSimule();
     const posee = await poserEnBase(lieu, texteDuCombat(2, 7), { revision: 7, secret, retoucher });
     const { ecran } = await ouvrirLEcran(await pageNeuve(), { magasin: await lieu.onglet() });
-    // Rien ne se reprend ; la phrase est dans la barre, passe par l'avis, et le panneau la dit avec son bouton.
+    // Rien ne se reprend ; la phrase est dans la barre, passe par l'avis, et le bloc d'arrêt la dit avec son bouton.
     assert.equal(garde(ecran), NE_SE_LIT_PLUS, cas);
     assert.deepEqual(fiches(ecran), []);
     assert.deepEqual(tous(avis(ecran), "p").map(texteDe), [NE_SE_LIT_PLUS]);
     assert.deepEqual(tous(avis(ecran), "button").map(texteDe), ["Nouveau combat"]);
-    const bloc = un(ecran, ".combat-cadre").children[1];
+    const bloc = sousLaCarte(ecran);
     assert.equal(bloc.getAttribute("aria-label"), "Combat arrêté");
     assert.equal(texteDe(un(bloc, "h2")), NE_SE_LIT_PLUS);
     assert.equal(tous(ecran, ".combat-preparation").length, 0, "on ne prépare rien par-dessus un combat qui ne se lit pas");
@@ -2055,7 +2404,7 @@ dansUnePage("enregistrement — une version plus récente de l'Atelier : rien ne
   assert.equal(garde(ecran), RECENT);
   assert.deepEqual(tous(avis(ecran), "p").map(texteDe), [RECENT]);
   assert.equal(tous(avis(ecran), "button").length, 0, "aucun bouton : il faut recharger");
-  const bloc = un(ecran, ".combat-cadre").children[1];
+  const bloc = sousLaCarte(ecran);
   assert.equal(texteDe(un(bloc, "h2")), RECENT);
   assert.equal(tous(bloc, "button").length, 0);
   const nouveau = boutonDit(barre(ecran), "Nouveau combat");
@@ -2066,16 +2415,16 @@ dansUnePage("enregistrement — une version plus récente de l'Atelier : rien ne
   await laisserFiler(30);
   assert.deepEqual(await lieu.gardee(), posee, "le combat plus récent n'est pas écrasé");
 
-  // Un contenu d'une autre version des règles : il se dit, ne se rejoue pas, et se remplace.
+  // Un contenu d'une autre version des règles (la 1, la version courante étant la 2) : il se dit, ne se rejoue pas, et se remplace.
   const AUTRE_VERSION = "Ce combat a été commencé avec une autre version du simulateur : il ne se reprend pas.";
   const autre = lieuSimule();
-  await poserEnBase(autre, texteDuCombat(2, 3, (contenu) => ({ ...contenu, regles: 2, effets: [] })));
+  await poserEnBase(autre, texteDuCombat(2, 3, (contenu) => ({ ...contenu, regles: 1, effets: [] })));
   const { ecran: second } = await ouvrirLEcran(await pageNeuve(), { magasin: await autre.onglet() });
   assert.equal(garde(second), AUTRE_VERSION);
   assert.deepEqual(tous(avis(second), "p").map(texteDe), [AUTRE_VERSION]);
   assert.deepEqual(tous(avis(second), "button").map(texteDe), ["Nouveau combat"]);
   assert.deepEqual(fiches(second), []);
-  await cliquer(boutonDit(un(second, ".combat-cadre").children[1], "Nouveau combat"));
+  await cliquer(boutonDit(sousLaCarte(second), "Nouveau combat"));
   await cliquer(boutonDit(barre(second), "Effacer"));
   await attendre(() => garde(second) === PHRASES_DE_GARDE.garde, "l'écriture du combat neuf");
   assert.equal((await lireLaBase(autre)).revision, 4);
@@ -2130,18 +2479,18 @@ dansUnePage("les services — sans service, « Copier » passe par le presse-pap
     await lancerLeCombat(ecran);
     const apres = new Date();
     // Sur un téléphone, personne ne jouant encore, aucune fiche n'est ouverte ; sur un grand écran, toutes le sont.
-    const ouvertes = (noeud) => tous(noeud, "details").filter((fiche) => fiche.hasAttribute("open")).length;
+    const ouvertes = (noeud) => tous(noeud, "details").filter((uneFiche) => uneFiche.hasAttribute("open")).length;
     assert.deepEqual([...demandees], ["(max-width: 55.99rem)"]);
     assert.equal(ouvertes(ecran), 0);
-    const zone = un(ecran, ".combat-journal");
-    await cliquer(boutonDit(zone, "Copier"));
+    const zoneDuJournal = un(ecran, ".combat-journal");
+    await cliquer(boutonDit(zoneDuJournal, "Copier"));
     assert.equal(presse.copies.length, 1, "la copie est allée au presse-papiers du navigateur");
     assert.match(presse.copies[0], /^Simulateur de combat — L'Atelier des Arpenteurs\nCombat lancé le /);
-    assert.equal(tous(zone, "textarea").length, 0, "aucun champ de repli");
+    assert.equal(tous(zoneDuJournal, "textarea").length, 0, "aucun champ de repli");
     // Le fichier porte la date et l'heure locales du lancement : combat-AAAA-MM-JJ-HHhMM.txt.
     const deux = (nombre) => String(nombre).padStart(2, "0");
     const nomA = (date) => `combat-${date.getFullYear()}-${deux(date.getMonth() + 1)}-${deux(date.getDate())}-${deux(date.getHours())}h${deux(date.getMinutes())}.txt`;
-    await cliquer(boutonDit(zone, "Télécharger"));
+    await cliquer(boutonDit(zoneDuJournal, "Télécharger"));
     assert.equal(telecharges.length, 1);
     assert.ok([nomA(avant), nomA(apres)].includes(telecharges[0][0]), `${telecharges[0][0]} : l'heure du lancement, ${nomA(avant)}`);
     // Une autre visite, la fenêtre élargie.
@@ -2166,10 +2515,10 @@ dansUnePage("« Fin de tour » — inactif pendant un geste, il dit pourquoi, et
   await jouerLeGeste(ecran, scenario.gestes[0], {
     apresChaqueDe() {
       if (corps(ecran).querySelector(".combat-jet") === null) return;
-      const avant = [etatDuCombat(ecran), titreDuPanneau(ecran), journal(ecran).length];
+      const avant = [etatDuCombat(ecran), enTete(ecran), journal(ecran).length];
       const vu = { inactif: inactif(fin), horsDuClavier: fin.hasAttribute("disabled"), raison: raisonDe(ecran, fin) };
       fin.click();
-      vus.push({ ...vu, bouge: JSON.stringify([etatDuCombat(ecran), titreDuPanneau(ecran), journal(ecran).length]) !== JSON.stringify(avant), avis: avis(ecran).children.length });
+      vus.push({ ...vu, bouge: JSON.stringify([etatDuCombat(ecran), enTete(ecran), journal(ecran).length]) !== JSON.stringify(avant), avis: avis(ecran).children.length });
     },
   });
   assert.ok(vus.length >= 1, "le geste a lancé au moins un dé");
@@ -2222,11 +2571,54 @@ dansUnePage("enregistrement — « Reprendre le combat le plus récent » trouve
   assert.equal(garde(ecran), NE_SE_LIT_PLUS);
   assert.deepEqual(tous(avis(ecran), "p").map(texteDe), [NE_SE_LIT_PLUS]);
   assert.deepEqual(tous(avis(ecran), "button").map(texteDe), ["Nouveau combat"]);
-  const bloc = un(ecran, ".combat-cadre").children[1];
+  const bloc = sousLaCarte(ecran);
   assert.equal(texteDe(un(bloc, "h2")), NE_SE_LIT_PLUS);
   assert.deepEqual(tous(bloc, "button").map(texteDe), ["Nouveau combat"]);
+  assert.equal(tous(bloc, ".attente").length, 0, "la reprise finie, l'attente a quitté le bloc");
   await laisserFiler(20);
   assert.deepEqual(await lieu.gardee(), posee, "rien n'est écrit par-dessus");
+});
+
+dansUnePage("enregistrement — pendant le rejeu de « Reprendre le combat le plus récent », le bloc d'arrêt montre la même attente que l'ouverture, au lieu de son bouton", async (page) => {
+  const lieu = lieuSimule();
+  // La reprise rend la main entre deux tranches : le contrôle retient la première, et regarde l'écran pendant ce temps.
+  let retenir = false;
+  let lacher = null;
+  let tranches = 0;
+  const rendreLaMain = () => {
+    tranches += 1;
+    if (!retenir) return Promise.resolve();
+    return new Promise((resoudre) => {
+      lacher = resoudre;
+    });
+  };
+  const { ecran } = await ouvrirLEcran(page, { magasin: await lieu.onglet(), rendreLaMain });
+  await ajouterLePersonnage(ecran, "Aubépine Crèmebrûlée");
+  await attendre(() => garde(ecran) === PHRASES_DE_GARDE.garde, "la fin de l'écriture");
+  const gardee = await lieu.gardee();
+  // Ailleurs, un combat de 1 500 événements a été écrit par-dessus.
+  const posee = await chiffrerCombat(texteDuLongCombat(1500, gardee.revision + 1), SECRET, { mode: "demo", revision: gardee.revision + 1 });
+  assert.deepEqual(await (await lieu.onglet()).ecrireSi(posee, gardee.revision), { ecrit: true });
+  await ajouterDesAdversaires(ecran, "Plongeur", 1);
+  await attendre(() => garde(ecran) === "Combat ouvert ailleurs", "le refus de l'écriture");
+  const bloc = sousLaCarte(ecran);
+  assert.deepEqual(tous(bloc, "button").map(texteDe), ["Reprendre le combat le plus récent"]);
+  retenir = true;
+  tranches = 0;
+  const reprise = cliquer(boutonDit(bloc, "Reprendre le combat le plus récent"));
+  await attendre(() => lacher !== null, "la première tranche du rejeu");
+  const attente = un(bloc, "p.attente");
+  assert.deepEqual([attente.getAttribute("role"), texteDe(attente)], ["status", "Ouverture du combat…"]);
+  assert.equal(tous(bloc, "button").length, 0, "le bouton cède la place à l'attente");
+  assert.equal(texteDe(un(bloc, "h2")), "Combat ouvert ailleurs", "le bloc garde sa phrase");
+  retenir = false;
+  lacher();
+  await reprise;
+  await attendre(() => etatDuCombat(ecran) === "Tour 1 · camp des PJ", "le combat repris");
+  assert.equal(tranches, 1, "1 500 événements : la main rendue une fois");
+  assert.equal(sousLaCarte(ecran).getAttribute("aria-label"), "Action en cours");
+  assert.equal(tous(ecran, ".attente").length, 0, "l'attente a quitté la page");
+  assert.deepEqual(journal(ecran), journalAttendu.slice(0, 2));
 });
 
 dansUnePage("oublier() — pendant une écriture : ce qui était parti avec la clé oubliée ne s'écrit plus", async (page) => {
@@ -2296,4 +2688,666 @@ dansUnePage("la liste d'une case — avant le lancement elle dit quel jeton est 
     await cliquer(un(laCase(ecran, "J1"), etroit ? "button.combat-plus-etroit" : "button.combat-plus-large"));
     assert.deepEqual(tous(liste, "button").filter((b) => texteDe(b) !== "Fermer").map((b) => [texteDe(b), b.getAttribute("aria-pressed")]), noms.map((nom) => [nom, String(nom === tenu)]));
   }
+});
+
+// ─── Au groupe 2 : la bulle ─────────────────────────────────────────────────
+
+/** Le combat de référence lancé, sur un grand écran ; tous sur D4 si « serres » (quatre jetons : un « +1 » sur un grand écran). */
+async function combatLance(page, { serres = false, des = [], ...options } = {}) {
+  const ouvert = await ouvrirLEcran(page, { magasin: magasinCombatMemoire(), des, ...options });
+  await preparerLaReference(ouvert.ecran);
+  if (serres) for (const id of ["pj1", "adv2"]) poserSur(ouvert.ecran, id, "D4");
+  await lancerLeCombat(ouvert.ecran);
+  return ouvert;
+}
+
+dansUnePage("la bulle — « Qui joue ? », le jeton et « Jouer » l'ouvrent contre la case, placée, nommée, le focus à sa première ligne ; ✕ la ferme et rend le focus au jeton", async (page) => {
+  const { ecran } = await combatLance(page);
+  const bulle = laBulle(ecran);
+  assert.equal(bulleMontree(ecran), false, "personne ne joue : la bulle est cachée");
+  assert.equal(titreDeLaZone(ecran), "Qui joue ?");
+
+  // « Qui joue ? » : la bulle s'ouvre sur les actions d'Aubépine, placée contre sa case, le focus sur sa première ligne active.
+  const ecrituresAvant = bulle.style.ecritures.length;
+  await cliquer(boutonDit(zone(ecran), "Aubépine Crèmebrûlée"));
+  assert.equal(bulleMontree(ecran), true);
+  assert.equal(nomDeLaBulle(ecran), "Aubépine Crèmebrûlée : ses actions");
+  assert.deepEqual(enTete(ecran), ["Aubépine Crèmebrûlée", "actions restantes : 2 sur 2 · souffle 10/10"]);
+  assert.equal(texteDe(zone(ecran)), PHRASE_DE_LA_ZONE, "la zone sous la carte ne dit plus que la phrase");
+  assert.equal(document.activeElement, premiereLigne(ecran));
+  assert.equal(document.activeElement.getAttribute("data-ligne"), "0:0", "la première ligne : Frappe");
+  assert.deepEqual(bulle.style.ecritures.slice(ecrituresAvant).map(([nom]) => nom), ["--bulle-gauche", "--bulle-haut", "--bulle-fleche"], "placée une fois, à son ouverture");
+  assert.ok(bulle.className.split(" ").some((classe) => /^combat-bulle-(droite|gauche|dessous|dessus)$/.test(classe)), bulle.className);
+  assert.ok(un(laCase(ecran, "C3"), ".combat-jeton").className.split(" ").includes("joue"));
+  // Un rendu qui ne change pas ce qu'elle montre ne la replace pas.
+  const ecritures = bulle.style.ecritures.length;
+  await cliquer(boutonDit(un(ecran, ".combat-journal"), "Télécharger"));
+  assert.equal(bulle.style.ecritures.length, ecritures);
+
+  // ✕ : « Fermer », la croix en dernier ; elle ferme, rien n'est dépensé, et le focus va au jeton.
+  await cliquer(boutonDit(zone(ecran), "Aubépine Crèmebrûlée"));
+  const fermer = un(bulle, "button.combat-bulle-fermer");
+  assert.equal(bulle.children.at(-1), fermer, "la croix est le dernier élément de la bulle");
+  assert.equal(fermer.getAttribute("aria-label"), "Fermer");
+  await cliquer(fermer);
+  assert.equal(bulleMontree(ecran), false);
+  assert.equal(titreDeLaZone(ecran), "Qui joue ?");
+  assert.equal(document.activeElement, jeton(ecran, "Aubépine Crèmebrûlée"), "le focus au jeton");
+
+  // Le jeton l'ouvre de même ; « Jouer », sur la fiche, aussi.
+  await cliquer(jeton(ecran, "Aubépine Crèmebrûlée"));
+  assert.equal(nomDeLaBulle(ecran), "Aubépine Crèmebrûlée : ses actions");
+  assert.equal(document.activeElement, premiereLigne(ecran));
+  await cliquer(un(bulle, "button.combat-bulle-fermer"));
+  await cliquer(repere(fiche(ecran, "pj1"), "jouer"));
+  assert.equal(bulleMontree(ecran), true);
+  assert.equal(document.activeElement, premiereLigne(ecran));
+  // Un jeton de l'autre camp, hors d'un choix de cible, n'ouvre rien.
+  await cliquer(un(bulle, "button.combat-bulle-fermer"));
+  await cliquer(jeton(ecran, "Chef de partie"));
+  assert.equal(bulleMontree(ecran), false);
+  assert.deepEqual(focusQuiDefilent(), [], "chaque focus sans défiler");
+});
+
+dansUnePage("la bulle — le clic au-dehors la ferme sans bouger le focus ; un clic dans la carte, dans la bulle ou sur l'onglet ne la ferme pas ; après le premier dé, il la réduit", async (page) => {
+  const { ecran } = await combatLance(page, { des: [6, 9, 8, 2, 16] });
+  await choisirQuiJoue(ecran, "Aubépine Crèmebrûlée");
+  const focusDansLaBulle = document.activeElement;
+  // Dans la carte, sur une case : la bulle reste.
+  await cliquerSur(ecran, laCase(ecran, "H8"));
+  assert.equal(bulleMontree(ecran), true, "un clic dans la carte n'est pas au-dehors");
+  // Dans la bulle elle-même : elle reste.
+  await cliquerSur(ecran, un(laBulle(ecran), "h2.combat-bulle-titre"));
+  assert.equal(bulleMontree(ecran), true);
+  // Au-dehors (le titre du journal) : elle se ferme, rien n'est dépensé, et le focus ne bouge pas.
+  const focusAvant = document.focalisations.length;
+  await cliquerSur(ecran, un(ecran, "#combat-journal-titre"));
+  assert.equal(bulleMontree(ecran), false);
+  assert.equal(titreDeLaZone(ecran), "Qui joue ?");
+  assert.equal(document.activeElement, focusDansLaBulle, "le focus reste où il était");
+  assert.equal(document.focalisations.length, focusAvant, "aucun focus posé par le clic au-dehors");
+  assert.deepEqual(journal(ecran), journalAttendu.slice(0, 2), "fermer avant le premier dé ne dépense rien");
+
+  // La bulle cachée, un clic au-dehors ne fait rien.
+  await cliquerSur(ecran, un(ecran, "#combat-journal-titre"));
+  assert.equal(titreDeLaZone(ecran), "Qui joue ?");
+
+  // Après le premier dé : un clic au-dehors réduit la bulle en un onglet, contre la case ; le focus ne bouge pas.
+  await choisirQuiJoue(ecran, "Aubépine Crèmebrûlée");
+  await cliquer(boutonDeCapacite(ecran, "Frappe"));
+  await cliquer(boutonDit(un(corps(ecran), ".combat-cibles"), "Marmiton de corvée n° 1"));
+  await cliquer(deACliquer(ecran));
+  assert.equal(un(laBulle(ecran), "button.combat-bulle-fermer").getAttribute("aria-label"), "Réduire");
+  assert.equal(texteDe(un(laBulle(ecran), "button.combat-bulle-fermer")), String.fromCodePoint(0x2013));
+  const focusPendantLeJet = document.activeElement;
+  const ecrituresDeLOnglet = onglet(ecran).style.ecritures.length;
+  await cliquerSur(ecran, un(ecran, "p.combat-aide"));
+  assert.equal(bulleMontree(ecran), false, "réduite");
+  assert.equal(cache(onglet(ecran)), false, "l'onglet paraît");
+  assert.equal(texteDe(onglet(ecran)), "Frappe : rouvrir");
+  assert.ok(onglet(ecran).style.ecritures.length > ecrituresDeLOnglet, "l'onglet se place contre la case");
+  assert.equal(document.activeElement, focusPendantLeJet);
+  // Un clic sur l'onglet n'est pas au-dehors : il rouvre la bulle, le focus sur la commande qui attend.
+  await cliquer(onglet(ecran));
+  assert.equal(bulleMontree(ecran), true);
+  assert.equal(cache(onglet(ecran)), true);
+  assert.equal(document.activeElement, deACliquer(ecran), "le focus au dé qui attend");
+  // Le geste se finit dans la bulle rouverte.
+  await cliquer(deACliquer(ecran));
+  await cliquer(deACliquer(ecran));
+  await cliquer(boutonDit(corps(ecran), "Appliquer"));
+  assert.deepEqual(journal(ecran), journalAttendu.slice(0, 3));
+});
+
+dansUnePage("la bulle — Échap ferme d'abord l'infobulle, sans bouger le focus, puis la bulle, et rend le focus au jeton ; ailleurs, Échap n'est pas pris ; après le premier dé, il la réduit", async (page) => {
+  const { ecran } = await combatLance(page, { des: [6, 9] });
+  await choisirQuiJoue(ecran, "Aubépine Crèmebrûlée");
+  const frappe = premiereLigne(ecran);
+  // Le focus sur la ligne ouvre son infobulle.
+  frappe.declencher("focus");
+  const ouvertes = () => tous(laBulle(ecran), "div.combat-infobulle").filter((noeud) => !cache(noeud));
+  assert.equal(ouvertes().length, 1, "l'infobulle de la ligne est ouverte");
+  assert.ok(tous(ecran, ".combat-case").some((noeud) => noeud.className.split(" ").includes("portee")), "les hachures de sa portée");
+  // Échap : l'infobulle se ferme, le focus ne bouge pas, la bulle reste.
+  const focusAvant = document.focalisations.length;
+  assert.equal(echap(ecran), true);
+  assert.equal(ouvertes().length, 0);
+  assert.equal(tous(ecran, ".combat-case").filter((noeud) => noeud.className.split(" ").includes("portee")).length, 0, "les hachures s'effacent avec elle");
+  assert.equal(bulleMontree(ecran), true);
+  assert.equal(document.focalisations.length, focusAvant, "le focus n'a pas bougé");
+  // Un second Échap ferme la bulle, et rend le focus au jeton.
+  assert.equal(echap(ecran), true);
+  assert.equal(bulleMontree(ecran), false);
+  assert.equal(document.activeElement, jeton(ecran, "Aubépine Crèmebrûlée"));
+
+  // Le focus sur le jeton : Échap ferme aussi la bulle montrée.
+  await cliquer(jeton(ecran, "Aubépine Crèmebrûlée"));
+  jeton(ecran, "Aubépine Crèmebrûlée").focus({ preventScroll: true });
+  assert.equal(echap(ecran), true);
+  assert.equal(bulleMontree(ecran), false);
+
+  // Le focus ailleurs (le titre de la page) : Échap n'est pas pris, la bulle reste.
+  await cliquer(jeton(ecran, "Aubépine Crèmebrûlée"));
+  un(ecran, "h1").focus({ preventScroll: true });
+  assert.equal(echap(ecran), false, "Échap n'est pas pris");
+  assert.equal(bulleMontree(ecran), true);
+  // La bulle cachée, Échap n'est pas pris non plus.
+  await cliquer(un(laBulle(ecran), "button.combat-bulle-fermer"));
+  assert.equal(echap(ecran), false);
+
+  // Après le premier dé, Échap réduit la bulle, et rend le focus au jeton.
+  await cliquer(jeton(ecran, "Aubépine Crèmebrûlée"));
+  await cliquer(boutonDeCapacite(ecran, "Frappe"));
+  await cliquer(boutonDit(un(corps(ecran), ".combat-cibles"), "Marmiton de corvée n° 1"));
+  await cliquer(deACliquer(ecran));
+  assert.equal(echap(ecran), true);
+  assert.equal(bulleMontree(ecran), false);
+  assert.equal(texteDe(onglet(ecran)), "Frappe : rouvrir");
+  assert.equal(document.activeElement, jeton(ecran, "Aubépine Crèmebrûlée"));
+  assert.deepEqual(journal(ecran), journalAttendu.slice(0, 2), "réduire ne défait rien : le geste attend");
+  assert.deepEqual(focusQuiDefilent(), []);
+});
+
+dansUnePage("la bulle — « +k » ouvre la liste de la case dans la bulle même, nommée par son titre ; « Fermer » la ferme (focus au « +k ») ou rend ce qu'elle montrait ; un jeton choisi y met ses options ; un autre jeton du camp", async (page) => {
+  const { ecran } = await combatLance(page, { serres: true });
+  // Quatre jetons sur D4 : un « +1 » sur un grand écran.
+  const plus = () => un(laCase(ecran, "D4"), "button.combat-plus-large");
+  assert.equal(texteDe(plus()), "+1");
+  const liste = () => un(laBulle(ecran), ".combat-case-liste");
+
+  // Personne ne joue : la bulle s'ouvre pour la liste seule, placée contre la case, le focus à son titre.
+  await cliquer(plus());
+  assert.equal(bulleMontree(ecran), true);
+  assert.equal(texteDe(un(liste(), "h3")), "Case D4");
+  assert.equal(laBulle(ecran).getAttribute("aria-labelledby"), "combat-bulle-case-titre");
+  assert.equal(un(liste(), "h3").id, "combat-bulle-case-titre");
+  assert.equal(laBulle(ecran).hasAttribute("aria-label"), false);
+  assert.equal(document.activeElement, un(liste(), "h3"));
+  assert.equal(un(un(ecran, "section.combat-action"), ".combat-case-liste").children.length, 0, "sur un grand écran, la zone ne la porte pas");
+  assert.deepEqual(tous(liste(), "button").map((b) => [texteDe(b), inactif(b)]), [
+    ["Aubépine Crèmebrûlée", false],
+    ["Chef de partie", true],
+    ["Marmiton de corvée n° 1", true],
+    ["Marmiton de corvée n° 2", true],
+    ["Fermer", false],
+  ]);
+  // « Fermer » : la bulle, ouverte pour elle seule, se ferme ; le focus va au « +1 ».
+  await cliquer(boutonDit(liste(), "Fermer"));
+  assert.equal(bulleMontree(ecran), false);
+  assert.equal(document.activeElement, plus());
+  // Échap sur la liste : de même, le focus au « +1 ».
+  await cliquer(plus());
+  assert.equal(echap(ecran), true);
+  assert.equal(bulleMontree(ecran), false);
+  assert.equal(document.activeElement, plus());
+
+  // Un jeton choisi dans la liste : ses options prennent la place, le focus à la première ligne.
+  await cliquer(plus());
+  await cliquer(boutonDit(liste(), "Aubépine Crèmebrûlée"));
+  assert.equal(nomDeLaBulle(ecran), "Aubépine Crèmebrûlée : ses actions");
+  assert.equal(tous(laBulle(ecran), ".combat-case-liste").length, 0, "la liste a quitté la bulle");
+  assert.equal(document.activeElement, premiereLigne(ecran));
+  // La bulle montrée : la liste prend sa place, puis « Fermer » rend ce qu'elle montrait.
+  await cliquer(plus());
+  assert.equal(texteDe(un(liste(), "h3")), "Case D4");
+  assert.deepEqual([cache(un(laBulle(ecran), ".combat-bulle-tete")), laBulle(ecran).getAttribute("aria-labelledby")], [true, "combat-bulle-case-titre"]);
+  await cliquer(boutonDit(liste(), "Fermer"));
+  assert.equal(nomDeLaBulle(ecran), "Aubépine Crèmebrûlée : ses actions");
+  assert.equal(bulleMontree(ecran), true);
+  assert.equal(document.activeElement, premiereLigne(ecran));
+  // Un clic au-dehors, la liste ouverte : elle se ferme, la bulle rend ce qu'elle montrait, le focus ne bouge pas.
+  await cliquer(plus());
+  const focusSurLaListe = document.activeElement;
+  await cliquerSur(ecran, un(ecran, "p.combat-aide"));
+  assert.equal(nomDeLaBulle(ecran), "Aubépine Crèmebrûlée : ses actions");
+  assert.equal(document.activeElement, focusSurLaListe);
+
+  // Pendant un choix de cible : la liste dans la bulle choisit la cible, « choisie ici ».
+  await cliquer(boutonDeCapacite(ecran, "Frappe"));
+  await cliquer(plus());
+  await cliquer(boutonDit(liste(), "Marmiton de corvée n° 2"));
+  assert.equal(nomDeLaBulle(ecran), "Aubépine Crèmebrûlée : ses actions");
+  assert.deepEqual(tous(corps(ecran), ".combat-origine").map(texteDe), ["choisie ici"]);
+  assert.equal(document.activeElement, deACliquer(ecran), "le focus au dé qui attend");
+  await cliquer(boutonDit(corps(ecran), "Revenir"));
+
+  // Le tour des adversaires : un autre jeton du camp ouvre sa bulle à la place.
+  await cliquer(boutonDit(corps(ecran), "Passer son tour"));
+  assert.equal(etatDuCombat(ecran), "Tour 1 · camp des adversaires");
+  await cliquer(repere(fiche(ecran, "adv2"), "jouer"));
+  assert.equal(nomDeLaBulle(ecran), "Chef de partie : ses actions");
+  await cliquer(plus());
+  await cliquer(boutonDit(liste(), "Marmiton de corvée n° 1"));
+  assert.equal(nomDeLaBulle(ecran), "Marmiton de corvée n° 1 : ses actions");
+  assert.equal(document.activeElement, premiereLigne(ecran));
+  assert.deepEqual(focusQuiDefilent(), []);
+});
+
+dansUnePage("la bulle — un autre jeton du camp ouvre la sienne ; le geste fini, elle revient à la liste, ou se ferme et rend le focus au jeton", async (page) => {
+  const gestes = scenario.gestes.slice(0, 4);
+  const { ecran } = await combatLance(page, { des: desDe(gestes) });
+  for (const geste of gestes.slice(0, 2)) await jouerLeGeste(ecran, geste);
+  // Le tour des adversaires : le Chef, puis un autre jeton de son camp.
+  await cliquer(jeton(ecran, "Chef de partie"));
+  assert.equal(nomDeLaBulle(ecran), "Chef de partie : ses actions");
+  const ecritures = laBulle(ecran).style.ecritures.length;
+  await cliquer(jeton(ecran, "Marmiton de corvée n° 1"));
+  assert.equal(nomDeLaBulle(ecran), "Marmiton de corvée n° 1 : ses actions");
+  assert.ok(laBulle(ecran).style.ecritures.length > ecritures, "un autre protagoniste : la bulle se replace");
+  assert.equal(document.activeElement, premiereLigne(ecran));
+  // Le geste du Marmiton n° 1 : sa seule action dépensée, la bulle se ferme et le focus va à son jeton.
+  await jouerLeGeste(ecran, gestes[2]);
+  assert.deepEqual(journal(ecran), journalAttendu.slice(0, 7));
+  assert.equal(bulleMontree(ecran), false);
+  assert.equal(titreDeLaZone(ecran), "Qui joue ?");
+  assert.equal(document.activeElement, jeton(ecran, "Marmiton de corvée n° 1"));
+  // Le Chef joue Pas chassé [2] : un déplacement se confirme, et la bulle se ferme de même. Quatre jetons sur D4,
+  // personne ne joue : le Chef y est le troisième montré, et se voit sur un grand écran.
+  await jouerLeGeste(ecran, gestes[3]);
+  assert.deepEqual(journal(ecran), journalAttendu.slice(0, 8));
+  assert.equal(bulleMontree(ecran), false);
+  assert.equal(tous(laCase(ecran, "D4"), ".combat-jeton")[2], jeton(ecran, "Chef de partie"));
+  assert.equal(document.activeElement, jeton(ecran, "Chef de partie"));
+  assert.deepEqual(focusQuiDefilent(), []);
+});
+
+dansUnePage("la bulle — fermée, elle rend le focus au jeton s'il se voit à cette largeur, sinon au « +k » qui le cache", async () => {
+  for (const etroit of [false, true]) {
+    const { ecran } = await combatLance(await pageNeuve(), { serres: true, etroit });
+    const quand = etroit ? "sur un téléphone" : "sur un grand écran";
+    await cliquer(jeton(ecran, "Aubépine Crèmebrûlée"));
+    await cliquer(boutonDit(corps(ecran), "Passer son tour"));
+    assert.equal(etatDuCombat(ecran), "Tour 1 · camp des adversaires");
+    // Quatre jetons sur D4, les trois adversaires devant : le Marmiton n° 2 est le troisième. Un grand écran en
+    // montre trois ; sous 56rem, la feuille n'en montre que deux.
+    await cliquer(repere(fiche(ecran, "adv4"), "jouer"));
+    assert.equal(nomDeLaBulle(ecran), "Marmiton de corvée n° 2 : ses actions", quand);
+    await cliquer(un(laBulle(ecran), "button.combat-bulle-fermer"));
+    assert.equal(bulleMontree(ecran), false);
+    assert.equal(tous(laCase(ecran, "D4"), ".combat-jeton")[2], jeton(ecran, "Marmiton de corvée n° 2"));
+    assert.equal(document.activeElement, etroit ? un(laCase(ecran, "D4"), "button.combat-plus-etroit") : jeton(ecran, "Marmiton de corvée n° 2"), quand);
+  }
+});
+
+dansUnePage("la bulle — Maj+Tab depuis sa première ligne revient au jeton ; Tab après ✕ sort de la bulle, qui reste ouverte", async (page) => {
+  const { ecran } = await combatLance(page);
+  await choisirQuiJoue(ecran, "Aubépine Crèmebrûlée");
+  const bulle = laBulle(ecran);
+  let empeche = false;
+  bulle.declencher("keydown", {
+    key: "Tab",
+    shiftKey: true,
+    target: premiereLigne(ecran),
+    preventDefault() {
+      empeche = true;
+    },
+  });
+  assert.equal(empeche, true);
+  assert.equal(document.activeElement, jeton(ecran, "Aubépine Crèmebrûlée"), "le focus au jeton");
+  assert.equal(bulleMontree(ecran), true, "la bulle reste ouverte : ni piège ni modale");
+  // Tab, depuis ✕ : rien n'est retenu, le navigateur sort de la bulle.
+  empeche = false;
+  bulle.declencher("keydown", {
+    key: "Tab",
+    target: un(bulle, "button.combat-bulle-fermer"),
+    preventDefault() {
+      empeche = true;
+    },
+  });
+  assert.equal(empeche, false);
+  assert.equal(bulleMontree(ecran), true);
+});
+
+// ─── Au groupe 2 : le journal, le bandeau ───────────────────────────────────
+
+dansUnePage("le bandeau — caché avant le lancement ; la dernière ligne ; pendant un geste, sa ligne en cours ; « Journal ↓ » et le clic à la souris montrent le journal, seul défilement de l'écran", async (page) => {
+  const { ecran } = await ouvrirLEcran(page, { magasin: magasinCombatMemoire(), des: desDe(scenario.gestes.slice(0, 1)) });
+  await preparerLaReference(ecran);
+  const bandeau = un(ecran, "div.combat-bandeau");
+  assert.equal(cache(bandeau), true, "avant le lancement, il n'est pas montré");
+  await lancerLeCombat(ecran);
+  assert.equal(cache(bandeau), false);
+  assert.equal(bandeau.parentNode, cadre(ecran));
+  assert.equal(bandeau.className, "combat-bandeau");
+  assert.equal(texteDe(un(bandeau, ".combat-bandeau-etiquette")), "Dernier événement");
+  assert.equal(texteDe(un(bandeau, ".combat-bandeau-texte")), journalAttendu[1]);
+  assert.equal(un(bandeau, ".combat-bandeau-texte").getAttribute("aria-hidden"), "true", "le texte coupé est caché aux lecteurs d'écran");
+  assert.equal(texteDe(un(bandeau, ".combat-bandeau-entier")), journalAttendu[1], "la ligne entière le suit, cachée à la vue");
+  assert.equal(bandeau.getAttribute("title"), journalAttendu[1]);
+  // Ni bouton, ni région.
+  assert.equal(bandeau.hasAttribute("role"), false);
+  assert.equal(bandeau.hasAttribute("aria-live"), false);
+
+  // Pendant un geste, après le premier dé seulement : la ligne en cours, le début de celle qui s'écrira, suivi de « … ».
+  await choisirQuiJoue(ecran, "Aubépine Crèmebrûlée");
+  await cliquer(boutonDeCapacite(ecran, "Frappe"));
+  await cliquer(boutonDit(un(corps(ecran), ".combat-cibles"), "Marmiton de corvée n° 1"));
+  assert.equal(bandeau.className, "combat-bandeau", "avant le premier dé, la dernière ligne du journal");
+  await cliquer(deACliquer(ecran));
+  assert.equal(bandeau.className, "combat-bandeau combat-bandeau-en-cours");
+  const enCours = texteDe(un(bandeau, ".combat-bandeau-entier"));
+  assert.ok(enCours.endsWith(POINTS), enCours);
+  assert.ok(journalAttendu[2].startsWith(enCours.slice(0, -1)), `« ${enCours} » débute la ligne qui s'écrira`);
+  assert.ok(tous(bandeau, ".combat-cadre-jet").length >= 1, "les dés du jet, encadrés");
+  await cliquer(deACliquer(ecran));
+  await cliquer(deACliquer(ecran));
+  await cliquer(boutonDit(corps(ecran), "Appliquer"));
+  assert.equal(bandeau.className, "combat-bandeau", "le geste fini, sa ligne définitive la remplace");
+  assert.equal(texteDe(un(bandeau, ".combat-bandeau-entier")), journalAttendu[2]);
+
+  // « Journal ↓ » : un bouton, jamais un lien ; le journal se montre, et son titre reçoit le focus, sans défiler de nouveau.
+  const versLeJournal = un(bandeau, "button.combat-bandeau-journal");
+  assert.equal(texteDe(versLeJournal), `Journal ${String.fromCodePoint(0x2193)}`);
+  assert.deepEqual(document.defilements, []);
+  await cliquer(versLeJournal);
+  const zoneDuJournal = un(ecran, "section.combat-journal");
+  assert.deepEqual(document.defilements, [{ noeud: zoneDuJournal, options: { block: "start" } }]);
+  assert.equal(document.activeElement, un(ecran, "#combat-journal-titre"));
+  assert.deepEqual(document.focalisations.at(-1).options, { preventScroll: true });
+  assert.equal(bulleMontree(ecran), false, "un clic hors de la bulle l'a fermée");
+  // Un clic à la souris sur le reste du bandeau fait de même ; au doigt, rien : un doigt qui balaie la page n'y saute pas.
+  const texte = un(bandeau, ".combat-bandeau-texte");
+  bandeau.declencher("pointerdown", { pointerType: "touch" });
+  bandeau.declencher("click", { target: texte });
+  assert.equal(document.defilements.length, 1, "au doigt, rien");
+  bandeau.declencher("pointerdown", { pointerType: "mouse" });
+  bandeau.declencher("click", { target: texte });
+  assert.equal(document.defilements.length, 2, "à la souris, le journal");
+  assert.equal(document.activeElement, un(ecran, "#combat-journal-titre"));
+  assert.deepEqual(focusQuiDefilent(), []);
+});
+
+dansUnePage("le bandeau — trois lignes au plus : la mesure de l'écran (tient), refaite quand la largeur change (surveiller) ; chaque morceau ôté devient « […] »", async (page) => {
+  // La mesure, prêtée : un budget de signes, que le contrôle change ; la surveillance, relevée.
+  let budget = 1000;
+  const mesures = [];
+  const surveilles = [];
+  const tient = (noeud) => (mesures.push(noeud), texteDe(noeud).length <= budget);
+  const surveiller = (noeud, rappel) => {
+    surveilles.push({ noeud, rappel });
+    return () => {};
+  };
+  const { ecran } = await ouvrirLEcran(page, { magasin: magasinCombatMemoire(), des: desDe(scenario.gestes.slice(0, 1)), tient, surveiller });
+  await preparerLaReference(ecran);
+  await lancerLeCombat(ecran);
+  const bandeau = un(ecran, "div.combat-bandeau");
+  const texte = un(bandeau, ".combat-bandeau-texte");
+  assert.deepEqual(surveilles.map(({ noeud }) => noeud), [texte], "l'écran surveille la taille du texte du bandeau");
+  assert.ok(mesures.length > 0 && mesures.every((noeud) => noeud === texte), "la mesure porte sur le texte du bandeau");
+  await jouerLeGeste(ecran, scenario.gestes[0]);
+  assert.equal(texteDe(texte), journalAttendu[2], "tout tient : la ligne entière");
+  assert.equal(tous(texte, ".combat-bandeau-coupe").length, 0);
+
+  // La largeur change (le budget avec elle) : la coupe se refait, la première phrase et celle du jet gardées.
+  budget = 150;
+  texte.rectangle = { left: 0, top: 0, width: 320, height: 60 };
+  surveilles[0].rappel();
+  assert.ok(tous(texte, ".combat-bandeau-coupe").length >= 1, texteDe(texte));
+  assert.ok(texteDe(texte).length <= 150, texteDe(texte));
+  assert.match(texteDe(texte), /^Aubépine : Frappe contre Marmiton n° 1\./);
+  assert.ok(texteDe(texte).includes("[…]"));
+  // La ligne entière reste pour les lecteurs d'écran et le titre.
+  assert.equal(texteDe(un(bandeau, ".combat-bandeau-entier")), journalAttendu[2]);
+  assert.equal(bandeau.getAttribute("title"), journalAttendu[2]);
+  // La même largeur : rien ne se refait.
+  const avant = mesures.length;
+  surveilles[0].rappel();
+  assert.equal(mesures.length, avant, "la mesure ne se refait qu'à une largeur neuve");
+});
+
+// ─── Au groupe 2 : « Annuler le dernier geste » ─────────────────────────────
+
+dansUnePage("annuler — le bouton et ses trois raisons ; la question dans la page, « Garder » ; « Annuler le geste » défait le geste, le focus revient au bouton ; la ligne « Annulé », les lignes barrées ; jusqu'au lancement", async (page) => {
+  const presse = pressePapiers();
+  // La Frappe de référence, puis une seconde, qui touche (9 et 9), manque son second dé (1 et 1), puis tombe au torse (16).
+  const { ecran } = await combatLance(page, { des: [...desDe(scenario.gestes.slice(0, 1)), 9, 9, 1, 1, 16], navigateur: presse.navigateur });
+  const autres = un(barre(ecran), "div.combat-autres");
+  const bouton = () => un(barre(ecran), "button.combat-annuler-geste");
+  const barrees = () => tous(un(ecran, "ol.combat-lignes"), "li").map((li) => li.className.split(" ").includes("combat-annulee"));
+  // Le bouton : « ↶ » caché aux lecteurs d'écran, une espace, le libellé ; à gauche de « Nouveau combat ».
+  assert.equal(cache(bouton()), false, "montré dès le lancement");
+  assert.deepEqual(tous(autres, "button").map(texteDe), [ANNULER_LE_DERNIER, "Nouveau combat"]);
+  const signe = un(bouton(), "span.combat-signe");
+  assert.deepEqual([signe.getAttribute("aria-hidden"), texteDe(signe)], ["true", String.fromCodePoint(0x21b6)]);
+  assert.equal(bouton().className, "bouton secondaire combat-annuler-geste");
+  // Rien à annuler depuis le lancement : inactif, avec sa raison ; son clic ne demande rien. Cette raison passe avant les deux autres.
+  assert.equal(inactif(bouton()), true);
+  assert.equal(raisonDe(ecran, bouton()), "Rien à annuler depuis le lancement.");
+  await cliquer(bouton());
+  assert.equal(tous(ecran, ".confirmation").length, 0);
+  await choisirQuiJoue(ecran, "Aubépine Crèmebrûlée");
+  await cliquer(boutonDeCapacite(ecran, "Frappe"));
+  assert.equal(raisonDe(ecran, bouton()), "Rien à annuler depuis le lancement.");
+  await cliquer(boutonDit(corps(ecran), "Revenir"));
+
+  // La Frappe de référence, jouée : le bouton s'active.
+  await jouerLeGeste(ecran, scenario.gestes[0]);
+  assert.deepEqual(journal(ecran), journalAttendu.slice(0, 3));
+  assert.match(texteDe(fiche(ecran, "adv3")), /11\/15/);
+  assert.equal(inactif(bouton()), false);
+  assert.equal(raisonDe(ecran, bouton()), "");
+  // Un geste en cours, non payé : « Revenez d'abord… » ; payé : « Terminez d'abord… ».
+  await cliquer(boutonDeCapacite(ecran, "Frappe"));
+  await cliquer(boutonDit(un(corps(ecran), ".combat-cibles"), "Marmiton de corvée n° 1"));
+  assert.equal(inactif(bouton()), true);
+  assert.equal(raisonDe(ecran, bouton()), "Revenez d'abord sur le geste en cours.");
+  await cliquer(deACliquer(ecran));
+  assert.equal(raisonDe(ecran, bouton()), "Terminez d'abord le geste en cours.");
+  await cliquer(deACliquer(ecran));
+  await cliquer(deACliquer(ecran));
+  await cliquer(boutonDit(corps(ecran), "Appliquer"));
+  // La seconde Frappe a dépensé la dernière action d'Aubépine : le tour des PJ s'est fini de lui-même.
+  assert.equal(etatDuCombat(ecran), "Tour 1 · camp des adversaires");
+  assert.equal(journal(ecran).length, 6);
+  assert.equal(inactif(bouton()), false);
+
+  // Son clic pose la question dans la page, à la place des boutons ; le focus sur « Garder ».
+  await cliquer(bouton());
+  const question = un(autres, ".confirmation");
+  assert.equal(question.getAttribute("role"), "group");
+  assert.equal(question.getAttribute("aria-labelledby"), "combat-question-annuler");
+  assert.equal(texteDe(un(question, "#combat-question-annuler")), "Annuler ce geste : Aubépine — Frappe contre Marmiton n° 1 ? Ses dés seront perdus.");
+  assert.deepEqual(tous(question, "button").map((b) => [texteDe(b), b.className]), [
+    ["Annuler le geste", "bouton"],
+    ["Garder", "bouton secondaire"],
+  ]);
+  assert.equal(document.activeElement, boutonDit(question, "Garder"));
+  // « Garder » : rien ne change, le focus revient au bouton.
+  await cliquer(boutonDit(question, "Garder"));
+  assert.equal(tous(ecran, ".confirmation").length, 0);
+  assert.equal(document.activeElement, bouton());
+  assert.equal(journal(ecran).length, 6);
+
+  // « Annuler le geste » : tout redevient ce qu'il était avant la seconde Frappe, fin du tour comprise ; le journal, lui, gagne sa ligne.
+  await cliquer(bouton());
+  await cliquer(boutonDit(un(autres, ".confirmation"), "Annuler le geste"));
+  assert.equal(tous(ecran, ".confirmation").length, 0);
+  assert.equal(document.activeElement, bouton(), "le focus revient au bouton « Annuler le dernier geste »");
+  assert.equal(etatDuCombat(ecran), "Tour 1 · camp des PJ");
+  assert.equal(journal(ecran).at(-1), "Annulé : Aubépine — Frappe.");
+  assert.equal(annonce(ecran), "Annulé : Aubépine — Frappe.");
+  assert.equal(bulleMontree(ecran), false, "personne n'est choisi : la bulle est fermée");
+  assert.equal(titreDeLaZone(ecran), "Qui joue ?");
+  await choisirQuiJoue(ecran, "Aubépine Crèmebrûlée");
+  assert.deepEqual(enTete(ecran), ["Aubépine Crèmebrûlée", "actions restantes : 1 sur 2 · souffle 10/10"], "il lui reste l'action d'avant la seconde Frappe");
+  await cliquer(un(laBulle(ecran), "button.combat-bulle-fermer"));
+  // Les lignes du geste (la Frappe, la fin du tour, le tour) sont barrées à l'écran ; la ligne « Annulé » ne l'est pas.
+  assert.deepEqual(barrees(), [false, false, false, true, true, true, false]);
+  // On le presse de nouveau : la Frappe de référence se défait à son tour, jusqu'au lancement.
+  assert.equal(inactif(bouton()), false);
+  await cliquer(bouton());
+  assert.equal(texteDe(un(autres, "#combat-question-annuler")), "Annuler ce geste : Aubépine — Frappe contre Marmiton n° 1 ? Ses dés seront perdus.");
+  await cliquer(boutonDit(un(autres, ".confirmation"), "Annuler le geste"));
+  assert.deepEqual(barrees(), [false, false, true, true, true, true, false, false]);
+  assert.doesNotMatch(texteDe(fiche(ecran, "adv3")), /11\/15/, "l'armure du Marmiton est rendue");
+  // Il n'y a plus rien à annuler : le lancement ne se défait pas.
+  assert.equal(inactif(bouton()), true);
+  assert.equal(raisonDe(ecran, bouton()), "Rien à annuler depuis le lancement.");
+  assert.equal(document.activeElement, bouton());
+  await choisirQuiJoue(ecran, "Aubépine Crèmebrûlée");
+  assert.deepEqual(enTete(ecran), ["Aubépine Crèmebrûlée", "actions restantes : 2 sur 2 · souffle 10/10"]);
+  // Le texte copié garde toutes les lignes, sans barre.
+  await cliquer(boutonDit(un(ecran, ".combat-journal"), "Copier"));
+  assert.ok(presse.copies[0].endsWith(["Annulé : Aubépine — Frappe.", "Annulé : Aubépine — Frappe."].join("\n")));
+  assert.ok(presse.copies[0].includes(journalAttendu[2]));
+  assert.deepEqual(focusQuiDefilent(), []);
+});
+
+dansUnePage("annuler — une question ouverte se ferme quand il n'y a plus rien à annuler ; « Passer son tour » et la fin du tour se défont ; sur un téléphone, « ⋯ » reste ouvert", async (page) => {
+  const { ecran } = await combatLance(page, { etroit: true });
+  const autres = un(barre(ecran), "div.combat-autres");
+  const plus = un(barre(ecran), "button.combat-plus-bouton");
+  const bouton = () => un(barre(ecran), "button.combat-annuler-geste");
+  // Aubépine passe son tour : le tour des PJ finit de lui-même.
+  await cliquer(jeton(ecran, "Aubépine Crèmebrûlée"));
+  await cliquer(boutonDit(corps(ecran), "Passer son tour"));
+  assert.equal(etatDuCombat(ecran), "Tour 1 · camp des adversaires");
+  // Sur un téléphone, le bouton est dans « ⋯ ».
+  await cliquer(plus);
+  assert.equal(autres.className, "combat-autres ouvert");
+  await cliquer(bouton());
+  assert.equal(texteDe(un(autres, "#combat-question-annuler")), "Annuler ce geste : Aubépine — passer son tour ?");
+  // Pendant la question, un geste commence (le Chef choisit une capacité) : plus rien à annuler, la question se ferme.
+  await cliquer(repere(fiche(ecran, "adv2"), "jouer"));
+  await cliquer(boutonDeCapacite(ecran, "Frappe"));
+  assert.equal(tous(ecran, ".confirmation").length, 0, "la question s'est fermée");
+  assert.equal(raisonDe(ecran, bouton()), "Revenez d'abord sur le geste en cours.");
+  await cliquer(boutonDit(corps(ecran), "Revenir"));
+  await cliquer(un(laBulle(ecran), "button.combat-bulle-fermer"));
+
+  // « Annuler le geste » : la passe et la fin de tour qu'elle a entraînée se défont ; « ⋯ » reste ouvert, le bouton s'y voit.
+  await cliquer(bouton());
+  await cliquer(boutonDit(un(autres, ".confirmation"), "Annuler le geste"));
+  assert.equal(etatDuCombat(ecran), "Tour 1 · camp des PJ");
+  assert.equal(journal(ecran).at(-1), "Annulé : Aubépine — passer son tour.");
+  assert.deepEqual(tous(un(ecran, "ol.combat-lignes"), "li").map((li) => li.className.split(" ").includes("combat-annulee")), [false, false, true, true, true, false], "la passe, la fin du tour et le tour, barrés");
+  assert.equal(autres.className, "combat-autres ouvert", "« ⋯ » reste ouvert sur un téléphone");
+  assert.equal(document.activeElement, bouton());
+  // « Fin de tour » se défait de même.
+  await cliquer(boutonDit(barre(ecran), "Fin de tour"));
+  await cliquer(bouton());
+  assert.equal(texteDe(un(autres, "#combat-question-annuler")), "Annuler la fin du tour des PJ ?");
+  await cliquer(boutonDit(un(autres, ".confirmation"), "Annuler le geste"));
+  assert.equal(journal(ecran).at(-1), "Annulé : la fin du tour des PJ.");
+  assert.equal(etatDuCombat(ecran), "Tour 1 · camp des PJ");
+});
+
+// ─── Au groupe 2 : la limite des événements ─────────────────────────────────
+
+dansUnePage("limite — à 13 500 événements, la phrase sous la barre, et une fois par combat dans la zone d'avis", async (page) => {
+  assert.equal(EVENEMENTS_ALERTE, 13500);
+  const lieu = lieuSimule();
+  await poserEnBase(lieu, texteDuLongCombat(EVENEMENTS_ALERTE + 1));
+  const { ecran } = await ouvrirLEcran(page, { magasin: await lieu.onglet() });
+  const limite = un(ecran, "p.combat-limite");
+  assert.equal(cache(limite), false);
+  assert.equal(texteDe(limite), LIMITE);
+  assert.equal(ecran.children[ecran.children.indexOf(limite) - 1], barre(ecran), "sous la barre de titre");
+  assert.deepEqual(tous(avis(ecran), "p").map(texteDe), [LIMITE], "dite une fois dans la zone d'avis");
+  // Le geste suivant efface l'avis ; la phrase reste sous la barre, et ne se redit pas.
+  await cliquer(boutonDit(zone(ecran), "Aubépine Crèmebrûlée"));
+  assert.equal(avis(ecran).children.length, 0);
+  assert.equal(texteDe(limite), LIMITE);
+  await cliquer(un(laBulle(ecran), "button.combat-bulle-fermer"));
+  assert.equal(avis(ecran).children.length, 0, "pas une seconde fois pour ce combat");
+  // Une autre visite, le même combat en mémoire : elle ne se redit pas.
+  const { ecran: revenue } = await ouvrirLEcran(page, { magasin: await lieu.onglet() });
+  assert.equal(texteDe(un(revenue, "p.combat-limite")), LIMITE);
+  assert.equal(avis(revenue).children.length, 0);
+
+  // Sous 13 500, rien.
+  const court = lieuSimule();
+  await poserEnBase(court, texteDuLongCombat(EVENEMENTS_ALERTE - 1));
+  const { ecran: sous } = await ouvrirLEcran(await pageNeuve(), { magasin: await court.onglet() });
+  assert.equal(cache(un(sous, "p.combat-limite")), true);
+  assert.equal(texteDe(un(sous, "p.combat-limite")), "");
+  assert.equal(avis(sous).children.length, 0);
+});
+
+// ─── Au groupe 2 : le téléphone ─────────────────────────────────────────────
+
+dansUnePage("téléphone — le volet porte la liste seule ; « Jouer » le ferme et le jet se joue sous la carte, sans ✕ ; la fenêtre élargie, le jet passe dans la bulle", async (page) => {
+  const fenetre = guetterLaFenetre();
+  try {
+    let largeur = 390;
+    globalThis.document.documentElement.clientWidth = largeur;
+    const { ecran } = await combatLance(page, { etroit: () => largeur < 896, des: desDe(scenario.gestes.slice(0, 1)) });
+    // Le volet : la liste seule, avec sa poignée, ✕ en dernier.
+    await cliquer(jeton(ecran, "Aubépine Crèmebrûlée"));
+    const bulle = laBulle(ecran);
+    assert.equal(bulleMontree(ecran), true);
+    assert.deepEqual(bulle.children.map((noeud) => noeud.className.split(" ")[0]), ["combat-bulle-poignee", "combat-bulle-tete", "combat-bulle-defile", "combat-infobulles", "combat-bulle-fermer"]);
+    assert.equal(un(bulle, ".combat-bulle-poignee").getAttribute("aria-hidden"), "true");
+    assert.equal(document.activeElement, premiereLigne(ecran));
+    assert.equal(zone(ecran).children.length, 0, "le volet ouvert, la zone sous la carte est vide");
+    // « Jouer » (la ligne) : le volet se ferme, le jet se joue sous la carte, avec l'en-tête de la bulle, sans ✕ ni « – ».
+    await cliquer(boutonDeCapacite(ecran, "Frappe"));
+    assert.equal(bulleMontree(ecran), false);
+    assert.deepEqual(enTete(ecran), ["Frappe", "Aubépine · action 1 sur 2 · souffle 10/10"]);
+    assert.equal(tous(sousLaCarte(ecran), "button.combat-bulle-fermer").length, 0);
+    assert.ok(tous(zone(ecran), ".combat-cibles button").length > 0, "les doubles des cibles, sous la carte");
+    await cliquer(boutonDit(un(zone(ecran), ".combat-cibles"), "Marmiton de corvée n° 1"));
+    assert.equal(document.activeElement, deACliquer(ecran), "le focus au dé, sous la carte");
+    await cliquer(deACliquer(ecran));
+    assert.equal(bulleMontree(ecran), false, "après le premier dé, le jet reste sous la carte");
+
+    // La fenêtre s'élargit : l'écran se refait à la largeur, et le jet passe dans la bulle, réductible.
+    largeur = 1280;
+    fenetre.redimensionner(1280);
+    assert.equal(bulleMontree(ecran), true, "sur un grand écran, le jet se joue dans la bulle");
+    assert.equal(tous(bulle, ".combat-bulle-poignee").length, 0, "plus de poignée");
+    assert.equal(texteDe(zone(ecran)), PHRASE_DE_LA_ZONE);
+    assert.equal(un(bulle, "button.combat-bulle-fermer").getAttribute("aria-label"), "Réduire");
+    // Le geste se finit dans la bulle.
+    await cliquer(deACliquer(ecran));
+    await cliquer(deACliquer(ecran));
+    await cliquer(boutonDit(corps(ecran), "Appliquer"));
+    assert.deepEqual(journal(ecran), journalAttendu.slice(0, 3));
+    // Puis de nouveau étroite : la liste d'Aubépine, dans le volet.
+    largeur = 390;
+    fenetre.redimensionner(390);
+    assert.equal(tous(bulle, ".combat-bulle-poignee").length, 1);
+    assert.equal(nomDeLaBulle(ecran), "Aubépine Crèmebrûlée : ses actions");
+    assert.deepEqual(focusQuiDefilent(), []);
+    assert.deepEqual(document.defilements, []);
+  } finally {
+    fenetre.retirer();
+  }
+});
+
+dansUnePage("téléphone — sous la carte, Échap ferme l'infobulle d'une cause, sans bouger le focus ; l'écran ne pose aucun écouteur global", async (page) => {
+  const { ecran } = await combatLance(page, { etroit: true });
+  await cliquer(jeton(ecran, "Aubépine Crèmebrûlée"));
+  await cliquer(boutonDeCapacite(ecran, "Frappe"));
+  await cliquer(boutonDit(un(zone(ecran), ".combat-cibles"), "Marmiton de corvée n° 1"));
+  // Le nombre des avantages et des désavantages, sous la carte : son focus ouvre l'infobulle de ses causes.
+  const cause = un(zone(ecran), "button.combat-cause");
+  cause.declencher("focus");
+  const ouvertes = () => tous(sousLaCarte(ecran), "div.combat-infobulle").filter((noeud) => !cache(noeud));
+  assert.equal(ouvertes().length, 1, "l'infobulle de la cause, dans la couche de la zone");
+  assert.equal(ouvertes()[0].parentNode.className, "combat-infobulles");
+  const focusAvant = document.focalisations.length;
+  assert.equal(echap(ecran), true);
+  assert.equal(ouvertes().length, 0);
+  assert.equal(document.focalisations.length, focusAvant, "le focus ne bouge pas");
+  // Rien d'autre à fermer : la bulle est cachée, Échap n'est plus pris.
+  assert.equal(echap(ecran), false);
+});
+
+// ─── Au groupe 2 : les services de la page ──────────────────────────────────
+
+test("les services — leurs défauts sont ceux de la page : la fenêtre du document, la hauteur de ligne, ResizeObserver, setTimeout ; la séance reçoit rendreLaMain, la rencontre son magasin", () => {
+  assert.match(SOURCE, /fenetre: services\.fenetre \?\? fenetreDeLaPage,/);
+  assert.match(SOURCE, /tient: services\.tient \?\? tientEnTroisLignes,/);
+  assert.match(SOURCE, /surveiller: services\.surveiller \?\? surveillerLaTaille,/);
+  assert.match(SOURCE, /minuteur: services\.minuteur \?\? MINUTEUR_DE_LA_PAGE,/);
+  assert.match(SOURCE, /rendreLaMain: services\.rendreLaMain,/);
+  assert.match(SOURCE, /\.charger\(contexte, \{ magasin: services\.magasinRencontre \}\)/);
+  assert.match(SOURCE, /documentElement[\s\S]{0,80}clientWidth[\s\S]{0,40}clientHeight/);
+  assert.match(SOURCE, /noeud\.scrollHeight <= 3 \* ligne \+ 1/);
+  assert.match(SOURCE, /getComputedStyle\?\.\(noeud\)\?\.lineHeight/);
+  assert.match(SOURCE, /new globalThis\.ResizeObserver\(/);
+  assert.match(SOURCE, /globalThis\.setTimeout\(faire, ms\)/);
+  assert.match(SOURCE, /lirePersonnageDeDemonstration\("demo", \{ fetch: services\.fetch \}\)/);
+  assert.match(SOURCE, /garderRecu\(contexte\.etat\.etagere, lu\.personnage, zone, \{ sansDefiler: true \}\)/);
 });

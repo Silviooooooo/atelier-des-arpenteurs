@@ -1,13 +1,17 @@
 // L'écran du simulateur de combat, #/combat (SPECIFICATION.md, § 17, « Le
-// simulateur de combat (lot 4) » ; § 7.2 pour l'enregistrement chiffré).
+// simulateur de combat (lot 4) » ; § 7.2 pour l'enregistrement chiffré ;
+// contrat du lot 4, groupe 2, § 9 ; complément, § 4 et § 5).
 //
-// Ce qu'il fait : il assemble les quatre parties de l'écran (le plateau, les
-// fiches vivantes, le panneau d'action, la préparation) autour d'une séance,
-// et tient lui-même le reste : la barre de titre, la zone d'avis, le panneau
-// « Fiche complète », la liste d'une case, le journal et ses deux boutons.
-// Il ne porte aucune règle du jeu : chaque rendu demande ses vues au moteur
-// (js/combat/lecture.js), chaque clic rend à la séance la commande que la vue
-// portait, puis l'écran se redessine.
+// Ce qu'il fait : il assemble les parties de l'écran (le plateau, les fiches
+// vivantes, la zone sous la carte, la bulle d'options, la préparation, le
+// journal et son bandeau) autour d'une séance, et tient lui-même le reste :
+// la barre de titre (« Fin de tour », « Annuler le dernier geste » et sa
+// question, « Nouveau combat » et la sienne, le menu « ⋯ »), la ligne de la
+// limite des événements, la zone d'avis, le panneau « Fiche complète », la
+// liste d'une case, et les deux boutons du journal. Il ne porte aucune règle
+// du jeu : chaque rendu demande ses vues au moteur (js/combat/lecture.js),
+// chaque clic rend à la séance la commande que la vue portait, puis l'écran
+// se redessine.
 //
 // Pourquoi il existe : c'est le seul module qui garde le combat en mémoire.
 // Chaque visite de l'adresse reconstruit la page ; le combat, lui, doit
@@ -18,22 +22,35 @@
 // d'écrire.
 //
 // L'ouverture demande trois attentes (les rôles câblés de la banque, la base
-// de l'appareil, le combat gardé) : afficher() rend donc son nœud tout de
-// suite, avec le titre et une attente, puis le remplit. Une suite partie
-// avant un oubli, ou pour un nœud qui a quitté la page, ne touche plus à
-// rien.
+// de l'appareil, le combat gardé, rejoué par tranches) : afficher() rend donc
+// son nœud tout de suite, avec le titre et une attente, puis le remplit. Une
+// suite partie avant un oubli, ou pour un nœud qui a quitté la page, ne
+// touche plus à rien. La composition de la rencontre gardée se lit à côté,
+// sans que l'ouverture l'attende.
+//
+// Au groupe 2, tout ce qui se décide pour un geste se fait dans la bulle,
+// accrochée à la case de qui joue (sous 56rem, le volet) : l'écran la rend
+// avec la case active pour ancre et le cadre pour repère, la replace quand
+// elle s'ouvre, et y met le focus quand l'ouverture suit une commande. Un
+// clic hors de la bulle, de son onglet et de la carte la ferme ou la réduit
+// sans bouger le focus ; Échap ferme d'abord l'infobulle ouverte, puis la
+// bulle, et rend le focus au jeton. L'écran ne fait jamais défiler la page
+// de lui-même : chaque focus qu'il pose l'est sans défiler, la liste du
+// journal défile en elle-même, et seul « Journal ↓ » (montrerLeJournal) fait
+// voir le journal, à la demande.
 //
 // Ce que l'écran sait de plus que le combat n'est gardé nulle part : d'où
-// vient la cible choisie (la carte, ou le panneau), la case dont la liste est
-// ouverte, la fiche complète montrée, le menu « ⋯ ». Un rechargement les
-// oublie.
+// vient la cible choisie (la carte, ou la bulle et la zone), la case dont la
+// liste est ouverte, la fiche complète montrée, le menu « ⋯ », la question
+// ouverte, la phrase du personnage de démonstration gardé. Un rechargement
+// les oublie.
 
 import { indexerAdversaires } from "../adversaire/resolution.js";
 import { listeDe } from "../banque/consultation.js";
 import { sourceAleatoire } from "../combat/des.js";
 import { creerGardien, ouvrirMagasinCombat } from "../combat/enregistrement.js";
 import { nomDuFichier, texteDuJournal } from "../combat/journal.js";
-import { vueBarre, vueFiche, vueLigne, vuePanneau, vuePlateau, vuePreparation } from "../combat/lecture.js";
+import { vueBandeau, vueBarre, vueFiche, vueJournal, vuePanneau, vuePlateau, vuePreparation } from "../combat/lecture.js";
 import { photographierAdversaire, photographierPersonnage } from "../combat/photographie.js";
 import { PLAFOND_ADVERSAIRES } from "../combat/regles.js";
 import { ecrireAbsents, tableDesRoles } from "../combat/roles.js";
@@ -44,11 +61,15 @@ import { calculerFiche } from "../personnage/calcul.js";
 import { personnagesDisponibles } from "../personnage/disponibles.js";
 import { accepter } from "../personnage/format.js";
 import * as partieAction from "./combat_action.js";
+import * as partieBulle from "./combat_bulle.js";
 import * as partieFiches from "./combat_fiches.js";
+import { creerBandeau, creerListe } from "./combat_journal.js";
 import * as partiePlateau from "./combat_plateau.js";
 import * as partiePreparation from "./combat_preparation.js";
 import { el, sansSensForce, telecharger, titre } from "./dom.js";
-import { cadreDeCartes, rencontrePreparee } from "./rencontre.js";
+import { lirePersonnageDeDemonstration, phraseDuPersonnageGarde } from "./partage.js";
+import { garderRecu } from "./personnages.js";
+import * as rencontre from "./rencontre.js";
 
 const TITRE = "Simulateur de combat";
 const QUESTION = "Effacer ce combat et son journal ?";
@@ -64,10 +85,21 @@ const COPIE_REFUSEE = "Copie refusée par le navigateur : le texte du journal es
 const PERSONNAGE_ILLISIBLE = "Ce personnage ne se lit pas.";
 const ADVERSAIRE_ILLISIBLE = "Cet adversaire ne se lit pas.";
 const HORS_DU_COMBAT = "reste hors du combat.";
+// Le personnage de démonstration que l'appareil n'a pas pu garder (contrat
+// du groupe 2, § 9.10).
+const PAS_GARDE = "Le personnage n'a pas pu être gardé";
+// Le signe d'« Annuler le dernier geste » (U+21B6), écrit par son code, et
+// caché aux lecteurs d'écran : le libellé seul dit le bouton.
+const SIGNE_ANNULER = "\u21b6";
 
 // La largeur sous laquelle l'écran tient sur une colonne : celle de la
-// feuille de style (56rem), lue ici pour replier les fiches.
+// feuille de style (56rem). Le téléphone se juge à elle : les fiches s'y
+// replient, la bulle y devient le volet, le jet s'y joue sous la carte.
 const ETROIT = "(max-width: 55.99rem)";
+// Les jetons qu'une case montre (combat_plateau.js) : trois, et deux sous
+// 56rem, où la feuille cache le troisième. Au-delà, son « +k ».
+const MONTRES = 3;
+const MONTRES_ETROIT = 2;
 // Le fichier téléchargé s'ouvre dans les éditeurs de Windows : la marque
 // d'ordre des octets leur dit que c'est de l'UTF-8. Elle se fabrique par son
 // code : aucun signe invisible ne s'écrit dans les sources.
@@ -80,10 +112,48 @@ const TYPE_DU_FICHIER = "text/plain;charset=utf-8";
 const GARDES_QUI_PREVIENNENT = { ailleurs: "reprendre", illisible: "nouveau", autre_version: "nouveau", recent: null, memoire: null, sans_cle: null };
 const LIBELLES = { reprendre: "Reprendre le combat le plus récent", nouveau: "Nouveau combat" };
 
+// Ce que la bulle reçoit quand on ne joue pas (un combat ouvert ailleurs,
+// la préparation) : aucun genre qu'elle montre.
+const BULLE_CACHEE = Object.freeze({ genre: "arrete" });
+
+// ─── Les services de la page ────────────────────────────────────────────────
+
+/** La taille de la fenêtre, lue dans la page au moment de la demande. */
+function fenetreDeLaPage() {
+  const racine = globalThis.document?.documentElement;
+  return { largeur: racine?.clientWidth ?? 0, hauteur: racine?.clientHeight ?? 0 };
+}
+
+/**
+ * Vrai quand le texte du bandeau tient en trois lignes : sa hauteur contre
+ * trois fois sa hauteur de ligne. Une hauteur de ligne qui ne se lit pas ne
+ * coupe rien : la feuille rogne.
+ */
+function tientEnTroisLignes(noeud) {
+  const ligne = Number.parseFloat(globalThis.getComputedStyle?.(noeud)?.lineHeight);
+  if (!Number.isFinite(ligne)) return true;
+  return noeud.scrollHeight <= 3 * ligne + 1;
+}
+
+/** Prévient à chaque changement de taille du nœud, s'il se peut ; rend de quoi arrêter. */
+function surveillerLaTaille(noeud, rappel) {
+  if (typeof globalThis.ResizeObserver !== "function") return () => {};
+  const observateur = new globalThis.ResizeObserver(() => rappel());
+  observateur.observe(noeud);
+  return () => observateur.disconnect();
+}
+
+const MINUTEUR_DE_LA_PAGE = {
+  poser: (faire, ms) => globalThis.setTimeout(faire, ms),
+  retirer: (numero) => globalThis.clearTimeout(numero),
+};
+
 // ─── La mémoire du module ───────────────────────────────────────────────────
 
 // Le combat, d'une visite à l'autre : { mode, gardien, seance, gardeVue,
-// disponibles, lecture }. Nul tant que rien n'est ouvert, et après un oubli.
+// disponibles, lecture, limiteDite }. Nul tant que rien n'est ouvert, et
+// après un oubli. limiteDite : l'heure de lancement du combat pour lequel
+// l'approche de la limite a été dite, une fois, dans la zone d'avis.
 let memoire = null;
 // « Oublier » l'avance : une suite asynchrone partie avant lui relit ce
 // numéro, et ne touche plus à rien s'il a changé.
@@ -135,16 +205,19 @@ async function preparerLOuverture(contexte, services, depart, enCours) {
   });
   // Un oubli pendant la lecture doit atteindre ce gardien-ci aussi.
   enCours.gardien = gardien;
+  // Le rejeu d'un combat gardé rend la main entre deux tranches : la séance
+  // attend rendreLaMain (la tâche suivante du navigateur, à défaut).
   const seance = creerSeance({
     gardien,
     des: { lancer: (faces, combien) => servicesDuMoment.des.lancer(faces, combien) },
     maintenant: () => servicesDuMoment.maintenant(),
     mode,
     accepter,
+    rendreLaMain: services.rendreLaMain,
   });
   await seance.ouvrir();
   if (depart !== circuit) return;
-  memoire = { mode, gardien, seance, gardeVue: null, disponibles: null, lecture: 0 };
+  memoire = { mode, gardien, seance, gardeVue: null, disponibles: null, lecture: 0, limiteDite: null };
 }
 
 function ouvrir(contexte, services) {
@@ -230,13 +303,22 @@ function photographier(faire, phrase) {
   }
 }
 
+/** Le protagoniste d'une vue de la bulle : elle ne le nomme que dans la commande de « Passer son tour ». */
+const protagonisteDe = (vue) => vue?.passer?.commande?.evenement?.qui ?? null;
+
 // ─── L'écran ────────────────────────────────────────────────────────────────
 
 /**
  * L'écran #/combat. Rend son nœud tout de suite ; l'ouverture du combat est
- * asynchrone. « services » ne sert qu'aux contrôles : { des, magasin,
- * maintenant, navigateur, telecharger, media }, chacun avec son défaut ; la
- * page n'en passe aucun, et rien dans la page ne permet d'imposer un dé.
+ * asynchrone. « services » ne sert qu'aux contrôles, chacun avec son défaut ;
+ * la page n'en passe aucun, et rien dans la page ne permet d'imposer un dé :
+ * { des, magasin, maintenant, navigateur, telecharger, media, fenetre, tient,
+ * surveiller, minuteur, rendreLaMain, magasinRencontre, fetch }.
+ * fenetre() rend la taille de la fenêtre ; tient(noeud) dit si le texte du
+ * bandeau tient en trois lignes ; surveiller(noeud, rappel) prévient quand
+ * sa taille change ; minuteur tient la grâce des infobulles ; rendreLaMain
+ * passe à la séance ; magasinRencontre, à la rencontre gardée ; fetch lit le
+ * personnage de démonstration.
  */
 export function afficher(contexte, services = {}) {
   contexteDuMoment = contexte;
@@ -257,6 +339,12 @@ export function afficher(contexte, services = {}) {
       navigateur: services.navigateur ?? globalThis.navigator,
       telecharger: services.telecharger ?? telecharger,
       media: services.media ?? ((requete) => globalThis.matchMedia?.(requete)?.matches ?? false),
+      fenetre: services.fenetre ?? fenetreDeLaPage,
+      tient: services.tient ?? tientEnTroisLignes,
+      surveiller: services.surveiller ?? surveillerLaTaille,
+      minuteur: services.minuteur ?? MINUTEUR_DE_LA_PAGE,
+      magasinRencontre: services.magasinRencontre,
+      fetch: services.fetch,
     },
   };
   if (estPret(contexte)) {
@@ -265,7 +353,8 @@ export function afficher(contexte, services = {}) {
   }
   // L'attente quitte la page quand l'écran s'affiche : elle ne côtoie jamais
   // la région d'annonce des dés. Le titre, lui, reste le même nœud : il a pu
-  // recevoir le focus à l'arrivée sur l'écran.
+  // recevoir le focus à l'arrivée sur l'écran. Elle reste pendant tout le
+  // rejeu du combat gardé, qui rend la main par tranches.
   const attente = el("p", { classe: "attente", role: "status" }, ATTENTE);
   racine.append(attente);
   const depart = circuit;
@@ -294,6 +383,7 @@ function monter(visite) {
   const { banque } = contexte.etat;
   const outils = outilsDe(contexte);
   const resolution = () => (outils.resolution ??= contexte.etat.index?.adversaires?.() ?? indexerAdversaires(banque));
+  const enDemonstration = contexte.etat.mode === "demo";
 
   // Après un oubli, ou quand une autre visite a pris la suite, les boutons
   // de celle-ci ne font plus rien.
@@ -306,24 +396,63 @@ function monter(visite) {
   let ficheOuverte = null;
   let retourDeCopie = null; // "faite", ou { texte } quand le presse-papiers refuse
   let menuOuvert = false;
-  let question = false;
+  // La question ouverte dans la barre : « nouveau » (« Nouveau combat »),
+  // « annuler » (« Annuler le dernier geste »), ou null.
+  let question = null;
+  let phraseDeDemonstration = null;
   // Pendant une commande, le gardien prévient avant que la séance ait fini :
   // l'écran attend la fin de la commande pour se redessiner.
   let occupe = 0;
+  // Pendant un clic au-dehors, un Échap ou une annulation, la commande jouée
+  // ne déplace pas le focus : celui qui l'a demandée le pose lui-même, ou le
+  // laisse où il est.
+  let immobile = 0;
+  // D'où vient la commande en cours : un choix fait sur la carte rend le
+  // focus à la commande qui attend dans la bulle (la règle du groupe 1).
+  let origineDuMoment = null;
+  // « Reprendre le combat le plus récent » en cours : le bloc d'arrêt montre
+  // l'attente au lieu de son bouton.
+  let reprises = 0;
+  let enReprise = false;
   // Ce qui est montré, pour ne réécrire que ce qui change.
   let montree = null;
+  let bulleMontree = false;
+  let protagonisteMontre = null;
   let bloqueRendu = null;
   let avisMontre = "null";
   let blocageMontre = "";
   let listeMontree = "";
   let copieMontree = "";
-  let journalPose = { combien: 0, premiere: null, derniere: null };
+  let libelleDAnnulation = null;
   let commandeDeFin = null;
+  // Revenu sur l'écran avec le combat en mémoire, ce nœud n'est pas encore
+  // dans la page : la liste du journal ne se pose qu'une fois qu'il y est,
+  // pour défiler jusqu'à sa dernière ligne.
+  let journalEnAttente = !racine.isConnected;
 
-  const actions = { executer, lancerLeDe, ajouterPersonnage, ajouterAdversaires, placerRencontre, lancer, ouvrirFiche, ouvrirCase };
+  const sansBougerLeFocus = (faire) => {
+    immobile += 1;
+    try {
+      return faire();
+    } finally {
+      immobile -= 1;
+    }
+  };
+
+  const hachurer = (noms) => plateau.hachurer(noms);
+  const actions = { executer, lancerLeDe, ajouterPersonnage, ajouterAdversaires, placerRencontre, lancer, ouvrirFiche, ouvrirCase, ajouterLaDemonstration, hachurer };
   const plateau = partiePlateau.creer(actions);
   const fiches = partieFiches.creer(actions);
-  const action = partieAction.creer(actions);
+  // La zone sous la carte a ses infobulles (les causes d'un jet joué sous la
+  // carte, sur un téléphone), dans une couche que l'écran crée et qu'elle
+  // porte : elles se posent sur elle.
+  const coucheDeLaZone = el("div", { classe: "combat-infobulles" });
+  const infobullesDeLaZone = partieBulle.creerInfobulles({ couche: coucheDeLaZone, actions: { hachurer }, services: { minuteur: services.minuteur, fenetre: services.fenetre } });
+  const action = partieAction.creer({ executer, lancerLeDe, hachurer }, { lier: infobullesDeLaZone.lier, couche: coucheDeLaZone });
+  const bulle = partieBulle.creer(
+    { executer, lancerLeDe, hachurer, focusSurLeJeton, fermerLaCase: () => fermerLaListe(caseOuverte), rafraichir },
+    { composerListe: partieAction.composerListe, composerGeste: partieAction.composerGeste },
+  );
   const preparation = partiePreparation.creer(actions);
 
   // ——— La barre de titre ———
@@ -356,9 +485,9 @@ function monter(visite) {
       type: "button",
       classe: "bouton secondaire",
       onclick: () => {
-        question = false;
+        question = null;
         rendreLeMenu();
-        nouveau.focus();
+        nouveau.focus({ preventScroll: true });
       },
     },
     "Annuler",
@@ -366,6 +495,39 @@ function monter(visite) {
   // La confirmation se fait dans la page, à la place du bouton : le groupe
   // a la question pour nom, et un lecteur d'écran la dit en y entrant.
   const confirmation = el("div", { classe: "confirmation", role: "group", "aria-labelledby": "combat-question" }, el("p", { id: "combat-question" }, QUESTION), el("div", { classe: "boutons" }, effacer, annuler));
+
+  // « Annuler le dernier geste » (compl. § 4.10) : caché avant le lancement,
+  // inactif avec sa raison ; son clic pose sa question dans la page, comme
+  // « Nouveau combat ».
+  const raisonDAnnulation = el("span", { id: "combat-raison-annuler", classe: "combat-raison", hidden: true });
+  const annulerLeGeste = el("button", {
+    type: "button",
+    classe: "bouton secondaire combat-annuler-geste",
+    "aria-describedby": "combat-raison-annuler",
+    hidden: true,
+    onclick: () => demanderLAnnulation(),
+  });
+  const questionDAnnulation = el("p", { id: "combat-question-annuler" });
+  const confirmerLAnnulation = el("button", { type: "button", classe: "bouton", onclick: () => annulerLeDernierGeste() });
+  const garderLeGeste = el(
+    "button",
+    {
+      type: "button",
+      classe: "bouton secondaire",
+      onclick: () => {
+        question = null;
+        rendreLeMenu();
+        annulerLeGeste.focus({ preventScroll: true });
+      },
+    },
+  );
+  const confirmationDAnnulation = el(
+    "div",
+    { classe: "confirmation", role: "group", "aria-labelledby": "combat-question-annuler" },
+    questionDAnnulation,
+    el("div", { classe: "boutons" }, confirmerLAnnulation, garderLeGeste),
+  );
+
   const autres = el("div", { id: "combat-autres", classe: "combat-autres" });
   const plus = el(
     "button",
@@ -382,17 +544,21 @@ function monter(visite) {
     },
     "⋯",
   );
+  // À l'approche du plafond des événements, une phrase sous la barre ;
+  // cachée quand elle est vide.
+  const limite = el("p", { classe: "combat-limite", hidden: true });
   const aide = el("p", { classe: "combat-aide" });
   const zoneDAvis = el("div", { classe: "combat-avis", role: "alert" });
   const panneau = el("section", { classe: "combat-panneau", "aria-label": "Fiche complète" });
+  // Le repère de la bulle et de son onglet, placés contre la case active.
   const cadre = el("div", { classe: "combat-cadre" });
 
   function rendreLeMenu() {
-    const ouvert = menuOuvert || question;
+    const ouvert = menuOuvert || question !== null;
     const classe = ouvert ? "combat-autres ouvert" : "combat-autres";
     if (autres.className !== classe) autres.className = classe;
     plus.setAttribute("aria-expanded", String(ouvert));
-    const contenu = question ? [confirmation] : [nouveau, raisonDeNouveau];
+    const contenu = question === "nouveau" ? [confirmation] : question === "annuler" ? [confirmationDAnnulation] : [annulerLeGeste, raisonDAnnulation, nouveau, raisonDeNouveau];
     if (autres.children.length !== contenu.length || contenu.some((noeud, rang) => autres.children[rang] !== noeud)) autres.replaceChildren(...contenu);
   }
 
@@ -401,14 +567,14 @@ function monter(visite) {
     // Sur un téléphone, le menu reste ouvert : « Annuler » y rend la main au
     // bouton, qui doit se voir.
     menuOuvert = true;
-    question = true;
+    question = "nouveau";
     rendreLeMenu();
-    annuler.focus();
+    annuler.focus({ preventScroll: true });
   }
 
   function effacerLeCombat() {
     if (perimee()) return;
-    question = false;
+    question = null;
     // Le menu se referme avec la question : sur un téléphone, « Nouveau
     // combat » restait affiché sous la barre du combat neuf.
     menuOuvert = false;
@@ -418,12 +584,50 @@ function monter(visite) {
       avis = null;
       cibleChoisie = null;
       caseOuverte = null;
+      bulle.oublier();
       fermerLaFiche({ focus: false });
       lireLesPersonnages();
     }
     rendreLeMenu();
     rendre({ parCommande: true });
-    h1.focus();
+    h1.focus({ preventScroll: true });
+  }
+
+  // La question se relit au moment du clic, jamais dans une vue d'avant ;
+  // le focus va au choix sans risque, « Garder ».
+  function demanderLAnnulation() {
+    if (perimee() || estInactif(annulerLeGeste)) return;
+    const vue = vueBarre(seance.etat()).annuler;
+    if (!vue?.actif || !vue.question) return;
+    menuOuvert = true;
+    question = "annuler";
+    rendreLaQuestion(vue.question);
+    rendreLeMenu();
+    garderLeGeste.focus({ preventScroll: true });
+  }
+
+  function rendreLaQuestion(vue) {
+    poser(questionDAnnulation, vue.texte);
+    poser(confirmerLAnnulation, vue.confirmer);
+    poser(garderLeGeste, vue.garder);
+  }
+
+  // « Annuler le geste » : la commande de la vue, depuis la barre. Personne
+  // n'est plus choisi : la bulle se ferme, ce que l'écran savait du geste
+  // s'oublie, et le focus revient au bouton, sans défiler. Sur un téléphone,
+  // « ⋯ » reste ouvert : le bouton s'y voit.
+  function annulerLeDernierGeste() {
+    if (perimee()) return;
+    const vue = vueBarre(seance.etat()).annuler;
+    question = null;
+    if (vue?.actif === true) {
+      cibleChoisie = null;
+      caseOuverte = null;
+      bulle.oublier();
+      sansBougerLeFocus(() => executer(vue.commande, "barre"));
+    }
+    rendreLeMenu();
+    annulerLeGeste.focus({ preventScroll: true });
   }
 
   function rendreLaBarre(vue, bloque) {
@@ -441,6 +645,36 @@ function monter(visite) {
     // s'écrase pas : la séance refuserait le combat vide.
     const libre = bloque !== "ailleurs" && bloque !== "recent";
     reglerBouton(nouveau, raisonDeNouveau, libre, libre ? null : gardien.phrase());
+
+    // « Annuler le dernier geste » : son signe, une espace, son libellé.
+    const vueDAnnulation = vue.annuler ?? null;
+    annulerLeGeste.hidden = vueDAnnulation === null;
+    if (vueDAnnulation !== null && vueDAnnulation.libelle !== libelleDAnnulation) {
+      libelleDAnnulation = vueDAnnulation.libelle;
+      annulerLeGeste.replaceChildren(el("span", { classe: "combat-signe", "aria-hidden": "true" }, SIGNE_ANNULER), " ", sansSensForce(libelleDAnnulation));
+    }
+    reglerBouton(annulerLeGeste, raisonDAnnulation, vueDAnnulation === null || (joue && vueDAnnulation.actif === true), joue ? (vueDAnnulation?.raison ?? null) : gardien.phrase());
+    // Une question ouverte se ferme quand il n'y a plus rien à annuler.
+    if (question === "annuler") {
+      if (joue && vueDAnnulation?.actif === true && vueDAnnulation.question) rendreLaQuestion(vueDAnnulation.question);
+      else question = null;
+    }
+    rendreLeMenu();
+  }
+
+  // ——— La limite des événements ———
+
+  /**
+   * À 13 500 événements, la phrase de la vue sous la barre ; elle passe une
+   * fois par la zone d'avis, pour ce combat-ci : la mémoire du combat retient
+   * l'heure de lancement de celui pour lequel elle a été dite.
+   */
+  function rendreLaLimite(phrase, etat) {
+    poser(limite, phrase ?? "");
+    limite.hidden = phrase === null || phrase === undefined;
+    if (limite.hidden || m.limiteDite === etat.lanceLe) return;
+    m.limiteDite = etat.lanceLe;
+    avis = avis === null ? { lignes: [phrase], bouton: null } : { ...avis, lignes: [...avis.lignes, phrase] };
   }
 
   // ——— L'enregistrement, et la zone d'avis ———
@@ -475,32 +709,43 @@ function monter(visite) {
   }
 
   // Quand on ne joue pas (un combat ouvert ailleurs, gardé mais illisible,
-  // ou d'une autre version), ce bloc prend la place du panneau d'action et
-  // dit pourquoi, avec le bouton qui en sort.
+  // ou d'une autre version), ce bloc prend la place de la zone sous la carte
+  // et dit pourquoi, avec le bouton qui en sort. Pendant « Reprendre le combat
+  // le plus récent », la même attente que l'ouverture remplace son bouton.
   const titreDuBlocage = el("h2", { classe: "combat-qui", tabindex: "-1" });
   const choixDuBlocage = el("div", { classe: "combat-choix" });
-  const blocage = { noeud: el("section", { classe: "combat-action", "aria-label": "Combat arrêté" }, titreDuBlocage, choixDuBlocage), listeDeCase: null };
+  const blocage = { noeud: el("section", { classe: "combat-action", "aria-label": "Combat arrêté" }, titreDuBlocage, choixDuBlocage) };
 
   function rendreLeBlocage(bloque) {
     const bouton = GARDES_QUI_PREVIENNENT[bloque] ?? null;
     const phrase = gardien.phrase();
-    const signature = JSON.stringify([phrase, bouton]);
+    const signature = JSON.stringify([phrase, bouton, enReprise]);
     if (signature === blocageMontre) return;
     blocageMontre = signature;
     poser(titreDuBlocage, phrase);
-    choixDuBlocage.replaceChildren(...(bouton ? [boutonDeGarde(bouton)] : []));
+    if (enReprise) choixDuBlocage.replaceChildren(el("p", { classe: "attente", role: "status" }, ATTENTE));
+    else choixDuBlocage.replaceChildren(...(bouton ? [boutonDeGarde(bouton)] : []));
   }
 
   async function reprendre() {
     if (perimee()) return;
     const depart = circuit;
+    reprises += 1;
+    const numero = reprises;
+    enReprise = true;
+    if (seance.bloque() !== null) rendreLeBlocage(seance.bloque());
     occupe += 1;
+    let issue = null;
     try {
-      await seance.reprendre();
+      ({ issue } = await seance.reprendre());
     } finally {
       occupe -= 1;
+      if (numero === reprises) enReprise = false;
     }
     if (depart !== circuit || perimee() || !racine.isConnected) return;
+    // Une reprise plus récente a pris la place de celle-ci : c'est elle qui
+    // redessinera.
+    if (issue === "abandonne") return;
     avis = null;
     cibleChoisie = null;
     caseOuverte = null;
@@ -521,7 +766,7 @@ function monter(visite) {
     else rendreAvis();
   }
 
-  // ——— Les commandes des quatre parties ———
+  // ——— Les commandes des parties ———
 
   function apres(issue, suite = null) {
     if (issue?.refus) avis = avisDuRefus(issue.refus.message);
@@ -541,18 +786,26 @@ function monter(visite) {
     }
   }
 
+  // L'écran se refait pendant l'appel, comme au groupe 1 : c'est là que la
+  // bulle voit qu'elle s'est fermée, et met le focus au jeton.
   function executer(commande, origine = "panneau") {
     if (perimee()) return;
-    apres(
-      commander(() => seance.executer(commande)),
-      () => {
-        // D'où vient la cible : ni l'événement ni l'état ne le disent.
-        const evenement = commande?.evenement;
-        if (evenement?.type !== "regler" || evenement.champ !== "cible") return;
-        const geste = gesteEnCours(seance.etat());
-        cibleChoisie = geste === null ? null : { numero: geste.numero, cible: evenement.valeur, origine: origine === "plateau" ? "plateau" : "panneau" };
-      },
-    );
+    const avant = origineDuMoment;
+    origineDuMoment = origine;
+    try {
+      apres(
+        commander(() => seance.executer(commande)),
+        () => {
+          // D'où vient la cible : ni l'événement ni l'état ne le disent.
+          const evenement = commande?.evenement;
+          if (evenement?.type !== "regler" || evenement.champ !== "cible") return;
+          const geste = gesteEnCours(seance.etat());
+          cibleChoisie = geste === null ? null : { numero: geste.numero, cible: evenement.valeur, origine: origine === "plateau" ? "plateau" : "panneau" };
+        },
+      );
+    } finally {
+      origineDuMoment = avant;
+    }
   }
 
   function lancerLeDe() {
@@ -595,7 +848,7 @@ function monter(visite) {
     if (perimee()) return;
     const photos = [];
     const laisses = [];
-    for (const { nom, nombre } of rencontrePreparee(banque)) {
+    for (const { nom, nombre } of rencontre.rencontrePreparee(banque)) {
       const { photo, refus } = photoDeLAdversaire(nom);
       if (refus) laisses.push(`${nom} ${HORS_DU_COMBAT} ${refus}`);
       else for (let exemplaire = 0; exemplaire < nombre; exemplaire += 1) photos.push(photo);
@@ -650,29 +903,121 @@ function monter(visite) {
     personnages: optionsDesPersonnages(),
     phrases: m.disponibles?.lu.phrases ?? [],
     adversaires: adversairesDeLaBanque(),
-    rencontre: rencontrePreparee(banque),
+    rencontre: rencontre.rencontrePreparee(banque),
     absents: ecrireAbsents(outils.roles.absents),
   });
 
+  /**
+   * « Ajouter le personnage de démonstration » (compl. § 5.1), dans la
+   * préparation : le fichier se lit comme sur l'écran Personnages, puis
+   * l'appareil le garde. Sa question s'ouvre dans la zone que la préparation
+   * lui donne, sans faire défiler la page. Gardé, sa phrase se dit sous le
+   * bouton et la liste des personnages se relit ; il n'entre pas au combat :
+   * on l'y ajoute comme les autres.
+   */
+  async function ajouterLaDemonstration(zone) {
+    if (perimee() || !enDemonstration) return;
+    const depart = circuit;
+    const enCours = () => depart === circuit && !perimee() && racine.isConnected;
+    const lu = await lirePersonnageDeDemonstration("demo", { fetch: services.fetch });
+    if (!enCours()) return;
+    if (lu.erreur) {
+      avis = { lignes: [lu.erreur], bouton: null };
+      rendreAvis();
+      return;
+    }
+    let gardePar = null;
+    try {
+      gardePar = await garderRecu(contexte.etat.etagere, lu.personnage, zone, { sansDefiler: true });
+    } catch (erreur) {
+      if (!enCours()) return;
+      avis = { lignes: [`${PAS_GARDE} : ${erreur?.message ?? String(erreur)}`], bouton: null };
+      rendreAvis();
+      return;
+    }
+    if (!enCours() || gardePar === null) return;
+    phraseDeDemonstration = phraseDuPersonnageGarde(gardePar);
+    rendre();
+    lireLesPersonnages();
+  }
+
   // ——— La liste d'une case (« +k ») ———
 
-  const noeudDeLaCase = (nomDeCase) => [...plateau.noeud.querySelectorAll(".combat-case")].find((noeud) => noeud.getAttribute("data-case") === nomDeCase) ?? null;
+  // Les cases de la carte ne changent jamais de nœud : elles se trouvent une
+  // fois par leur nom.
+  let casesParNom = null;
+  const noeudDeLaCase = (nomDeCase) => {
+    casesParNom ??= new Map([...plateau.noeud.querySelectorAll(".combat-case")].map((noeud) => [noeud.getAttribute("data-case"), noeud]));
+    return casesParNom.get(nomDeCase) ?? null;
+  };
+
+  const estEtroit = () => services.media(ETROIT) === true;
 
   // Des deux « +k » d'une case, la feuille de style n'en montre qu'un,
   // selon la largeur : le focus va à celui qui se voit.
   function focusSurLaCase(nomDeCase) {
     const noeud = noeudDeLaCase(nomDeCase);
     if (noeud === null) return;
-    const classe = services.media(ETROIT) === true ? ".combat-plus-etroit" : ".combat-plus-large";
-    (noeud.querySelector("[aria-pressed=true]") ?? noeud.querySelector(classe) ?? noeud.querySelector(".combat-case-plus") ?? noeud.querySelector("button"))?.focus();
+    const classe = estEtroit() ? ".combat-plus-etroit" : ".combat-plus-large";
+    (noeud.querySelector("[aria-pressed=true]") ?? noeud.querySelector(classe) ?? noeud.querySelector(".combat-case-plus") ?? noeud.querySelector("button"))?.focus({ preventScroll: true });
   }
 
   const vueDuPlateau = () => vuePlateau(seance.etat(), seance.choisi());
 
+  /** Le jeton d'un protagoniste sur la carte, s'il se voit à cette largeur ; sinon null. */
+  function jetonDe(id, vue = vueDuPlateau()) {
+    if (id === null || id === undefined || !Object.hasOwn(vue.jetons, id)) return { jeton: null, nomDeCase: null };
+    const nomDeCase = Object.keys(vue.cases).find((nom) => vue.cases[nom].jetons.includes(id)) ?? null;
+    const laCase = nomDeCase === null ? null : noeudDeLaCase(nomDeCase);
+    if (laCase === null) return { jeton: null, nomDeCase };
+    // Le jeton porte le nom accessible que la vue lui donne.
+    const nom = sansSensForce(vue.jetons[id].nom);
+    const montres = [...laCase.querySelectorAll(".combat-jeton")];
+    const rang = montres.findIndex((noeud) => noeud.getAttribute("aria-label") === nom);
+    return { jeton: rang >= 0 && rang < (estEtroit() ? MONTRES_ETROIT : MONTRES) ? montres[rang] : null, nomDeCase };
+  }
+
+  /** Le focus au jeton d'un protagoniste ; s'il ne se voit pas, au « +k » de sa case. */
+  function focusSurLeJeton(id) {
+    if (perimee() || id === null || id === undefined) return;
+    const { jeton, nomDeCase } = jetonDe(id);
+    if (jeton !== null) jeton.focus({ preventScroll: true });
+    else if (nomDeCase !== null) focusSurLaCase(nomDeCase);
+  }
+
+  /**
+   * Où se pose la liste d'une case : sous la préparation avant le lancement ;
+   * pendant le combat, dans la bulle sur un grand écran, quand elle peut la
+   * montrer (quelqu'un agit, ou l'on choisit qui joue) ; sinon dans la zone
+   * sous la carte, qui la garde sur un téléphone.
+   */
+  function lieuDeLaListe(vue, etroit) {
+    if (montree === preparation) return preparation.listeDeCase;
+    if (montree !== action) return null;
+    if (!etroit && (vue.genre === "action" || vue.genre === "qui_joue")) return bulle.listeDeCase;
+    return action.listeDeCase;
+  }
+
+  const lieuDuMoment = () => lieuDeLaListe(vuePanneau(seance.etat(), seance.choisi()), estEtroit());
+
+  // La liste se ferme par son bouton « Fermer », par la croix de la bulle,
+  // par Échap ou par un clic au-dehors. Dans la bulle, celle-ci rend ce
+  // qu'elle montrait avant, ou se ferme si elle ne s'était ouverte que pour
+  // elle ; le focus va à la commande qui attend, ou au « +k ». Après un clic
+  // au-dehors, il reste où il est.
   function fermerLaListe(nomDeCase) {
+    if (perimee() || nomDeCase === null || nomDeCase === undefined) return;
+    const dansLaBulle = lieuDuMoment() === bulle.listeDeCase;
     caseOuverte = null;
-    rendreLaListe(vueDuPlateau());
-    focusSurLaCase(nomDeCase);
+    if (dansLaBulle) {
+      rendre();
+      if (immobile > 0) return;
+      if (bulleMontree) bulle.focaliser();
+      else focusSurLaCase(nomDeCase);
+      return;
+    }
+    rendreLaListe(vueDuPlateau(), lieuDuMoment());
+    if (immobile === 0) focusSurLaCase(nomDeCase);
   }
 
   // Le choix fait dans la liste est un choix du panneau : « choisie ici ».
@@ -687,7 +1032,7 @@ function monter(visite) {
       // sur la carte.
       caseOuverte = null;
       plateau.prendre(id);
-      rendreLaListe(vue);
+      rendreLaListe(vue, lieuDuMoment());
       focusSurLaCase(nomDeCase);
       return;
     }
@@ -696,8 +1041,7 @@ function monter(visite) {
     executer(jeton.choix.commande, "panneau");
   }
 
-  function rendreLaListe(vue) {
-    const cible = montree?.listeDeCase ?? null;
+  function rendreLaListe(vue, cible) {
     const presents = caseOuverte !== null && Object.hasOwn(vue.cases, caseOuverte) ? vue.cases[caseOuverte].jetons.filter((id) => Object.hasOwn(vue.jetons, id)) : [];
     // Les morts viennent en dernier, comme sur la carte : on ouvre la liste
     // pour choisir, et un mort ne se choisit pas.
@@ -711,10 +1055,11 @@ function monter(visite) {
             const jeton = vue.jetons[id];
             return { id, entier: jeton.entier, nom: jeton.nom, actif: avant || (jeton.choix !== null && jeton.inactif !== true), tenu: avant ? plateau.enMain() === id : null };
           });
-    const signature = JSON.stringify([caseOuverte, cible === action.listeDeCase ? "action" : "preparation", decrits]);
+    const lieu = cible === bulle.listeDeCase ? "bulle" : cible === action.listeDeCase ? "zone" : "preparation";
+    const signature = JSON.stringify([caseOuverte, lieu, decrits]);
     if (signature === listeMontree) return;
     listeMontree = signature;
-    for (const noeud of [action.listeDeCase, preparation.listeDeCase]) if (noeud.children.length > 0) noeud.replaceChildren();
+    for (const noeud of [bulle.listeDeCase, action.listeDeCase, preparation.listeDeCase]) if (noeud.children.length > 0) noeud.replaceChildren();
     if (caseOuverte === null) return;
     const nomDeCase = caseOuverte;
     cible.replaceChildren(
@@ -736,11 +1081,20 @@ function monter(visite) {
     );
   }
 
+  // « +k » : la liste de la case. Dans la bulle, elle s'ouvre (ou prend la
+  // place de ce qu'elle montrait) et reçoit le focus une fois placée.
   function ouvrirCase(nomDeCase) {
-    if (perimee() || (montree?.listeDeCase ?? null) === null) return;
+    if (perimee()) return;
+    const lieu = lieuDuMoment();
+    if (lieu === null) return;
     caseOuverte = nomDeCase;
-    rendreLaListe(vueDuPlateau());
-    montree.listeDeCase.querySelector("h3")?.focus();
+    if (lieu === bulle.listeDeCase) {
+      rendre();
+      if (bulleMontree) bulle.focaliser();
+      return;
+    }
+    rendreLaListe(vueDuPlateau(), lieu);
+    lieu.querySelector("h3")?.focus({ preventScroll: true });
   }
 
   // ——— « Fiche complète » ———
@@ -759,7 +1113,7 @@ function monter(visite) {
     try {
       if (photo.camp === "pj") return [changee, lecture(calculerFiche(banque, source.personnage, { index: resolution().index }))].filter(Boolean);
       const appoint = indexerAdversaires({ ...banque, adversaires: [source.ligne], types_adversaires: source.types }, resolution().index);
-      const cartes = cadreDeCartes();
+      const cartes = rencontre.cadreDeCartes();
       cartes.montrer([{ resolu: appoint.resoudre(appoint.adversaires.get(source.ligne.nom)), numero: seance.etat().noms?.[protagoniste.id]?.exemplaire ?? null }]);
       // L'échelle de la carte se mesure sur la largeur de ce qui la contient,
       // remplissage compris : dans le panneau lui-même, qui en a un, elle
@@ -780,7 +1134,7 @@ function monter(visite) {
     // maintenant. Repliée, c'est son en-tête qui reçoit le focus.
     const fiche = ficheVivante(id);
     if (fiche === null) return;
-    (fiche.hasAttribute("open") ? fiche.querySelector("[data-repere=fiche-complete]") : fiche.querySelector("summary"))?.focus();
+    (fiche.hasAttribute("open") ? fiche.querySelector("[data-repere=fiche-complete]") : fiche.querySelector("summary"))?.focus({ preventScroll: true });
   }
 
   function ouvrirFiche(id) {
@@ -791,23 +1145,41 @@ function monter(visite) {
     const nom = seance.etat().noms?.[id]?.entier ?? protagoniste.photo.valeurs.nom;
     const tete = el("h2", { tabindex: "-1" }, `Fiche complète : ${nom}`);
     panneau.replaceChildren(tete, el("div", { classe: "boutons" }, el("button", { type: "button", classe: "bouton secondaire", onclick: () => fermerLaFiche() }, "Fermer")), ...contenuDeLaFiche(protagoniste));
-    tete.focus();
+    tete.focus({ preventScroll: true });
   }
 
-  // ——— Le journal ———
+  // ——— Le journal, et le bandeau « Dernier événement » ———
 
-  const lignesDuJournal = el("ol", { classe: "combat-lignes", tabindex: "0", "aria-label": "Journal du combat" });
   const zoneDeCopie = el("div", { classe: "combat-copie" });
   const boutonCopier = el("button", { type: "button", classe: "bouton secondaire", onclick: () => copier() }, "Copier");
   const boutonTelecharger = el("button", { type: "button", classe: "bouton secondaire", onclick: () => telechargerLeJournal() }, "Télécharger");
+  // Le titre reçoit le focus quand on demande le journal (« Journal ↓ »),
+  // sans entrer dans l'ordre du clavier.
+  const titreDuJournal = el("h2", { id: "combat-journal-titre", tabindex: "-1" }, "Journal");
+  // La liste des lignes : elle pose les lignes neuves, barre celles d'un geste
+  // annulé, et défile en elle-même jusqu'à la dernière.
+  const liste = creerListe({ vueJournal });
   // Une région que son titre nomme : sans nom, une section n'en est pas une.
   const journal = el(
     "section",
     { classe: "combat-journal", "aria-labelledby": "combat-journal-titre" },
-    el("div", { classe: "combat-journal-tete" }, el("h2", { id: "combat-journal-titre" }, "Journal"), boutonCopier, boutonTelecharger),
-    lignesDuJournal,
+    el("div", { classe: "combat-journal-tete" }, titreDuJournal, boutonCopier, boutonTelecharger),
+    liste.noeud,
     zoneDeCopie,
   );
+
+  /**
+   * Fait voir le journal, à la demande (« Journal ↓ », ou un clic à la souris
+   * sur le bandeau) : le seul défilement de la page que l'écran fasse, puis le
+   * focus sur son titre, sans défiler de nouveau.
+   */
+  function montrerLeJournal() {
+    if (perimee()) return;
+    journal.scrollIntoView({ block: "start" });
+    titreDuJournal.focus({ preventScroll: true });
+  }
+
+  const bandeau = creerBandeau({ montrerLeJournal, tient: services.tient, surveiller: services.surveiller });
 
   // Le texte qui sort de l'écran perd les signes qui commandent le sens de
   // l'écriture, d'un seul geste, sur le texte entier : le journal du combat,
@@ -857,7 +1229,7 @@ function monter(visite) {
     // seule région polie de l'écran. Le dé suivant la remplace.
     if (faite) action.dire(COPIE_FAITE);
     if (champ === null) return;
-    champ.focus();
+    champ.focus({ preventScroll: true });
     champ.select();
   }
 
@@ -866,36 +1238,14 @@ function monter(visite) {
     services.telecharger(nomDuFichier(seance.etat().lanceLe), `${MARQUE_D_ORDRE}${texteASortir("\r\n")}`, TYPE_DU_FICHIER);
   }
 
-  // La dernière ligne reste visible. Le défilement ne prend que sur un nœud
-  // qui est dans la page.
-  function montrerLaDerniereLigne() {
-    lignesDuJournal.scrollTop = lignesDuJournal.scrollHeight;
-  }
-
   function rendreLeJournal(etat) {
-    const lignes = etat.journal;
-    const { combien } = journalPose;
     // Les lignes déjà posées restent ; seules les nouvelles s'ajoutent. Un
     // autre journal (un combat neuf, un combat repris) se repose en entier.
-    const suite = lignes.length >= combien && (combien === 0 || (lignes[0] === journalPose.premiere && lignes[combien - 1] === journalPose.derniere));
-    if (!suite) lignesDuJournal.replaceChildren();
-    const depuis = suite ? combien : 0;
-    if (lignes.length > depuis) {
-      for (let rang = depuis; rang < lignes.length; rang += 1) {
-        // La vue dit ce que la ligne met en évidence : la seule phrase de la
-        // mort, et non la ligne entière.
-        const vue = vueLigne(etat, lignes[rang]);
-        lignesDuJournal.append(
-          el("li", { classe: vue.genre === "tour" ? "tour" : null }, vue.texte === "" ? null : vue.texte, vue.mort === null ? null : el("span", { classe: "combat-mort" }, vue.mort)),
-        );
-      }
-      montrerLaDerniereLigne();
-    }
-    if (!suite || lignes.length > depuis) {
-      journalPose = { combien: lignes.length, premiere: lignes[0] ?? null, derniere: lignes.at(-1) ?? null };
+    if (!journalEnAttente) {
+      const { ajoutees, reposee } = liste.rendre(etat);
       // Un texte montré pour une copie à la main ne suit pas le journal : il
       // s'efface dès qu'une ligne s'ajoute.
-      retourDeCopie = null;
+      if (ajoutees > 0 || reposee) retourDeCopie = null;
     }
     // Sans heure de lancement, ni en-tête ni nom de fichier ne s'écrivent.
     const lance = etat.lanceLe !== null;
@@ -911,6 +1261,47 @@ function monter(visite) {
     rendreLaZoneDeCopie(lance);
   }
 
+  // ——— La bulle : le clic au-dehors, Échap ———
+
+  // Un clic hors de la bulle, de son onglet et de la carte la ferme (avant
+  // le premier dé) ou la réduit (après) ; le focus reste où il est. Le clic
+  // se voit en capture, avant que ce qu'il touche ait agi.
+  function auClicDansLaPage(evenement) {
+    if (perimee() || !bulleMontree) return;
+    const cible = evenement?.target ?? null;
+    if (!bulle.dehors(cible) || plateau.noeud.contains(cible)) return;
+    sansBougerLeFocus(() => bulle.auDehors());
+  }
+
+  // Échap ferme d'abord l'infobulle ouverte de la zone, sans bouger le focus ;
+  // sinon, la bulle montrée et le focus en elle ou sur son jeton, la bulle
+  // ferme son infobulle, ou se ferme, ou se réduit, et le focus va au jeton
+  // (au « +k » pour la liste d'une case). Sinon, Échap n'est pas pris.
+  function auClavier(evenement) {
+    if (evenement?.key !== "Escape" || perimee()) return;
+    if (infobullesDeLaZone.fermer()) {
+      evenement.preventDefault?.();
+      return;
+    }
+    if (!bulleMontree) return;
+    const actif = globalThis.document?.activeElement ?? null;
+    const qui = protagonisteMontre;
+    const surSonJeton = actif !== null && qui !== null && actif === jetonDe(qui).jeton;
+    if (!surSonJeton && !bulle.noeud.contains(actif)) return;
+    const laCase = lieuDuMoment() === bulle.listeDeCase ? caseOuverte : null;
+    const issue = sansBougerLeFocus(() => bulle.echap());
+    if (issue === null) return;
+    evenement.preventDefault?.();
+    if (issue === "infobulle") return;
+    if (laCase !== null) focusSurLaCase(laCase);
+    else focusSurLeJeton(qui);
+  }
+
+  // La largeur de la fenêtre a changé : le téléphone se juge à elle.
+  function rafraichir() {
+    if (!perimee() && racine.isConnected) rendre();
+  }
+
   // ——— Le rendu ———
 
   function origineDeLaCible(etat) {
@@ -920,18 +1311,20 @@ function monter(visite) {
   }
 
   // Où va le focus quand la partie montrée change : à la commande qui
-  // attend, sinon au titre.
+  // attend (dans la bulle si elle est ouverte), sinon au titre.
   function focusSurLaPartie() {
-    if (montree === action) (action.noeud.querySelector("[data-focus]") ?? h1).focus();
-    else if (montree === blocage) titreDuBlocage.focus();
-    else h1.focus();
+    if (montree === action) {
+      if (bulleMontree && bulle.focaliser()) return;
+      (action.noeud.querySelector("[data-focus]") ?? h1).focus({ preventScroll: true });
+    } else if (montree === blocage) titreDuBlocage.focus({ preventScroll: true });
+    else h1.focus({ preventScroll: true });
   }
 
   /**
    * Redessine l'écran d'après le combat du moment. « parCommande » : le rendu
    * suit un geste de la personne, et le focus va à la commande qui attend ;
    * sinon (la première visite, la fin d'une écriture, une lecture qui
-   * revient) le focus ne bouge pas.
+   * revient, la fenêtre qui change de largeur) le focus ne bouge pas.
    */
   function rendre({ parCommande = false } = {}) {
     const etat = seance.etat();
@@ -939,13 +1332,18 @@ function monter(visite) {
     const bloque = seance.bloque();
     bloqueRendu = bloque;
     const enPreparation = etat.phase === "preparation";
+    const etroit = estEtroit();
+    const deplacer = parCommande && immobile === 0;
 
-    rendreLaBarre(vueBarre(etat), bloque);
+    const vueDeLaBarre = vueBarre(etat);
+    rendreLaBarre(vueDeLaBarre, bloque);
     rendreLaGarde();
+    // Après l'état de l'enregistrement : la limite s'ajoute à ce qu'il dit.
+    rendreLaLimite(vueDeLaBarre.limite ?? null, etat);
 
     // Quand on ne joue pas (un combat ouvert ailleurs), la séance refuserait
     // tout : la carte et les fiches montrent le combat sans rien offrir, ni
-    // jeton à choisir, ni « Jouer », ni case à changer.
+    // jeton à choisir, ni « Jouer », ni case à changer ; la bulle se cache.
     const arrete = bloque !== null;
     const vueDuMoment = vuePlateau(etat, choisi);
     plateau.rendre(vueDuMoment, { arrete });
@@ -954,37 +1352,67 @@ function monter(visite) {
       .filter(Boolean)
       .map((vue) => (arrete ? { ...vue, jouer: null, avant: null } : vue));
     // Les fiches rendent d'elles-mêmes le focus qu'elles portaient : c'est
-    // avant le panneau d'action, dont le focus prime.
-    fiches.rendre({ pj: vues.filter((vue) => vue.camp === "pj"), adv: vues.filter((vue) => vue.camp !== "pj") }, { etroit: services.media(ETROIT) === true });
+    // avant la zone et la bulle, dont le focus prime.
+    fiches.rendre({ pj: vues.filter((vue) => vue.camp === "pj"), adv: vues.filter((vue) => vue.camp !== "pj") }, { etroit });
 
-    // L'ordre du document est celui du téléphone : la carte, le panneau
-    // d'action (ou la préparation), puis les deux camps.
+    // L'ordre du document est celui du téléphone : le bandeau, la carte, la
+    // bulle et son onglet, la zone sous la carte (ou la préparation, ou le
+    // bloc d'arrêt), puis les deux camps.
     const aMontrer = bloque !== null ? blocage : enPreparation ? preparation : action;
     const change = aMontrer !== montree;
     let focusPerdu = false;
     if (change) {
       const actif = globalThis.document?.activeElement ?? null;
-      focusPerdu = montree !== null && actif !== null && estDans(actif, montree.noeud);
-      cadre.replaceChildren(plateau.noeud, aMontrer.noeud, fiches.noeud);
+      // La bulle et son onglet se cachent quand la zone cède la place : un
+      // focus qui y était se perd avec eux.
+      focusPerdu = montree !== null && actif !== null && [montree.noeud, bulle.noeud, bulle.onglet].some((noeud) => estDans(actif, noeud));
+      cadre.replaceChildren(bandeau.noeud, plateau.noeud, bulle.noeud, bulle.onglet, aMontrer.noeud, fiches.noeud);
       // Un nœud retiré puis remis dans la page y perd le focus.
-      if (!focusPerdu && montree !== null && actif !== null && estDans(actif, cadre)) actif.focus();
+      if (!focusPerdu && montree !== null && actif !== null && estDans(actif, cadre)) actif.focus({ preventScroll: true });
       montree = aMontrer;
       // La liste d'une case appartenait à la partie qui vient de céder la place.
       caseOuverte = null;
     }
-    // Le panneau d'action se rend même quand il n'est pas montré : sa région
+    // La zone se rend même quand elle n'est pas montrée : sa région
     // d'annonce se vide avec le combat, et ne redit rien d'un combat d'avant.
-    const refait = action.rendre(vuePanneau(etat, choisi), { origineDeLaCible: origineDeLaCible(etat) });
-    if (aMontrer === preparation) preparation.rendre(vuePreparation(seance.miseEnPlace(), apports()));
+    const vueDuPanneau = vuePanneau(etat, choisi);
+    const origine = origineDeLaCible(etat);
+    const refait = action.rendre(vueDuPanneau, { etroit, origineDeLaCible: origine });
+    if (aMontrer === preparation) preparation.rendre(vuePreparation(seance.miseEnPlace(), apports()), { demonstration: enDemonstration, phraseDeDemonstration });
     if (bloque !== null) rendreLeBlocage(bloque);
 
-    rendreLaListe(vueDuMoment);
+    // La liste d'une case se remplit avant que la bulle se rende : elle
+    // mesure sa taille pour se placer.
+    const lieu = lieuDeLaListe(vueDuPanneau, etroit);
+    rendreLaListe(vueDuMoment, lieu);
+    const caseDeLaBulle = lieu === bulle.listeDeCase ? caseOuverte : null;
+    const vueDeLaBulle = arrete || montree !== action ? BULLE_CACHEE : vueDuPanneau;
+    const caseActive = Object.keys(vueDuMoment.cases).find((nom) => vueDuMoment.cases[nom].active === true) ?? null;
+    const rendu = bulle.rendre(vueDeLaBulle, {
+      etroit,
+      caseOuverte: caseDeLaBulle,
+      ancre: noeudDeLaCase(caseDeLaBulle ?? caseActive),
+      repere: cadre,
+      fenetre: services.fenetre,
+      origineDeLaCible: origine,
+    });
+    bulleMontree = rendu.montree;
+    protagonisteMontre = vueDeLaBulle === vueDuPanneau ? protagonisteDe(vueDuPanneau) : null;
+    if (rendu.ouverture) bulle.replacer();
+
     if (ficheOuverte !== null && !etat.ordre.includes(ficheOuverte)) fermerLaFiche({ focus: false });
     rendreLeJournal(etat);
+    bandeau.rendre(vueBandeau(etat));
     rendreAvis();
 
-    if (change && (parCommande || focusPerdu)) focusSurLaPartie();
-    else if (parCommande && refait && montree === action) action.noeud.querySelector("[data-focus]")?.focus();
+    if (change && (deplacer || focusPerdu)) focusSurLaPartie();
+    else if (deplacer) {
+      // La bulle qui s'ouvre, ou un choix fait sur la carte : le focus va à
+      // la commande qui attend dans la bulle. Sinon, la règle du groupe 1 :
+      // la zone refaite le rend à la sienne.
+      if (bulleMontree && (rendu.ouverture || origineDuMoment === "plateau")) bulle.focaliser();
+      else if (refait && montree === action) action.noeud.querySelector("[data-focus]")?.focus({ preventScroll: true });
+    }
   }
 
   // ——— L'assemblage ———
@@ -993,14 +1421,18 @@ function monter(visite) {
   // « ⋯ » sur une ligne, comme la maquette ; ce que « ⋯ » ouvre dessous, sur
   // sa propre rangée (dans celle des commandes, il les faisait passer à la
   // ligne en s'ouvrant) ; puis l'état de l'enregistrement, sur la sienne. À
-  // partir de 56rem, la feuille de style range tout sur une ligne, « Nouveau
-  // combat » puis « Fin de tour » au bout de la barre.
+  // partir de 56rem, la feuille de style range tout sur une ligne,
+  // « Annuler le dernier geste » et « Nouveau combat » puis « Fin de tour »
+  // au bout de la barre.
   barre.append(etatDuCombat, el("div", { classe: "combat-commandes" }, finDeTour, raisonDeFin, plus), autres, garde);
   // La région polie est dans la page dès le premier rendu, vide, et reste la
   // seule : un lecteur d'écran la connaît avant qu'elle parle. Elle ne quitte
-  // pas la page quand la préparation ou un blocage prend la place du panneau.
-  racine.append(aide, zoneDAvis, panneau, cadre, journal, action.annonce);
+  // pas la page quand la préparation ou un blocage prend la place de la zone.
+  racine.append(limite, aide, zoneDAvis, panneau, cadre, journal, action.annonce);
   rendreLeMenu();
+  // Le clic au-dehors se voit en capture ; Échap, sur l'écran entier.
+  racine.addEventListener("click", (evenement) => auClicDansLaPage(evenement), true);
+  racine.addEventListener("keydown", (evenement) => auClavier(evenement));
 
   // Une seule visite suit le gardien : celle d'avant se désabonne.
   visiteCourante?.desabonner?.();
@@ -1008,14 +1440,26 @@ function monter(visite) {
   visiteCourante = visite;
 
   if (seance.etat().phase === "preparation") lireLesPersonnages();
+  // La composition gardée de la rencontre se lit à la première visite, sans
+  // que l'écran l'attende ; si elle change ce que la préparation montre,
+  // l'écran se redessine.
+  const depart = circuit;
+  rencontre
+    .charger(contexte, { magasin: services.magasinRencontre })
+    .then((changee) => {
+      if (!changee || depart !== circuit || perimee() || !racine.isConnected) return;
+      if (seance.etat().phase === "preparation") rendre();
+    })
+    .catch(() => {});
   rendre();
   // Revenu sur l'écran avec le combat en mémoire, ce nœud n'est pas encore
-  // dans la page : la page l'y pose juste après, dans le même tour. Le
-  // défilement réglé avant n'a pas pris ; il se règle donc une fois de plus,
-  // dès que le tour finit.
-  if (!racine.isConnected) {
+  // dans la page : la page l'y pose juste après, dans le même tour. Hors de
+  // la page, la liste ne défilerait pas : elle se pose une fois le tour fini,
+  // si le nœud est dans la page, sinon au rendu suivant.
+  if (journalEnAttente) {
     queueMicrotask(() => {
-      if (!perimee() && racine.isConnected) montrerLaDerniereLigne();
+      journalEnAttente = false;
+      if (!perimee() && racine.isConnected) rendreLeJournal(seance.etat());
     });
   }
 }
