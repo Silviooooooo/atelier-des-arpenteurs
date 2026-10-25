@@ -5,9 +5,42 @@
 // l'adresse, qui n'est jamais envoyé au serveur. Le code QR est hors lot.
 // Tout fichier reçu se vérifie avant d'être lu en entier : sa taille
 // d'abord, puis son schéma (format.js).
+//
+// Le personnage de démonstration (§ 15.7) se lit ici, sans écran : l'écran
+// Personnages et la préparation du combat le partagent (contrat du lot 4,
+// groupe 2, § 12.4). La lecture n'écrit rien ; c'est garderRecu
+// (personnages.js) qui le garde, et sa phrase se fabrique ici.
 
 import { TAILLE_MAX, adresseDuLien, codeDuLien, ecrirePersonnage, lirePersonnage, nomDeFichier } from "../personnage/format.js";
 import { el, telecharger } from "./dom.js";
+
+/** Le fichier du personnage de démonstration, servi avec le site (§ 15.7). */
+export const FICHIER_DEMO = "essais/personnage_demo.arpenteur.json";
+
+/**
+ * Lit le personnage de démonstration. Rend { personnage } ou { erreur } ;
+ * le fichier se relit à chaque fois, sans cache ; fetch se prête, celui de
+ * la page à défaut.
+ */
+export async function lirePersonnageDeDemonstration(mode, { fetch = globalThis.fetch } = {}) {
+  let texte;
+  try {
+    const reponse = await fetch(FICHIER_DEMO, { cache: "no-store" });
+    if (!reponse.ok) throw new Error(`réponse ${reponse.status}`);
+    texte = await reponse.text();
+  } catch {
+    return { erreur: "Le personnage de démonstration est introuvable sur ce site." };
+  }
+  const lu = lirePersonnage(texte, { mode });
+  if (lu.erreur) return { erreur: `Le personnage de démonstration est illisible : ${lu.erreur}` };
+  return { personnage: lu.personnage };
+}
+
+/** La phrase d'un personnage gardé sur l'appareil, « Sans nom » à défaut de nom. */
+export function phraseDuPersonnageGarde(personnage) {
+  const nom = String(personnage?.identite?.nom ?? "").trim() || "Sans nom";
+  return `Le personnage « ${nom} » est sur cet appareil.`;
+}
 
 /** Le bouton « Enregistrer le fichier ». */
 export function boutonFichier(personnage) {

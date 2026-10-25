@@ -39,18 +39,33 @@
 // - le combat finit sans « Fin du tour » : personne ne retrouve ses actions.
 //
 // Le geste en cours est le sommet d'une pile, profonde de 1 au groupe 1 : au
-// groupe 2, une intervention ou une contre-attaque s'empilera sur le geste
+// groupe 3, une intervention ou une contre-attaque s'empilera sur le geste
 // qu'elle interrompt. Le moment d'un geste ne change que dans avancer().
+//
+// « Annuler le dernier geste » (groupe 2 ; complément, § 4.10 ; contrat du
+// groupe, § 2). Un geste fini (une capacité jouée avec ses dés, un
+// déplacement, « Passer son tour », « Fin de tour », avec la mort, la fin du
+// combat et les fins de tour automatiques qu'il entraîne) laisse un maillon :
+// l'état d'avant lui, sans journal, et la plage des lignes qu'il a écrites.
+// « annuler » reprend cet état et y remet le journal courant, qui ne recule
+// jamais : une ligne « Annulé » s'y ajoute, et l'écran barre la plage. Les
+// maillons forment une liste chaînée gelée, qui partage tout ce qui n'a pas
+// changé : annuler coûte comme un clic, et le rejeu reste linéaire. La pile
+// ne se garde pas : elle se refait au rejeu, et ne passe jamais par JSON.
+//
+// Le rejeu (groupe 2 ; contrat, § 4.3, § 4.4) : un générateur qui rend la
+// main toutes les REJEU_TRANCHE ; et le journal n'est recopié qu'une fois par
+// événement, gelé par appliquer() à la fin.
 
 import { CARACTERISTIQUES } from "../personnage/regles.js";
 import { circonstances } from "./circonstances.js";
 import { basesPermises, coupsDuGeste, frapper, lettreDe, localiser, nombreDeD20 } from "./degats.js";
 import { validerEvenement } from "./forme.js";
 import { exploser, garder, jetFini, lancerDe, ouvrirJet, relancer, reussites } from "./jet.js";
-import { annonce, ligneDeFin, ligneDeFinDeTour, ligneDeLancement, ligneDePasse, ligneDeTour, ligneDuGeste } from "./journal.js";
+import { annonce, lignes } from "./journal.js";
 import { nommer } from "./noms.js";
-import { accepte, candidats, esquiveOfferte, prixDeLEsquive, prixDuGeste, reglages } from "./offre.js";
-import { REGLES, geler } from "./regles.js";
+import { accepte, candidats, esquiveOfferte, modeDeLaFacon, prixDeLEsquive, prixDuGeste, reglages } from "./offre.js";
+import { REGLES, REJEU_TRANCHE, SANS_ANNULATION, geler } from "./regles.js";
 import { campDe, capaciteDe, courantDe, faconDe, gesteEnCours, photoDe, vivantsDe } from "./valeurs.js";
 
 export { gesteEnCours } from "./valeurs.js";
@@ -115,6 +130,8 @@ export function ouvrirCombat(miseEnPlace) {
     annonce: null,
     vainqueur: null,
     pas: 0,
+    // Rien à annuler : l'objet même de regles.js, que partagent les états.
+    annulation: SANS_ANNULATION,
   });
 }
 
@@ -125,17 +142,23 @@ export function ouvrirCombat(miseEnPlace) {
 
 const changer = (etat, id, champs) => ({ ...etat, protagonistes: { ...etat.protagonistes, [id]: { ...etat.protagonistes[id], ...champs } } });
 
-// Ajoute des lignes au journal. Une ligne est gelée quand elle naît, et la
-// liste neuve l'est en surface, ici même : geler() ne redescend pas dans ce
-// qui est déjà gelé, et une ligne de plus ne fait donc regarder aucune de
-// celles qui la précèdent. Laissée à appliquer(), la liste neuve était
-// reparcourue ligne à ligne à chaque événement, et le rejeu d'un combat gardé
-// coûtait comme le carré de sa longueur. Les lignes d'avant sont celles d'un
-// état que le moteur a rendu : elles sont gelées. La recopie reste, une par
-// ajout ; elle s'écrit par étalement, que le moteur de JavaScript sait faire
-// vite sur une liste gelée (mesuré : dix fois plus vite que slice()).
-function ecrire(etat, ...lignes) {
-  return { ...etat, journal: Object.freeze([...etat.journal, ...lignes.map(geler)]) };
+// Ajoute des lignes au journal, faites par les fabriques de js/combat/journal.js,
+// qui les rendent gelées. Une seule recopie par événement (contrat du
+// groupe 2, § 4.4) : la liste d'un état rendu est gelée, et la première
+// écriture d'un événement la recopie dans une liste neuve, non gelée, que les
+// écritures suivantes du même événement prolongent ; appliquer() la gèle en
+// surface, une fois, à la fin. Au groupe 1, chaque écriture recopiait et
+// gelait la liste : une passe qui finit le tour la recopiait deux fois, et le
+// rejeu de 15 000 passes demandait 13,4 s. Une ligne de plus ne fait regarder
+// aucune de celles qui la précèdent : elles sont gelées, et geler() ne
+// redescend pas dans ce qui l'est déjà. La recopie s'écrit par étalement, que
+// le moteur de JavaScript sait faire vite (mesuré : dix fois plus vite que
+// slice()).
+function ecrire(etat, ...neuves) {
+  const prolonge = !Object.isFrozen(etat.journal);
+  const journal = prolonge ? etat.journal : [...etat.journal];
+  journal.push(...neuves);
+  return { ...etat, journal };
 }
 
 const poserLeGeste = (etat, geste) => ({ ...etat, pile: [...etat.pile.slice(0, -1), geste] });
@@ -160,7 +183,7 @@ function finirLeTour(etat) {
     const courant = protagonistes[id];
     if (courant.actions !== courant.actionsMax || courant.passe) protagonistes[id] = { ...courant, actions: courant.actionsMax, passe: false };
   }
-  return ecrire({ ...etat, tour, protagonistes }, { genre: "cadre", texte: ligneDeFinDeTour(camp) }, { genre: "tour", texte: ligneDeTour(tour) });
+  return ecrire({ ...etat, tour, protagonistes }, lignes.finDeTour(camp), lignes.tour(tour));
 }
 
 // Deux fins de tour d'affilée au plus : quand aucun des deux camps ne peut
@@ -181,16 +204,12 @@ function apres(etat) {
 // ici, sans toucher à frapper(), qui reçoit sa victime.
 const victimeDe = (geste) => geste.cible;
 
-// Comment se joue une capacité, d'après son rôle et sa façon. Un adversaire
-// qui porte la capacité du jet de caractéristique la joue sans jet : seuls
-// les joueurs lancent des dés. Le jet prêté ne tient qu'à une capacité qui
-// n'est pas une attaque.
+// Comment se joue une capacité, d'après son rôle et sa façon : ce que dit
+// l'offre (modeDeLaFacon), que lisent aussi les vues. Le jet prêté, choisi
+// par un réglage, ne tient qu'à une capacité qui se joue sans jet.
 function modeDe(etat, geste) {
-  const capacite = capaciteDe(etat, geste.acteur, geste.capacite);
-  if (capacite?.role === "deplacement") return "deplacement";
-  if (capacite?.role === "jet_de_caracteristique" && campDe(etat, geste.acteur) === "pj") return "caracteristique";
-  if (faconDe(etat, geste)?.attaque === true) return "attaque";
-  return geste.mode === "jet_prete" ? "jet_prete" : "sans_jet";
+  const mode = modeDeLaFacon(capaciteDe(etat, geste.acteur, geste.capacite), faconDe(etat, geste), campDe(etat, geste.acteur));
+  return mode === "sans_jet" && geste.mode === "jet_prete" ? "jet_prete" : mode;
 }
 
 // L'arme qui prête son jet, d'office : pour un PJ, celle de sa photographie
@@ -219,7 +238,10 @@ const REGLAGES = {
     return { ...geste, mode: valeur ? "jet_prete" : "sans_jet", armePretee: valeur ? armePreteeDOffice(etat, geste.acteur) : null };
   },
   arme_pretee: (etat, geste, valeur) => ({ ...geste, armePretee: valeur }),
-  cible: (etat, geste, valeur) => ({ ...geste, cible: valeur }),
+  // Une autre cible, un autre dé de défense : la défense choisie retombe au
+  // défaut proposé (contrat du groupe 2, § 5.4).
+  cible: (etat, geste, valeur) => ({ ...geste, cible: valeur, defense: null }),
+  defense: (etat, geste, valeur) => ({ ...geste, defense: valeur }),
   arrivee: (etat, geste, valeur) => ({ ...geste, arrivee: valeur }),
   // Rangées dans l'ordre des neuf caractéristiques, quel que soit l'ordre du
   // choix : le jet, le journal et les vues lisent la même liste.
@@ -235,6 +257,7 @@ const REGLAGES = {
 // passe avant X, qu'elle borne.
 const A_REVALIDER = [
   ["cible", null],
+  ["defense", null],
   ["arrivee", null],
   ["caracteristiques", null],
   ["jauge", null],
@@ -276,16 +299,15 @@ function payer(etat, geste) {
 // meurt si son corps est à 0 ; puis le combat finit si un camp n'a plus de
 // vivant (sans « Fin du tour »), sinon le tour finit de lui-même si tous ont
 // joué.
+// La ligne du geste porte « mort: true » quand sa victime meurt.
 function finirLeGeste(etat, geste) {
   const morte = geste.resultat?.mort === true ? victimeDe(geste) : null;
-  const ligne = { genre: "geste", texte: ligneDuGeste(etat, geste) };
-  if (morte !== null) ligne.mort = true;
-  let fini = retirerLeGeste(ecrire(etat, ligne));
+  let fini = retirerLeGeste(ecrire(etat, lignes.geste(etat, geste)));
   if (morte !== null) fini = changer(fini, morte, { mort: { tour: fini.tour.numero } });
   const vaincu = CAMPS.find((camp) => vivantsDe(fini, camp).length === 0) ?? null;
   if (vaincu === null) return apres(fini);
   const vainqueur = AUTRE_CAMP[vaincu];
-  return { ...ecrire(fini, { genre: "fin", texte: ligneDeFin(vainqueur) }), phase: "termine", vainqueur };
+  return { ...ecrire(fini, lignes.fin(vainqueur)), phase: "termine", vainqueur };
 }
 
 // Vrai quand le dernier d20 lancé montre la face de contre-attaque de la
@@ -359,7 +381,7 @@ const REDUCTEURS = {
     const lance = { ...etat, phase: "combat", lanceLe: le, tour };
     // Un camp qui commence sans pouvoir agir (des adversaires sans action)
     // voit son tour finir dès le lancement.
-    return apres(ecrire(lance, { genre: "cadre", texte: ligneDeLancement(lance) }, { genre: "tour", texte: ligneDeTour(tour) }));
+    return apres(ecrire(lance, lignes.lancement(lance), lignes.tour(tour)));
   },
 
   capacite(etat, { qui, capacite, facon }) {
@@ -381,6 +403,8 @@ const REDUCTEURS = {
       caracteristiques: null,
       difficulte: null,
       armePretee: null,
+      // Le type du jet de défense à égalité de dés : null, le défaut proposé.
+      defense: null,
       reglages: { modificateur: null, avantages: null },
       jet: null,
       degats: null,
@@ -452,11 +476,60 @@ const REDUCTEURS = {
 
   passer(etat, { qui }) {
     const passe = changer(sansGesteNonPaye(etat), qui, { passe: true });
-    return apres(ecrire(passe, { genre: "geste", texte: ligneDePasse(passe, qui) }));
+    return apres(ecrire(passe, lignes.passe(passe, qui)));
   },
 
   fin_de_tour: (etat) => apres(finirLeTour(sansGesteNonPaye(etat))),
+
+  // Reprend l'état d'avant le dernier geste fini, sans son journal : le
+  // journal courant y revient, avec la ligne « Annulé », et le maillon quitte
+  // la pile. L'offre a jugé qu'il y en a un, et qu'aucun geste n'est en
+  // cours. appliquer() pose ensuite le pas et l'annonce : ni l'un ni le
+  // journal ne reculent.
+  annuler(etat) {
+    const maillon = etat.annulation.pile;
+    const repris = { ...maillon.avant, journal: etat.journal, annonce: etat.annonce, annulation: { attente: null, pile: maillon.precedent } };
+    return ecrire(repris, lignes.annulation(etat, maillon.quoi, maillon.plage));
+  },
 };
+
+// ─── L'annulation ───────────────────────────────────────────────────────────
+
+// L'état d'avant un geste, tel que l'annulation le reprendra : une copie de
+// surface, gelée, qui partage tout avec son état, sans journal ni annonce, ni
+// pile d'annulation (le maillon qui le porte sait la sienne).
+const instantane = (etat) => geler({ ...etat, journal: null, annulation: null, annonce: null });
+
+// Un maillon de plus sur la pile : le geste défait se nomme par « quoi » ;
+// « plage » est [début, fin) des lignes qu'il a écrites, contiguës.
+const empiler = (pile, avant, quoi, plage) => geler({ attente: null, pile: { avant, quoi, plage, precedent: pile } });
+
+/**
+ * L'annulation de l'état d'après un événement accepté (contrat du groupe 2,
+ * § 2.3) :
+ * - « passer » et « fin_de_tour » sont des gestes à eux seuls : un maillon,
+ *   pris de l'état d'avant eux, le geste non payé qu'ils retirent ôté ;
+ * - le premier dé ou la confirmation qui paie le geste en cours met de côté
+ *   l'état d'avant ce geste (« attente ») : tout ce qui suit le paiement se
+ *   défera d'un coup ;
+ * - l'événement après lequel ce geste est fini (sa mort, la fin du combat et
+ *   les fins de tour qu'il entraîne comprises) en fait un maillon ;
+ * - tout autre événement la laisse telle quelle, l'objet même. Ni le
+ *   lancement ni ses suites ne se défont.
+ * Un geste empilé sur un autre (groupe 3) n'est pas suivi : seul compte un
+ * geste seul sur la pile.
+ */
+function suivreLAnnulation(etat, lu, suivant, geste) {
+  const courante = etat.annulation ?? SANS_ANNULATION;
+  const plage = [etat.journal.length, suivant.journal.length];
+  if (lu.type === "passer") return empiler(courante.pile, instantane(sansGesteNonPaye(etat)), { genre: "passer", qui: lu.qui }, plage);
+  if (lu.type === "fin_de_tour") return empiler(courante.pile, instantane(sansGesteNonPaye(etat)), { genre: "fin_de_tour", camp: etat.tour.camp }, plage);
+  const racine = etat.pile.length === 1 ? gesteEnCours(etat) : null;
+  if (racine === null) return courante;
+  const attente = (lu.type === "de" || lu.type === "confirmer") && racine.paye === false ? instantane(retirerLeGeste(etat)) : courante.attente;
+  if (geste?.moment === "fini") return empiler(courante.pile, attente, { genre: "capacite", geste }, plage);
+  return attente === courante.attente ? courante : geler({ attente, pile: courante.pile });
+}
 
 // ─── Appliquer, rejouer ─────────────────────────────────────────────────────
 
@@ -469,7 +542,9 @@ const REDUCTEURS = {
  * profondeur, et partage avec le précédent tout ce qui n'a pas changé.
  *
  * L'annonce (ce que dit la région d'annonce de l'écran) suit : quand
- * l'événement n'a rien à dire, celle d'avant reste, l'objet même.
+ * l'événement n'a rien à dire, celle d'avant reste, l'objet même. De même
+ * l'annulation (voir suivreLAnnulation) et le journal, quand l'événement n'y
+ * écrit rien.
  */
 export function appliquer(etat, evenement) {
   const verdict = accepte(etat, evenement);
@@ -478,25 +553,32 @@ export function appliquer(etat, evenement) {
   // le geste garde (les opérations des dégâts, par exemple).
   const lu = validerEvenement(evenement).evenement;
   const { etat: suivant, geste } = avancer(REDUCTEURS[lu.type](etat, lu));
+  const annulation = lu.type === "annuler" ? suivant.annulation : suivreLAnnulation(etat, lu, suivant, geste);
   const pas = etat.pas + 1;
   const texte = annonce(suivant, geste, lu, etat.journal.length);
-  return { etat: geler({ ...suivant, annonce: texte === null ? etat.annonce : { pas, texte }, pas }) };
+  // La liste neuve du journal, gelée en surface, une fois : ses lignes le sont
+  // déjà, et geler() ne la reparcourt donc pas.
+  Object.freeze(suivant.journal);
+  return { etat: geler({ ...suivant, annonce: texte === null ? etat.annonce : { pas, texte }, pas, annulation }) };
 }
 
 const VERSION_INCONNUE = "Ce combat a été commencé avec une autre version des règles.";
 const CONTENU_ILLISIBLE = "Le contenu de ce combat ne se lit pas.";
 
 /**
- * Refait l'état d'un combat gardé : ouvrirCombat() sur sa mise en place, puis
- * appliquer() pour chacun de ses événements, par le chemin même du jeu. Rend
- * { etat }, ou { erreur: { pas, code, message } } au premier refus (« pas »
- * est le numéro de l'événement refusé, 0 pour le contenu lui-même) : la suite
- * n'est jamais tronquée en silence, un combat qui ne se rejoue pas est une
- * donnée abîmée.
+ * Refait l'état d'un combat gardé, en rendant la main (contrat du groupe 2,
+ * § 4.3) : ouvrirCombat() sur sa mise en place, puis appliquer() pour chacun
+ * de ses événements, par le chemin même du jeu. Un générateur pur : il cède
+ * { pas } après chaque tranche de « tranche » événements (le nombre de ceux
+ * déjà appliqués), et celui qui le mène rend la main au navigateur entre
+ * deux. Il rend { etat }, ou { erreur: { pas, code, message } } au premier
+ * refus (« pas » est le numéro de l'événement refusé, 0 pour le contenu
+ * lui-même) : la suite n'est jamais tronquée en silence, un combat qui ne se
+ * rejoue pas est une donnée abîmée.
  *
  * Le contenu a déjà été jugé pour sa forme (validerContenu, js/combat/forme.js).
  */
-export function rejouer(contenu) {
+export function* rejeu(contenu, tranche = REJEU_TRANCHE) {
   if (contenu?.regles !== REGLES) return { erreur: { pas: 0, code: "forme", message: VERSION_INCONNUE } };
   if (!Array.isArray(contenu.evenements)) return { erreur: { pas: 0, code: "forme", message: CONTENU_ILLISIBLE } };
   let etat;
@@ -509,6 +591,18 @@ export function rejouer(contenu) {
     const { etat: suivant, refus } = appliquer(etat, evenement);
     if (refus) return { erreur: { pas: rang + 1, ...refus } };
     etat = suivant;
+    if ((rang + 1) % tranche === 0) yield { pas: rang + 1 };
   }
   return { etat };
+}
+
+/**
+ * Le même rejeu, d'une traite : { etat }, ou { erreur: { pas, code, message } }
+ * (voir rejeu).
+ */
+export function rejouer(contenu) {
+  const suite = rejeu(contenu);
+  let etape = suite.next();
+  while (!etape.done) etape = suite.next();
+  return etape.value;
 }

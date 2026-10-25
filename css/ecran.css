@@ -531,6 +531,12 @@ dl {
   .retour {
     display: none;
   }
+
+  /* Les vignettes du créateur : autant de colonnes qu'il en tient. La règle
+     nomme .creation pour l'emporter sur celle du téléphone, écrite plus bas. */
+  .creation .vignettes {
+    grid-template-columns: repeat(auto-fill, minmax(var(--largeur-vignette), 1fr));
+  }
 }
 
 /* Personnages (lot 2) : la liste, le parcours de création, un personnage
@@ -784,11 +790,6 @@ dl {
   border-bottom: 0;
 }
 
-.choix-bloc.choisi {
-  padding-left: var(--espace-2);
-  border-left: var(--trait-epais) solid var(--accent);
-}
-
 .capacites-decrites {
   margin: 0 0 var(--espace-1);
   padding: 0 0 0 calc(var(--taille-case) + var(--espace-3));
@@ -849,6 +850,126 @@ dl {
   margin-top: var(--espace-5);
   padding-top: var(--espace-3);
   border-top: var(--trait) solid var(--separateur);
+}
+
+/* Le créateur en vignettes (lot 4, groupe 2 ; complément § 7, contrat
+   § 12.5) : aux étapes 3 à 6, un bloc, puis une option, se choisit dans une
+   vignette. Elle habille un bouton radio ou une case à cocher natifs, posés
+   sur toute la vignette et transparents : le clic, les flèches, Tab et les
+   lecteurs d'écran restent ceux du navigateur. Deux colonnes sur un
+   téléphone ; au-delà de 56rem, autant qu'il en tient (plus haut). Le choix
+   se lit dans ✓ et le cadre, pas à la seule couleur. Contrastes : le texte
+   secondaire sur --accent-doux, 5,76 et 6,08:1 ; ✓, 5,94 et 6,22 ; le bord
+   d'une vignette sur --fond-2, 3,47 et 3,25. */
+
+.aide-vignettes {
+  color: var(--texte-2);
+}
+
+.groupe-vignettes {
+  margin: 0 0 var(--espace-3);
+  padding: 0;
+  border: 0;
+}
+
+.groupe-vignettes > legend {
+  padding: 0 0 var(--espace-2);
+}
+
+.vignettes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espace-2);
+}
+
+.vignette {
+  position: relative;
+  min-height: var(--cible-tactile);
+  padding: var(--espace-2) var(--espace-3);
+  border: var(--trait) solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--fond-2);
+  overflow-wrap: anywhere;
+}
+
+.vignette.choisie {
+  border-color: var(--accent);
+  background: var(--accent-doux);
+  box-shadow: inset 0 0 0 var(--trait) var(--accent);
+}
+
+/* L'entrée native couvre la vignette, au-dessus de son texte et de ✓ :
+   toute la vignette se touche. */
+.vignette-entree {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  appearance: none;
+  cursor: pointer;
+}
+
+.vignette:has(> .vignette-entree:focus-visible) {
+  outline: var(--contour) solid var(--accent);
+  outline-offset: var(--trait);
+}
+
+.vignette .vignette-nom {
+  margin: 0;
+  padding-right: var(--espace-5);
+}
+
+.vignette-resume,
+.vignette-meta,
+.vignette-texte {
+  display: block;
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+/* Le résumé tient en deux lignes ; au-delà, le navigateur écrit « … ». */
+.vignette-resume {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.vignette-coche {
+  position: absolute;
+  top: var(--espace-2);
+  right: var(--espace-3);
+  color: var(--accent);
+  font-weight: var(--graisse-forte);
+}
+
+.bloc-choisi {
+  margin: var(--espace-3) 0 var(--espace-4);
+  padding: var(--espace-3);
+  border: var(--trait) solid var(--accent);
+  border-radius: var(--rayon);
+}
+
+.bloc-choisi h3 {
+  margin-top: 0;
+}
+
+.bloc-choisi .capacites-decrites {
+  padding-left: 0;
+}
+
+/* Dans le cadre du bloc choisi, ses groupes n'ont pas de second cadre. */
+.bloc-choisi .groupe-choix {
+  margin: var(--espace-3) 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.bloc-choisi .groupe-choix legend {
+  padding: 0 0 var(--espace-1);
 }
 
 /* Adversaires (lot 3) : la vue lecture et la vue carte d'un adversaire, la

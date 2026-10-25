@@ -14,9 +14,16 @@
 // refait ; un personnage enregistré se modifie par une copie de travail, qui
 // s'enregistre à sa place ou sous un autre nom.
 //
+// Le lot 4, groupe 2 (contrat § 12.5, complément § 7) : aux étapes 3 à 6,
+// les blocs se choisissent en vignettes, côte à côte, chacune avec son
+// résumé ; sous elles, le bloc choisi décrit, ses descriptions ouvertes, et
+// ses groupes de choix, en vignettes eux aussi. Sous l'habit de vignette, un
+// bouton radio ou une case à cocher natifs.
+//
 // Aucune règle du jeu n'est écrite ici : ce qui manque, les montées
-// permises et le tirage viennent de parcours.js, la fiche de calcul.js, les
-// packs de packs.js, les nombres de regles.js.
+// permises, le tirage, l'intitulé d'un groupe et le résumé d'un bloc
+// viennent de parcours.js, la fiche de calcul.js, les packs de packs.js, les
+// nombres de regles.js.
 
 import { cle } from "../banque/noms.js";
 import { TYPES, typeDe } from "../banque/types.js";
@@ -24,14 +31,13 @@ import { coutEcrit, lecture } from "../fiche/lecture.js";
 import { calculerFiche, capacitesDuBloc, descriptionA, estBouclier, indexerCreation } from "../personnage/calcul.js";
 import { ErreurPersonnage, nouvelIdentifiant, verifier } from "../personnage/format.js";
 import { NOMS_PACK, packsDArmure, zonesCouvertes } from "../personnage/packs.js";
-import { ETAPES, banqueUtilisable, manques, niveauxPermis, tirerConstellation } from "../personnage/parcours.js";
+import { ETAPES, banqueUtilisable, legendeDuGroupe, manques, niveauxPermis, resumeDuBloc, tirerConstellation } from "../personnage/parcours.js";
 import {
   CARACTERISTIQUES,
   CARACTERISTIQUE_MAX,
   CARACTERISTIQUE_MIN,
   COUT_NIVEAU,
   DES,
-  ELEMENTS,
   POINTS_CREATION,
   SOMME_CARACTERISTIQUES,
   TYPES_OBJET,
@@ -86,9 +92,10 @@ const coutLisible = (cout) => {
 /**
  * Une capacité avec sa description, ses [N] et expressions évalués au
  * niveau demandé (par défaut son niveau de création) : ouverte sur un grand
- * écran, à déplier sous son nom sur un téléphone.
+ * écran, à déplier sous son nom sur un téléphone ; ouverte partout quand
+ * ouverte vaut true (le bloc choisi d'une étape en vignettes).
  */
-function capaciteDecrite(o, nom, { bloc = null, niveau = null, qualite = QUALITE_CREATION, intitule = null, cle: cleEtat = null } = {}) {
+function capaciteDecrite(o, nom, { bloc = null, niveau = null, qualite = QUALITE_CREATION, intitule = null, cle: cleEtat = null, ouverte = null } = {}) {
   const d = descriptionA(o.index, o.personnage, nom, { bloc, niveau, qualite });
   if (!d) return el("li", { classe: "capacite-decrite" }, el("span", { classe: "capacite-nom" }, intitule ?? nom), el("span", { classe: "detail" }, " — capacité à venir"));
   return el(
@@ -96,7 +103,7 @@ function capaciteDecrite(o, nom, { bloc = null, niveau = null, qualite = QUALITE
     { classe: "capacite-decrite" },
     el(
       "details",
-      { open: !estEtroit(), "data-cle": cleEtat ?? `${bloc ?? ""}|${nom}|${niveau ?? ""}|${intitule ?? ""}` },
+      { open: ouverte ?? !estEtroit(), "data-cle": cleEtat ?? `${bloc ?? ""}|${nom}|${niveau ?? ""}|${intitule ?? ""}` },
       el("summary", {}, el("span", { classe: "capacite-nom" }, intitule ?? d.nom), " ", el("span", { classe: "detail" }, `niveau ${d.niveau} · ${coutLisible(d.cout)}`)),
       el("p", { classe: "capacite-texte" }, d.texte.trim() || "Sans description."),
     ),
@@ -106,15 +113,18 @@ function capaciteDecrite(o, nom, { bloc = null, niveau = null, qualite = QUALITE
 const capacitesDecrites = (o, noms, options = {}) => (noms.length ? el("ul", { classe: "capacites-decrites" }, noms.map((nom) => capaciteDecrite(o, nom, options))) : null);
 
 // Ce qu'un bloc donne, décrit : ses capacités, puis ses groupes de choix
-// quand ils ne sont pas proposés ailleurs dans la page.
-function blocDecrit(o, bloc, { avecGroupes = true, qualite = QUALITE_CREATION, siVide = "Capacités à venir." } = {}) {
+// quand ils ne sont pas proposés ailleurs dans la page. ouvertes : les
+// descriptions ouvertes sur un téléphone aussi ; sinon, la règle de
+// capaciteDecrite.
+function blocDecrit(o, bloc, { avecGroupes = true, qualite = QUALITE_CREATION, siVide = "Capacités à venir.", ouvertes = false } = {}) {
   const { capacites, groupes } = capacitesDuBloc(bloc, []);
-  const parties = [capacitesDecrites(o, capacites.map((c) => c.nom), { bloc: bloc.nom, qualite })];
+  const ouverte = ouvertes ? true : null;
+  const parties = [capacitesDecrites(o, capacites.map((c) => c.nom), { bloc: bloc.nom, qualite, ouverte })];
   if (avecGroupes) {
     for (const g of groupes) {
       parties.push(
         el("p", { classe: "secondaire-texte petit" }, g.forme === "choix" ? "Au choix, une option :" : "Facultatif, aucune, une ou plusieurs options :"),
-        capacitesDecrites(o, g.options, { bloc: bloc.nom, qualite }),
+        capacitesDecrites(o, g.options, { bloc: bloc.nom, qualite, ouverte }),
       );
     }
   }
@@ -122,33 +132,65 @@ function blocDecrit(o, bloc, { avecGroupes = true, qualite = QUALITE_CREATION, s
   return parties;
 }
 
+// ─── Les vignettes ──────────────────────────────────────────────────────────
+
+// Le signe d'une vignette choisie, caché aux lecteurs d'écran : le bouton
+// natif dit déjà qu'elle l'est.
+const COCHE = "✓";
+
+/**
+ * Une vignette (contrat § 12.5) : un bouton radio ou une case à cocher
+ * natifs, posés sur toute la vignette et transparents (ecran.css) ; le nom
+ * dans son label ; dessous, le résumé d'un bloc, ou le niveau, le coût et la
+ * description d'une option, que l'entrée désigne par aria-describedby ; ✓
+ * quand elle est choisie.
+ */
+function vignette({ id, name, type = "radio", nom, absente = false, choisie, resume = null, decrite = null, onchange }) {
+  const description = resume !== null ? `${id}-resume` : decrite ? `${id}-texte` : null;
+  return el(
+    "div",
+    { classe: choisie ? "vignette choisie" : "vignette" },
+    el("input", { type, id, name, classe: "vignette-entree", checked: choisie, "aria-describedby": description, onchange }),
+    el("label", { for: id, classe: "vignette-nom" }, nom, absente ? el("span", { classe: "detail" }, " — capacité à venir") : null),
+    resume !== null ? el("span", { id: description, classe: "vignette-resume" }, resume) : null,
+    decrite ? [el("span", { classe: "vignette-meta" }, decrite.meta), el("span", { id: description, classe: "vignette-texte" }, decrite.texte)] : null,
+    choisie ? el("span", { classe: "vignette-coche", "aria-hidden": "true" }, COCHE) : null,
+  );
+}
+
+// Les blocs d'une étape en vignettes radio, sous leur légende.
+const vignettesDesBlocs = (intitule, vignettes) => el("fieldset", { classe: "groupe-choix groupe-vignettes" }, el("legend", {}, intitule), el("div", { classe: "vignettes" }, vignettes));
+
 // ─── Les groupes de choix d'un bloc ─────────────────────────────────────────
-
-// Une capacité porte l'élément si l'une de ses variantes l'a parmi ses
-// éléments propres (convention du lot 2 pour styles et maîtrises, § 12).
-function porteElement(capacite, nomElement) {
-  return Boolean(capacite?.variantes.some((v) => v.elements.some((e) => e.nom && cle(e.nom) === cle(nomElement))));
-}
-
-function legende(index, groupe) {
-  const toutes = (nomElement) => groupe.options.length > 0 && groupe.options.every((option) => porteElement(index.capacite(option), nomElement));
-  if (toutes(ELEMENTS.style)) return ELEMENTS.style;
-  if (toutes(ELEMENTS.maitrise)) return ELEMENTS.maitrise;
-  return groupe.forme === "choix" ? "Au choix" : "Facultatif";
-}
 
 /**
  * Les groupes de choix d'un bloc : ( a | b ) en boutons radio, [ a | b ] en
- * cases à cocher, chaque option avec sa description. ecrire(q, choix) range
- * la liste des options choisies dans le personnage q ; un choix qui n'est
- * plus une option s'y perd.
+ * cases à cocher, chaque option avec sa description ; en vignettes quand
+ * vignettes vaut true (les étapes 3 à 6). ecrire(q, choix) range la liste
+ * des options choisies dans le personnage q ; un choix qui n'est plus une
+ * option s'y perd.
  */
-function groupesDeChoix(o, bloc, choix, prefixe, ecrire, { qualite = QUALITE_CREATION } = {}) {
+function groupesDeChoix(o, bloc, choix, prefixe, ecrire, { qualite = QUALITE_CREATION, vignettes = false } = {}) {
   const { groupes } = capacitesDuBloc(bloc, choix);
   return groupes.map((groupe, g) => {
+    const unique = groupe.forme === "choix";
     const options = groupe.options.map((option, i) => {
       const id = `${prefixe}-g${g}-${i}`;
-      const unique = groupe.forme === "choix";
+      const choisie = groupe.choisies.some((c) => cle(c) === cle(option));
+      const onchange = (evenement) => {
+        const sans = (liste) => liste.filter((c) => cle(c) !== cle(option));
+        const nouveaux = groupes.flatMap((autre, k) => {
+          if (k !== g) return autre.choisies;
+          if (unique) return [option];
+          return evenement.target.checked ? [...sans(autre.choisies), option] : sans(autre.choisies);
+        });
+        o.modifier((q) => ecrire(q, nouveaux), { refaire: true, focus: id });
+      };
+      if (vignettes) {
+        const d = descriptionA(o.index, o.personnage, option, { bloc: bloc.nom, qualite });
+        const decrite = d ? { meta: `niveau ${d.niveau} · ${coutLisible(d.cout)}`, texte: d.texte.trim() || "Sans description." } : null;
+        return vignette({ id, name: `${prefixe}-g${g}`, type: unique ? "radio" : "checkbox", nom: option, absente: !d, choisie, decrite, onchange });
+      }
       return el(
         "div",
         { classe: "option-decrite" },
@@ -159,16 +201,8 @@ function groupesDeChoix(o, bloc, choix, prefixe, ecrire, { qualite = QUALITE_CRE
             type: unique ? "radio" : "checkbox",
             id,
             name: `${prefixe}-g${g}`,
-            checked: groupe.choisies.some((c) => cle(c) === cle(option)),
-            onchange: (evenement) => {
-              const sans = (liste) => liste.filter((c) => cle(c) !== cle(option));
-              const nouveaux = groupes.flatMap((autre, k) => {
-                if (k !== g) return autre.choisies;
-                if (unique) return [option];
-                return evenement.target.checked ? [...sans(autre.choisies), option] : sans(autre.choisies);
-              });
-              o.modifier((q) => ecrire(q, nouveaux), { refaire: true, focus: id });
-            },
+            checked: choisie,
+            onchange,
           }),
           el("span", {}, option, o.index.capacite(option) ? null : el("span", { classe: "detail" }, " — capacité à venir")),
         ),
@@ -178,11 +212,23 @@ function groupesDeChoix(o, bloc, choix, prefixe, ecrire, { qualite = QUALITE_CRE
     return el(
       "fieldset",
       { classe: "groupe-choix" },
-      el("legend", {}, legende(o.index, groupe)),
-      el("p", { classe: "secondaire-texte petit" }, groupe.forme === "choix" ? "Une option." : "Aucune, une ou plusieurs options."),
-      options,
+      el("legend", {}, legendeDuGroupe(o.index, groupe)),
+      el("p", { classe: "secondaire-texte petit" }, unique ? "Une option." : "Aucune, une ou plusieurs options."),
+      vignettes ? el("div", { classe: "vignettes" }, options) : options,
     );
   });
+}
+
+// Le bloc choisi d'une étape en vignettes, sous elles : son nom, ses
+// capacités décrites et ouvertes, puis ses groupes de choix en vignettes.
+function blocChoisi(o, bloc, choix, prefixe, ecrire) {
+  return el(
+    "section",
+    { classe: "bloc-choisi" },
+    el("h3", {}, bloc.nom),
+    blocDecrit(o, bloc, { avecGroupes: false, ouvertes: true }),
+    groupesDeChoix(o, bloc, choix, prefixe, ecrire, { vignettes: true }),
+  );
 }
 
 // ─── Les étapes ─────────────────────────────────────────────────────────────
@@ -285,50 +331,44 @@ function etapeCaracteristiques(o) {
   ];
 }
 
-// Archétype, espèce, primordial : un bloc à choisir, chacun avec les
-// capacités qu'il donne, décrites ; puis les groupes du bloc choisi.
+// Archétype, espèce, primordial : un bloc à choisir parmi des vignettes,
+// chacune avec son résumé ; sous elles, le bloc choisi, décrit, et ses
+// groupes de choix. Changer de bloc perd les choix du bloc quitté.
 function etapeBloc(o, role, { intitule, aucun }) {
   const blocs = o.index.blocsDeType(role);
   if (!blocs.length) return el("p", { classe: "message" }, aucun);
   const choisi = o.personnage[role];
   const actuel = choisi?.nom ? o.index.bloc(choisi.nom) : null;
+  const avecGroupes = blocs.some((bloc) => capacitesDuBloc(bloc, []).groupes.length > 0);
   return [
-    el(
-      "fieldset",
-      { classe: "groupe-choix" },
-      el("legend", {}, intitule),
+    el("p", { classe: "aide-vignettes" }, avecGroupes ? "Choisissez une vignette : sa description et ses choix s'affichent dessous." : "Choisissez une vignette : sa description s'affiche dessous."),
+    vignettesDesBlocs(
+      intitule,
       blocs.map((bloc, i) => {
         const id = `${role}-${i}`;
-        const estChoisi = actuel?.nom === bloc.nom;
-        return el(
-          "div",
-          { classe: estChoisi ? "choix-bloc choisi" : "choix-bloc" },
-          el(
-            "label",
-            { classe: "choix-option" },
-            el("input", {
-              type: "radio",
-              id,
-              name: role,
-              checked: estChoisi,
-              onchange: () => {
-                if (o.personnage[role]?.nom === bloc.nom) return;
-                o.modifier((q) => { q[role] = { nom: bloc.nom, choix: [] }; }, { refaire: true, focus: id });
-              },
-            }),
-            el("span", {}, el("span", { classe: "choix-nom" }, bloc.nom)),
-          ),
-          // Les groupes du bloc choisi se choisissent plus bas, décrits.
-          blocDecrit(o, bloc, { avecGroupes: !estChoisi }),
-        );
+        return vignette({
+          id,
+          name: role,
+          nom: bloc.nom,
+          choisie: actuel?.nom === bloc.nom,
+          resume: resumeDuBloc(o.index, bloc),
+          onchange: () => {
+            if (o.personnage[role]?.nom === bloc.nom) return;
+            o.modifier((q) => { q[role] = { nom: bloc.nom, choix: [] }; }, { refaire: true, focus: id });
+          },
+        });
       }),
     ),
-    actuel ? groupesDeChoix(o, actuel, choisi.choix, role, (q, choix) => { q[role].choix = choix; }) : null,
+    actuel ? blocChoisi(o, actuel, choisi.choix, role, (q, choix) => { q[role].choix = choix; }) : null,
   ];
 }
 
 // Étape 5 : le tirage se refait à volonté (décision de l'auteur, lot 2 bis),
-// et se compte ; la fiche dit « tirée N fois » ou « saisie à la main ».
+// et se compte ; la fiche dit « tirée N fois » ou « saisie à la main ». Le
+// tirage fait à la table se saisit par les vignettes (lot 4, groupe 2) : en
+// choisir une donne une constellation « saisie à la main » et garde le
+// compte des tirages ; la tirée porte ✓ ; la choisir de nouveau ne change
+// rien.
 function etapeConstellation(o) {
   const constellations = o.index.blocsDeType("constellation");
   if (!constellations.length) return el("p", { classe: "message" }, "La banque ne contient aucune constellation : ni tirage ni saisie n'est possible.");
@@ -347,30 +387,29 @@ function etapeConstellation(o) {
     );
   };
   const bouton = el("button", { type: "button", id: "tirer-constellation", classe: "bouton", onclick: tirer }, actuelle?.obtention === "tirage" ? "Refaire le tirage" : "Tirer au sort");
-  const saisie = el(
-    "select",
-    {
-      id: "constellation-saisie",
-      classe: "champ",
-      onchange: (evenement) => {
-        const nom = evenement.target.value;
-        // « — choisir — » ne défait rien : le compte des tirages resterait
-        // perdu avec la constellation (relecture du lot 2 bis).
-        if (!nom) {
-          o.refaire("constellation-saisie");
-          return;
-        }
-        o.modifier(
-          (q) => {
-            const compte = q.constellation?.tirages ?? 0;
-            q.constellation = nom ? { nom, choix: q.constellation?.nom === nom ? q.constellation.choix : [], obtention: "saisie", tirages: compte } : null;
-          },
-          { refaire: true, focus: "constellation-saisie" },
-        );
-      },
-    },
-    el("option", { value: "", selected: !(actuelle?.obtention === "saisie") }, "— choisir —"),
-    constellations.map((c) => el("option", { value: c.nom, selected: actuelle?.obtention === "saisie" && actuelle.nom === c.nom }, c.nom)),
+  const saisie = vignettesDesBlocs(
+    "Constellation tirée à la table",
+    constellations.map((c, i) => {
+      const id = `constellation-${i}`;
+      return vignette({
+        id,
+        name: "constellation",
+        nom: c.nom,
+        choisie: bloc?.nom === c.nom,
+        resume: resumeDuBloc(o.index, c),
+        onchange: () => {
+          // La constellation déjà choisie, tirée ou saisie, ne change pas.
+          if (o.personnage.constellation?.nom === c.nom) return;
+          o.modifier(
+            (q) => {
+              const compte = q.constellation?.tirages ?? 0;
+              q.constellation = { nom: c.nom, choix: [], obtention: "saisie", tirages: compte };
+            },
+            { refaire: true, focus: id },
+          );
+        },
+      });
+    }),
   );
   const resultat =
     actuelle?.obtention === "tirage"
@@ -386,15 +425,13 @@ function etapeConstellation(o) {
         : null;
   return [
     resultat,
-    bloc ? blocDecrit(o, bloc, { avecGroupes: false }) : null,
-    bloc ? groupesDeChoix(o, bloc, actuelle.choix, "constellation", (q, choix) => { q.constellation.choix = choix; }) : null,
     el("h3", {}, "Tirer au sort"),
     el("p", {}, "L'Atelier tire une constellation parmi celles de la banque. Le tirage se refait autant de fois qu'il le faut ; la fiche dit combien de fois il a été fait."),
     el("div", { classe: "boutons" }, bouton),
     el("h3", {}, "Saisir le tirage fait à la table"),
     el("p", { classe: "secondaire-texte petit" }, "Une constellation saisie est marquée « saisie à la main » sur la fiche."),
-    el("label", { for: "constellation-saisie" }, "Constellation tirée à la table"),
     saisie,
+    bloc ? blocChoisi(o, bloc, actuelle.choix, "constellation", (q, choix) => { q.constellation.choix = choix; }) : null,
   ];
 }
 

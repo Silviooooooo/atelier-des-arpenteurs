@@ -3,7 +3,9 @@
 //
 // « Mes personnages », le parcours de création en neuf étapes et la
 // réception d'un lien. La banque vient du classeur d'essai, fictif ; les
-// personnages vivent dans une étagère en mémoire ; fetch est simulé.
+// personnages vivent dans une étagère en mémoire ; fetch est simulé. Le
+// créateur en vignettes (lot 4, groupe 2, contrat § 12.5) : les résumés,
+// les étapes 3 à 6, la feuille.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -11,7 +13,7 @@ import { readFileSync } from "node:fs";
 import { importerFichier } from "../js/banque/importation.js";
 import { calculerFiche, indexerCreation } from "../js/personnage/calcul.js";
 import { codeDuLien, ecrirePersonnage, nouveauPersonnage } from "../js/personnage/format.js";
-import { MESSAGE_BANQUE_SANS_TYPES, manques, niveauxPermis } from "../js/personnage/parcours.js";
+import { MESSAGE_BANQUE_SANS_TYPES, legendeDuGroupe, manques, niveauxPermis, porteElement, resumeDuBloc } from "../js/personnage/parcours.js";
 import { creerEtagere, magasinPersonnagesMemoire } from "../js/personnage/stockage.js";
 import { el } from "../js/ecrans/dom.js";
 import { boutons, installerDom, laisserFiler, texteDe } from "./outils/dom_simule.js";
@@ -470,64 +472,233 @@ test("parcours — étape 2 : toutes à 2 au départ, + et − de 2 à 6, la som
   }
 });
 
-test("parcours — étapes 3, 4 et 6 : chaque bloc montre ses capacités décrites au niveau 1 ; dépliées sur grand écran, à déplier sur téléphone", async () => {
+// ─── Le créateur en vignettes (lot 4, groupe 2 ; contrat § 12.5) ─────────────
+
+// Les vignettes d'un nœud, celle d'un nom (son label, sans « — capacité à
+// venir »), et ce qu'elles portent.
+const vignettesDe = (noeud) => [...noeud.querySelectorAll(".vignette")];
+const nomDeVignette = (vignette) => texteDe(vignette.querySelector(".vignette-nom")).replace(/ — capacité à venir$/, "");
+const vignetteDe = (noeud, nom) => vignettesDe(noeud).find((v) => nomDeVignette(v) === nom);
+const entreeDe = (vignette) => vignette.querySelector("input");
+const choisies = (noeud) => vignettesDe(noeud).filter((v) => v.className.split(" ").includes("choisie")).map(nomDeVignette);
+const cochees = (noeud) => vignettesDe(noeud).filter((v) => v.querySelector(".vignette-coche")).map(nomDeVignette);
+// Les enfants de l'étape, dans l'ordre : « balise.classe ».
+const ordreDe = (ecran) => ecran.querySelector(".etape").children.map((e) => e.tagName + (e.className ? `.${e.className.split(" ").at(-1)}` : ""));
+const telephone = () => {
+  globalThis.matchMedia = (requete) => ({ matches: requete.includes("max-width") });
+};
+
+test("vignettes — resumeDuBloc : les noms des capacités, puis un mot par groupe ; legendeDuGroupe et porteElement inchangés (§ 12.5)", () => {
+  const bloc = (nom) => INDEX.bloc(nom);
+  assert.equal(resumeDuBloc(INDEX, bloc("Saucier")), "Réduction, Flambage, Dressage minute ; un style, une maîtrise");
+  assert.equal(resumeDuBloc(INDEX, bloc("Marmiton")), "Vif, Nez fin");
+  assert.equal(resumeDuBloc(INDEX, bloc("Grand Four")), "Fournaise ; un choix");
+  assert.equal(resumeDuBloc(INDEX, bloc("Givre éternel")), "Capacités à venir.");
+  // Un bloc fabriqué : les quatre mots, dans l'ordre de ses groupes ; des groupes seuls ; un groupe mêlé est « un choix ».
+  const fabrique = (capacites) => ({ nom: "Bloc fabriqué", capacites });
+  const tout = fabrique([
+    { forme: "simple", nom: "Vif" },
+    { forme: "facultatif", options: ["Glaçage", "Meringue fantôme"] },
+    { forme: "choix", options: ["Solo du chef", "Brigade"] },
+    { forme: "choix", options: ["Maîtrise du lourd", "Maîtrise du précis"] },
+  ]);
+  assert.equal(resumeDuBloc(INDEX, tout), "Vif ; facultatif, un style, une maîtrise");
+  assert.equal(resumeDuBloc(INDEX, fabrique([{ forme: "choix", options: ["Braise", "Cendre"] }, { forme: "facultatif", options: ["Glaçage"] }])), "un choix, facultatif");
+  assert.equal(resumeDuBloc(INDEX, fabrique([{ forme: "choix", options: ["Brigade", "Braise"] }])), "un choix");
+  assert.equal(resumeDuBloc(INDEX, fabrique([])), "Capacités à venir.");
+  // legendeDuGroupe : l'élément quand toutes les options le portent, sinon la forme ; un groupe vide n'a pas d'élément.
+  const groupes = (b) => b.capacites.filter((c) => c.forme !== "simple");
+  assert.deepEqual(groupes(tout).map((g) => legendeDuGroupe(INDEX, g)), ["Facultatif", "Style de combat", "Maîtrise"]);
+  assert.deepEqual(groupes(bloc("Grand Four")).map((g) => legendeDuGroupe(INDEX, g)), ["Au choix"]);
+  assert.equal(legendeDuGroupe(INDEX, { forme: "choix", options: [] }), "Au choix");
+  assert.equal(legendeDuGroupe(INDEX, { forme: "facultatif", options: [] }), "Facultatif");
+  // porteElement : le nom de l'élément comparé par sa clé ; une capacité absente n'en porte aucun.
+  assert.equal(porteElement(INDEX.capacite("Brigade"), "style de combat"), true);
+  assert.equal(porteElement(INDEX.capacite("Brigade"), "Maîtrise"), false);
+  assert.equal(porteElement(INDEX.capacite("Meringue fantôme"), "Style de combat"), false);
+});
+
+test("vignettes — étape 3 : une vignette par bloc sur un bouton radio natif, ✓ cachée aux lecteurs, le bloc décrit dessous, ses choix perdus au changement, le focus rendu", async () => {
+  const retirer = installerDom();
+  try {
+    const contexte = contexteDe();
+    const personnage = await garde(contexte, nouveauPersonnage("demo"));
+    let ecran = await etape(contexte, personnage.id, 3);
+    assert.equal(texteDe(ecran.querySelector(".aide-vignettes")), "Choisissez une vignette : sa description et ses choix s'affichent dessous.");
+    const groupe = ecran.querySelector("fieldset.groupe-vignettes");
+    assert.equal(texteDe(groupe.querySelector("legend")), "Archétype");
+    const noms = INDEX.blocsDeType("archetype").map((b) => b.nom);
+    assert.deepEqual(vignettesDe(groupe.querySelector(".vignettes")).map(nomDeVignette), noms);
+    vignettesDe(groupe).forEach((v, i) => {
+      const entree = entreeDe(v);
+      assert.deepEqual([entree.getAttribute("type"), entree.id, entree.getAttribute("name"), entree.className], ["radio", `archetype-${i}`, "archetype", "vignette-entree"]);
+      assert.equal(v.querySelector("label").getAttribute("for"), entree.id, "le nom est le label de l'entrée");
+      const resume = v.querySelector(".vignette-resume");
+      assert.equal(entree.getAttribute("aria-describedby"), resume.id, "l'entrée désigne son résumé");
+      assert.equal(texteDe(resume), resumeDuBloc(INDEX, INDEX.bloc(noms[i])));
+    });
+    assert.deepEqual([choisies(ecran), cochees(ecran)], [[], []]);
+    assert.equal(ecran.querySelector(".bloc-choisi"), null, "rien dessous tant que rien n'est choisi");
+
+    // Le Saucier choisi : sa vignette porte le cadre et ✓, cachée aux lecteurs d'écran ; le focus revient à sa vignette rendue.
+    const avant = entreeDe(vignetteDe(ecran, "Saucier"));
+    cocher(avant);
+    const saucier = vignetteDe(ecran, "Saucier");
+    assert.deepEqual([choisies(ecran), cochees(ecran)], [["Saucier"], ["Saucier"]]);
+    assert.equal(entreeDe(saucier).checked, true);
+    const coche = saucier.querySelector(".vignette-coche");
+    assert.deepEqual([texteDe(coche), coche.getAttribute("aria-hidden")], ["✓", "true"]);
+    assert.equal(document.activeElement, entreeDe(saucier), "le focus sur la vignette rendue");
+    assert.notEqual(document.activeElement, avant, "pas sur l'ancienne, retirée de la page");
+    assert.ok(ecran.contains(document.activeElement));
+
+    // Dessous : le nom, les capacités décrites (blocDecrit tel quel), puis les groupes, chacun sa légende, sa phrase et ses vignettes.
+    const ordre = ordreDe(ecran);
+    assert.ok(ordre.indexOf("SECTION.bloc-choisi") > ordre.indexOf("FIELDSET.groupe-vignettes"), ordre.join(" "));
+    const dessous = ecran.querySelector(".bloc-choisi");
+    assert.equal(texteDe(dessous.querySelector("h3")), "Saucier");
+    assert.deepEqual([...dessous.querySelectorAll("summary")].map((s) => texteDe(s.querySelector(".capacite-nom"))), ["Réduction", "Flambage", "Dressage minute"]);
+    assert.doesNotMatch(texteDe(dessous), /Au choix, une option :/, "les groupes ne se décrivent pas deux fois");
+    const fieldsets = [...dessous.querySelectorAll("fieldset")];
+    assert.deepEqual(fieldsets.map((f) => texteDe(f.querySelector("legend"))), ["Style de combat", "Maîtrise"]);
+    assert.match(texteDe(fieldsets[0]), /Une option\./);
+    assert.deepEqual(fieldsets.map((f) => vignettesDe(f.querySelector(".vignettes")).length), [2, 2], "les options en grille, sous la phrase");
+    assert.deepEqual(vignettesDe(fieldsets[0]).map(nomDeVignette), ["Solo du chef", "Brigade"]);
+    for (const v of vignettesDe(dessous)) {
+      const entree = entreeDe(v);
+      assert.equal(entree.getAttribute("type"), "radio");
+      assert.match(texteDe(v.querySelector(".vignette-meta")), /^niveau \d+ · \S/);
+      assert.equal(entree.getAttribute("aria-describedby"), v.querySelector(".vignette-texte").id, "l'option désigne sa description");
+      assert.doesNotMatch(texteDe(v.querySelector(".vignette-texte")), /\[N\]/);
+    }
+    assert.deepEqual(entreeDe(vignetteDe(dessous, "Brigade")).id, "archetype-g0-1");
+
+    // Une option choisie : son cadre, ✓, le focus rendu sur elle.
+    cocher(entreeDe(vignetteDe(ecran, "Brigade")));
+    cocher(entreeDe(vignetteDe(ecran, "Maîtrise du lourd")));
+    assert.deepEqual(cochees(ecran), ["Saucier", "Brigade", "Maîtrise du lourd"]);
+    assert.equal(document.activeElement, entreeDe(vignetteDe(ecran, "Maîtrise du lourd")));
+    await laisserFiler(10);
+    assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).archetype, { nom: "Saucier", choix: ["Brigade", "Maîtrise du lourd"] });
+
+    // Un autre bloc : les choix du bloc quitté se perdent.
+    cocher(entreeDe(vignetteDe(ecran, "Pâtissier")));
+    await laisserFiler(10);
+    assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).archetype, { nom: "Pâtissier", choix: [] });
+    assert.deepEqual(cochees(ecran), ["Pâtissier"]);
+    assert.equal(texteDe(ecran.querySelector(".bloc-choisi h3")), "Pâtissier");
+
+    // Un groupe facultatif : des cases à cocher natives ; une option absente de la banque, « à venir », sans description.
+    const banque = structuredClone(BANQUE);
+    banque.blocs.find((b) => b.nom === "Pâtissier").capacites.push({ forme: "facultatif", options: ["Glaçage", "Meringue fantôme"] });
+    const autre = contexteDe({ banque });
+    const brouillon = await garde(autre, personnageEssai((p) => (p.archetype = { nom: "Pâtissier", choix: ["Brigade", "Maîtrise du précis"] })));
+    ecran = await etape(autre, brouillon.id, 3);
+    assert.match(texteDe(vignetteDe(ecran, "Pâtissier").querySelector(".vignette-resume")), /un style, une maîtrise, facultatif$/);
+    const facultatif = [...ecran.querySelector(".bloc-choisi").querySelectorAll("fieldset")].at(-1);
+    assert.equal(texteDe(facultatif.querySelector("legend")), "Facultatif");
+    assert.match(texteDe(facultatif), /Aucune, une ou plusieurs options\./);
+    assert.deepEqual(vignettesDe(facultatif).map((v) => [nomDeVignette(v), entreeDe(v).getAttribute("type"), entreeDe(v).getAttribute("name")]), [
+      ["Glaçage", "checkbox", "archetype-g2"],
+      ["Meringue fantôme", "checkbox", "archetype-g2"],
+    ]);
+    const meringue = vignetteDe(facultatif, "Meringue fantôme");
+    assert.equal(texteDe(meringue.querySelector(".vignette-nom")), "Meringue fantôme — capacité à venir");
+    assert.deepEqual([meringue.querySelector(".vignette-texte"), entreeDe(meringue).getAttribute("aria-describedby")], [null, null]);
+    cocher(entreeDe(vignetteDe(facultatif, "Glaçage")));
+    cocher(entreeDe(vignetteDe(ecran, "Meringue fantôme")));
+    await laisserFiler(10);
+    assert.deepEqual((await autre.etat.etagere.lire(brouillon.id)).archetype.choix, ["Brigade", "Maîtrise du précis", "Glaçage", "Meringue fantôme"]);
+    assert.deepEqual(choisies(ecran.querySelector(".bloc-choisi")), ["Brigade", "Maîtrise du précis", "Glaçage", "Meringue fantôme"]);
+    // Décochée, la case se retire du choix ; le focus reste sur elle.
+    cocher(entreeDe(vignetteDe(ecran, "Glaçage")), false);
+    await laisserFiler(10);
+    assert.deepEqual((await autre.etat.etagere.lire(brouillon.id)).archetype.choix, ["Brigade", "Maîtrise du précis", "Meringue fantôme"]);
+    assert.equal(document.activeElement, entreeDe(vignetteDe(ecran, "Glaçage")));
+  } finally {
+    retirer();
+  }
+});
+
+test("vignettes — étapes 3, 4 et 6 : le bloc choisi décrit au niveau 1, ses descriptions ouvertes, sur téléphone aussi ; celles de l'étape 8 repliées sur téléphone", async () => {
   const retirer = installerDom();
   const avant = globalThis.matchMedia;
   try {
     const contexte = contexteDe();
-    const personnage = await garde(contexte, personnageEssai((p) => (p.caracteristiques.force = 5)));
-    let ecran = await etape(contexte, personnage.id, 3);
-    // Le Saucier est choisi : Réduction, décrite ; ses groupes, plus bas, chacun décrit.
-    const saucier = [...ecran.querySelectorAll(".choix-bloc")].find((b) => texteDe(b).startsWith("Saucier"));
-    assert.ok(saucier.querySelectorAll("details").length >= 3, "les capacités du Saucier");
-    const flambage = [...ecran.querySelectorAll("details")].find((d) => texteDe(d.querySelector("summary")).startsWith("Flambage"));
-    assert.ok(flambage, "Flambage décrite");
-    assert.match(texteDe(flambage.querySelector("summary")), /niveau 1 · /);
-    assert.equal(flambage.getAttribute("open"), "", "grand écran : dépliée");
-    // Un bloc non choisi montre aussi ses groupes, décrits.
-    const patissier = [...ecran.querySelectorAll(".choix-bloc")].find((b) => texteDe(b).startsWith("Pâtissier"));
-    assert.match(texteDe(patissier), /Au choix, une option :/);
-    // Les options du groupe choisi, chacune avec sa description.
-    const style = [...ecran.querySelectorAll("fieldset")].find((f) => texteDe(f.querySelector("legend")) === "Style de combat");
-    assert.equal(style.querySelectorAll(".option-decrite").length, 2);
-    assert.ok(style.querySelectorAll("details").length >= 1);
-    // Aucune expression ne reste entre crochets là où elle se calcule.
-    for (const d of ecran.querySelectorAll(".capacite-texte")) assert.doesNotMatch(texteDe(d), /\[N\]/);
+    const ouvertes = (noeud) => [...noeud.querySelectorAll("details")].map((d) => d.getAttribute("open") !== null);
+    for (const grand of [true, false]) {
+      if (!grand) telephone();
+      const personnage = await garde(contexte, personnageEssai((p) => Object.assign(p, { id: grand ? "AAAAAAAAAAAAAAAAAAAAAA" : "BBBBBBBBBBBBBBBBBBBBBB", caracteristiques: { ...p.caracteristiques, force: 5 } })));
+      let ecran = await etape(contexte, personnage.id, 3);
+      const dessous = ecran.querySelector(".bloc-choisi");
+      const flambage = [...dessous.querySelectorAll("details")].find((d) => texteDe(d.querySelector("summary")).startsWith("Flambage"));
+      assert.match(texteDe(flambage.querySelector("summary")), /niveau 1 · /);
+      assert.deepEqual(ouvertes(dessous), [true, true, true], grand ? "grand écran" : "téléphone");
+      for (const d of ecran.querySelectorAll(".capacite-texte")) assert.doesNotMatch(texteDe(d), /\[N\]/);
 
-    // Le bloc de base décrit à l'étape 8 ; ici, l'espèce et le primordial.
-    ecran = await etape(contexte, personnage.id, 4);
-    assert.ok([...ecran.querySelectorAll(".choix-bloc")].every((b) => b.querySelectorAll("details").length + (/Capacités à venir/.test(texteDe(b)) ? 1 : 0) >= 1));
-    ecran = await etape(contexte, personnage.id, 6);
-    const four = [...ecran.querySelectorAll(".choix-bloc")].find((b) => texteDe(b).startsWith("Grand Four"));
-    assert.ok([...four.querySelectorAll("details")].some((d) => texteDe(d).startsWith("Fournaise")));
-    const givre = [...ecran.querySelectorAll(".choix-bloc")].find((b) => texteDe(b).startsWith("Givre éternel"));
-    assert.match(texteDe(givre), /Capacités à venir/);
+      // L'espèce : aucun bloc n'a de groupe, la phrase d'aide le dit.
+      ecran = await etape(contexte, personnage.id, 4);
+      assert.equal(texteDe(ecran.querySelector(".aide-vignettes")), "Choisissez une vignette : sa description s'affiche dessous.");
+      assert.deepEqual(cochees(ecran), ["Marmiton"]);
+      assert.deepEqual([...ecran.querySelector(".bloc-choisi").querySelectorAll(".capacite-nom")].map(texteDe), ["Vif", "Nez fin"]);
+      assert.ok(ouvertes(ecran).every(Boolean));
+      assert.equal(ecran.querySelector(".bloc-choisi").querySelectorAll("fieldset").length, 0);
 
-    // Sur un téléphone, la description se déplie sous le nom.
-    globalThis.matchMedia = (requete) => ({ matches: requete.includes("max-width") });
-    ecran = await etape(contexte, personnage.id, 3);
-    assert.ok(ecran.querySelectorAll("details").length > 0);
-    assert.ok([...ecran.querySelectorAll("details")].every((d) => d.getAttribute("open") === null), "téléphone : repliées");
+      // Le primordial : un bloc a un groupe, la phrase entière ; le choix « Au choix » en vignettes, la Cendre choisie.
+      ecran = await etape(contexte, personnage.id, 6);
+      assert.equal(texteDe(ecran.querySelector(".aide-vignettes")), "Choisissez une vignette : sa description et ses choix s'affichent dessous.");
+      assert.equal(texteDe(vignetteDe(ecran, "Givre éternel").querySelector(".vignette-resume")), "Capacités à venir.");
+      const four = ecran.querySelector(".bloc-choisi");
+      assert.deepEqual([...four.querySelectorAll(".capacite-nom")].map(texteDe), ["Fournaise"]);
+      assert.ok(ouvertes(four).every(Boolean));
+      assert.equal(texteDe(four.querySelector("legend")), "Au choix");
+      assert.deepEqual([vignettesDe(four).map(nomDeVignette), choisies(four)], [["Braise", "Cendre"], ["Cendre"]]);
+      cocher(entreeDe(vignetteDe(ecran, "Givre éternel")));
+      const givre = ecran.querySelector(".bloc-choisi");
+      assert.deepEqual([...givre.children].map(texteDe), ["Givre éternel", "Capacités à venir."]);
+
+      // L'étape 8 ne change pas : repliée sur téléphone, dépliée sur grand écran.
+      ecran = await etape(contexte, personnage.id, 8);
+      assert.ok(ouvertes(ecran).length > 0);
+      assert.ok(ouvertes(ecran).every((o) => o === grand), grand ? "grand écran : dépliées" : "téléphone : repliées");
+    }
   } finally {
     globalThis.matchMedia = avant;
     retirer();
   }
 });
 
-test("parcours — étape 5 : le tirage se refait à volonté et se compte ; la saisie reste possible", async () => {
+test("parcours — étape 5 : le tirage se refait à volonté et se compte ; la saisie, par les vignettes, garde le compte ; la tirée porte ✓", async () => {
   const retirer = installerDom();
   try {
     const contexte = contexteDe();
     const personnage = await garde(contexte, nouveauPersonnage("demo"));
     let ecran = await etape(contexte, personnage.id, 5);
     assert.match(zoneManques(ecran), /Tirez la constellation au sort/);
+    // Les vignettes remplacent la liste : ni #constellation-saisie, ni « — choisir — ».
+    assert.equal(ecran.querySelector("#constellation-saisie"), null);
+    assert.doesNotMatch(texteDe(ecran), /— choisir —/);
+    const groupe = ecran.querySelector("fieldset.groupe-vignettes");
+    assert.equal(texteDe(groupe.querySelector("legend")), "Constellation tirée à la table");
+    const noms = INDEX.blocsDeType("constellation").map((b) => b.nom);
+    assert.deepEqual(vignettesDe(groupe).map((v) => [nomDeVignette(v), entreeDe(v).id, entreeDe(v).getAttribute("name"), entreeDe(v).getAttribute("type")]), noms.map((nom, i) => [nom, `constellation-${i}`, "constellation", "radio"]));
+    assert.deepEqual(vignettesDe(groupe).map((v) => texteDe(v.querySelector(".vignette-resume"))), ["Cuillère d'argent", "Bouillonnement", "Capacités à venir."]);
+    assert.deepEqual([cochees(ecran), ecran.querySelector(".bloc-choisi")], [[], null]);
+    // Le tirage, puis la saisie : dans cet ordre, sous « Saisir le tirage fait à la table ».
+    const ordre = ordreDe(ecran);
+    assert.ok(ordre.indexOf("FIELDSET.groupe-vignettes") > ordre.lastIndexOf("H3"), ordre.join(" "));
+
     boutons(ecran, "Tirer au sort")[0].click();
     await laisserFiler(10);
     let tiree = (await contexte.etat.etagere.lire(personnage.id)).constellation;
     assert.deepEqual([tiree.obtention, tiree.tirages], ["tirage", 1]);
-    assert.ok(INDEX.blocsDeType("constellation").some((b) => b.nom === tiree.nom));
+    assert.ok(noms.includes(tiree.nom));
     assert.match(texteDe(ecran.querySelector("#constellation-tiree")), /tirée 1 fois/);
     assert.equal(document.activeElement?.id, "constellation-tiree");
+    // La tirée porte ✓, son entrée cochée ; le bloc choisi, dessous.
+    assert.deepEqual([choisies(ecran), cochees(ecran)], [[tiree.nom], [tiree.nom]]);
+    assert.equal(entreeDe(vignetteDe(ecran, tiree.nom)).checked, true);
+    assert.equal(texteDe(ecran.querySelector(".bloc-choisi h3")), tiree.nom);
     // « Refaire le tirage » : un tirage de plus, compté.
     assert.equal(boutons(ecran, "Tirer au sort").length, 0);
     boutons(ecran, "Refaire le tirage")[0].click();
@@ -539,14 +710,28 @@ test("parcours — étape 5 : le tirage se refait à volonté et se compte ; la 
     ecran = await etape(contexte, personnage.id, 5);
     assert.equal(boutons(ecran, "Refaire le tirage").length, 1, "toujours refaisable après un retour à l'étape");
 
-    // La saisie à la main : marquée comme telle ; le compte des tirages reste.
-    saisir(ecran.querySelector("#constellation-saisie"), "Constellation de la Cuillère", "change");
+    // La saisie à la main, par une autre vignette : marquée comme telle ; le compte des tirages reste ; le focus sur elle.
+    const autre = noms.find((nom) => nom !== tiree.nom);
+    cocher(entreeDe(vignetteDe(ecran, autre)));
     await laisserFiler(10);
-    assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).constellation, { nom: "Constellation de la Cuillère", choix: [], obtention: "saisie", tirages: 3 });
-    assert.match(texteDe(ecran), /Constellation saisie à la main : Constellation de la Cuillère/);
+    assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).constellation, { nom: autre, choix: [], obtention: "saisie", tirages: 3 });
+    assert.match(texteDe(ecran), new RegExp(`Constellation saisie à la main : ${autre}`));
+    assert.deepEqual(cochees(ecran), [autre]);
+    assert.equal(document.activeElement, entreeDe(vignetteDe(ecran, autre)));
     boutons(ecran, "Tirer au sort")[0].click();
     await laisserFiler(10);
     assert.equal((await contexte.etat.etagere.lire(personnage.id)).constellation.tirages, 4);
+
+    // Le personnage de démonstration, tiré trois fois : la Cuillère saisie garde ses trois tirages, et se décrit dessous.
+    const demo = await garde(contexte, personnageEssai());
+    ecran = await etape(contexte, demo.id, 5);
+    assert.deepEqual(cochees(ecran), ["Constellation du Sablier"]);
+    cocher(entreeDe(vignetteDe(ecran, "Constellation de la Cuillère")));
+    await laisserFiler(10);
+    assert.deepEqual((await contexte.etat.etagere.lire(demo.id)).constellation, { nom: "Constellation de la Cuillère", choix: [], obtention: "saisie", tirages: 3 });
+    const dessous = ecran.querySelector(".bloc-choisi");
+    assert.equal(texteDe(dessous.querySelector("h3")), "Constellation de la Cuillère");
+    assert.deepEqual([...dessous.querySelectorAll(".capacite-nom")].map(texteDe), ["Cuillère d'argent"]);
   } finally {
     retirer();
   }
@@ -1087,22 +1272,88 @@ test("relecture — étape 8 : après « + », le focus reste sur « + » tant q
   }
 });
 
-test("relecture — étape 5 : « — choisir — » ne défait ni la constellation ni le compte des tirages", async () => {
+test("vignettes — la vignette déjà choisie ne change rien : la constellation tirée reste tirée, l'archétype garde ses choix", async () => {
   const retirer = installerDom();
   try {
     const contexte = contexteDe();
-    const personnage = await garde(contexte, nouveauPersonnage("demo"));
-    const ecran = await etape(contexte, personnage.id, 5);
-    boutons(ecran, "Tirer au sort")[0].click();
-    boutons(ecran, "Refaire le tirage")[0].click();
-    boutons(ecran, "Refaire le tirage")[0].click();
-    saisir(ecran.querySelector("#constellation-saisie"), "Constellation de la Cuillère", "change");
-    saisir(ecran.querySelector("#constellation-saisie"), "", "change");
+    const personnage = await garde(contexte, personnageEssai());
+    const garde1 = await contexte.etat.etagere.lire(personnage.id);
+    let ecran = await etape(contexte, personnage.id, 5);
+    // Un « change » sur la vignette tirée (un navigateur n'en émet pas sur un bouton radio déjà coché ; le clavier, si).
+    entreeDe(vignetteDe(ecran, "Constellation du Sablier")).declencher("change");
     await laisserFiler(10);
-    assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).constellation, { nom: "Constellation de la Cuillère", choix: [], obtention: "saisie", tirages: 3 });
+    const relu = await contexte.etat.etagere.lire(personnage.id);
+    assert.deepEqual(relu.constellation, { nom: "Constellation du Sablier", choix: [], obtention: "tirage", tirages: 3 });
+    assert.equal(relu.modifie_le, garde1.modifie_le, "rien n'est écrit");
+    assert.match(texteDe(ecran.querySelector("#constellation-tiree")), /tirée 3 fois/);
+    // Le compte des tirages survit à une saisie, puis à un retour sur la vignette saisie.
+    cocher(entreeDe(vignetteDe(ecran, "Constellation du Chaudron")));
+    entreeDe(vignetteDe(ecran, "Constellation du Chaudron")).declencher("change");
+    await laisserFiler(10);
+    assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).constellation, { nom: "Constellation du Chaudron", choix: [], obtention: "saisie", tirages: 3 });
     boutons(ecran, "Tirer au sort")[0].click();
     await laisserFiler(10);
     assert.equal((await contexte.etat.etagere.lire(personnage.id)).constellation.tirages, 4);
+
+    // L'archétype déjà choisi : ses choix restent.
+    ecran = await etape(contexte, personnage.id, 3);
+    entreeDe(vignetteDe(ecran, "Saucier")).declencher("change");
+    await laisserFiler(10);
+    assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).archetype, { nom: "Saucier", choix: ["Solo du chef", "Maîtrise de l'agile"] });
+  } finally {
+    retirer();
+  }
+});
+
+test("vignettes — la feuille : 44 px au moins, deux colonnes sur un téléphone, la largeur d'une vignette au-delà de 56rem, le résumé en deux lignes, l'entrée posée sur toute la vignette", () => {
+  const lire = (chemin) => readFileSync(new URL(chemin, RACINE), "utf8");
+  const css = lire("css/ecran.css").replace(/\/\*[\s\S]*?\*\//g, "");
+  const jetons = lire("css/jetons.css");
+  // Le corps d'une règle écrite en début de ligne.
+  const corps = (texte, selecteur) => {
+    const debut = texte.indexOf(`\n${selecteur} {`);
+    assert.notEqual(debut, -1, selecteur);
+    return texte.slice(debut, texte.indexOf("}", debut));
+  };
+  // Le @media (min-width: 56rem) du site, et ses règles ramenées en début de ligne.
+  const debutMedia = css.indexOf("\n@media (min-width: 56rem) {");
+  assert.notEqual(debutMedia, -1, "le @media (min-width: 56rem) du site");
+  const media = css.slice(debutMedia, css.indexOf("\n}", debutMedia));
+  const dansMedia = media.replace(/\n {2}/g, "\n");
+  assert.match(corps(css, ".vignette"), /min-height: var\(--cible-tactile\);/);
+  assert.match(jetons, /--cible-tactile: 44px;/);
+  assert.match(corps(css, ".vignettes"), /display: grid;\s*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  assert.match(corps(dansMedia, ".creation .vignettes"), /grid-template-columns: repeat\(auto-fill, minmax\(var\(--largeur-vignette\), 1fr\)\);/);
+  assert.match(jetons, /--largeur-vignette: 180px;/);
+  // Hors du @media, aucune règle ne donne aux vignettes la largeur du grand écran.
+  assert.doesNotMatch(css.replace(media, ""), /--largeur-vignette/);
+  assert.match(corps(css, ".vignette-resume"), /display: -webkit-box;\s*-webkit-box-orient: vertical;\s*-webkit-line-clamp: 2;\s*overflow: hidden;/);
+  const entree = corps(css, ".vignette-entree");
+  for (const declaration of ["position: absolute;", "inset: 0;", "z-index: 1;", "opacity: 0;"]) assert.ok(entree.includes(declaration), declaration);
+  assert.match(corps(css, ".vignette"), /position: relative;/);
+  assert.match(corps(css, ".vignette.choisie"), /border-color: var\(--accent\);\s*background: var\(--accent-doux\);/);
+  assert.match(corps(css, ".vignette:has(> .vignette-entree:focus-visible)"), /outline: var\(--contour\) solid var\(--accent\);/);
+  assert.match(corps(css, ".vignette-coche"), /position: absolute;\s*top: var\(--espace-2\);\s*right: var\(--espace-3\);/);
+});
+
+test("vignettes — des identifiants uniques aux étapes 3 à 6, et chaque label, chaque aria-describedby désigne un élément de la page", async () => {
+  const retirer = installerDom();
+  try {
+    const contexte = contexteDe();
+    const banque = structuredClone(BANQUE);
+    banque.blocs.find((b) => b.nom === "Saucier").capacites.push({ forme: "facultatif", options: ["Glaçage", "Meringue fantôme"] });
+    const riche = contexteDe({ banque });
+    for (const [ctx, personnage] of [[contexte, nouveauPersonnage("demo")], [contexte, personnageEssai()], [riche, personnageEssai((p) => (p.id = "CCCCCCCCCCCCCCCCCCCCCC"))]]) {
+      await garde(ctx, personnage);
+      for (const n of [3, 4, 5, 6]) {
+        const ecran = await etape(ctx, personnage.id, n);
+        const ids = [...ecran.querySelectorAll("[id]")].map((e) => e.id);
+        assert.deepEqual(ids.filter((id, i) => ids.indexOf(id) !== i), [], `étape ${n}`);
+        assert.ok(vignettesDe(ecran).length > 0, `étape ${n} : des vignettes`);
+        for (const label of ecran.querySelectorAll("label")) assert.ok(ids.includes(label.getAttribute("for")), `étape ${n} : ${texteDe(label)}`);
+        for (const e of ecran.querySelectorAll("[aria-describedby]")) assert.ok(ids.includes(e.getAttribute("aria-describedby")), `étape ${n} : ${e.id}`);
+      }
+    }
   } finally {
     retirer();
   }

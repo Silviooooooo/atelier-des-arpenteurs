@@ -1,8 +1,13 @@
 // Contrôles des coûts du combat (SPECIFICATION.md, § 17 et § 11, domaine
 // « Combat ») : js/combat/offre.js et js/combat/moteur.js. Le paiement d'un
-// geste, « Revenir », la façon que joue d'office un bouton, la part X d'un
-// coût, le lien et ses jauges, les raisons d'un bouton inactif, la portée et
-// les cibles, le déplacement, et le jet prêté.
+// geste, « Revenir », une ligne par façon, la part X d'un coût, le lien et ses
+// jauges, les raisons d'une ligne inactive, la portée et les cibles, le
+// déplacement et la façon que joue sa case d'arrivée, et le jet prêté.
+//
+// Au groupe 2 (complément, § 4.7 ; contrat du groupe, § 6) : il n'y a plus de
+// façon jouée d'office ; chaque puissance a sa ligne, pour un PJ comme pour un
+// adversaire, et la case d'un déplacement fait jouer la plus petite puissance
+// qui l'atteint et se paie.
 //
 // Chaque règle est vue dans les deux sens : avant le premier dé et après, la
 // puissance qu'on peut payer et celle qu'on ne peut pas, la jauge qui suffit
@@ -18,8 +23,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { appliquer, gesteEnCours, ouvrirCombat } from "../js/combat/moteur.js";
-import { arrivees, boutons, cibles, faconsDe, offre, pret, prixDeLEsquive, prixDuGeste, reglages } from "../js/combat/offre.js";
-import { adversaireEssai, ajouterPassif, capaciteEssai, faconEssai, miseEnPlaceEssai, pjEssai } from "./outils/photographies_essai.js";
+import { arrivees, boutons, cibles, faconDeLArrivee, faconsDe, offre, pret, prixDeLEsquive, prixDuGeste, reglages } from "../js/combat/offre.js";
+import { adversaireEssai, ajouterPassif, capaciteEssai, chefDePartieEssai, faconEssai, miseEnPlaceEssai, pjEssai } from "./outils/photographies_essai.js";
 
 // ─── Les outils ─────────────────────────────────────────────────────────────
 
@@ -143,33 +148,37 @@ test("« Revenir » ne dépense rien, et ne se propose plus après le premier d�
   refuse(jouer(pas, CONFIRMER), { type: "revenir" }, "hors_moment", "Aucun geste n'est en cours.");
 });
 
-// ─── Les boutons, et la façon d'office ──────────────────────────────────────
+// ─── Les lignes : une par façon ─────────────────────────────────────────────
 
-test("boutons : un par capacité d'un PJ, dans l'ordre de sa photographie, chacun avec sa façon d'office", () => {
+test("boutons : une ligne par façon d'un PJ, dans l'ordre de sa photographie et de ses façons", () => {
   const depart = contre(AUBEPINE);
   const actif = (indice, facon) => ({ capacite: indice, facon, actif: true, raison: null });
-  // Flambage et Pas chassé ont deux puissances : la plus haute se paie (10 de souffle).
-  assert.deepEqual(boutons(depart, "pj1"), [actif(0, 0), actif(1, 0), actif(2, 1), actif(3, 0), actif(4, 1), actif(5, 0), actif(6, 0), actif(7, 0)]);
+  // Flambage et Pas chassé ont deux puissances : deux lignes chacun, toutes payables (10 de souffle).
+  assert.deepEqual(boutons(depart, "pj1"), [actif(0, 0), actif(1, 0), actif(2, 0), actif(2, 1), actif(3, 0), actif(4, 0), actif(4, 1), actif(5, 0), actif(6, 0), actif(7, 0)]);
   assert.deepEqual(boutons(depart, "pj9"), []);
 });
 
-test("la façon d'office d'un bouton : la plus haute puissance qu'on peut payer ; aucune, la plus basse, et le bouton est inactif", () => {
+test("une ligne par puissance : celle qu'on ne peut pas payer reste, inactive, avec sa raison ; aucune n'est jouée d'office", () => {
   const avecSouffle = (souffle) => contre(pjEssai((champs) => (champs.souffle = souffle)));
   const flambage = (etat) => boutonDe(etat, "pj1", "Flambage");
   const pasChasse = (etat) => boutonDe(etat, "pj1", "Pas chassé");
+  const ligne = (capacite, facon, raison = null) => ({ capacite, facon, actif: raison === null, raison });
 
   // Flambage : [1] 5 de souffle, [2] 10. Pas chassé : [1] gratuit, [2] 1 de souffle.
-  assert.deepEqual(flambage(avecSouffle(10)), [{ capacite: 2, facon: 1, actif: true, raison: null }]);
-  assert.deepEqual(flambage(avecSouffle(9)), [{ capacite: 2, facon: 0, actif: true, raison: null }]);
-  assert.deepEqual(flambage(avecSouffle(5)), [{ capacite: 2, facon: 0, actif: true, raison: null }]);
-  assert.deepEqual(flambage(avecSouffle(4)), [{ capacite: 2, facon: 0, actif: false, raison: "Pas assez de souffle : 5 demandés, 4 restants." }]);
-  assert.deepEqual(pasChasse(avecSouffle(1)), [{ capacite: 4, facon: 1, actif: true, raison: null }]);
-  assert.deepEqual(pasChasse(avecSouffle(0)), [{ capacite: 4, facon: 0, actif: true, raison: null }]);
+  assert.deepEqual(flambage(avecSouffle(10)), [ligne(2, 0), ligne(2, 1)]);
+  assert.deepEqual(flambage(avecSouffle(9)), [ligne(2, 0), ligne(2, 1, "Pas assez de souffle : 10 demandés, 9 restants.")]);
+  assert.deepEqual(flambage(avecSouffle(4)), [ligne(2, 0, "Pas assez de souffle : 5 demandés, 4 restants."), ligne(2, 1, "Pas assez de souffle : 10 demandés, 4 restants.")]);
+  assert.deepEqual(pasChasse(avecSouffle(1)), [ligne(4, 0), ligne(4, 1)]);
+  assert.deepEqual(pasChasse(avecSouffle(0)), [ligne(4, 0), ligne(4, 1, "Pas assez de souffle : 1 demandé, 0 restant.")]);
 
-  // L'événement écrit la façon : la plus haute se joue si elle se paie, et elle seule décide.
+  // L'événement écrit la façon, et elle seule décide : la ligne inactive se refuse avec sa raison.
   const juste = avecSouffle(9);
   refuse(juste, capacite(juste, "pj1", "Flambage", 1), "interdit", "Pas assez de souffle : 10 demandés, 9 restants.");
   assert.equal(gesteEnCours(jouer(juste, capacite(juste, "pj1", "Flambage", 0))).facon, 0);
+  // Chaque ligne active ouvre le geste à sa façon.
+  for (const { capacite: indice, facon } of boutons(juste, "pj1").filter((une) => une.actif)) {
+    assert.equal(gesteEnCours(jouer(juste, { type: "capacite", qui: "pj1", capacite: indice, facon })).facon, facon);
+  }
 });
 
 test("la puissance se change tant que rien n'est payé : parmi celles qu'on peut payer, et le prix suit", () => {
@@ -250,9 +259,10 @@ test("un passif n'a pas de bouton, ni la capacité dont le simulateur tient le r
     champs.capacites.push(capaciteEssai({ nom: "Lever le couvercle", role: "jet_de_defense" }));
   });
   const depart = contre(charge);
+  // Flambage et Pas chassé : une ligne par puissance.
   assert.deepEqual(
     boutons(depart, "pj1").map((bouton) => bouton.capacite),
-    [0, 1, 2, 3, 4, 5, 6, 7],
+    [0, 1, 2, 2, 3, 4, 4, 5, 6, 7],
   );
   for (const nom of ["Costaud", "Guetter", "Lever le pied", "Lever le couvercle"]) {
     assert.deepEqual(boutonDe(depart, "pj1", nom), [], nom);
@@ -265,7 +275,7 @@ test("un passif n'a pas de bouton, ni la capacité dont le simulateur tient le r
   assert.equal(boutonDe(depart, "pj1", "Pas de côté")[0].actif, true);
 });
 
-test("une façon passive ne se joue jamais, même quand la capacité a d'autres façons", () => {
+test("une façon passive ne se joue jamais, et n'a pas de ligne, même quand la capacité a d'autres façons", () => {
   // Flambage : la puissance [1] est passive, la [2] se joue.
   const mixte = (souffle) =>
     contre(
@@ -284,9 +294,9 @@ test("une façon passive ne se joue jamais, même quand la capacité a d'autres 
   const ouvert = jouer(depart, capacite(depart, "pj1", "Flambage", 1));
   assert.deepEqual(reglages(ouvert).facon.options, [1]);
   refuse(ouvert, regler("facon", 0), "interdit", "Passif à cette puissance.");
-  // Faute de pouvoir payer la [2], le bouton la garde, inactif : la façon passive n'est jamais celle d'office.
+  // Faute de pouvoir payer la [2], sa ligne reste, inactive : la façon passive n'en a toujours pas.
   assert.deepEqual(boutonDe(mixte(9), "pj1", "Flambage"), [{ capacite: 2, facon: 1, actif: false, raison: "Pas assez de souffle : 10 demandés, 9 restants." }]);
-  // Passive à la plus haute puissance : le bouton joue la [1].
+  // Passive à la plus haute puissance : seule la [1] a sa ligne.
   const haute = contre(pjEssai((champs) => (champs.capacites[2].facons[1].passif = true)));
   assert.deepEqual(boutonDe(haute, "pj1", "Flambage"), [{ capacite: 2, facon: 0, actif: true, raison: null }]);
 });
@@ -637,6 +647,74 @@ test("un adversaire se déplace à son rang, s'il en a la capacité ; sans elle,
   );
 });
 
+// Groupe 2 (complément, § 4.7 ; contrat du groupe, § 6.2, vue 4).
+test("la case d'arrivée fait jouer la plus petite puissance qui l'atteint et se paie : le Chef qui avance d'une case depuis [2] joue [1]", () => {
+  // Le Chef de partie, au rang 2 : Pas chassé [1] gratuit, [2] 1 souffle ; une ligne chacune.
+  const depart = combat(
+    [
+      { photo: AUBEPINE, case: "A1" },
+      { photo: chefDePartieEssai(), case: "D4" },
+    ],
+    { quiCommence: "adv" },
+  );
+  const pas = indiceDe(depart, "adv2", "Pas chassé");
+  assert.deepEqual(boutonDe(depart, "adv2", "Pas chassé"), [
+    { capacite: pas, facon: 0, actif: true, raison: null },
+    { capacite: pas, facon: 1, actif: true, raison: null },
+  ]);
+  const depuisDeux = jouer(depart, capacite(depart, "adv2", "Pas chassé", 1));
+  assert.equal(arrivees(depuisDeux).length, 24, "la ligne [2] marque les cases de 1 à 2");
+  assert.equal(faconDeLArrivee(depuisDeux, "E5"), 0, "à une case : la [1], gratuite");
+  assert.equal(faconDeLArrivee(depuisDeux, "F6"), 1, "à deux cases : la [2] seule");
+  // Hors d'atteinte : sa propre case, trois cases, une case qui n'existe pas.
+  for (const loin of ["D4", "G4", "K4"]) assert.equal(faconDeLArrivee(depuisDeux, loin), null, loin);
+  // Depuis la ligne [1], la case à deux cases se joue aussi, à la [2].
+  const depuisUn = jouer(depart, capacite(depart, "adv2", "Pas chassé", 0));
+  assert.equal(faconDeLArrivee(depuisUn, "E5"), 0);
+  assert.equal(faconDeLArrivee(depuisUn, "F6"), 1);
+  // Les deux événements de la case : la façon, puis l'arrivée. Le journal écrit la puissance jouée, sans souffle.
+  const arrive = jouer(depuisDeux, regler("facon", 0), regler("arrivee", "E5"), CONFIRMER);
+  assert.equal(arrive.protagonistes.adv2.case, "E5");
+  assert.equal(arrive.protagonistes.adv2.souffle, 7);
+  assert.match(derniereLigne(arrive), /: Pas chassé \[1\], D4 → E5\.$/);
+  // Hors d'un déplacement en préparation : null, même pour une attaque de puissance 1, à une case.
+  assert.equal(faconDeLArrivee(depart, "E5"), null);
+  assert.equal(faconDeLArrivee(jouer(depart, capacite(depart, "adv2", "Moulinet farineux")), "E5"), null);
+});
+
+test("la case d'arrivée : une puissance qu'on ne peut pas payer ne se joue pas, ni une façon d'une autre arme", () => {
+  // Pas chassé : [1] coûte 2 de souffle, [2] 1 ; Aubépine n'en a qu'un. Une [1] de plus vient du couteau.
+  const retouche = (champs) => {
+    champs.souffle = 1;
+    const pasChasse = champs.capacites[4];
+    pasChasse.facons[0].cout = { souffle: 2, lien: 0 };
+    pasChasse.facons.push(faconEssai({ puissance: 1, arme: 0, libelle: "Couteau d'office", description: "Se déplace de 1 cases." }));
+  };
+  const depart = contre(pjEssai(retouche));
+  assert.deepEqual(
+    boutonDe(depart, "pj1", "Pas chassé").map(({ facon, actif }) => [facon, actif]),
+    [
+      [0, false],
+      [1, true],
+      [2, true],
+    ],
+  );
+  const depuisDeux = jouer(depart, capacite(depart, "pj1", "Pas chassé", 1));
+  assert.equal(faconDeLArrivee(depuisDeux, "E5"), 1, "la [1] ne se paie pas, et celle du couteau n'est pas de la même arme : la [2]");
+  // Depuis la façon du couteau, elle seule est de son arme.
+  const duCouteau = jouer(depart, capacite(depart, "pj1", "Pas chassé", 2));
+  assert.equal(faconDeLArrivee(duCouteau, "E5"), 2);
+  assert.equal(faconDeLArrivee(duCouteau, "F6"), null);
+  // Avec deux de souffle, la [1] se paie : c'est elle.
+  const riche = contre(
+    pjEssai((champs) => {
+      retouche(champs);
+      champs.souffle = 2;
+    }),
+  );
+  assert.equal(faconDeLArrivee(jouer(riche, capacite(riche, "pj1", "Pas chassé", 1)), "E5"), 0);
+});
+
 // Relecture de fin de groupe (lot 4) : une capacité de déplacement qui
 // n'évolue pas se joue à la puissance 0. Son bouton, actif, ouvrait un geste
 // sans aucune case d'arrivée, dont on ne sortait que par « Revenir ».
@@ -664,9 +742,9 @@ test("un déplacement à la puissance 0 n'offre aucune case : son bouton est ina
   assert.deepEqual(boutonDe(fige, "adv2", "Pas chassé").map(({ actif, raison }) => [actif, raison]), [[false, "aucune case à sa portée"]]);
   refuse(fige, capacite(fige, "adv2", "Pas chassé"), "interdit", "aucune case à sa portée");
 
-  // Le voisin : à la puissance 1, le même bouton est actif, et mène à huit cases.
+  // Le voisin : aux puissances 1 et 2, les mêmes lignes sont actives ; la [1] mène à huit cases.
   const mobile = contre(AUBEPINE);
-  assert.deepEqual(boutonDe(mobile, "pj1", "Pas chassé").map(({ actif, raison }) => [actif, raison]), [[true, null]]);
+  assert.deepEqual(boutonDe(mobile, "pj1", "Pas chassé").map(({ actif, raison }) => [actif, raison]), [[true, null], [true, null]]);
   assert.equal(arrivees(jouer(mobile, capacite(mobile, "pj1", "Pas chassé", 0))).length, 8);
   // Une autre capacité à la puissance 0 n'est pas un déplacement : elle se joue.
   assert.equal(boutonDe(mobile, "pj1", "Goûter")[0].actif, true);
@@ -676,7 +754,12 @@ test("un déplacement à la puissance 0 n'offre aucune case : son bouton est ina
 
 test("le jet prêté d'un PJ est celui de son arme tenue : son dé, sa portée, ses dégâts sur demande, sans désavantage de maîtrise", () => {
   // Flambage, hors maîtrise si c'était une attaque : le jet prêté n'en tient pas compte.
-  const depart = contre(pjEssai((champs) => (champs.capacites[2].facons[0].desavantage = true)));
+  const depart = contre(
+    pjEssai((champs) => {
+      champs.capacites[2].facons[0].desavantage = true;
+      champs.capacites[2].facons[0].maitrise = { origine: "Couteau d'office", poids: "precise" };
+    }),
+  );
   const ouvert = jouer(depart, capacite(depart, "pj1", "Flambage"));
   assert.deepEqual(reglages(ouvert).jet_prete, { valeur: false, options: [false, true] });
   assert.equal(offre(ouvert).de, null);
@@ -743,7 +826,7 @@ test("sans arme tenue, un PJ prête le jet de ses mains nues : un dé au choix, 
 test("le jet prêté d'un adversaire : sa première arme, sans avantage de maîtrise pour le PJ ; « sans arme » pour celui qui n'en a aucune", () => {
   // Humer, une capacité sans jet que sa façon dit hors maîtrise.
   const humeur = adversaireEssai((champs) => {
-    champs.capacites.push(capaciteEssai({ nom: "Humer", groupe: CAPACITES, facons: [faconEssai({ desavantage: true })] }));
+    champs.capacites.push(capaciteEssai({ nom: "Humer", groupe: CAPACITES, facons: [faconEssai({ desavantage: true, maitrise: { origine: "Spatule souple", poids: "agile" } })] }));
   });
   const depart = adverse(humeur);
   const prete = jouer(depart, capacite(depart, "adv2", "Humer"), regler("jet_prete", true));

@@ -28,6 +28,7 @@
 //
 // Un geste :
 //   { finDeTour: true }                « Fin de tour », par le bouton
+//   { annuler: true }                  « Annuler le dernier geste »
 //   { qui, passe: true }               « Passer son tour »
 //   { qui, joue, … }                   une capacité, par son nom
 // « qui », « contre » et « sur » sont des noms courts, ceux du journal. Une
@@ -35,8 +36,16 @@
 //
 // Les champs d'une capacité jouée :
 //   puissance, arme      la façon : sa puissance, ou le libellé de l'arme qui
-//                        la donne ; sans eux, celle que porte son bouton
+//                        la donne. Sans puissance, un adversaire ne joue que
+//                        ses façons de puissance égale à son rang (contrat du
+//                        groupe 2, § 5.7) ; sans l'une ni l'autre, un PJ joue
+//                        la façon d'office du groupe 1, gardée ici comme
+//                        convention de lecture : la plus haute puissance
+//                        qu'il peut payer, sinon la plus basse
 //   contre, sur          la cible : un adversaire ; un allié ou soi
+//   defense              après la cible : le type d'armure du jet de défense
+//                        du PJ visé, à égalité de dés (« lourde », « agile »,
+//                        « precise »)
 //   sansCible            vrai : aucune cible
 //   vers                 la case d'arrivée d'un déplacement
 //   pret                 vrai, ou le libellé d'une arme : « Jet d'attaque »
@@ -61,6 +70,7 @@ import { REGLES } from "../../js/combat/regles.js";
 
 const CHAMPS_D_UN_GESTE = [
   "finDeTour",
+  "annuler",
   "qui",
   "passe",
   "joue",
@@ -68,6 +78,7 @@ const CHAMPS_D_UN_GESTE = [
   "arme",
   "contre",
   "sur",
+  "defense",
   "sansCible",
   "vers",
   "pret",
@@ -130,24 +141,37 @@ function mettreEnPlace(scenario, photos) {
 
 // ─── Un geste ───────────────────────────────────────────────────────────────
 
+// La façon d'office d'un PJ, celle du groupe 1 (règle de lecture d'un
+// scénario, non du simulateur, qui n'en a plus) : parmi ses lignes, la plus
+// haute puissance qu'il peut payer ; s'il n'en peut payer aucune, la plus
+// basse.
+function faconDOffice(facons, lignes) {
+  const puissance = (ligne) => facons[ligne.facon].puissance;
+  const payables = lignes.filter((ligne) => ligne.actif);
+  if (payables.length > 0) return payables.reduce((haute, ligne) => (puissance(ligne) > puissance(haute) ? ligne : haute));
+  return lignes.reduce((basse, ligne) => (puissance(ligne) < puissance(basse) ? ligne : basse));
+}
+
 // La capacité que nomme le scénario, et la façon de la jouer.
 function designer(etat, qui, ecrit, quoi) {
   const { capacites } = etat.photos[qui];
   const capacite = capacites.findIndex(({ nom }) => nom === ecrit.joue);
   if (capacite === -1) echouer(quoi, `${etat.noms[qui].court} n'a pas de capacité « ${ecrit.joue} ».`);
+  const { facons, niveau: rang } = capacites[capacite];
+  const adversaire = etat.protagonistes[qui].camp !== "pj";
 
   if (ecrit.puissance === undefined && ecrit.arme === undefined) {
-    const lesSiens = boutons(etat, qui).filter((bouton) => bouton.capacite === capacite);
-    if (lesSiens.length !== 1 || lesSiens[0].facon === null) {
-      echouer(quoi, `« ${ecrit.joue} » a ${lesSiens.length} bouton(s) jouable(s) : précisez « puissance » ou « arme ».`);
+    // Ses lignes : un adversaire n'y prend que celles de son rang.
+    const lesSiennes = boutons(etat, qui).filter((ligne) => ligne.capacite === capacite && (!adversaire || ligne.facon === null || facons[ligne.facon].puissance === rang));
+    if (lesSiennes.length === 0 || lesSiennes[0].facon === null || (adversaire && lesSiennes.length > 1)) {
+      echouer(quoi, `« ${ecrit.joue} » a ${lesSiennes.length} bouton(s) jouable(s) : précisez « puissance » ou « arme ».`);
     }
-    return { capacite, facon: lesSiens[0].facon };
+    return { capacite, facon: adversaire ? lesSiennes[0].facon : faconDOffice(facons, lesSiennes).facon };
   }
-  const facons = capacites[capacite].facons
-    .map((facon, indice) => ({ facon, indice }))
-    .filter(({ facon }) => (ecrit.puissance === undefined || facon.puissance === ecrit.puissance) && (ecrit.arme === undefined || facon.libelle === ecrit.arme));
-  if (facons.length !== 1) echouer(quoi, `${facons.length} façon(s) de « ${ecrit.joue} » répondent à la puissance et à l'arme écrites.`);
-  return { capacite, facon: facons[0].indice };
+  const puissanceLue = (facon) => (ecrit.puissance === undefined ? !adversaire || facon.puissance === rang : facon.puissance === ecrit.puissance);
+  const trouvees = facons.map((facon, indice) => ({ facon, indice })).filter(({ facon }) => puissanceLue(facon) && (ecrit.arme === undefined || facon.libelle === ecrit.arme));
+  if (trouvees.length !== 1) echouer(quoi, `${trouvees.length} façon(s) de « ${ecrit.joue} » répondent à la puissance et à l'arme écrites.`);
+  return { capacite, facon: trouvees[0].indice };
 }
 
 // Les dés d'une liste, pris dans l'ordre : il en manque un, le geste lève.
@@ -196,6 +220,8 @@ function regler(partie, qui, ecrit, quoi) {
     if (campDe(cible) !== campDe(qui)) echouer(quoi, `« sur » vise un allié ou soi, et ${ecrit.sur} est de l'autre camp : écrivez « contre ».`);
     jouer({ type: "regler", champ: "cible", valeur: cible });
   }
+  // Après la cible, qui la remet au défaut.
+  if (ecrit.defense !== undefined) jouer({ type: "regler", champ: "defense", valeur: ecrit.defense });
 
   if (ecrit.vers !== undefined) jouer({ type: "regler", champ: "arrivee", valeur: ecrit.vers });
   if (ecrit.caracteristiques !== undefined) jouer({ type: "regler", champ: "caracteristiques", valeur: ecrit.caracteristiques });
@@ -293,6 +319,10 @@ function jouerUnGeste(partie, ecrit, quoi, desPermis) {
     partie.jouer({ type: "fin_de_tour" });
     return true;
   }
+  if (ecrit.annuler) {
+    partie.jouer({ type: "annuler" });
+    return true;
+  }
   if (ecrit.passe) {
     partie.jouer({ type: "passer", qui: parNomCourt(partie.etat, ecrit.qui, quoi) });
     return true;
@@ -347,7 +377,8 @@ export function versContenu(scenario, photos, { jusqua } = {}) {
 
   partie.jouer({ type: "lancer", le: scenario.lanceLe });
   const arret = lireLArret(jusqua, scenario.gestes.length);
-  const nommer = (rang, ecrit) => `Geste n° ${rang + 1} (${[ecrit.qui, ecrit.joue ?? (ecrit.passe ? "passe" : ecrit.finDeTour ? "fin de tour" : null)].filter(Boolean).join(", ")})`;
+  const genre = (ecrit) => (ecrit.passe ? "passe" : ecrit.finDeTour ? "fin de tour" : ecrit.annuler ? "annuler" : null);
+  const nommer = (rang, ecrit) => `Geste n° ${rang + 1} (${[ecrit.qui, ecrit.joue ?? genre(ecrit)].filter(Boolean).join(", ")})`;
 
   for (let rang = 0; rang < arret.entiers; rang += 1) {
     quoi = nommer(rang, scenario.gestes[rang]);

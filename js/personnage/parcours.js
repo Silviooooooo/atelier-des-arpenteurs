@@ -3,11 +3,13 @@
 // Neuf étapes, un brouillon enregistré à chaque pas, et toujours un message
 // qui dit ce qui manque. Ce module ne touche pas à la page : il dit ce qui
 // manque à chaque étape, quelles montées sont possibles, et tire la
-// constellation.
+// constellation. Le lot 4, groupe 2 (contrat § 12.5) : il nomme aussi les
+// groupes de choix d'un bloc et résume un bloc pour sa vignette.
 
+import { cle } from "../banque/noms.js";
 import { TYPES, banqueSansTypes, typeDe } from "../banque/types.js";
 import { calculerFiche, capacitesDuBloc, estBouclier, indexerCreation } from "./calcul.js";
-import { CARACTERISTIQUES, CARACTERISTIQUE_MAX, CARACTERISTIQUE_MIN, COUT_NIVEAU, POINTS_CREATION, SOMME_CARACTERISTIQUES } from "./regles.js";
+import { CARACTERISTIQUES, CARACTERISTIQUE_MAX, CARACTERISTIQUE_MIN, COUT_NIVEAU, ELEMENTS, POINTS_CREATION, SOMME_CARACTERISTIQUES } from "./regles.js";
 
 export const ETAPES = [
   { numero: 1, cle: "identite", titre: "Identité" },
@@ -26,6 +28,44 @@ export const MESSAGE_BANQUE_SANS_TYPES = "Le créateur a besoin d'une banque rep
 /** Vrai quand la banque convient au créateur ; sinon le message du § 15.3. */
 export function banqueUtilisable(banque) {
   return banqueSansTypes(banque) ? { erreur: MESSAGE_BANQUE_SANS_TYPES } : { ok: true };
+}
+
+// ─── Les groupes de choix et le résumé d'un bloc ────────────────────────────
+
+/**
+ * Une capacité porte l'élément si l'une de ses variantes l'a parmi ses
+ * éléments propres (convention du lot 2 pour styles et maîtrises, § 12).
+ */
+export function porteElement(capacite, nomElement) {
+  return Boolean(capacite?.variantes.some((v) => v.elements.some((e) => e.nom && cle(e.nom) === cle(nomElement))));
+}
+
+/**
+ * L'intitulé d'un groupe de choix : « Style de combat » ou « Maîtrise »
+ * quand toutes ses options portent cet élément, sinon « Au choix » ou
+ * « Facultatif », selon sa forme.
+ */
+export function legendeDuGroupe(index, groupe) {
+  const toutes = (nomElement) => groupe.options.length > 0 && groupe.options.every((option) => porteElement(index.capacite(option), nomElement));
+  if (toutes(ELEMENTS.style)) return ELEMENTS.style;
+  if (toutes(ELEMENTS.maitrise)) return ELEMENTS.maitrise;
+  return groupe.forme === "choix" ? "Au choix" : "Facultatif";
+}
+
+// Un mot par groupe, dans le résumé d'une vignette (complément du lot 4,
+// groupe 2, § 7).
+const MOT_DU_GROUPE = { [ELEMENTS.style]: "un style", [ELEMENTS.maitrise]: "une maîtrise", "Au choix": "un choix", Facultatif: "facultatif" };
+
+/**
+ * Le résumé d'un bloc, sur sa vignette : les noms de ses capacités séparés
+ * par « , », puis « ; » et un mot par groupe ; « Capacités à venir. » pour
+ * un bloc qui ne donne rien.
+ */
+export function resumeDuBloc(index, bloc) {
+  const { capacites, groupes } = capacitesDuBloc(bloc, []);
+  const noms = capacites.map((c) => c.nom).join(", ");
+  const mots = groupes.map((g) => MOT_DU_GROUPE[legendeDuGroupe(index, g)]).join(", ");
+  return [noms, mots].filter(Boolean).join(" ; ") || "Capacités à venir.";
 }
 
 function manquesDuBloc(index, choix, type, intitule) {

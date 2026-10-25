@@ -15,16 +15,25 @@
 // Les protagonistes sont ceux de tests/outils/photographies_essai.js :
 // « Aubépine » (pj1) et « Marmiton » (adv2), aux valeurs rondes. Le dé
 // d'Aubépine est un d8, la défense du Marmiton vaut 5, son attaque 4.
+//
+// Au groupe 2 (contrat du groupe, § 2, § 4, § 5.4) : l'événement « annuler »
+// entre dans la table, le plafond passe à 15 000 événements, le rejeu rend la
+// main par tranches, le journal n'est recopié qu'une fois par événement, et le
+// PJ visé par un adversaire choisit le type de sa défense à égalité de dés.
+// La pile d'annulation ne passe jamais par JSON : les états entiers se
+// comparent sans elle (ses contrôles sont dans combat_annulation.test.js), et
+// les lignes du journal par leur genre et leur texte (leurs segments ont les
+// leurs, dans combat_segments.test.js).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { appliquer, gesteEnCours, ouvrirCombat, rejouer } from "../js/combat/moteur.js";
+import { appliquer, gesteEnCours, ouvrirCombat, rejeu, rejouer } from "../js/combat/moteur.js";
 import * as moteur from "../js/combat/moteur.js";
 import * as porte from "../js/combat/offre.js";
 import { accepte, offre } from "../js/combat/offre.js";
 import { peutLancer } from "../js/combat/preparation.js";
-import { EVENEMENTS_MAX, REGLES } from "../js/combat/regles.js";
+import { EVENEMENTS_MAX, REGLES, REJEU_TRANCHE, SANS_ANNULATION } from "../js/combat/regles.js";
 import * as valeurs from "../js/combat/valeurs.js";
 import { casesDOffice, journalAttendu, scenario } from "./outils/combat_reference.js";
 import { adversaireEssai, aubepineEssai, capaciteEssai, chefDePartieEssai, etatEssai, faconEssai, marmitonDeCorveeEssai, miseEnPlaceEssai, pjEssai } from "./outils/photographies_essai.js";
@@ -79,6 +88,12 @@ const APPLIQUER = { type: "appliquer" };
 const dernier = (liste) => liste[liste.length - 1];
 // La ligne du dernier geste fini : une fin de tour automatique peut la suivre.
 const derniereLigne = (etat) => etat.journal.findLast((ligne) => ligne.genre === "geste").texte;
+// Une ligne telle que le groupe 1 la comparait : son genre, son texte, sa mort.
+const lue = ({ genre, texte, mort }) => (mort === undefined ? { genre, texte } : { genre, texte, mort });
+// Un état entier, tel qu'il se compare : sans sa pile d'annulation, et ses
+// lignes par leur genre et leur texte.
+const comparable = ({ annulation, ...reste }) => ({ ...reste, journal: reste.journal.map(lue) });
+const sansAnnulation = ({ annulation, ...reste }) => reste;
 
 function estGele(valeur) {
   if (valeur === null || typeof valeur !== "object") return true;
@@ -115,24 +130,28 @@ function temoins() {
 
   const termine = jouer(bilan, { type: "degats", base: "lettre", operations: [{ op: "ajuster", valeur: 999, raison: "Dernier service" }], nature: "corps" }, d20(5), APPLIQUER);
 
+  // « annuler » est de toutes les colonnes d'un combat lancé ; aucun geste
+  // n'y est encore fini, sauf dans le combat terminé : il y est inactif, et
+  // dit pourquoi.
+  const rien = { annuler: "Rien à annuler depuis le lancement." };
   return {
     avant: { etat: avant, admis: ["lancer"] },
-    sans_geste: { etat: sansGeste, admis: ["capacite", "passer", "fin_de_tour"] },
-    "preparation, une attaque prête": { etat: prete, admis: ["capacite", "regler", "revenir", "de", "passer", "fin_de_tour"], de: d8(4) },
-    "preparation, une capacité sans jet": { etat: sansJet, admis: ["capacite", "regler", "revenir", "confirmer", "passer", "fin_de_tour"] },
-    "jet, un dé attendu": { etat: jet, admis: ["de"], de: d8(4) },
-    "jet, relancer ou garder": { etat: choixRelance, admis: ["relancer", "garder"] },
-    "jet, le dé de la relance": { etat: jouer(choixRelance, { type: "relancer" }), admis: ["de"], de: d8(4) },
-    "jet, faire exploser": { etat: choixExplosion, admis: ["exploser"] },
-    "jet, le dé de l'explosion": { etat: jouer(choixExplosion, { type: "exploser" }), admis: ["de"], de: d8(4) },
-    bilan: { etat: bilan, admis: ["de", "degats"], de: d20(5) },
-    localisation: { etat: localisation, admis: ["de"], de: d20(6) },
-    suites: { etat: suites, admis: ["decaler", "esquive", "appliquer"] },
-    termine: { etat: termine, admis: [] },
+    sans_geste: { etat: sansGeste, admis: ["capacite", "passer", "fin_de_tour"], inactifs: rien },
+    "preparation, une attaque prête": { etat: prete, admis: ["capacite", "regler", "revenir", "de", "passer", "fin_de_tour"], de: d8(4), inactifs: rien },
+    "preparation, une capacité sans jet": { etat: sansJet, admis: ["capacite", "regler", "revenir", "confirmer", "passer", "fin_de_tour"], inactifs: rien },
+    "jet, un dé attendu": { etat: jet, admis: ["de"], de: d8(4), inactifs: rien },
+    "jet, relancer ou garder": { etat: choixRelance, admis: ["relancer", "garder"], inactifs: rien },
+    "jet, le dé de la relance": { etat: jouer(choixRelance, { type: "relancer" }), admis: ["de"], de: d8(4), inactifs: rien },
+    "jet, faire exploser": { etat: choixExplosion, admis: ["exploser"], inactifs: rien },
+    "jet, le dé de l'explosion": { etat: jouer(choixExplosion, { type: "exploser" }), admis: ["de"], de: d8(4), inactifs: rien },
+    bilan: { etat: bilan, admis: ["de", "degats"], de: d20(5), inactifs: rien },
+    localisation: { etat: localisation, admis: ["de"], de: d20(6), inactifs: rien },
+    suites: { etat: suites, admis: ["decaler", "esquive", "appliquer"], inactifs: rien },
+    termine: { etat: termine, admis: ["annuler"] },
   };
 }
 
-const TYPES = ["lancer", "capacite", "regler", "revenir", "confirmer", "de", "relancer", "garder", "exploser", "degats", "decaler", "esquive", "appliquer", "passer", "fin_de_tour"];
+const TYPES = ["lancer", "capacite", "regler", "revenir", "confirmer", "de", "relancer", "garder", "exploser", "degats", "decaler", "esquive", "appliquer", "passer", "fin_de_tour", "annuler"];
 
 // Un événement bien fait de chaque type : dans sa colonne il est accepté ;
 // ailleurs, seul le moment le fait refuser.
@@ -152,6 +171,7 @@ const ECHANTILLONS = {
   appliquer: APPLIQUER,
   passer: { type: "passer", qui: "pj1" },
   fin_de_tour: { type: "fin_de_tour" },
+  annuler: { type: "annuler" },
 };
 
 // ─── La table ───────────────────────────────────────────────────────────────
@@ -159,6 +179,7 @@ const ECHANTILLONS = {
 test("la table des événements : dans chaque colonne, chaque type est accepté ou refusé comme elle le dit", () => {
   let acceptes = 0;
   let refuses = 0;
+  let inactifs = 0;
   for (const [colonne, temoin] of Object.entries(temoins())) {
     for (const type of TYPES) {
       const evenement = type === "de" && temoin.de ? temoin.de : ECHANTILLONS[type];
@@ -168,6 +189,11 @@ test("la table des événements : dans chaque colonne, chaque type est accepté 
         assert.notEqual(rendu.etat, temoin.etat, `${colonne} : « ${type} » rend un état neuf`);
         assert.equal(rendu.etat.pas, temoin.etat.pas + 1, `${colonne} : « ${type} » compte pour un pas`);
         acceptes += 1;
+      } else if (Object.hasOwn(temoin.inactifs ?? {}, type)) {
+        // De la colonne, mais inactif : le refus dit sa raison.
+        assert.deepEqual(rendu.refus, { code: "interdit", message: temoin.inactifs[type] }, `${colonne} : « ${type} »`);
+        assert.equal(rendu.etat, temoin.etat);
+        inactifs += 1;
       } else {
         assert.equal(rendu.refus?.code, "hors_moment", `${colonne} : « ${type} » aurait dû être refusé pour son moment (${JSON.stringify(rendu.refus)})`);
         assert.equal(rendu.etat, temoin.etat, `${colonne} : « ${type} » refusé rend l'état reçu`);
@@ -175,9 +201,10 @@ test("la table des événements : dans chaque colonne, chaque type est accepté 
       }
     }
   }
-  // La table entière : treize témoins, quinze types.
-  assert.equal(acceptes + refuses, 13 * 15);
-  assert.equal(acceptes, 1 + 3 + 6 + 6 + 1 + 2 + 1 + 1 + 1 + 2 + 1 + 3 + 0);
+  // La table entière : treize témoins, seize types.
+  assert.equal(acceptes + inactifs + refuses, 13 * 16);
+  assert.equal(acceptes, 1 + 3 + 6 + 6 + 1 + 2 + 1 + 1 + 1 + 2 + 1 + 3 + 1);
+  assert.equal(inactifs, 11, "« annuler », dans chaque colonne d'un combat lancé où rien n'est à annuler");
 });
 
 test("l'offre nomme, dans chaque colonne, les types qu'elle accepte, et eux seuls", () => {
@@ -265,8 +292,10 @@ test("appliquer ne lève jamais, quoi qu'on lui donne pour événement", () => {
 
 test("l'événement de trop : au dernier pas permis, tout événement est refusé, même mal fait", () => {
   const mep = miseEnPlaceEssai(surD4(AUBEPINE, MARMITON));
+  // 15 000, chiffre de l'auteur (25/10/2026), écrit avec une espace ordinaire.
+  assert.equal(EVENEMENTS_MAX, 15000);
   const plein = etatEssai(mep, { retoucher: (etat) => (etat.pas = EVENEMENTS_MAX) });
-  const phrase = "Ce combat a atteint 5 000 événements : commencez-en un nouveau.";
+  const phrase = "Ce combat a atteint 15 000 événements : commencez-en un nouveau.";
   for (const evenement of [...Object.values(ECHANTILLONS), null, { type: "danser" }]) {
     const rendu = appliquer(plein, evenement);
     assert.equal(rendu.etat, plein);
@@ -281,23 +310,38 @@ test("l'événement de trop : au dernier pas permis, tout événement est refus�
   refuse(dernierPas, { type: "fin_de_tour" }, "hors_bornes", phrase);
 });
 
-test("le combat le plus long se rejoue en entier, journal compris ; un événement de plus, et rien ne se rejoue", () => {
-  // Le genre d'événement qui écrit le plus : Aubépine et le Marmiton passent
-  // tour à tour, trois lignes chaque fois (la passe, la fin du tour, le tour).
+// Le plus long combat : 15 000 événements, sur un contenu qui n'écrit rien
+// (Aubépine ouvre sa Frappe et revient, sans fin), pour que le contrôle tienne
+// le plafond sans peser ; la mesure du pire contenu (15 000 passes) est celle
+// de l'agent principal, hors des contrôles (contrat du groupe 2, § 14, M).
+test("le combat le plus long se rejoue en entier ; un événement de plus, et rien ne se rejoue", () => {
   const miseEnPlace = miseEnPlaceEssai(surD4(AUBEPINE, MARMITON));
-  const passes = (combien) => Array.from({ length: combien }, (_rien, rang) => ({ type: "passer", qui: rang % 2 === 0 ? "pj1" : "adv2" }));
-  const plein = { regles: REGLES, revision: 1, miseEnPlace, evenements: [LANCER, ...passes(EVENEMENTS_MAX - 1)] };
+  const allerRetour = (combien) => Array.from({ length: combien }, (_rien, rang) => (rang % 2 === 0 ? { type: "capacite", qui: "pj1", capacite: 0, facon: 0 } : { type: "revenir" }));
+  const plein = { regles: REGLES, revision: 1, miseEnPlace, evenements: [LANCER, ...allerRetour(EVENEMENTS_MAX - 1)] };
   const { etat } = rejouer(plein);
   assert.equal(etat.pas, EVENEMENTS_MAX);
-  assert.equal(etat.journal.length, 2 + 3 * (EVENEMENTS_MAX - 1));
+  assert.equal(etat.journal.length, 2, "rien n'est écrit après le lancement");
   assert.equal(etat.phase, "combat");
+  assert.equal(etat.pile.length, (EVENEMENTS_MAX - 1) % 2, "le dernier événement ouvre la Frappe");
+  assert.equal(etat.annulation, SANS_ANNULATION, "rien à annuler : l'objet même");
+  // Un de plus : le rejeu s'arrête à lui, et le dit.
+  const deTrop = rejouer({ ...plein, evenements: [...plein.evenements, { type: "revenir" }] });
+  assert.deepEqual(deTrop, { erreur: { pas: EVENEMENTS_MAX + 1, code: "hors_bornes", message: "Ce combat a atteint 15 000 événements : commencez-en un nouveau." } });
+});
+
+test("les passes, le genre d'événement qui écrit le plus : 2 000 se rejouent, journal compris, trois lignes chaque fois", () => {
+  // Aubépine et le Marmiton passent tour à tour : la passe, la fin du tour, le tour.
+  const miseEnPlace = miseEnPlaceEssai(surD4(AUBEPINE, MARMITON));
+  const combien = 2000;
+  const passes = Array.from({ length: combien - 1 }, (_rien, rang) => ({ type: "passer", qui: rang % 2 === 0 ? "pj1" : "adv2" }));
+  const { etat } = rejouer({ regles: REGLES, revision: 1, miseEnPlace, evenements: [LANCER, ...passes] });
+  assert.equal(etat.pas, combien);
+  assert.equal(etat.journal.length, 2 + 3 * (combien - 1));
   // Deux passes par tour : la dernière ligne dit le tour où l'on est arrivé.
-  assert.deepEqual(etat.tour, { numero: 1 + Math.floor((EVENEMENTS_MAX - 1) / 2), camp: EVENEMENTS_MAX % 2 === 1 ? "pj" : "adv" });
+  assert.deepEqual(etat.tour, { numero: 1 + Math.floor((combien - 1) / 2), camp: combien % 2 === 1 ? "pj" : "adv" });
   assert.equal(etat.journal.at(-1).genre, "tour");
   assert.ok(Object.isFrozen(etat.journal));
-  // Un de plus : le rejeu s'arrête à lui, et le dit.
-  const deTrop = rejouer({ ...plein, evenements: [...plein.evenements, { type: "passer", qui: EVENEMENTS_MAX % 2 === 1 ? "pj1" : "adv2" }] });
-  assert.deepEqual(deTrop, { erreur: { pas: EVENEMENTS_MAX + 1, code: "hors_bornes", message: "Ce combat a atteint 5 000 événements : commencez-en un nouveau." } });
+  assert.ok(etat.journal.every((ligne) => Object.isFrozen(ligne)));
 });
 
 // ─── L'ouverture et le lancement ────────────────────────────────────────────
@@ -314,6 +358,7 @@ test("ouvrirCombat : la préparation, personne n'a joué, rien n'est au journal"
   assert.equal(etat.pas, 0);
   assert.deepEqual(etat.journal, []);
   assert.equal(etat.annonce, null);
+  assert.equal(etat.annulation, SANS_ANNULATION, "rien à annuler : l'objet même de regles.js");
   assert.deepEqual(etat.ordre, ["pj1", "adv2"]);
   assert.equal(etat.protagonistes.pj1.case, "C3");
   assert.equal(etat.protagonistes.adv2.case, "F6");
@@ -336,14 +381,16 @@ test("ouvrirCombat puis lancer égale l'état écrit à la main, champ pour cham
     );
     const lance = jouer(ouvrirCombat(mep), LANCER);
     const attendu = etatEssai(mep);
-    assert.deepEqual(lance, attendu);
-    assert.equal(JSON.stringify(lance), JSON.stringify(attendu), "le même ordre des clés");
+    assert.deepEqual(comparable(lance), comparable(attendu));
+    assert.equal(JSON.stringify(comparable(lance)), JSON.stringify(comparable(attendu)), "le même ordre des clés");
+    assert.deepEqual(Object.keys(lance), Object.keys(attendu), "l'annulation comprise, en dernier");
+    assert.equal(lance.annulation, SANS_ANNULATION, "le lancement ne se défait pas");
     assert.equal(estGele(lance), true);
 
     // Par « Fin de tour », personne n'ayant joué : le tour 2 du même camp.
     const fin = { type: "fin_de_tour" };
-    assert.deepEqual(jouer(lance, fin), etatEssai(mep, { tour: { numero: 1, camp: quiCommence === "pj" ? "adv" : "pj" } }));
-    assert.deepEqual(jouer(lance, fin, fin), etatEssai(mep, { tour: { numero: 2, camp: quiCommence } }));
+    assert.deepEqual(comparable(jouer(lance, fin)), comparable(etatEssai(mep, { tour: { numero: 1, camp: quiCommence === "pj" ? "adv" : "pj" } })));
+    assert.deepEqual(comparable(jouer(lance, fin, fin)), comparable(etatEssai(mep, { tour: { numero: 2, camp: quiCommence } })));
   }
 });
 
@@ -375,8 +422,8 @@ test("capacite ouvre un geste en préparation : rien n'est payé, et il porte le
     { acteur: "pj1", capacite: 1, facon: 0, mode: "attaque", moment: "preparation", paye: false, prix: null },
   );
   assert.deepEqual(
-    { cible: geste.cible, arrivee: geste.arrivee, depart: geste.depart, x: geste.x, jauge: geste.jauge, caracteristiques: geste.caracteristiques, difficulte: geste.difficulte, armePretee: geste.armePretee },
-    { cible: null, arrivee: null, depart: null, x: 0, jauge: null, caracteristiques: null, difficulte: null, armePretee: null },
+    { cible: geste.cible, arrivee: geste.arrivee, depart: geste.depart, x: geste.x, jauge: geste.jauge, caracteristiques: geste.caracteristiques, difficulte: geste.difficulte, armePretee: geste.armePretee, defense: geste.defense },
+    { cible: null, arrivee: null, depart: null, x: 0, jauge: null, caracteristiques: null, difficulte: null, armePretee: null, defense: null },
   );
   assert.deepEqual(geste.reglages, { modificateur: null, avantages: null });
   assert.deepEqual({ jet: geste.jet, degats: geste.degats, localisation: geste.localisation, interventions: geste.interventions, resultat: geste.resultat, parent: geste.parent }, {
@@ -408,6 +455,17 @@ test("le mode d'un geste vient du rôle de la capacité et de sa façon", () => 
   const adverse = combat(surD4(AUBEPINE, gouteur), { quiCommence: "adv" });
   assert.equal(modeDe(adverse, "adv2", "Pas chassé"), "sans_jet");
   assert.equal(modeDe(adverse, "adv2", "Frappe"), "attaque");
+
+  // Le même mode, dit par l'offre d'après la seule photographie (groupe 2 : les vues le lisent aussi).
+  const { capacites } = AUBEPINE.valeurs;
+  const modeDeLaFacon = (capacite, camp) => porte.modeDeLaFacon(capacite, capacite.facons[0], camp);
+  assert.deepEqual(
+    capacites.map((une) => modeDeLaFacon(une, "pj")),
+    ["attaque", "attaque", "sans_jet", "sans_jet", "deplacement", "caracteristique", "attaque", "sans_jet"],
+  );
+  assert.equal(modeDeLaFacon(capacites[5], "adv"), "sans_jet", "le jet de caractéristique d'un adversaire");
+  assert.equal(modeDeLaFacon(capacites[4], "adv"), "deplacement");
+  assert.equal(porte.modeDeLaFacon(capacites[0], null, "pj"), "sans_jet", "sans façon, rien n'attaque");
 });
 
 test("un geste non payé se remplace, se retire, et ne dépense rien ; payé, il se finit d'abord", () => {
@@ -440,7 +498,7 @@ test("regler : un champ qui ne s'offre pas à ce geste est refusé pour son mome
   const depart = combat(surD4(AUBEPINE, MARMITON));
   const frappe = jouer(depart, capacite(depart, "pj1", "Frappe"));
   assert.deepEqual(Object.keys(offre(frappe).reglages), ["cible", "modificateur", "avantages"]);
-  for (const evenement of [regler("arrivee", "E5"), regler("difficulte", 6), regler("x", 1), regler("jauge", 0), regler("jet_prete", true), regler("facon", 0), regler("arme_pretee", 0), regler("caracteristiques", ["force"])]) {
+  for (const evenement of [regler("arrivee", "E5"), regler("difficulte", 6), regler("x", 1), regler("jauge", 0), regler("jet_prete", true), regler("facon", 0), regler("arme_pretee", 0), regler("caracteristiques", ["force"]), regler("defense", "agile")]) {
     refuse(frappe, evenement, "hors_moment", "Ce réglage ne s'offre pas à ce geste.");
   }
 
@@ -546,6 +604,65 @@ test("l'arme prêtée d'un adversaire : à changer d'arme, la cible que la nouve
   assert.equal(gesteEnCours(jouer(louche, regler("arme_pretee", 0))).cible, null);
   refuse(humer, regler("arme_pretee", 2), "hors_bornes");
   refuse(humer, regler("arme_pretee", null), "forme");
+});
+
+// Groupe 2 (complément, § 6.2 ; contrat du groupe, § 5.4) : le livret laisse
+// au joueur le type d'armure de sa défense quand deux types sont à égalité de
+// dés ; le type retenu par la photographie est le défaut proposé.
+test("la défense à égalité de dés : le PJ visé par un adversaire choisit son type jusqu'au premier dé ; il retombe au défaut quand la cible change", () => {
+  const aEgalite = (nom, identifiant) =>
+    pjEssai((champs) => {
+      champs.identifiant = identifiant;
+      champs.nom = nom;
+      champs.deDefense.egalite = ["agile", "precise"];
+    });
+  const depart = combat(surD4(aEgalite("Aubépine", "essai-aubepine-0000000001"), MARMITON, aEgalite("Ciboulette", "essai-ciboulette-0000000002")), { quiCommence: "adv" });
+  const frappe = jouer(depart, capacite(depart, "adv2", "Frappe"));
+  assert.equal("defense" in offre(frappe).reglages, false, "sans cible, rien à choisir");
+  const visee = jouer(frappe, viser("pj1"));
+  assert.deepEqual(offre(visee).reglages.defense, { valeur: "agile", options: ["agile", "precise"] }, "le défaut : le type retenu");
+  assert.deepEqual(Object.keys(offre(visee).reglages), ["cible", "defense", "modificateur", "avantages"]);
+
+  const precise = jouer(visee, regler("defense", "precise"));
+  assert.equal(gesteEnCours(precise).defense, "precise");
+  assert.equal(offre(precise).reglages.defense.valeur, "precise");
+  // Le type choisi donne les caractéristiques du jet, figées au premier dé.
+  const lance = jouer(precise, d8(8));
+  assert.deepEqual(gesteEnCours(lance).jet.mobilisees, ["precision", "empathie"]);
+  assert.deepEqual(gesteEnCours(jouer(visee, d8(8))).jet.mobilisees, ["agilite", "creativite"], "au défaut, l'agile");
+  // Après le premier dé, il ne se règle plus.
+  refuse(lance, regler("defense", "agile"), "hors_moment", "Le geste en cours n'en est pas là.");
+
+  // Une autre cible remet la défense au défaut, la même aussi.
+  assert.equal(gesteEnCours(jouer(precise, viser("pj3"))).defense, null);
+  assert.equal(offre(jouer(precise, viser("pj3"))).reglages.defense.valeur, "agile");
+  assert.equal(gesteEnCours(jouer(precise, viser("pj1"))).defense, null);
+  // Un autre réglage la laisse.
+  assert.equal(gesteEnCours(jouer(precise, regler("modificateur", 1, "Sel fin"))).defense, "precise");
+  // Un réglage qui ôte le jet la retire : le jet prêté d'une capacité sans jet, puis rendu.
+  const humeur = adversaireEssai((champs) => champs.capacites.push({ ...champs.capacites[2], nom: "Humer", role: null }));
+  const flaire = combat(surD4(aEgalite("Aubépine", "essai-aubepine-0000000001"), humeur), { quiCommence: "adv" });
+  const prete = jouer(flaire, capacite(flaire, "adv2", "Humer"), regler("jet_prete", true), viser("pj1"), regler("defense", "precise"));
+  assert.equal(gesteEnCours(prete).defense, "precise", "le jet prêté d'un adversaire : le PJ choisit aussi");
+  const sansJet = jouer(prete, regler("jet_prete", false));
+  assert.deepEqual([gesteEnCours(sansJet).mode, gesteEnCours(sansJet).cible, gesteEnCours(sansJet).defense], ["sans_jet", "pj1", null]);
+  assert.equal("defense" in offre(sansJet).reglages, false, "sans jet, pas de défense");
+
+  // Hors des types à égalité, une valeur mal faite, une raison : refusés.
+  refuse(visee, regler("defense", "lourde"), "hors_bornes", "Cette valeur n'est pas de celles qui s'offrent.");
+  refuse(visee, regler("defense", null), "forme");
+  refuse(visee, regler("defense", "precise", "Par habitude"), "forme");
+  // Chaque jet de défense repart du défaut : le geste suivant naît sans choix.
+  assert.equal(gesteEnCours(jouer(depart, capacite(depart, "adv2", "Moulinet farineux"))).defense, null);
+
+  // Sans égalité, rien à choisir : le réglage ne s'offre pas.
+  const sansEgalite = combat(surD4(AUBEPINE, MARMITON), { quiCommence: "adv" });
+  const contreAubepine = jouer(sansEgalite, capacite(sansEgalite, "adv2", "Frappe"), viser("pj1"));
+  assert.equal("defense" in offre(contreAubepine).reglages, false);
+  refuse(contreAubepine, regler("defense", "agile"), "hors_moment", "Ce réglage ne s'offre pas à ce geste.");
+  // Ni quand le PJ attaque : c'est son arme qui fait son dé.
+  const duPj = combat(surD4(aEgalite("Aubépine", "essai-aubepine-0000000001"), MARMITON));
+  assert.equal("defense" in offre(jouer(duPj, capacite(duPj, "pj1", "Frappe"), viser("adv2"))).reglages, false);
 });
 
 // ─── Prêt, ou non ───────────────────────────────────────────────────────────
@@ -912,7 +1029,7 @@ test("appliquer : les dégâts vont à la victime, la ligne s'écrit, le geste q
   assert.deepEqual(fini.protagonistes.adv2.zones[0], { armure: 5, armureMax: 10, resistance: 5, resistanceMax: 5 });
   assert.equal(fini.protagonistes.adv2.zones[1], bilan.protagonistes.adv2.zones[1], "une zone intacte est partagée : le même objet");
   assert.equal(fini.photos, bilan.photos, "les photographies sont partagées");
-  assert.deepEqual(dernier(fini.journal), { genre: "geste", texte: "Aubépine : Frappe contre Marmiton. d8 contre 5 → 8 ✓, 2 ✗ : 1 réussite, A = 5. Localisation d20 → 5 : torse. Armure 10 → 5." });
+  assert.deepEqual(lue(dernier(fini.journal)), { genre: "geste", texte: "Aubépine : Frappe contre Marmiton. d8 contre 5 → 8 ✓, 2 ✗ : 1 réussite, A = 5. Localisation d20 → 5 : torse. Armure 10 → 5." });
 });
 
 // ─── L'état rendu ───────────────────────────────────────────────────────────
@@ -920,9 +1037,14 @@ test("appliquer : les dégâts vont à la victime, la ligne s'écrit, le geste q
 test("tout ce que rend appliquer est gelé, et rien de ce qu'elle reçoit n'est modifié", () => {
   for (const [colonne, temoin] of Object.entries(temoins())) {
     assert.equal(estGele(temoin.etat), true, colonne);
-    const avant = JSON.stringify(temoin.etat);
+    // La pile d'annulation ne passe pas par JSON : elle se compare par identité.
+    const avant = JSON.stringify(sansAnnulation(temoin.etat));
+    const { annulation, journal } = temoin.etat;
+    const longueur = journal.length;
     for (const type of TYPES) appliquer(temoin.etat, type === "de" && temoin.de ? temoin.de : ECHANTILLONS[type]);
-    assert.equal(JSON.stringify(temoin.etat), avant, `${colonne} : l'état reçu n'a pas changé`);
+    assert.equal(JSON.stringify(sansAnnulation(temoin.etat)), avant, `${colonne} : l'état reçu n'a pas changé`);
+    assert.equal(temoin.etat.annulation, annulation);
+    assert.equal(temoin.etat.journal.length, longueur, `${colonne} : son journal non plus`);
   }
   // L'événement non plus : ni gelé, ni retouché.
   const { etat } = temoins().bilan;
@@ -1052,14 +1174,20 @@ const PHOTOS_DE_REFERENCE = { "Aubépine Crèmebrûlée": aubepineEssai(), "Chef
 
 test("rejouer refait l'état en appliquant chaque événement, journal compris, et le retrouve après un passage par JSON", () => {
   const { contenu, etat } = versContenu(scenario, PHOTOS_DE_REFERENCE);
-  assert.deepEqual(rejouer(contenu), { etat });
+  const rejoue = rejouer(contenu);
+  assert.deepEqual(Object.keys(rejoue), ["etat"]);
+  // L'état sans sa pile d'annulation, qui ne passe jamais par JSON.
+  assert.deepEqual(sansAnnulation(rejoue.etat), sansAnnulation(etat));
   const relu = rejouer(JSON.parse(JSON.stringify(contenu)));
-  assert.deepEqual(relu.etat, etat);
-  assert.equal(JSON.stringify(relu.etat), JSON.stringify(etat));
+  assert.deepEqual(sansAnnulation(relu.etat), sansAnnulation(etat));
+  assert.equal(JSON.stringify(sansAnnulation(relu.etat)), JSON.stringify(sansAnnulation(etat)));
+  assert.deepEqual(JSON.parse(JSON.stringify(sansAnnulation(relu.etat))), sansAnnulation(relu.etat), "l'état passe par JSON à l'identique");
   assert.equal(estGele(relu.etat), true);
   assert.equal(etat.pas, contenu.evenements.length);
   // Sans événement, c'est l'état de la préparation.
-  assert.deepEqual(rejouer({ ...contenu, evenements: [] }), { etat: ouvrirCombat(contenu.miseEnPlace) });
+  const prepare = rejouer({ ...contenu, evenements: [] });
+  assert.deepEqual(sansAnnulation(prepare.etat), sansAnnulation(ouvrirCombat(contenu.miseEnPlace)));
+  assert.equal(prepare.etat.annulation, SANS_ANNULATION);
 });
 
 test("rejouer s'arrête au premier refus, et dit lequel : la suite n'est jamais tronquée en silence", () => {
@@ -1075,6 +1203,40 @@ test("rejouer s'arrête au premier refus, et dit lequel : la suite n'est jamais 
   // Un événement mal fait.
   assert.equal(rejouer({ ...contenu, evenements: [premier, { type: "danser" }] }).erreur.code, "forme");
   assert.equal(rejouer({ ...contenu, evenements: [premier, { type: "danser" }] }).erreur.pas, 2);
+});
+
+// Groupe 2 (contrat du groupe, § 4.3) : le rejeu d'un long combat rend la main
+// au navigateur par tranches ; c'est la séance qui le mène.
+test("rejeu, le générateur : il cède { pas } après chaque tranche, ⌊n/1 000⌋ fois, et rend ce que rend rejouer", () => {
+  assert.equal(REJEU_TRANCHE, 1000);
+  assert.equal(Object.getPrototypeOf(rejeu).constructor.name, "GeneratorFunction");
+  const miseEnPlace = miseEnPlaceEssai(surD4(AUBEPINE, MARMITON));
+  const allerRetour = (combien) => Array.from({ length: combien }, (_rien, rang) => (rang % 2 === 0 ? { type: "capacite", qui: "pj1", capacite: 0, facon: 0 } : { type: "revenir" }));
+  const contenuDe = (n) => ({ regles: REGLES, revision: 1, miseEnPlace, evenements: [LANCER, ...allerRetour(n - 1)] });
+  const mener = (suite) => {
+    const cedes = [];
+    let etape = suite.next();
+    while (!etape.done) {
+      cedes.push(etape.value);
+      etape = suite.next();
+    }
+    return { cedes, fin: etape.value };
+  };
+  for (const n of [999, 1000, 2500]) {
+    const { cedes, fin } = mener(rejeu(contenuDe(n)));
+    assert.deepEqual(cedes, Array.from({ length: Math.floor(n / 1000) }, (_rien, rang) => ({ pas: 1000 * (rang + 1) })), `${n} événements`);
+    assert.equal(fin.etat.pas, n);
+    assert.deepEqual(sansAnnulation(fin.etat), sansAnnulation(rejouer(contenuDe(n)).etat));
+  }
+  // Une autre tranche : dix événements, par trois.
+  assert.deepEqual(mener(rejeu(contenuDe(10), 3)).cedes, [{ pas: 3 }, { pas: 6 }, { pas: 9 }]);
+  // Un refus après une tranche : il est rendu, et rien n'est cédé après lui.
+  const abime = contenuDe(1500);
+  abime.evenements[1199] = { type: "appliquer" };
+  assert.deepEqual(mener(rejeu(abime)), { cedes: [{ pas: 1000 }], fin: { erreur: { pas: 1200, code: "hors_moment", message: "Aucun geste n'est en cours." } } });
+  assert.deepEqual(rejouer(abime), { erreur: { pas: 1200, code: "hors_moment", message: "Aucun geste n'est en cours." } });
+  // Un contenu d'une autre version : rien n'est joué, rien n'est cédé.
+  assert.deepEqual(mener(rejeu({ ...contenuDe(2000), regles: 1 })), { cedes: [], fin: { erreur: { pas: 0, code: "forme", message: "Ce combat a été commencé avec une autre version des règles." } } });
 });
 
 test("rejouer refuse un contenu d'une autre version des règles, ou qui ne se lit pas, sans rien jouer", () => {
@@ -1268,6 +1430,60 @@ test("le lecteur de scénario : des dégâts fixés, une face décalée, une arm
   assert.equal(etat.quiCommence, "pj", "sans « quiCommence », les PJ commencent");
 });
 
+// Groupe 2 (contrat du groupe, § 5.7) : une ligne par façon, l'annulation, la défense à égalité.
+test("le lecteur de scénario : « annuler », « defense », la puissance d'un adversaire à son rang, la façon d'office d'un PJ", () => {
+  // Le Chef de partie, au rang 2, frappe Aubépine Crèmebrûlée, dont la défense est à égalité (agile et précise).
+  const photos = { "Aubépine Crèmebrûlée": aubepineEssai(), "Chef de partie": chefDePartieEssai() };
+  const { etat, contenu } = versContenu(
+    {
+      mode: "demo",
+      quiCommence: "adv",
+      lanceLe: "2026-10-12T21:30",
+      ajouts: [["pj", "Aubépine Crèmebrûlée"], ["adversaire", "Chef de partie"]],
+      cases: { Aubépine: "D4", Chef: "D4" },
+      gestes: [
+        { qui: "Chef", joue: "Frappe", contre: "Aubépine", defense: "precise", des: [8, 8, 8] },
+        { annuler: true },
+        // Sans puissance, le Chef joue Pas chassé à son rang : [2], même pour une case.
+        { qui: "Chef", joue: "Pas chassé", vers: "E5" },
+      ],
+    },
+    photos,
+  );
+  const reglages = contenu.evenements.filter((evenement) => evenement.type === "regler").map(({ champ, valeur }) => [champ, valeur]);
+  assert.deepEqual(reglages, [["cible", "pj1"], ["defense", "precise"], ["arrivee", "E5"]], "la défense se règle après la cible");
+  assert.equal(contenu.evenements.filter((evenement) => evenement.type === "annuler").length, 1);
+  assert.deepEqual(contenu.evenements.at(-3), { type: "capacite", qui: "adv2", capacite: 2, facon: 1 });
+  // La Frappe parée et sa fin de tour, défaites ; puis le déplacement et la sienne.
+  assert.deepEqual(
+    etat.journal.slice(-4).map((ligne) => ligne.texte),
+    ["Annulé : Chef — Frappe.", "Chef : Pas chassé [2] (1 souffle), D4 → E5.", "Fin du tour des adversaires : ils retrouvent leurs actions.", "— Tour 1 · camp des PJ —"],
+  );
+  assert.deepEqual(etat.protagonistes.adv2.case, "E5");
+
+  // Un PJ sans puissance : la plus haute qu'il peut payer, sinon la plus basse (Flambage : [1] 5 souffle, [2] 10).
+  const flambage = (souffle) =>
+    versContenu(
+      { mode: "demo", lanceLe: "2026-10-12T21:30", ajouts: [["pj", "Aubépine"], ["adversaire", "Marmiton"]], gestes: [{ qui: "Aubépine", joue: "Flambage" }] },
+      { Aubépine: pjEssai((champs) => (champs.souffle = souffle)), Marmiton: MARMITON },
+      { jusqua: { geste: 1, des: 0 } },
+    ).contenu.evenements.at(-1);
+  assert.deepEqual(flambage(10), { type: "capacite", qui: "pj1", capacite: 2, facon: 1 });
+  assert.deepEqual(flambage(9), { type: "capacite", qui: "pj1", capacite: 2, facon: 0 });
+  assert.throws(() => flambage(4), /Geste n° 1 \(Aubépine, Flambage\) : l'événement .* est refusé \(interdit\) : Pas assez de souffle : 5 demandés, 4 restants\./);
+
+  // Un adversaire qui a deux façons à son rang (deux armes) : le scénario doit dire laquelle.
+  const aDeuxArmes = adversaireEssai((champs) => {
+    champs.armes.push({ nom: "Louche", libelle: "Louche", poids: null, faces: null, caracteristiques: null, degats: [1, 2, 3], portee: 2, locMultiple: 1, mainsNues: false });
+    champs.capacites[0].facons.push(faconEssai({ arme: 1, libelle: "Louche", attaque: true, degats: [1, 2, 3], portee: 2 }));
+  });
+  const deux = (geste) => versContenu({ mode: "demo", quiCommence: "adv", lanceLe: "2026-10-12T21:30", ajouts: [["pj", "Aubépine"], ["adversaire", "Marmiton"]], cases: { Marmiton: "A1" }, gestes: [geste] }, { Aubépine: AUBEPINE, Marmiton: aDeuxArmes });
+  assert.throws(() => deux({ qui: "Marmiton", joue: "Frappe", contre: "Aubépine", des: [8, 8, 8] }), /« Frappe » a 2 bouton\(s\) jouable\(s\) : précisez « puissance » ou « arme »\./);
+  assert.deepEqual(deux({ qui: "Marmiton", joue: "Frappe", arme: "Louche", contre: "Aubépine", des: [8, 8, 8] }).contenu.evenements[1], { type: "capacite", qui: "adv2", capacite: 0, facon: 1 });
+  // « annuler » quand rien n'est à défaire : le refus, cité.
+  assert.throws(() => deux({ annuler: true }), /Geste n° 1 \(annuler\) : l'événement \{"type":"annuler"\} est refusé \(interdit\) : Rien à annuler depuis le lancement\./);
+});
+
 // ─── Les modules ────────────────────────────────────────────────────────────
 
 const lire = (chemin) => readFileSync(new URL(chemin, import.meta.url), "utf8");
@@ -1282,16 +1498,20 @@ test("offre.js et moteur.js n'importent que ce que le noyau leur permet ; l'offr
 });
 
 test("offre.js et moteur.js exportent ce que dit le contrat, et l'offre deux fonctions de plus : le prix d'un geste, celui d'une esquive", () => {
-  assert.deepEqual(Object.keys(moteur).sort(), ["appliquer", "gesteEnCours", "ouvrirCombat", "rejouer"]);
+  // Au groupe 2 : le rejeu par tranches ; l'annulation, le mode d'une façon, la façon d'une case d'arrivée.
+  assert.deepEqual(Object.keys(moteur).sort(), ["appliquer", "gesteEnCours", "ouvrirCombat", "rejeu", "rejouer"]);
   assert.deepEqual(Object.keys(porte).sort(), [
     "accepte",
     "acteurCourant",
+    "annulation",
     "arrivees",
     "boutons",
     "candidats",
     "cibles",
     "esquiveOfferte",
+    "faconDeLArrivee",
     "faconsDe",
+    "modeDeLaFacon",
     "offre",
     "pret",
     "prixDeLEsquive",
@@ -1319,4 +1539,88 @@ test("offre.js, moteur.js et scenario.js : un en-tête qui dit le pourquoi et le
   assert.equal(lire("../js/combat/moteur.js").split("switch (").length - 1, 1);
   assert.equal(lire("../js/combat/offre.js").includes("switch ("), false);
   assert.equal(lire("../js/combat/moteur.js").split("moment:").length - 1, 1);
+});
+
+// ─── Une recopie du journal par événement ───────────────────────────────────
+//
+// Groupe 2 (contrat du groupe, § 4.4). Au groupe 1, chaque écriture recopiait
+// la liste : une passe qui finit le tour la recopiait deux fois, et le rejeu
+// de 15 000 passes demandait 13,4 s. Une recopie d'une liste se voit à
+// l'itérateur qu'elle demande : le contrôle le remplace le temps d'un
+// événement, et compte les listes longues qu'on parcourt. Il vient en dernier
+// dans ce fichier : remplacer cet itérateur ralentit pour de bon, dans ce
+// processus, l'étalement des listes.
+
+function compterLesRecopies(longueur, faire) {
+  const itererDOrigine = Array.prototype[Symbol.iterator];
+  let recopies = 0;
+  Array.prototype[Symbol.iterator] = function iterer() {
+    if (this.length >= longueur) recopies += 1;
+    return itererDOrigine.call(this);
+  };
+  try {
+    faire();
+  } finally {
+    Array.prototype[Symbol.iterator] = itererDOrigine;
+  }
+  return recopies;
+}
+
+test("une recopie du journal par événement : un tableau neuf quand il écrit, gelé une fois, l'objet même quand il n'écrit rien", () => {
+  // Quarante lignes de plus : plus longue que toute autre liste de l'état.
+  const etat = etatEssai(miseEnPlaceEssai(surD4(AUBEPINE, MARMITON)), {
+    retoucher(libre) {
+      libre.journal = [...libre.journal, ...Array.from({ length: 40 }, (_, rang) => ({ genre: "geste", texte: `Ligne ${rang + 1}.` }))];
+    },
+  });
+  const longueur = etat.journal.length;
+
+  // Armé : l'étalement d'une liste gelée de cette longueur se compte.
+  assert.equal(compterLesRecopies(longueur, () => [...etat.journal]), 1);
+
+  // Une passe qui finit le tour : trois lignes, en deux écritures, et une seule recopie.
+  let passe = null;
+  assert.equal(
+    compterLesRecopies(longueur, () => {
+      passe = jouer(etat, { type: "passer", qui: "pj1" });
+    }),
+    1,
+  );
+  assert.equal(passe.journal.length, longueur + 3);
+  assert.notEqual(passe.journal, etat.journal, "un tableau neuf");
+  assert.ok(Object.isFrozen(passe.journal));
+  assert.equal(etat.journal.length, longueur, "celui d'avant n'a pas bougé");
+
+  // Un geste qui tue et finit le combat : la ligne du geste, puis la fin ; une recopie.
+  const auCorps = { type: "degats", base: "lettre", operations: [{ op: "ajuster", valeur: 10, raison: "Dernier service" }], nature: "corps" };
+  const touche = jouer(etat, capacite(etat, "pj1", "Frappe"), viser("adv2"), d8(8), d8(1), auCorps, d20(5));
+  let fini = null;
+  assert.equal(
+    compterLesRecopies(longueur, () => {
+      fini = jouer(touche, APPLIQUER);
+    }),
+    1,
+  );
+  assert.deepEqual(fini.journal.slice(longueur).map((ligne) => ligne.genre), ["geste", "fin"]);
+  assert.ok(Object.isFrozen(fini.journal));
+
+  // Un événement qui n'écrit rien : ni recopie, ni tableau neuf.
+  let ouvert = null;
+  assert.equal(
+    compterLesRecopies(longueur, () => {
+      ouvert = jouer(etat, capacite(etat, "pj1", "Frappe"));
+    }),
+    0,
+  );
+  assert.equal(ouvert.journal, etat.journal, "le même tableau");
+  // L'annulation : la ligne « Annulé », une recopie.
+  let annule = null;
+  assert.equal(
+    compterLesRecopies(longueur, () => {
+      annule = jouer(passe, { type: "annuler" });
+    }),
+    1,
+  );
+  assert.equal(annule.journal.length, longueur + 4);
+  assert.ok(Object.isFrozen(annule.journal));
 });

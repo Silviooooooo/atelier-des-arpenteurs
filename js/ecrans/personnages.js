@@ -11,22 +11,24 @@
 // window.confirm, que certains navigateurs bloquent.
 //
 // La démonstration ne dépose rien en ligne : tous ses personnages restent
-// sur l'appareil, et la page le dit.
+// sur l'appareil, et la page le dit. Son personnage se lit par partage.js,
+// que la préparation du combat partage, puis se garde par garderRecu, dont
+// la question peut poser son focus sans défiler (contrat du lot 4,
+// groupe 2, § 12.4) ; ici, rien ne change à l'écran.
 //
 // Sans banque typée, le créateur ne peut ni créer ni ouvrir : la liste
 // reste, pour enregistrer le fichier d'un personnage ou le supprimer.
 
 import { dateLisible } from "../banque/dates.js";
-import { lirePersonnage, nouveauPersonnage, nouvelIdentifiant } from "../personnage/format.js";
+import { nouveauPersonnage, nouvelIdentifiant } from "../personnage/format.js";
 import { PHRASE_CLE_CHANGEE } from "../personnage/depot.js";
 import { ETAPES, banqueUtilisable } from "../personnage/parcours.js";
 import { adressePersonnage } from "../routes.js";
 import { copieDeTravail } from "./creation.js";
 import { compte, el, titre } from "./dom.js";
-import { boutonFichier, lireFichierChoisi, panneauTelephone } from "./partage.js";
+import { boutonFichier, lireFichierChoisi, lirePersonnageDeDemonstration, panneauTelephone, phraseDuPersonnageGarde } from "./partage.js";
 
 export const PHRASE_NON_DURABLE = "Cet appareil ne garde rien : les personnages disparaîtront à la fermeture de la page. Enregistrez leur fichier.";
-const FICHIER_DEMO = "essais/personnage_demo.arpenteur.json";
 
 const nomDe = (personnage) => personnage.identite.nom.trim() || "Sans nom";
 const texteErreur = (erreur) => erreur?.message ?? String(erreur);
@@ -35,7 +37,10 @@ const heure = (iso) => dateLisible(iso);
 // Une version, telle que la question la montre : nom, état, date.
 const version = (personnage) => `« ${nomDe(personnage)} », ${etatDe(personnage)}, modifié le ${dateLisible(personnage.modifie_le)}`;
 
-function demanderDoublon(zone, present, recu) {
+// sansDefiler : le focus se pose sur « Annuler » sans faire défiler la page
+// (la préparation du combat) ; l'écran Personnages et la réception gardent
+// le focus d'avant.
+function demanderDoublon(zone, present, recu, { sansDefiler = false } = {}) {
   // Remplacer une version enregistrée par un brouillon, ou par plus ancien,
   // se dit en clair : c'est définitif (relecture du lot 2).
   const risques = [
@@ -64,7 +69,7 @@ function demanderDoublon(zone, present, recu) {
         ),
       ),
     );
-    annuler.focus();
+    annuler.focus(sansDefiler ? { preventScroll: true } : undefined);
   });
 }
 
@@ -72,12 +77,13 @@ function demanderDoublon(zone, present, recu) {
  * Garde un personnage reçu (fichier, lien, démonstration). S'il est déjà
  * sur l'appareil, la zone demande : Remplacer, Garder les deux (sous un
  * nouvel identifiant), ou Annuler. Rend le personnage gardé, ou null.
+ * sansDefiler : la question prend le focus sans faire défiler la page.
  */
-export async function garderRecu(etagere, personnage, zone) {
+export async function garderRecu(etagere, personnage, zone, { sansDefiler = false } = {}) {
   let aGarder = personnage;
   const present = await etagere.lire(personnage.id);
   if (present) {
-    const choix = await demanderDoublon(zone, present, personnage);
+    const choix = await demanderDoublon(zone, present, personnage, { sansDefiler });
     if (choix === "annuler") return null;
     if (choix === "les_deux") aGarder = { ...personnage, id: nouvelIdentifiant() };
   }
@@ -406,7 +412,7 @@ export function afficher(contexte) {
   const accueillir = async (personnage) => {
     try {
       const garde = await garderRecu(etagere, personnage, zoneDoublon);
-      if (garde) dire(`Le personnage « ${nomDe(garde)} » est sur cet appareil.`);
+      if (garde) dire(phraseDuPersonnageGarde(garde));
     } catch (erreur) {
       dire(`Le personnage n'a pas pu être gardé : ${texteErreur(erreur)}`, true);
     }
@@ -435,19 +441,11 @@ export function afficher(contexte) {
     await accueillir(lu.personnage);
   };
 
+  // La lecture partagée (partage.js) ; le fetch de la page.
   const ajouterDemo = async () => {
-    let texte;
-    try {
-      const reponse = await fetch(FICHIER_DEMO, { cache: "no-store" });
-      if (!reponse.ok) throw new Error(`réponse ${reponse.status}`);
-      texte = await reponse.text();
-    } catch {
-      dire("Le personnage de démonstration est introuvable sur ce site.", true);
-      return;
-    }
-    const lu = lirePersonnage(texte, { mode });
+    const lu = await lirePersonnageDeDemonstration(mode);
     if (lu.erreur) {
-      dire(`Le personnage de démonstration est illisible : ${lu.erreur}`, true);
+      dire(lu.erreur, true);
       return;
     }
     await accueillir(lu.personnage);

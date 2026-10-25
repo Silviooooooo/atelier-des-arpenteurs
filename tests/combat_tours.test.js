@@ -12,6 +12,11 @@
 // Les protagonistes sont ceux de tests/outils/photographies_essai.js :
 // « Aubépine » et « Ciboulette », deux personnages à deux actions, et des
 // « Marmiton » à une action. Tous sont sur la case D4, sauf mention.
+//
+// Au groupe 2, une ligne du journal porte aussi ses segments et ses phrases
+// (js/combat/journal.js a leurs contrôles) : ici, les lignes se comparent par
+// leur genre, leur texte et leur marque de mort. Et une passe qui entraîne
+// deux fins de tour automatiques se défait d'un coup, avec elles.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -78,6 +83,8 @@ const coupMortel = (etat, qui, cible, des, degats = 10) => [
 ];
 
 const textes = (etat, depuis = 0) => etat.journal.slice(depuis).map((ligne) => ligne.texte);
+// Une ligne telle que le groupe 1 la comparait : son genre, son texte, sa mort.
+const lue = ({ genre, texte, mort }) => (mort === undefined ? { genre, texte } : { genre, texte, mort });
 const actions = (etat) => Object.fromEntries(etat.ordre.map((id) => [id, etat.protagonistes[id].actions]));
 
 const FIN_DES_PJ = "Fin du tour des PJ : ils retrouvent leurs actions.";
@@ -160,7 +167,7 @@ test("passer son tour ne coûte rien : le protagoniste a joué, sa ligne s'écri
   const depart = aQuatre();
   const passe = jouer(depart, passer("pj1"));
   assert.deepEqual(textes(passe, 2), ["Aubépine passe son tour."]);
-  assert.deepEqual(passe.journal[2], { genre: "geste", texte: "Aubépine passe son tour." });
+  assert.deepEqual(lue(passe.journal[2]), { genre: "geste", texte: "Aubépine passe son tour." });
   assert.deepEqual(passe.annonce, { pas: passe.pas, texte: "Aubépine passe son tour." });
   assert.equal(passe.protagonistes.pj1.passe, true);
   assert.equal(passe.protagonistes.pj1.actions, 2);
@@ -216,7 +223,7 @@ test("la fin automatique : le tour d'un camp finit de lui-même quand tous ses v
   const deux = jouer(une, frappeManquee(depart, "pj1", "adv2"));
   assert.deepEqual(deux.tour, { numero: 1, camp: "adv" });
   assert.deepEqual(textes(deux, 4), [FIN_DES_PJ, tourDes(1, "adversaires")]);
-  assert.deepEqual(deux.journal.slice(4), [
+  assert.deepEqual(deux.journal.slice(4).map(lue), [
     { genre: "cadre", texte: FIN_DES_PJ },
     { genre: "tour", texte: tourDes(1, "adversaires") },
   ]);
@@ -380,6 +387,30 @@ test("deux fins de tour d'affilée au plus : quand aucun camp ne peut agir, le c
   assert.equal(pousse.annonce.texte, textes(pousse, 6).join(" "));
 });
 
+// Groupe 2 (complément, § 4.10) : une fin automatique ne se défait jamais
+// seule, mais avec le geste qui l'a entraînée.
+test("une passe et ses deux fins de tour automatiques se défont d'un coup : le tour, les actions et le « passé » reviennent", () => {
+  // Les adversaires sans action : la passe d'Aubépine finit le tour des PJ, puis celui des adversaires.
+  const lance = combat(surD4(AUBEPINE, SANS_ACTION), { quiCommence: "adv" });
+  const passe = jouer(lance, passer("pj1"));
+  assert.deepEqual(textes(passe, 4), ["Aubépine passe son tour.", FIN_DES_PJ, tourDes(2, "adversaires"), FIN_DES_ADVERSAIRES, tourDes(2, "PJ")]);
+  assert.deepEqual(passe.tour, { numero: 2, camp: "pj" });
+
+  const annule = jouer(passe, { type: "annuler" });
+  // L'état d'avant la passe, hors du journal, du pas, de l'annonce et de l'annulation.
+  const sansSuivi = ({ journal, pas, annonce, annulation, ...reste }) => reste;
+  assert.deepEqual(sansSuivi(annule), sansSuivi(lance));
+  assert.deepEqual(annule.tour, { numero: 1, camp: "pj" });
+  assert.equal(annule.protagonistes, lance.protagonistes, "les protagonistes d'avant, l'objet même");
+  assert.deepEqual(candidats(annule), ["pj1"]);
+  // Le journal ne recule pas : les cinq lignes restent, et la ligne « Annulé » les couvre.
+  assert.deepEqual(textes(annule, 4), [...textes(passe, 4), "Annulé : Aubépine — passer son tour."]);
+  assert.deepEqual(annule.journal.at(-1).barre, [4, 9]);
+  assert.equal(annule.pas, passe.pas + 1);
+  // Rien d'autre à annuler : le lancement et sa fin automatique ne se défont pas.
+  refuse(annule, { type: "annuler" }, "interdit", "Rien à annuler depuis le lancement.");
+});
+
 // ─── La mort ────────────────────────────────────────────────────────────────
 
 test("la mort : à 0 point de corps, un protagoniste meurt ; il ne joue plus et ne se cible plus", () => {
@@ -389,7 +420,7 @@ test("la mort : à 0 point de corps, un protagoniste meurt ; il ne joue plus et 
   assert.deepEqual(tue.protagonistes.adv2.mort, { tour: 1 });
   assert.equal(vivant(tue, "adv2"), false);
   assert.equal(vivant(tue, "adv3"), true);
-  assert.deepEqual(tue.journal[2], {
+  assert.deepEqual(lue(tue.journal[2]), {
     genre: "geste",
     texte: "Aubépine : Frappe contre Marmiton n° 1. d8 contre 5 → 8 ✓, 1 ✗ : 1 réussite, A = 5, dégâts directs au corps : 10 (Dernier service). Localisation d20 → 5 : torse. Corps 10 → 0. Marmiton n° 1 meurt.",
     mort: true,
@@ -448,7 +479,7 @@ test("la fin du combat : quand un camp n'a plus de vivant, « Combat terminé »
   assert.equal(fini.phase, "termine");
   assert.equal(fini.vainqueur, "pj");
   assert.deepEqual(fini.pile, []);
-  assert.deepEqual(fini.journal.slice(4), [{ genre: "fin", texte: "Combat terminé : victoire des PJ." }]);
+  assert.deepEqual(fini.journal.slice(4).map(lue), [{ genre: "fin", texte: "Combat terminé : victoire des PJ." }]);
   assert.equal(fini.journal[3].mort, true);
   assert.match(fini.journal[3].texte, /Marmiton meurt\.$/);
   assert.equal(
@@ -459,9 +490,10 @@ test("la fin du combat : quand un camp n'a plus de vivant, « Combat terminé »
   assert.deepEqual(fini.tour, { numero: 1, camp: "pj" });
   assert.equal(fini.annonce.texte, `${fini.journal[3].texte} Combat terminé : victoire des PJ.`);
 
-  // On ne joue plus : rien ne s'offre, tout est refusé.
+  // On ne joue plus : rien ne s'offre, tout est refusé, sauf l'annulation du
+  // geste qui a fini le combat (groupe 2).
   assert.deepEqual(candidats(fini), []);
-  assert.deepEqual(offre(fini).types, []);
+  assert.deepEqual(offre(fini).types, ["annuler"]);
   for (const evenement of [FIN_DE_TOUR, passer("pj1"), capacite(fini, "pj1", "Frappe"), LANCER, APPLIQUER]) {
     refuse(fini, evenement, "hors_moment", "Le combat est terminé.");
   }

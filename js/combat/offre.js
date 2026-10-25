@@ -37,6 +37,22 @@
 // « hors_moment » (rien de tel ne s'offre à cet instant), « hors_bornes » (la
 // valeur n'est pas de celles qui s'offrent), « interdit » (le bouton existe,
 // mais il est inactif : le message est sa raison).
+//
+// Au groupe 2 (contrat du groupe, § 2, § 4.2, § 5.4, § 6) :
+// - une ligne par façon : chaque puissance (et chaque arme) d'une capacité a
+//   son entrée, active ou inactive avec sa raison, pour les deux camps ; il
+//   n'y a plus de façon jouée d'office ;
+// - l'offre allégée : « capacite » ne juge que la façon demandée, et non plus
+//   chaque façon de qui joue ; son verdict est celui du groupe 1, branche
+//   pour branche. C'est ce qui porte le plafond à 15 000 événements ;
+// - la case d'un déplacement fait jouer la plus petite puissance qui
+//   l'atteint et qui se paie (faconDeLArrivee) ;
+// - la défense à égalité de dés : le PJ visé par un adversaire choisit, tant
+//   que rien n'est lancé, le type d'armure de son jet (livret, « Jets de
+//   défense ») ; le réglage retombe au défaut quand la cible change ;
+// - « Annuler le dernier geste » : l'offre dit s'il se peut, et sinon
+//   pourquoi, dans un ordre fixe : rien à annuler, puis un geste en cours non
+//   payé, puis un geste payé.
 
 import { CARACTERISTIQUES } from "../personnage/regles.js";
 import { circonstances } from "./circonstances.js";
@@ -44,7 +60,7 @@ import { basesPermises, bornesDuDecalage, degatsFixes, nombreDeD20 } from "./deg
 import { validerEvenement } from "./forme.js";
 import { choixDuJet, deAttendu, ouvrirJet } from "./jet.js";
 import { casesEntre, distance } from "./plateau.js";
-import { BORNE_DEGATS, BORNE_REGLAGE, DIFFICULTES, EVENEMENTS_MAX, FACES_LOCALISATION, ROLES_SANS_BOUTON } from "./regles.js";
+import { BORNE_DEGATS, BORNE_REGLAGE, DIFFICULTES, EVENEMENTS_MAX, FACES_LOCALISATION, ROLES_SANS_BOUTON, SANS_ANNULATION, ecrireEnMilliers } from "./regles.js";
 import { aJoue, campDe, capaciteDe, courantDe, faconDe, gesteEnCours, photoDe, vivant, vivantsDe } from "./valeurs.js";
 
 // Livret, « Capacités » et « Actions de jeu » : jouer une capacité coûte une
@@ -188,32 +204,22 @@ export function faconsDe(etat, id, capacite) {
   });
 }
 
-// La façon que joue d'office le bouton d'un PJ (règle d'interface) : la plus
-// haute puissance qu'il peut payer, parmi celles qui ne sont pas passives ;
-// s'il n'en peut payer aucune, la plus basse, et le bouton est inactif.
-function faconDOffice(capacite, jugees) {
-  const jouables = jugees.filter(({ facon }) => !capacite.facons[facon].passif);
-  const puissance = ({ facon }) => capacite.facons[facon].puissance;
-  const payables = jouables.filter(({ actif }) => actif);
-  if (payables.length > 0) return payables.reduce((haute, jugee) => (puissance(jugee) > puissance(haute) ? jugee : haute));
-  return jouables.reduce((basse, jugee) => (puissance(jugee) < puissance(basse) ? jugee : basse));
-}
-
 /**
- * Les boutons de capacité d'un protagoniste, dans l'ordre de sa
- * photographie : { capacite, facon, actif, raison }. Un PJ a un bouton par
- * capacité, qui porte sa façon d'office ; un adversaire, un par façon (une
- * par arme qui donne la capacité).
+ * Les lignes de capacité d'un protagoniste, dans l'ordre de sa photographie
+ * et de ses façons : { capacite, facon, actif, raison }, une par façon qui
+ * n'est pas passive (une par puissance, et par arme qui donne la capacité),
+ * pour un PJ comme pour un adversaire (complément, § 4.7). Une façon qu'on ne
+ * peut pas payer garde sa ligne, inactive, avec sa raison.
  *
- * N'ont pas de bouton : une capacité dont toutes les façons sont passives, et
- * celles dont le simulateur tient lui-même le rôle (passer son tour, le jet
- * de défense, attendre). Une capacité absente de la banque garde le sien,
- * inactif et sans façon.
+ * N'ont pas de ligne : une façon passive, même parmi d'autres qui se jouent ;
+ * une capacité dont toutes les façons sont passives ; celles dont le
+ * simulateur tient lui-même le rôle (passer son tour, le jet de défense,
+ * attendre). Une capacité absente de la banque garde la sienne, inactive et
+ * sans façon.
  */
 export function boutons(etat, id) {
   const photo = photoDe(etat, id);
   if (photo === null) return [];
-  const parFacon = campDe(etat, id) !== "pj";
   const liste = [];
   photo.capacites.forEach((capacite, indice) => {
     if (ROLES_SANS_BOUTON.includes(capacite.role)) return;
@@ -221,13 +227,28 @@ export function boutons(etat, id) {
       liste.push({ capacite: indice, facon: null, actif: false, raison: capacite.inactive ?? ABSENTE });
       return;
     }
-    if (capacite.facons.every((facon) => facon.passif)) return;
-    const jugees = faconsDe(etat, id, indice);
-    for (const { facon, actif, raison } of parFacon ? jugees : [faconDOffice(capacite, jugees)]) {
-      liste.push({ capacite: indice, facon, actif, raison });
-    }
+    capacite.facons.forEach((facon, rang) => {
+      if (facon.passif) return;
+      const raison = empechement(etat, id, capacite, facon);
+      liste.push({ capacite: indice, facon: rang, actif: raison === null, raison });
+    });
   });
   return liste;
+}
+
+/**
+ * Comment se joue une façon, à l'ouverture de son geste : « deplacement »
+ * pour le rôle du déplacement ; « caracteristique » pour celui du jet de
+ * caractéristique, joué par un PJ (un adversaire le joue sans jet : seuls les
+ * joueurs lancent des dés) ; « attaque » pour une façon qui attaque ; sinon
+ * « sans_jet ». Le jet prêté se choisit ensuite, par un réglage. « capacite »
+ * et « facon » sont les objets de la photographie, « camp » celui du porteur.
+ */
+export function modeDeLaFacon(capacite, facon, camp) {
+  if (capacite?.role === "deplacement") return "deplacement";
+  if (capacite?.role === "jet_de_caracteristique" && camp === "pj") return "caracteristique";
+  if (facon?.attaque === true) return "attaque";
+  return "sans_jet";
 }
 
 // ─── Le geste en préparation ────────────────────────────────────────────────
@@ -288,6 +309,32 @@ export function arrivees(etat) {
   return casesDuDeplacement(courantDe(etat, geste.acteur)?.case ?? null, faconDe(etat, geste));
 }
 
+/**
+ * La façon qu'une case d'arrivée fait jouer au déplacement en préparation
+ * (complément, § 4.7) : parmi les façons de sa capacité qui se paient
+ * (empechement nul, la part X comptée 0, la jauge du geste : une façon
+ * passive ne se paie pas), de la même arme que la façon en cours, et qui
+ * mènent à cette case, celle de plus petite puissance, puis de plus petit
+ * indice. Le Chef qui avance d'une case depuis la ligne Pas chassé [2] joue
+ * ainsi Pas chassé [1], gratuit. null quand aucune n'y mène, ou hors d'un
+ * déplacement en préparation.
+ */
+export function faconDeLArrivee(etat, nomDeCase) {
+  const geste = enPreparation(etat);
+  if (geste === null || geste.mode !== "deplacement") return null;
+  const capacite = capaciteDe(etat, geste.acteur, geste.capacite);
+  const enCours = faconDe(etat, geste);
+  if (capacite === null || enCours === null) return null;
+  const depart = courantDe(etat, geste.acteur)?.case ?? null;
+  let choisie = null;
+  capacite.facons.forEach((facon, indice) => {
+    if (facon.arme !== enCours.arme || !casesDuDeplacement(depart, facon).includes(nomDeCase)) return;
+    if (empechement(etat, geste.acteur, capacite, facon, { x: 0, jauge: geste.jauge }) !== null) return;
+    if (choisie === null || facon.puissance < capacite.facons[choisie].puissance) choisie = indice;
+  });
+  return choisie;
+}
+
 // Vrai quand le dé du geste se fait d'une ou deux caractéristiques au choix :
 // un jet de caractéristique ; une attaque ou un jet prêté d'un PJ dont l'arme
 // n'a pas de dé (les mains nues, ou pas d'arme du tout).
@@ -324,6 +371,18 @@ function jaugesAuChoix(courant, capacite, facon, geste) {
 
 const reglageALaMain = (reglage) => ({ valeur: reglage?.valeur ?? 0, min: -BORNE_REGLAGE, max: BORNE_REGLAGE, raison: true });
 
+// Le dé de défense du PJ que vise l'attaque (ou le jet prêté) d'un
+// adversaire, quand deux types d'armure au moins y sont à égalité de dés
+// (livret, « Jets de défense ») : le joueur choisit alors le type de son jet.
+// La cible d'une attaque est toujours de l'autre camp : une cible PJ dit donc
+// un adversaire qui attaque. null sinon : un geste sans jet, sans cible, une
+// cible qui n'est pas un PJ, un dé sans égalité.
+function defenseAuChoix(etat, geste) {
+  if (!MODES_D_ATTAQUE.includes(geste.mode) || campDe(etat, geste.cible) !== "pj") return null;
+  const deDefense = photoDe(etat, geste.cible)?.deDefense ?? null;
+  return deDefense !== null && deDefense.egalite.length >= 2 ? deDefense : null;
+}
+
 /**
  * Les réglages offerts au geste en préparation, par champ de l'événement
  * « regler » : { valeur, options?, min?, max?, raison? }. « valeur » est ce
@@ -358,6 +417,10 @@ export function reglages(etat) {
       .map(({ id }) => id);
     offerts.cible = { valeur: geste.cible, options: mode === "sans_jet" ? [null, ...possibles] : possibles };
   }
+  // Le type de la défense : le défaut proposé est le type retenu par la
+  // photographie ; il ne se règle que jusqu'au premier dé.
+  const deDefense = defenseAuChoix(etat, geste);
+  if (deDefense !== null) offerts.defense = { valeur: geste.defense ?? deDefense.type, options: [...deDefense.egalite] };
   if (mode === "deplacement") offerts.arrivee = { valeur: geste.arrivee, options: arrivees(etat) };
   if (deAuChoix(etat, geste)) offerts.caracteristiques = { valeur: geste.caracteristiques, options: [...CODES_CARACTERISTIQUES] };
   if (mode === "caracteristique") {
@@ -468,6 +531,33 @@ function deOffert(etat, geste) {
   return DE_ATTENDU[geste.moment](etat, geste);
 }
 
+// ─── L'annulation ───────────────────────────────────────────────────────────
+
+const RIEN_A_ANNULER = "Rien à annuler depuis le lancement.";
+const REVENIR_D_ABORD = "Revenez d'abord sur le geste en cours.";
+const TERMINER_D_ABORD = "Terminez d'abord le geste en cours.";
+
+/**
+ * « Annuler le dernier geste » (complément, § 4.10) : null avant le
+ * lancement, où le bouton n'est pas montré ; sinon { actif, raison, quoi }.
+ * « quoi » est le geste que l'annulation défera (le dernier maillon de la
+ * pile, voir js/combat/moteur.js), ou null. Les raisons, dans cet ordre :
+ * aucun geste fini depuis le lancement ; un geste en cours dont rien n'est
+ * payé ; un geste en cours payé. Un état sans champ « annulation » se lit
+ * comme SANS_ANNULATION.
+ */
+export function annulation(etat) {
+  if (etat.phase === "preparation") return null;
+  const { pile } = etat.annulation ?? SANS_ANNULATION;
+  const quoi = pile?.quoi ?? null;
+  const geste = gesteEnCours(etat);
+  let raison = null;
+  if (pile === null) raison = RIEN_A_ANNULER;
+  else if (geste !== null && geste.paye === false) raison = REVENIR_D_ABORD;
+  else if (geste !== null) raison = TERMINER_D_ABORD;
+  return { actif: raison === null, raison, quoi };
+}
+
 // ─── L'offre ────────────────────────────────────────────────────────────────
 
 const IL_FAUT_DEUX_CAMPS = "Il faut au moins un personnage et un adversaire.";
@@ -479,16 +569,18 @@ const peutSeLancer = (etat) => ["pj", "adv"].every((camp) => vivantsDe(etat, cam
 
 // La table « quel événement est valide à quel moment » : une colonne par
 // phase du combat, puis par moment du geste en cours. Un type absent de sa
-// colonne est refusé, « hors_moment ».
+// colonne est refusé, « hors_moment ». « annuler » est de toutes les colonnes
+// d'un combat lancé, combat terminé compris : hors de son seul moment
+// possible (aucun geste en cours), c'est un bouton inactif, qui dit pourquoi.
 const TABLE = {
   avant: ["lancer"],
-  sans_geste: ["capacite", "passer", "fin_de_tour"],
-  preparation: ["capacite", "regler", "revenir", "confirmer", "de", "passer", "fin_de_tour"],
-  jet: ["de", "relancer", "garder", "exploser"],
-  bilan: ["de", "degats"],
-  localisation: ["de"],
-  suites: ["decaler", "esquive", "appliquer"],
-  termine: [],
+  sans_geste: ["capacite", "passer", "fin_de_tour", "annuler"],
+  preparation: ["capacite", "regler", "revenir", "confirmer", "de", "passer", "fin_de_tour", "annuler"],
+  jet: ["de", "relancer", "garder", "exploser", "annuler"],
+  bilan: ["de", "degats", "annuler"],
+  localisation: ["de", "annuler"],
+  suites: ["decaler", "esquive", "appliquer", "annuler"],
+  termine: ["annuler"],
 };
 
 function colonneDe(etat) {
@@ -513,6 +605,7 @@ const S_OFFRE = {
   exploser: ({ offerts }) => offerts.choix.includes("exploser"),
   decaler: ({ offerts }) => offerts.decalages.length > 0,
   esquive: ({ offerts }) => offerts.esquive !== null,
+  annuler: ({ offerts }) => offerts.annulation?.actif === true,
 };
 
 /**
@@ -527,7 +620,8 @@ const S_OFFRE = {
  *   max } ;
  * - decalages : un par d20 lancé, { de, min, max }, tant qu'aucune esquive
  *   n'est jouée ;
- * - esquive : { min, max, capacite }, ou null.
+ * - esquive : { min, max, capacite }, ou null ;
+ * - annulation : ce que dit annulation(etat).
  */
 export function offre(etat) {
   const geste = gesteEnCours(etat);
@@ -541,6 +635,7 @@ export function offre(etat) {
     degats: colonne === "bilan" ? { bases: basesPermises(etat, geste), natures: [...NATURES], max: BORNE_DEGATS } : null,
     decalages: decalagesOfferts(etat),
     esquive: esquiveOfferte(etat),
+    annulation: annulation(etat),
   };
   offerts.types = TABLE[colonne].filter((type) => !Object.hasOwn(S_OFFRE, type) || S_OFFRE[type]({ etat, geste, offerts }));
   return offerts;
@@ -556,6 +651,7 @@ const interdit = (message) => refuser("interdit", message);
 
 const INCONNU = "Ce protagoniste n'est pas dans le combat.";
 const NE_PEUT_PAS_JOUER = "Ce protagoniste ne peut pas jouer à cet instant.";
+const NE_SE_JOUE_PAS = "Cette capacité ne se joue pas.";
 
 // Pourquoi un type n'est pas de sa colonne.
 function raisonHorsMoment(colonne, type) {
@@ -596,15 +692,22 @@ function jugerValeur(etat, { champ, valeur }, reglage) {
 const JUGES = {
   lancer: (etat) => (peutSeLancer(etat) ? OUI : interdit(IL_FAUT_DEUX_CAMPS)),
 
+  // L'offre allégée (complément, § 5.3) : seule la façon demandée est jugée,
+  // et non chaque façon de qui joue. Le verdict est celui que rendait le
+  // groupe 1 en passant par les boutons, branche pour branche : une capacité
+  // sans ligne (un rôle tenu par le simulateur, toutes ses façons passives)
+  // ne se joue pas ; une capacité absente est une ligne inactive.
   capacite(etat, { qui, capacite, facon }) {
     const candidat = jugerCandidat(etat, qui);
     if (!candidat.ok) return candidat;
-    const bouton = boutons(etat, qui).find((un) => un.capacite === capacite);
-    if (!bouton) return horsBornes("Cette capacité ne se joue pas.");
-    if (bouton.facon === null) return interdit(bouton.raison);
-    const jugee = faconsDe(etat, qui, capacite)[facon];
-    if (!jugee) return horsBornes("Cette capacité ne se joue pas de cette façon.");
-    return jugee.actif ? OUI : interdit(jugee.raison);
+    const laCapacite = capaciteDe(etat, qui, capacite);
+    if (laCapacite === null || ROLES_SANS_BOUTON.includes(laCapacite.role)) return horsBornes(NE_SE_JOUE_PAS);
+    if (laCapacite.facons.length === 0) return interdit(laCapacite.inactive ?? ABSENTE);
+    if (laCapacite.facons.every((une) => une.passif)) return horsBornes(NE_SE_JOUE_PAS);
+    const laFacon = element(laCapacite.facons, facon);
+    if (laFacon === null) return horsBornes("Cette capacité ne se joue pas de cette façon.");
+    const raison = empechement(etat, qui, laCapacite, laFacon);
+    return raison === null ? OUI : interdit(raison);
   },
 
   regler(etat, evenement) {
@@ -662,9 +765,14 @@ const JUGES = {
   },
 
   passer: (etat, { qui }) => jugerCandidat(etat, qui),
+
+  annuler(etat) {
+    const { actif, raison } = annulation(etat);
+    return actif ? OUI : interdit(raison);
+  },
 };
 
-const COMBAT_PLEIN = `Ce combat a atteint ${String(EVENEMENTS_MAX).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} événements : commencez-en un nouveau.`;
+const COMBAT_PLEIN = `Ce combat a atteint ${ecrireEnMilliers(EVENEMENTS_MAX)} événements : commencez-en un nouveau.`;
 
 /**
  * Dit si un événement est accepté à cet instant : { ok: true }, ou
