@@ -11,15 +11,24 @@
 // et déplacer les jetons se fait ailleurs : sur le plateau, et par le champ
 // « Case » des fiches.
 //
+// Au groupe 2 (contrat du groupe 2, § 8.8, § 9.9 et § 9.11 ; complément,
+// § 5.1 et § 5.2) : en démonstration, un bloc à part, juste après celui des
+// personnages, porte « Ajouter le personnage de démonstration », la zone où
+// s'ouvre sa question et la phrase que l'écran lui passe ; en mode réel, il
+// n'existe pas. La raison de « Placer la rencontre préparée » mène à l'écran
+// Rencontre par un lien. Le focus rendu ne fait jamais défiler la page.
+//
 // Ce qu'elle garde pour elle : le personnage et l'adversaire choisis dans
-// les listes, le nombre d'exemplaires saisi, et le texte de chaque morceau
-// de vue déjà montré, pour ne refaire que ce qui a changé.
+// les listes, le nombre d'exemplaires saisi, le texte de chaque morceau de
+// vue déjà montré, pour ne refaire que ce qui a changé, et les nœuds du bloc
+// de la démonstration, créés une fois.
 
 import { el, sansSensForce } from "./dom.js";
 
 const TITRE = "Avant le combat";
 const PREFIXE = "combat-preparation";
 // Les textes de cette partie qui ne viennent pas de la vue.
+const DEMONSTRATION = "Ajouter le personnage de démonstration";
 const ATTENTE = "Lecture des personnages en ligne…";
 const AUCUN_PERSONNAGE = "Aucun personnage enregistré à ajouter. Un personnage se crée et s'enregistre à l'écran ";
 const NE_S_AJOUTE_PAS = " (ne s'ajoute pas)";
@@ -75,13 +84,24 @@ function boutonARaison(repere, libelle, classe, auClic) {
   return {
     bouton,
     raison,
-    regler(estActif, pourquoi) {
+    /**
+     * Règle le bouton et sa raison. Avec un lien (contrat du groupe 2,
+     * § 8.8), la raison s'écrit en trois morceaux, le lien au milieu : écrite
+     * sous le bouton, elle s'atteint au clavier ; lue par aria-describedby,
+     * c'est le texte entier.
+     */
+    regler(estActif, pourquoi, lien = null) {
       actif = estActif === true;
       if (actif) bouton.removeAttribute("aria-disabled");
       else bouton.setAttribute("aria-disabled", "true");
-      const texte = actif || !pourquoi ? "" : sansSensForce(pourquoi);
-      raison.textContent = texte;
-      raison.hidden = texte === "";
+      if (actif || !pourquoi) {
+        raison.replaceChildren();
+        raison.hidden = true;
+        return;
+      }
+      const morceaux = lien ? [String(lien.avant), el("a", { href: lien.adresse }, lien.texte), String(lien.apres)] : [String(pourquoi)];
+      raison.replaceChildren(...morceaux.map((morceau) => (typeof morceau === "string" ? sansSensForce(morceau) : morceau)));
+      raison.hidden = false;
     },
   };
 }
@@ -111,14 +131,14 @@ function rangGarde(options, estLeChoix) {
 }
 
 /**
- * La partie « préparation » de l'écran du combat : { noeud, rendre(vue),
- * listeDeCase }.
+ * La partie « préparation » de l'écran du combat : { noeud, rendre(vue,
+ * ecran), listeDeCase }.
  *
  * « actions » vient de l'écran : ajouterPersonnage(cle),
- * ajouterAdversaires(nom, nombre), placerRencontre(), lancer(), et
- * executer(commande, origine) pour ce qui n'a pas besoin de photographie.
- * « listeDeCase » est le nœud, jamais refait, où l'écran écrit la liste
- * « +k » d'une case.
+ * ajouterAdversaires(nom, nombre), placerRencontre(), lancer(),
+ * ajouterLaDemonstration(zone), et executer(commande, origine) pour ce qui
+ * n'a pas besoin de photographie. « listeDeCase » est le nœud, jamais refait,
+ * où l'écran écrit la liste « +k » d'une case.
  */
 export function creer(actions) {
   // Ce que la personne a choisi dans les listes : gardé ici, puisque les
@@ -132,18 +152,38 @@ export function creer(actions) {
     blocs[nom] = { noeud: el("div", { classe: `${PREFIXE}-bloc ${PREFIXE}-${classe}` }), texte: null };
   }
   const listeDeCase = el("div", { classe: "combat-case-liste" });
-  const noeud = el(
-    "section",
-    { classe: PREFIXE, "aria-label": TITRE },
-    el("h2", {}, TITRE),
-    blocs.personnages.noeud,
-    blocs.adversaires.noeud,
-    blocs.rencontre.noeud,
-    blocs.quiCommence.noeud,
-    blocs.lancer.noeud,
-    blocs.notes.noeud,
-    listeDeCase,
-  );
+
+  // Le bloc de la démonstration (compl. § 5.1) : ses nœuds ne se créent
+  // qu'ici. La zone de la question surtout, où l'écran ouvre « Remplacer »,
+  // « Garder les deux » ou « Annuler » pendant que la liste des personnages
+  // se relit : une zone refaite, ou seulement retirée puis remise, perdrait
+  // le focus de la question ouverte, et sa réponse avec lui.
+  const question = el("div", { classe: `${PREFIXE}-question` });
+  const demonstration = {
+    bouton: el(
+      "button",
+      { type: "button", classe: "bouton secondaire", "data-repere": "ajouter-demonstration", onclick: () => actions.ajouterLaDemonstration(question) },
+      DEMONSTRATION,
+    ),
+    phrase: el("p", { classe: `${PREFIXE}-phrase` }),
+  };
+  demonstration.noeud = el("div", { classe: `${PREFIXE}-demonstration` }, demonstration.bouton, question);
+
+  const titre = el("h2", {}, TITRE);
+  /** Les enfants de la section, dans l'ordre du document ; la démonstration juste après les personnages. */
+  const enOrdre = (avecLaDemonstration) =>
+    [
+      titre,
+      blocs.personnages.noeud,
+      avecLaDemonstration ? demonstration.noeud : null,
+      blocs.adversaires.noeud,
+      blocs.rencontre.noeud,
+      blocs.quiCommence.noeud,
+      blocs.lancer.noeud,
+      blocs.notes.noeud,
+      listeDeCase,
+    ].filter(Boolean);
+  const noeud = el("section", { classe: PREFIXE, "aria-label": TITRE }, enOrdre(false));
 
   /** Refait un bloc si le morceau de vue qu'il montre a changé. */
   function refaire(bloc, vue, fabriquer) {
@@ -228,9 +268,14 @@ export function creer(actions) {
     ];
   }
 
+  /**
+   * « Placer la rencontre préparée ». Tant qu'aucune rencontre n'est
+   * composée, la vue donne aussi le lien de sa raison (compl. § 5.2) :
+   * « écran Rencontre » mène à #/rencontre.
+   */
   function faireRencontre(vue) {
     const placer = boutonARaison("rencontre", "Placer la rencontre préparée", "bouton secondaire", () => actions.placerRencontre());
-    placer.regler(vue.actif, vue.raison);
+    placer.regler(vue.actif, vue.raison, vue.lien ?? null);
     return [el("div", { classe: "combat-ligne" }, placer.bouton), placer.raison];
   }
 
@@ -272,15 +317,39 @@ export function creer(actions) {
   }
 
   /**
-   * Montre la vue. Le second argument que l'écran passe à chaque partie
-   * (sa mémoire) n'est pas lu ici : la préparation n'en dépend pas.
+   * Le bloc de la démonstration, d'après ce que l'écran en dit : présent en
+   * démonstration seulement (c'est un mode, que la vue ne porte pas), avec
+   * la phrase d'un personnage gardé quand elle n'est pas nulle. La section
+   * ne se recompose que si la présence du bloc change, c'est-à-dire au
+   * premier rendu : le mode ne change pas pendant une visite. Rien d'autre
+   * n'est jamais refait : le bouton et la zone restent les mêmes nœuds, à la
+   * même place, et la phrase se pose ou s'ôte après eux.
    */
-  function rendre(vue) {
+  function montrerLaDemonstration(ecran) {
+    const montree = ecran?.demonstration === true;
+    if (montree !== (demonstration.noeud.parentNode === noeud)) noeud.replaceChildren(...enOrdre(montree));
+    const dite = ecran?.phraseDeDemonstration;
+    const texte = montree && typeof dite === "string" && dite !== "" ? sansSensForce(dite) : null;
+    if (texte === null) {
+      demonstration.phrase.remove();
+      return;
+    }
+    if (demonstration.phrase.textContent !== texte) demonstration.phrase.replaceChildren(texte);
+    if (demonstration.phrase.parentNode !== demonstration.noeud) demonstration.noeud.append(demonstration.phrase);
+  }
+
+  /**
+   * Montre la vue. De la mémoire de l'écran, la préparation ne lit que
+   * « demonstration » (le mode) et « phraseDeDemonstration » (contrat du
+   * groupe 2, § 9.9).
+   */
+  function rendre(vue, ecran) {
     // Un bloc refait emporte le focus avec lui : on note où il était, pour
     // le rendre au bouton ou au champ de même rôle.
     const avant = globalThis.document?.activeElement;
     const repere = avant && estDans(avant, noeud) ? avant.getAttribute("data-repere") : null;
 
+    montrerLaDemonstration(ecran);
     refaire(blocs.personnages, vue.personnages, fairePersonnages);
     refaire(blocs.adversaires, vue.adversaires, faireAdversaires);
     refaire(blocs.rencontre, vue.rencontre, faireRencontre);
@@ -288,8 +357,9 @@ export function creer(actions) {
     refaire(blocs.lancer, vue.lancer, faireLancer);
     refaire(blocs.notes, { absents: vue.absents ?? null, avertissements: vue.avertissements ?? [] }, faireNotes);
 
+    // Sans défiler (compl. § 4.5) : un bloc refait ne déplace pas la vue.
     if (repere && !estDans(globalThis.document.activeElement, noeud)) {
-      noeud.querySelector(`[data-repere=${repere}]`)?.focus();
+      noeud.querySelector(`[data-repere=${repere}]`)?.focus({ preventScroll: true });
     }
   }
 

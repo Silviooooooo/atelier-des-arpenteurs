@@ -1,9 +1,9 @@
 // Contrôles du site (SPECIFICATION.md, § 7, § 9, § 10.1 et § 11, domaine
 // « Site ») : la page et sa politique de sécurité, le graphe de ses modules,
 // le manifeste et les icônes de l'écran d'accueil, les jetons et leurs
-// contrastes, dont les onze couleurs du simulateur de combat (§ 17), la
-// banque de démonstration et le chargement. Les écrans eux-mêmes s'essaient
-// à la main, dans le navigateur.
+// contrastes, dont les quinze couleurs du simulateur de combat (§ 17 ; lot 4,
+// groupe 2, complément § 4.12), la banque de démonstration et le chargement.
+// Les écrans eux-mêmes s'essaient à la main, dans le navigateur.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -134,14 +134,19 @@ test("site — le graphe des modules de la page se résout, et atteint les seize
   const modules = [
     "js/banque/chargement.js", "js/securite/coffre.js", "js/publication/github.js", "js/lecture/zip.js", "js/personnage/calcul.js", "js/personnage/stockage.js", "js/fiche/feuilles.js",
     "js/adversaire/resolution.js", "js/adversaire/carte.js", "js/adversaire/lecture.js", "js/ecrans/echelle.js",
-    // Le simulateur de combat (§ 17) : les quatre parties de son écran, son moteur, son enregistrement, ses dés.
+    // La rencontre préparée, gardée chiffrée sur l'appareil (lot 4, groupe 2 ; rencontre.js l'importe).
+    "js/adversaire/rencontre_gardee.js",
+    // Le simulateur de combat (§ 17) : les six parties de son écran (au groupe 2, la bulle et le journal), son moteur,
+    // son enregistrement, ses dés.
     "js/ecrans/combat_plateau.js", "js/ecrans/combat_fiches.js", "js/ecrans/combat_action.js", "js/ecrans/combat_preparation.js",
+    "js/ecrans/combat_bulle.js", "js/ecrans/combat_journal.js",
     "js/combat/moteur.js", "js/combat/offre.js", "js/combat/lecture.js", "js/combat/journal.js", "js/combat/seance.js", "js/combat/enregistrement.js",
     "js/combat/photographie.js", "js/combat/roles.js", "js/combat/des.js", "js/personnage/disponibles.js",
   ];
   for (const module of modules) assert.ok(vus.has(module), module);
   // L'écran du combat n'entre dans la page que par application.js, d'un import que ce parcours sait lire.
-  assert.match(lire("js/application.js"), /^import \* as combat from "\.\/ecrans\/combat\.js";\r?$/m);  // Tout module de js/ est dans le graphe : aucun fichier que la page n'appelle.
+  assert.match(lire("js/application.js"), /^import \* as combat from "\.\/ecrans\/combat\.js";\r?$/m);
+  // Tout module de js/ est dans le graphe : aucun fichier que la page n'appelle.
   const tous = readdirSync(new URL("js/", RACINE), { recursive: true }).map((chemin) => `js/${chemin.replaceAll("\\", "/")}`).filter((chemin) => chemin.endsWith(".js"));
   assert.deepEqual(tous.filter((chemin) => !vus.has(chemin)), ["js/veille.js"], "seule la veille vit hors du graphe (§ 9)");
 });
@@ -223,9 +228,14 @@ test("jetons — le texte contraste d'au moins 4,5:1, les bordures de 3:1, dans 
   }
 });
 
-// Les onze couleurs du simulateur de combat (§ 17), l'exception à la couleur
-// d'accent unique (§ 9). Trois fonds peuvent porter une case de la carte.
-const COULEURS_DU_COMBAT = ["combat-pj", "combat-pj-doux", "combat-pj-texte", "combat-adv", "combat-adv-doux", "combat-adv-texte", "combat-sur-jeton", "combat-mort", "combat-reussite", "combat-echec", "combat-alerte"];
+// Les quinze couleurs du simulateur de combat (§ 17), l'exception à la
+// couleur d'accent unique (§ 9) : les onze du lot 4, puis, au groupe 2, la
+// hachure de la portée, son bord, le bord et le fond du cadre d'un jet. Trois
+// fonds peuvent porter une case de la carte.
+const COULEURS_DU_COMBAT = [
+  "combat-pj", "combat-pj-doux", "combat-pj-texte", "combat-adv", "combat-adv-doux", "combat-adv-texte", "combat-sur-jeton", "combat-mort", "combat-reussite", "combat-echec", "combat-alerte",
+  "combat-portee", "combat-portee-bord", "combat-cadre-jet", "combat-cadre-jet-fond",
+];
 const FONDS_DE_CASE = ["fond", "fond-2", "accent-doux"];
 // Ce qui s'écrit, à 4,5:1 : [avant, fond].
 const TEXTES_DU_COMBAT = [
@@ -238,9 +248,17 @@ const TEXTES_DU_COMBAT = [
   ["combat-sur-jeton", "combat-mort"],
   // Le texte du site, posé sur les deux fonds doux.
   ...["texte", "texte-2", "accent"].flatMap((avant) => ["combat-pj-doux", "combat-adv-doux"].map((fond) => [avant, fond])),
+  // Dans le cadre d'un jet : ✓, ✗ et les chiffres.
+  ...["combat-reussite", "combat-echec", "texte"].map((avant) => [avant, "combat-cadre-jet-fond"]),
 ];
 // Les ronds, à 3:1 sur le fond des cases.
 const RONDS_DU_COMBAT = ["combat-pj", "combat-adv", "combat-mort"].flatMap((avant) => FONDS_DE_CASE.map((fond) => [avant, fond]));
+// Les traits, à 3:1 : le bord du cadre d'un jet sur les deux fonds et sur le sien ; les traits de la hachure et le bord
+// d'une case hachurée sur le fond des cases.
+const TRAITS_DU_COMBAT = [
+  ...["fond", "fond-2", "combat-cadre-jet-fond"].map((fond) => ["combat-cadre-jet", fond]),
+  ...["combat-portee", "combat-portee-bord"].flatMap((avant) => FONDS_DE_CASE.map((fond) => [avant, fond])),
+];
 
 // Les paires trop faibles d'une feuille de jetons, dans les deux thèmes : vide quand tout tient.
 function contrastesFaibles(css, paires, seuil) {
@@ -250,17 +268,24 @@ function contrastesFaibles(css, paires, seuil) {
   });
 }
 
-test("jetons — les onze couleurs du combat : le texte contraste d'au moins 4,5:1, les ronds de 3:1 sur le fond des cases, dans les deux thèmes (§ 17)", () => {
-  assert.equal(COULEURS_DU_COMBAT.length, 11);
+test("jetons — les quinze couleurs du combat : le texte contraste d'au moins 4,5:1, les ronds et les traits de 3:1 sur le fond des cases, dans les deux thèmes (§ 17)", () => {
+  assert.equal(COULEURS_DU_COMBAT.length, 15);
   assert.deepEqual(contrastesFaibles(JETONS, TEXTES_DU_COMBAT, 4.5), []);
   assert.deepEqual(contrastesFaibles(JETONS, RONDS_DU_COMBAT, 3), []);
-  // Chacune des onze est mesurée, comme couleur ou comme fond.
-  const mesurees = new Set([...TEXTES_DU_COMBAT, ...RONDS_DU_COMBAT].flat());
+  assert.deepEqual(contrastesFaibles(JETONS, TRAITS_DU_COMBAT, 3), []);
+  // Chacune des quinze est mesurée, comme couleur ou comme fond.
+  const mesurees = new Set([...TEXTES_DU_COMBAT, ...RONDS_DU_COMBAT, ...TRAITS_DU_COMBAT].flat());
   assert.deepEqual(COULEURS_DU_COMBAT.filter((nom) => !mesurees.has(nom)), []);
-  // Ces onze-là, et aucune autre : une couleur ajoutée sans mesure se verrait.
+  // Ces quinze-là, et aucune autre : une couleur ajoutée sans mesure se verrait.
   for (const theme of ["clair", "sombre"]) {
     assert.deepEqual(Object.keys(jetons(JETONS, theme)).filter((nom) => nom.startsWith("combat-")), COULEURS_DU_COMBAT, theme);
   }
+  const deTrop = JETONS.replace("--combat-cadre-jet-fond: #ffffff;", "--combat-cadre-jet-fond: #ffffff;\n  --combat-hachure: #d9534f;");
+  assert.notDeepEqual(Object.keys(jetons(deTrop, "clair")).filter((nom) => nom.startsWith("combat-")), COULEURS_DU_COMBAT);
+  // Le groupe 2 : une hachure trop pâle sur le fond doux d'une case ; un fond de cadre sombre qui avale son bord.
+  assert.match(contrastesFaibles(JETONS.replace("--combat-portee: #d9534f;", "--combat-portee: #e8776e;"), TRAITS_DU_COMBAT, 3).join("\n"), /^clair : --combat-portee sur --accent-doux, /m);
+  assert.match(contrastesFaibles(JETONS.replace("--combat-cadre-jet-fond: #262a30;", "--combat-cadre-jet-fond: #3a3f46;"), TRAITS_DU_COMBAT, 3).join("\n"), /^sombre : --combat-cadre-jet sur --combat-cadre-jet-fond, /m);
+  assert.match(contrastesFaibles(JETONS.replace("--combat-cadre-jet-fond: #262a30;", "--combat-cadre-jet-fond: #3a3f46;"), TEXTES_DU_COMBAT, 4.5).join("\n"), /^sombre : --combat-echec sur --combat-cadre-jet-fond, /m);
   // Le contrôle refuse : des initiales blanches sur le vert du thème sombre, un rouge trop pâle pour s'écrire sur le clair.
   const blanches = contrastesFaibles(JETONS.replace("--combat-sur-jeton: #0b1722;", "--combat-sur-jeton: #ffffff;"), [["combat-sur-jeton", "combat-pj"]], 4.5);
   assert.equal(blanches.length, 1, "le thème clair, lui, garde ses initiales blanches");
@@ -295,15 +320,38 @@ function sansValeurSombre(css, noms) {
   const [clair, sombre] = [jetons(css, "clair"), jetons(css, "sombre")];
   return noms.filter((nom) => !/^#[0-9a-f]{6}$/i.test(sombre[nom] ?? "") || sombre[nom] === clair[nom]);
 }
+// Les jetons que le bloc sombre déclare lui-même.
+const declaresEnSombre = (css) => new Set([...css.slice(css.indexOf("@media (prefers-color-scheme: dark)")).matchAll(/--([\w-]+):/g)].map(([, nom]) => nom));
+
+// Les propriétés que placerBulle (js/ecrans/echelle.js) écrit sur la bulle du
+// combat, son onglet et ses infobulles : lues dans son corps, jusqu'à la
+// première accolade fermante en début de ligne. combat.css les lit sans
+// qu'elles soient des jetons.
+function proprietesDePlacerBulle(source) {
+  const debut = source.indexOf("export function placerBulle(");
+  if (debut < 0) return [];
+  const fin = source.indexOf("\n}", debut);
+  return [...source.slice(debut, fin < 0 ? undefined : fin).matchAll(/setProperty\(\s*"--([\w-]+)"/g)].map(([, nom]) => nom);
+}
 
 test("jetons — ecran.css, personnage.css et combat.css tirent toutes leurs valeurs de jetons.css, hors les largeurs des @media ; aucune police téléchargée", () => {
   const definis = new Set(Object.keys(jetons(JETONS, "clair")));
-  for (const feuille of FEUILLES_A_JETONS) assert.deepEqual(valeursEnDur(lire(feuille), definis), [], feuille);
+  // La feuille du combat lit aussi les trois propriétés de la place de la bulle, et elles seules.
+  const deLaBulle = proprietesDePlacerBulle(lire("js/ecrans/echelle.js"));
+  assert.deepEqual(deLaBulle, ["bulle-gauche", "bulle-haut", "bulle-fleche"]);
+  assert.deepEqual([...definis].filter((nom) => nom.startsWith("bulle-")), [], "la place de la bulle n'est pas un jeton");
+  const definisPour = (feuille) => (feuille === "css/combat.css" ? new Set([...definis, ...deLaBulle]) : definis);
+  for (const feuille of FEUILLES_A_JETONS) assert.deepEqual(valeursEnDur(lire(feuille), definisPour(feuille)), [], feuille);
   assert.doesNotMatch(JETONS, /@font-face|@import|url\(/);
-  // La feuille du combat est bien lue : elle emploie ses jetons, et ses deux largeurs sont écrites là où elles sont permises.
+  // La feuille du combat est bien lue : elle emploie ses jetons et les trois propriétés de la bulle, et ses deux largeurs
+  // sont écrites là où elles sont permises ; sa troisième condition, la souris, n'en a pas.
   const combat = lire("css/combat.css");
-  for (const nom of [...COULEURS_DU_COMBAT, "largeur-combat"]) assert.ok(combat.includes(`var(--${nom})`), `--${nom} ne sert pas dans css/combat.css`);
-  assert.deepEqual(combat.split("\n").map((ligne) => ligne.trim()).filter((ligne) => ligne.startsWith("@")), ["@media (min-width: 56rem) {", "@media (min-width: 80rem) {"]);
+  for (const nom of [...COULEURS_DU_COMBAT, "largeur-combat", ...deLaBulle]) assert.ok(combat.includes(`var(--${nom})`), `--${nom} ne sert pas dans css/combat.css`);
+  assert.deepEqual(combat.split("\n").map((ligne) => ligne.trim()).filter((ligne) => ligne.startsWith("@")), ["@media (min-width: 56rem) {", "@media (min-width: 80rem) {", "@media (pointer: fine) {"]);
+  // Les --bulle-* ne sont admises que d'après placerBulle : une autre est refusée, dans combat.css comme ailleurs.
+  assert.match(valeursEnDur(".combat-bulle { left: var(--bulle-x); }", definisPour("css/combat.css")).join("\n"), /^--bulle-x n'est pas défini/);
+  assert.match(valeursEnDur(".bulle { left: var(--bulle-gauche); }", definisPour("css/ecran.css")).join("\n"), /^--bulle-gauche n'est pas défini/);
+  assert.deepEqual(proprietesDePlacerBulle("export function placerBulle(n) {\n  n.style.setProperty(\"--bulle-x\", \"1px\");\n}\nexport function autre(n) {\n  n.style.setProperty(\"--hors\", \"1px\");\n}\n"), ["bulle-x"]);
   // Le contrôle refuse : chaque sorte de valeur en dur, et une largeur sortie de la ligne de son @media.
   const refuse = (css, motif) => assert.match(valeursEnDur(css, definis).join("\n"), motif, css);
   refuse(".combat-x { color: #1e7a3c; }", /^couleur écrite en dur/);
@@ -317,11 +365,17 @@ test("jetons — ecran.css, personnage.css et combat.css tirent toutes leurs val
   refuse("@media\n  (min-width: 80rem) {\n  .combat-x { display: none; }\n}", /^valeur écrite en dur : \(min-width: 80rem\) \{/);
   refuse("@container (min-width: 40rem) {\n  .combat-x { display: none; }\n}", /^valeur écrite en dur : @container/);
   assert.deepEqual(valeursEnDur("@media (min-width: 56rem) {\n  .combat-x { max-width: var(--largeur-combat); width: 45%; flex: 1 1 0; }\n}", definis), []);
-  // Les jetons de couleur ont une valeur dans chaque thème.
-  const couleurs = ["fond", "fond-2", "texte", "texte-2", "bordure", "separateur", "accent", "texte-sur-accent", "accent-doux", ...COULEURS_DU_COMBAT];
+  // Les jetons de couleur ont une valeur dans chaque thème. Le bord du cadre d'un jet, seul, garde la même (un gris qui
+  // tient 3:1 sur les fonds des deux thèmes) : il est exempté par son nom, et le bloc sombre le redéclare.
+  const EXEMPTE = "combat-cadre-jet";
+  const couleurs = ["fond", "fond-2", "texte", "texte-2", "bordure", "separateur", "accent", "texte-sur-accent", "accent-doux", ...COULEURS_DU_COMBAT.filter((nom) => nom !== EXEMPTE)];
   assert.deepEqual(sansValeurSombre(JETONS, couleurs), []);
+  assert.deepEqual(sansValeurSombre(JETONS, [EXEMPTE]), [EXEMPTE], "l'exemption sert : sa valeur sombre est la claire");
+  assert.deepEqual(COULEURS_DU_COMBAT.filter((nom) => !declaresEnSombre(JETONS).has(nom)), [], "le bloc sombre déclare les quinze");
   assert.deepEqual(sansValeurSombre(JETONS.replace(/\s*--combat-alerte: #e6a85a;/, ""), couleurs), ["combat-alerte"], "un jeton resté à sa valeur claire");
   assert.deepEqual(sansValeurSombre(JETONS.replace("--combat-mort: #7d838d;", "--combat-mort: var(--bordure);"), couleurs), ["combat-mort"], "une valeur sombre qui ne se mesure pas");
+  assert.deepEqual(sansValeurSombre(JETONS.replace("--combat-cadre-jet-fond: #262a30;", "--combat-cadre-jet-fond: #ffffff;"), couleurs), ["combat-cadre-jet-fond"], "le fond du cadre resté blanc");
+  assert.deepEqual(COULEURS_DU_COMBAT.filter((nom) => !declaresEnSombre(JETONS.replace(/\r?\n {4}--combat-cadre-jet: #7d838d;/, "")).has(nom)), [EXEMPTE], "le bord du cadre sans valeur sombre");
 });
 
 test("démonstration — la banque se déchiffre avec le mot de passe public et vient du classeur d'essai", async () => {

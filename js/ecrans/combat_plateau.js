@@ -20,8 +20,17 @@
 // aucune case ne se choisit, rien ne se prend en main : un clic que la séance
 // refuserait ne s'offre pas.
 //
+// Au groupe 2 (contrat du groupe 2, § 8.5 et § 9.9 ; complément, § 4.2), la
+// carte hachure la portée de la capacité survolée : « hachurer », que l'écran
+// passe à la bulle et à ses infobulles, pose la classe « portee » sur les
+// cases qu'on lui nomme, et ne récrit que les cases dont la marque change.
+// Un jeton peut aussi porter une raison (« Une action est en cours. ») : son
+// titre la dit sur une seconde ligne, et un lecteur d'écran l'entend par un
+// texte caché, celui du jeton focalisé ou survolé.
+//
 // Ce qu'elle garde pour elle : le jeton « en main », le jeton qu'on fait
-// glisser, et le texte de ce que montre chaque case et chaque jeton.
+// glisser, les cases hachurées, le jeton dont le texte caché dit la raison,
+// et le texte de ce que montre chaque case et chaque jeton.
 
 import { el, sansSensForce } from "./dom.js";
 import { COLONNES, COTE } from "../combat/regles.js";
@@ -43,7 +52,11 @@ const LEGENDE = [
   ["joue", "joue"],
   ["cible", "cible"],
   ["mort", "mort, barré"],
+  ["portee", "portée de la capacité survolée"],
 ];
+// Le texte caché qui dit la raison d'un jeton : un seul pour la carte, que
+// chaque jeton à raison nomme par aria-describedby.
+const RAISON = "combat-plateau-raison";
 // L'en-tête de la carte, tel que sur la maquette : ce qu'elle est et comment
 // s'y compte une distance ; puis, pour qui a une souris, où lire un nom
 // entier (le titre de chaque jeton).
@@ -64,6 +77,9 @@ function morceauxDuNom(nomCourt) {
 
 const possede = (objet, nom) => Object.prototype.hasOwnProperty.call(objet, nom);
 
+/** La raison que la vue donne à un jeton, ou null. */
+const raisonDe = (jeton) => (typeof jeton.raison === "string" && jeton.raison !== "" ? jeton.raison : null);
+
 /** Vrai quand deux listes portent les mêmes nœuds, dans le même ordre. */
 function memesNoeuds(a, b) {
   return a.length === b.length && a.every((noeud, i) => noeud === b[i]);
@@ -77,12 +93,14 @@ function attribuer(noeud, nom, valeur) {
 
 /**
  * La partie « plateau » de l'écran du combat : { noeud, rendre(vue, ecran),
- * prendre(id), enMain() }.
+ * prendre(id), enMain(), hachurer(noms) }.
  *
  * « actions » vient de l'écran : executer(commande, origine), toujours avec
  * l'origine "plateau", et ouvrirCase(nomDeCase) pour la liste « +k ».
  * « prendre » et « enMain » servent à cette liste, que l'écran tient : avant
  * le lancement, elle prend un jeton en main sans passer par la grille.
+ * « hachurer » sert aux infobulles et à l'aperçu d'une ligne (contrat du
+ * groupe 2, § 9.5).
  */
 export function creer(actions) {
   let vue = null;
@@ -93,8 +111,14 @@ export function creer(actions) {
   let glisse = null;
   // La case de chaque jeton, d'après la dernière vue.
   let caseDe = new Map();
+  // Les cases hachurées : la portée de la capacité survolée.
+  let hachures = new Set();
+  // Le jeton dont le texte caché dit la raison : le dernier focalisé ou
+  // survolé parmi ceux qui en ont une.
+  let raisonMontree = null;
   const cases = new Map();
   const jetons = new Map();
+  const raison = el("span", { id: RAISON, classe: "combat-raison", hidden: true });
 
   const preparation = () => vue !== null && vue.phase === "preparation" && !arrete;
 
@@ -107,9 +131,18 @@ export function creer(actions) {
     if (caseDe.get(id) !== nomDeCase) actions.executer({ preparer: { type: "poser", id, case: nomDeCase } }, "plateau");
     dessiner();
     // Le bouton de la case vient de quitter la page, et le focus avec lui :
-    // il va au jeton posé, s'il se voit.
+    // il va au jeton posé, s'il se voit. Sans défiler (compl. § 4.5).
     const pose = jetons.get(id);
-    if (pose && pose.noeud.parentNode) pose.noeud.focus();
+    if (pose && pose.noeud.parentNode) pose.noeud.focus({ preventScroll: true });
+  }
+
+  /** Écrit dans le texte caché la raison d'un jeton, s'il en a une. */
+  function montrerLaRaison(fiche) {
+    const texte = fiche.etat === null ? null : fiche.etat.raison;
+    if (texte === null) return;
+    raisonMontree = fiche.id;
+    const propre = sansSensForce(texte);
+    if (raison.textContent !== propre) raison.replaceChildren(propre);
   }
 
   function auClicDuJeton(fiche) {
@@ -148,6 +181,9 @@ export function creer(actions) {
         type: "button",
         classe: "combat-jeton",
         onclick: () => auClicDuJeton(fiche),
+        // Le texte caché dit la raison du jeton focalisé ou survolé.
+        onfocus: () => montrerLaRaison(fiche),
+        onpointerenter: () => montrerLaRaison(fiche),
         ondragstart: (evenement) => {
           if (!preparation()) {
             evenement.preventDefault();
@@ -223,6 +259,9 @@ export function creer(actions) {
       marque: v.marque === "joue" || v.marque === "cible" ? v.marque : null,
       mort: v.mort === true,
       inactif,
+      // La raison d'un jeton inactif pendant une action (contrat du groupe 2,
+      // § 8.5). Quand on ne joue pas, rien n'est écarté : elle ne se dit pas.
+      raison: avant || arrete ? null : raisonDe(v),
       tenu: avant ? tenu : null,
       agit: avant ? !ecarte : commande !== null,
       commande,
@@ -240,9 +279,14 @@ export function creer(actions) {
     if (etat.inactif) classes.push("inactif");
     fiche.noeud.className = classes.join(" ");
     // Le titre et le nom accessible s'affichent ou se lisent : comme tout
-    // texte montré, ils perdent les signes qui commandent le sens.
-    fiche.noeud.setAttribute("title", sansSensForce(etat.entier));
+    // texte montré, ils perdent les signes qui commandent le sens. Une
+    // raison s'écrit sur une seconde ligne du titre, et se lit par le texte
+    // caché de la carte.
+    const titre = etat.raison === null ? etat.entier : `${etat.entier}\n${etat.raison}`;
+    fiche.noeud.setAttribute("title", sansSensForce(titre));
     fiche.noeud.setAttribute("aria-label", sansSensForce(etat.nom));
+    attribuer(fiche.noeud, "aria-describedby", etat.raison === null ? null : RAISON);
+    if (fiche.id === raisonMontree) montrerLaRaison(fiche);
     attribuer(fiche.noeud, "aria-pressed", etat.tenu === null ? null : String(etat.tenu));
     // Un jeton qui n'a rien à offrir reste un bouton, et garde le focus :
     // son nom dit qui est là.
@@ -263,6 +307,7 @@ export function creer(actions) {
     if (etat.active) classes.push("active");
     if (etat.choix) classes.push("possible");
     if (etat.inactive) classes.push("inactive");
+    if (etat.portee) classes.push("portee");
     fiche.noeud.className = classes.join(" ");
 
     const enfants = [];
@@ -327,8 +372,11 @@ export function creer(actions) {
     for (const nom of cases.keys()) for (const id of connus(nom)) caseDe.set(id, nom);
     const caseTenue = enMain === null ? null : (caseDe.get(enMain) ?? null);
     // La vue marque les jetons qu'un choix écarte, pas les cases : une case
-    // est écartée quand un choix est ouvert et qu'elle n'y offre rien.
-    const enChoix = !avant && !arrete && (Object.values(vue.jetons).some((jeton) => jeton.inactif === true) || Object.values(vue.cases).some((c) => c.choix));
+    // est écartée quand un choix est ouvert et qu'elle n'y offre rien. Un
+    // jeton inactif qui porte une raison n'est pas écarté par un choix : il
+    // attend la fin d'une action en cours.
+    const ecarteParUnChoix = (jeton) => jeton.inactif === true && raisonDe(jeton) === null;
+    const enChoix = !avant && !arrete && (Object.values(vue.jetons).some(ecarteParUnChoix) || Object.values(vue.cases).some((c) => c.choix));
 
     const montres = new Set();
     for (const fiche of cases.values()) {
@@ -346,6 +394,7 @@ export function creer(actions) {
       const etat = {
         active,
         inactive: enChoix && !active && choix === null && !ids.some((id) => vue.jetons[id].choix),
+        portee: hachures.has(fiche.nom),
         choix,
         montres: ids.slice(0, MONTRES),
         combien: ids.length,
@@ -379,7 +428,7 @@ export function creer(actions) {
     LEGENDE.map(([classe, texte]) => el("li", { classe }, el("span", { classe: "combat-rond" }), texte)),
   );
   const tete = el("p", { classe: "combat-plateau-tete" }, el("span", {}, EN_TETE), " ", el("span", { classe: "combat-plateau-survol" }, AU_SURVOL));
-  const noeud = el("section", { classe: "combat-plateau", "aria-label": TITRE }, tete, grille, legende);
+  const noeud = el("section", { classe: "combat-plateau", "aria-label": TITRE }, tete, grille, legende, raison);
 
   /**
    * Montre la vue. De la mémoire de l'écran, le plateau ne lit que
@@ -404,5 +453,18 @@ export function creer(actions) {
     return true;
   }
 
-  return { noeud, rendre, prendre, enMain: () => enMain };
+  /**
+   * Hachure les cases nommées (« A1 » … « J10 », la portée de la capacité
+   * survolée), ou n'en hachure aucune (null). Seules les cases dont la
+   * marque change sont récrites : un survol ne refait rien d'autre, et un
+   * jeton qui a le focus le garde. Les hachures tiennent d'un rendu à
+   * l'autre, jusqu'à ce qu'on les efface : c'est l'infobulle qui sait quand
+   * le survol cesse.
+   */
+  function hachurer(noms) {
+    hachures = new Set(Array.isArray(noms) ? noms.map(String) : []);
+    dessiner();
+  }
+
+  return { noeud, rendre, prendre, enMain: () => enMain, hachurer };
 }

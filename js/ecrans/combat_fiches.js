@@ -14,6 +14,10 @@
 // Ce qu'elle garde pour elle : le texte de chaque vue déjà montrée, pour ne
 // refaire que les fiches qui ont changé, et ce que la personne a fait de
 // chaque volet (ouvert ou replié), que la mort du protagoniste fait oublier.
+//
+// Au groupe 2 (contrat du groupe 2, § 8.5, § 9.9 et § 9.11) : l'en-tête
+// écrit les actions restantes telles que la vue les dit (« actions
+// restantes : 1 sur 2 »), et le focus rendu ne fait jamais défiler la page.
 
 import { abregerZone } from "../adversaire/carte.js";
 import { lireCase } from "../combat/plateau.js";
@@ -40,9 +44,6 @@ function estDans(noeud, ancetre) {
   }
   return false;
 }
-
-/** « 1 action », « 0 action », « 2 actions ». */
-const accorder = (nombre, mot) => `${nombre} ${mot}${nombre > 1 ? "s" : ""}`;
 
 /** Les cases d'une jauge : les pleines, puis les vides. */
 function cases(valeur, max) {
@@ -111,9 +112,13 @@ function ligneDEffet(effet) {
   return el("li", { classe: "eteint" }, effet.texte, effet.raison ? ` (inactif : ${effet.raison})` : " (inactif)");
 }
 
-/** Les actions restantes, en pastilles ; un lecteur d'écran en entend le compte. */
-function actionsRestantes({ reste, max }) {
-  const dit = `${accorder(reste, "action")} sur ${max}`;
+/**
+ * Les actions restantes, en pastilles ; un lecteur d'écran en entend le
+ * texte de la vue (« actions restantes : 1 sur 2 »), le même qu'en tête de
+ * la bulle. Au-delà de trente, ce texte seul.
+ */
+function actionsRestantes({ reste, max, texte }) {
+  const dit = typeof texte === "string" ? sansSensForce(texte) : "";
   if (max > CASES_MAX) return el("span", { classe: "combat-actions" }, dit);
   return el(
     "span",
@@ -387,22 +392,23 @@ export function creer(actions) {
    * Rend le focus à ce qui le portait : au même nœud s'il est encore là, au
    * bouton ou au champ de même rôle si le corps de la fiche a été refait, à
    * l'en-tête de la fiche s'il n'existe plus, au titre du camp si la fiche
-   * elle-même a été retirée.
+   * elle-même a été retirée. Jamais en faisant défiler la page (compl.
+   * § 4.5) : une fiche refaite au geste d'un autre ne déplace pas la vue.
    */
   function rendreLeFocus(avant) {
     if (!avant) return;
     const { document } = globalThis;
     if (estDans(avant.actif, noeud)) {
-      if (document.activeElement !== avant.actif) avant.actif.focus();
+      if (document.activeElement !== avant.actif) avant.actif.focus({ preventScroll: true });
       return;
     }
     const fiche = fiches.get(avant.id);
     if (!fiche) {
-      avant.camp?.tete.focus();
+      avant.camp?.tete.focus({ preventScroll: true });
       return;
     }
     const pareil = avant.repere ? (fiche.corps.querySelector(`[data-repere=${avant.repere}]`) ?? fiche.avant.querySelector(`[data-repere=${avant.repere}]`)) : null;
-    (pareil ?? fiche.resume).focus();
+    (pareil ?? fiche.resume).focus({ preventScroll: true });
   }
 
   function rendre(vue, ecran) {

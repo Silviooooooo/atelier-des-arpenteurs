@@ -1,11 +1,15 @@
 // Contrôles des feuilles de style du simulateur de combat (SPECIFICATION.md,
-// § 17 ; l'interface, § 9 ; les jetons, § 10.1).
+// § 17 ; l'interface, § 9 ; les jetons, § 10.1 ; le complément du lot 4,
+// groupe 2, § 4.1, § 4.8 et § 4.12).
 //
 // css/combat.css et css/jetons.css y sont lus comme des textes : aucun
 // navigateur ne tourne ici, et la mise en page se mesure ailleurs. Ce fichier
-// tient ce qu'un texte peut tenir : des jetons seulement, les deux largeurs
-// des @media, les classes, le contour réservé au focus, les onze couleurs
-// dans les deux thèmes et leurs contrastes, les trois dispositions.
+// tient ce qu'un texte peut tenir : des jetons seulement (et les trois
+// propriétés que js/ecrans/echelle.js écrit sur la bulle), les trois @media,
+// les classes, le contour réservé au focus, les quinze couleurs dans les deux
+// thèmes et leurs contrastes, les longueurs du groupe 2, les trois
+// dispositions, la bulle et son volet, ses lignes, la hachure, le bandeau, les
+// segments du journal et le cadre d'un jet.
 //
 // Chaque règle est une fonction qui rend la liste des défauts : vide sur la
 // feuille du dépôt, non vide sur une feuille fautive écrite ici même. Une
@@ -14,11 +18,25 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { FLECHE } from "../js/ecrans/echelle.js";
 
 const RACINE = new URL("../", import.meta.url);
 const lire = (chemin) => readFileSync(new URL(chemin, RACINE), "utf8");
 const COMBAT = lire("css/combat.css");
 const JETONS = lire("css/jetons.css");
+const ECHELLE = lire("js/ecrans/echelle.js");
+
+// Les propriétés que placerBulle écrit sur la bulle, son onglet et les
+// infobulles (js/ecrans/echelle.js, la seule écriture de style du code) : lues
+// dans son corps, jusqu'à la première accolade fermante en début de ligne. La
+// feuille les lit sans les déclarer dans jetons.css.
+function proprietesDePlacerBulle(source) {
+  const debut = source.indexOf("export function placerBulle(");
+  if (debut < 0) return [];
+  const fin = source.indexOf("\n}", debut);
+  return [...source.slice(debut, fin < 0 ? undefined : fin).matchAll(/setProperty\(\s*"--([\w-]+)"/g)].map(([, nom]) => nom);
+}
+const DE_LA_BULLE = proprietesDePlacerBulle(ECHELLE);
 
 const sansCommentaires = (css) => css.replace(/\/\*[\s\S]*?\*\//g, "");
 const lignesDe = (css) => sansCommentaires(css).split(/\r?\n/);
@@ -90,6 +108,9 @@ function valeur(css, selecteur, propriete, cadre = null) {
 
 const MEDIA_56 = "@media (min-width: 56rem)";
 const MEDIA_80 = "@media (min-width: 80rem)";
+const MEDIA_SOURIS = "@media (pointer: fine)";
+// Le rang d'une règle dans la feuille (son premier sélecteur exact, hors @media ou dans le cadre donné), -1 sans elle.
+const rangDe = (css, selecteur, cadre = null) => selecteursDe(css).findIndex((regle) => regle.selecteur === selecteur && regle.cadre === cadre);
 
 // ——— Des jetons seulement ———
 
@@ -117,8 +138,14 @@ function valeursEnDur(css, definis) {
   return defauts;
 }
 
-test("combat.css — des jetons seulement : ni couleur, ni longueur, ni police en dur, hors des largeurs des @media", () => {
-  const definis = new Set(Object.keys(jetons(JETONS, "clair")));
+test("combat.css — des jetons seulement : ni couleur, ni longueur, ni police en dur, hors des largeurs des @media ; les --bulle-* de placerBulle admises, sans repli", () => {
+  // Les trois propriétés de la place de la bulle (contrat § 9.3), lues dans echelle.js ; jetons.css n'en déclare aucune.
+  assert.deepEqual(DE_LA_BULLE, ["bulle-gauche", "bulle-haut", "bulle-fleche"]);
+  assert.deepEqual(Object.keys(jetons(JETONS, "sombre")).filter((nom) => nom.startsWith("bulle-")), []);
+  for (const nom of DE_LA_BULLE) assert.ok(COMBAT.includes(`var(--${nom})`), `--${nom} n'est pas lue par la feuille`);
+  assert.deepEqual(proprietesDePlacerBulle("export function placerBulle(n) {\n  n.style.setProperty(\"--bulle-x\", \"1px\");\n}\nexport function autre(n) {\n  n.style.setProperty(\"--hors\", \"1px\");\n}\n"), ["bulle-x"]);
+  assert.deepEqual(proprietesDePlacerBulle("export function poserEchelle(n) {}\n"), []);
+  const definis = new Set([...Object.keys(jetons(JETONS, "clair")), ...DE_LA_BULLE]);
   assert.deepEqual(valeursEnDur(COMBAT, definis), []);
   const refuse = (css, motif) => assert.match(valeursEnDur(css, definis).join("\n"), motif, css);
   refuse(".combat-x { color: #1e7a3c; }", /couleur écrite en dur/);
@@ -135,6 +162,11 @@ test("combat.css — des jetons seulement : ni couleur, ni longueur, ni police e
   refuse(".combat-x {\n  --combat-cote: 100%;\n}", /jeton déclaré hors de jetons\.css/);
   refuse(".combat-x { width: var(--combat-cote, 100%); }", /valeur de repli/);
   refuse(".combat-x { width: var(--combat-inconnu); }", /n'est pas défini/);
+  // Une autre propriété de la bulle que celles que placerBulle écrit, ou l'une d'elles lue avec un repli.
+  refuse(".combat-bulle { left: var(--bulle-x); }", /--bulle-x n'est pas défini dans jetons\.css/);
+  refuse(".combat-bulle { left: var(--bulle-gauche, 0); }", /--bulle-gauche lu avec une valeur de repli/);
+  assert.deepEqual(valeursEnDur(".combat-bulle {\n  top: var(--bulle-haut);\n  left: var(--bulle-gauche);\n}", definis), []);
+  assert.match(valeursEnDur(".combat-bulle { left: var(--bulle-gauche); }", new Set(Object.keys(jetons(JETONS, "clair")))).join("\n"), /--bulle-gauche n'est pas défini/);
   refuse("@import \"autre.css\";", /téléchargée/);
   // Les pièges du contrôle du site (tests/site.test.js) sont refusés ici aussi.
   refuse("@container (min-width: 40rem) {\n  .combat-x { display: none; }\n}", /valeur écrite en dur/);
@@ -144,39 +176,45 @@ test("combat.css — des jetons seulement : ni couleur, ni longueur, ni police e
   assert.deepEqual(valeursEnDur(".combat-x {\n  grid-template-columns: var(--espace-4) repeat(10, minmax(0, 1fr));\n  font-size: min(var(--taille-petite), 20cqi);\n  width: 70%;\n  aspect-ratio: 1 / 1;\n}", definis), []);
 });
 
-// ——— Les deux @media ———
+// ——— Les trois @media ———
 
 function defautsDesCadres(css) {
   const defauts = [];
   const arobases = lignesDe(css)
     .map((ligne) => ligne.trim())
     .filter((ligne) => ligne.includes("@"));
-  const attendues = [`${MEDIA_56} {`, `${MEDIA_80} {`];
+  const attendues = [`${MEDIA_56} {`, `${MEDIA_80} {`, `${MEDIA_SOURIS} {`];
   if (JSON.stringify(arobases) !== JSON.stringify(attendues)) defauts.push(`règles @ : ${JSON.stringify(arobases)}`);
   return defauts;
 }
 
-test("combat.css — deux @media, à 56rem et 80rem, chacun sur une ligne ; aucune autre règle @", () => {
+test("combat.css — trois @media, à 56rem, à 80rem, puis sous une souris, chacun sur une ligne, dans cet ordre ; aucune autre règle @", () => {
   assert.deepEqual(defautsDesCadres(COMBAT), []);
   const base = ".combat-x { display: none; }\n";
-  const deux = `${base}${MEDIA_56} {\n${base}}\n${MEDIA_80} {\n${base}}\n`;
-  assert.deepEqual(defautsDesCadres(deux), []);
+  const trois = `${base}${MEDIA_56} {\n${base}}\n${MEDIA_80} {\n${base}}\n${MEDIA_SOURIS} {\n${base}}\n`;
+  assert.deepEqual(defautsDesCadres(trois), []);
   for (const fautive of [
     base,
-    `${base}${MEDIA_56} {\n${base}}\n`,
-    deux.replace("56rem", "44rem"),
-    deux.replace("80rem", "79.99rem"),
-    `${deux}@media (max-width: 700px) {\n${base}}\n`,
-    `${deux}@container (min-width: 40rem) {\n${base}}\n`,
-    `${deux}@supports (display: grid) {\n${base}}\n`,
-    `${deux}@media print {\n${base}}\n`,
-    deux.replace(`${MEDIA_80} {`, "@media\n  (min-width: 80rem) {"),
-    `${MEDIA_80} {\n${base}}\n${MEDIA_56} {\n${base}}\n`,
+    `${base}${MEDIA_56} {\n${base}}\n${MEDIA_80} {\n${base}}\n`,
+    trois.replace("56rem", "44rem"),
+    trois.replace("80rem", "79.99rem"),
+    trois.replace("(pointer: fine)", "(pointer: coarse)"),
+    trois.replace("(pointer: fine)", "(hover: hover)"),
+    // Un quatrième @media.
+    `${trois}@media (max-width: 700px) {\n${base}}\n`,
+    `${trois}${MEDIA_SOURIS} {\n${base}}\n`,
+    `${trois}@container (min-width: 40rem) {\n${base}}\n`,
+    `${trois}@supports (display: grid) {\n${base}}\n`,
+    `${trois}@media print {\n${base}}\n`,
+    trois.replace(`${MEDIA_80} {`, "@media\n  (min-width: 80rem) {"),
+    trois.replace(`${MEDIA_SOURIS} {`, "@media\n  (pointer: fine) {"),
+    `${MEDIA_80} {\n${base}}\n${MEDIA_56} {\n${base}}\n${MEDIA_SOURIS} {\n${base}}\n`,
+    `${MEDIA_SOURIS} {\n${base}}\n${MEDIA_56} {\n${base}}\n${MEDIA_80} {\n${base}}\n`,
   ]) {
     assert.notDeepEqual(defautsDesCadres(fautive), [], fautive);
   }
-  // Chaque cadre porte des règles : la feuille n'a pas deux coquilles vides.
-  for (const cadre of [MEDIA_56, MEDIA_80]) assert.ok(regles(COMBAT).some((regle) => regle.cadre === cadre), cadre);
+  // Chaque cadre porte des règles : la feuille n'a pas trois coquilles vides.
+  for (const cadre of [MEDIA_56, MEDIA_80, MEDIA_SOURIS]) assert.ok(regles(COMBAT).some((regle) => regle.cadre === cadre), cadre);
 });
 
 // ——— La largeur de l'écran ———
@@ -196,11 +234,58 @@ test("combat.css — #ecran:has(> .combat) élargit la page à --largeur-combat 
 // Les classes du site que l'écran réemploie, et que la feuille peut nommer
 // sous une classe du combat.
 const CLASSES_DU_SITE = new Set(["bouton", "champ"]);
-// Les états du contrat (§ 7.9), écrits en classes de plus.
+// Les états du contrat (§ 7.9), écrits en classes de plus ; au groupe 2, la
+// portée de la capacité survolée, sur une case et dans la légende.
 const ETATS = new Set([
   "ouvert", "active", "possible", "inactive", "joue", "cible", "mort", "inactif", "fait", "en-cours", "reussi", "echoue", "relance", "a-lancer", "a-venir",
   "atteinte", "ciblee", "morte", "vide", "eteint", "tour", "abimee", "detruite",
+  "portee",
 ]);
+
+// Les classes du groupe 1 qui ont une règle.
+const CLASSES_DU_GROUPE_1 = [
+  "combat", "combat-barre", "combat-etat", "combat-garde", "combat-commandes", "combat-plus-bouton", "combat-autres", "combat-aide", "combat-avis", "combat-panneau",
+  "combat-cadre", "combat-plateau", "combat-grille", "combat-coord", "combat-case", "combat-case-choix", "combat-jeton", "combat-pj", "combat-adv", "combat-rond",
+  "combat-initiales", "combat-nom-court", "combat-case-plus", "combat-plus-large", "combat-plus-etroit", "combat-legende", "combat-action", "combat-preparation",
+  "combat-qui", "combat-etapes", "combat-groupe", "combat-groupe-titre", "combat-capacite", "combat-degats", "combat-cout", "combat-desavantage", "combat-passifs",
+  "combat-cibles", "combat-origine", "combat-des", "combat-jet", "combat-contexte", "combat-chaine", "combat-de", "combat-bilan", "combat-lettres", "combat-choix",
+  "combat-reglages", "combat-case-liste", "combat-annonce", "combat-camps", "combat-camp", "combat-camp-pj", "combat-camp-adv", "combat-compte", "combat-fiche",
+  "combat-pastille", "combat-nom", "combat-sous", "combat-statut", "combat-actions", "combat-pion", "combat-fiche-corps", "combat-jauge", "combat-point",
+  "combat-zones", "combat-contre", "combat-valeurs", "combat-effets", "combat-journal", "combat-journal-tete", "combat-lignes", "combat-copie",
+  "combat-ligne", "combat-de-titre", "combat-de-detail", "combat-de-valeur",
+  // Ce que le regard dans un navigateur a fait ajouter (la maquette).
+  "combat-raison", "combat-plateau-tete", "combat-plateau-survol", "combat-nom-debut", "combat-nom-numero", "combat-description",
+  "combat-sous-ligne", "combat-jauge-souffle",
+  // Ce que la mesure des cases a fait ajouter (des initiales de trois signes, rognées par le rond).
+  "combat-initiales-longues",
+  // Ce que la relecture de fin de groupe a fait ajouter.
+  "combat-assiste", "combat-mort", "combat-refus", "combat-fiche-avant", "combat-preparation-commence", "combat-preparation-lancer",
+];
+
+// Les classes nouvelles du groupe 2 (contrat § 10.2, liste close).
+const CLASSES_DU_GROUPE_2 = [
+  // La bulle.
+  "combat-bulle", "combat-bulle-jet", "combat-bulle-droite", "combat-bulle-gauche", "combat-bulle-dessous", "combat-bulle-dessus", "combat-bulle-poignee",
+  "combat-bulle-tete", "combat-bulle-titre", "combat-bulle-sous", "combat-bulle-defile", "combat-bulle-pied", "combat-bulle-fermer", "combat-onglet",
+  // Les lignes, les infobulles, les causes.
+  "combat-option", "combat-intervention", "combat-passif", "combat-apercu", "combat-infobulles", "combat-infobulle", "combat-infobulle-droite",
+  "combat-infobulle-gauche", "combat-infobulle-dessous", "combat-infobulle-dessus", "combat-infobulle-titre", "combat-infobulle-cout", "combat-citation",
+  "combat-cause", "combat-cause-signe", "combat-cause-explication", "combat-cause-avantage", "combat-cause-desavantage", "combat-defense", "combat-defenseur",
+  "combat-action-phrase",
+  // Le bandeau, le journal.
+  "combat-bandeau", "combat-bandeau-en-cours", "combat-bandeau-etiquette", "combat-bandeau-texte", "combat-bandeau-entier", "combat-bandeau-journal",
+  "combat-bandeau-coupe", "combat-seg-pj", "combat-seg-adv", "combat-seg-capacite", "combat-seg-reussite", "combat-seg-echec", "combat-seg-valeur",
+  "combat-seg-fin", "combat-seg-tour", "combat-cadre-jet", "combat-de-insecable", "combat-annulee",
+  // La barre, la préparation.
+  "combat-annuler-geste", "combat-signe", "combat-limite", "combat-preparation-demonstration", "combat-preparation-question", "combat-preparation-phrase",
+];
+
+// Les classes de la feuille hors des listes : une classe nouvelle sans place au contrat, ou une classe qui a quitté le code.
+function classesHorsDesListes(css) {
+  const connues = new Set([...CLASSES_DU_GROUPE_1, ...CLASSES_DU_GROUPE_2, ...ETATS, ...CLASSES_DU_SITE]);
+  const classes = new Set(selecteursDe(css).flatMap((regle) => [...regle.selecteur.matchAll(/\.([\w-]+)/g)].map(([, classe]) => classe)));
+  return [...classes].filter((classe) => !connues.has(classe));
+}
 
 function defautsDesClasses(css) {
   const defauts = [];
@@ -232,27 +317,15 @@ test("combat.css — chaque règle part d'une classe « combat » ; aucune class
   refuse(":where(.fiche) button { margin: 0; }", /hors de l'écran du combat/);
   refuse(":where(button) { margin: 0; }", /hors de l'écran du combat/);
   assert.deepEqual(defautsDesClasses(".combat { margin: 0; }\n.combat-fiche.joue summary::after,\n.combat-copie .champ { margin: 0; }\n:where(.combat) button { font: inherit; }"), []);
-  // La racine que vise la largeur, et quelques nœuds du contrat (§ 7.9).
+  // La racine que vise la largeur, les nœuds du contrat (§ 7.9) et les classes nouvelles du groupe 2 (contrat § 10.2) :
+  // chacune a sa règle ; « combat-qui-suite » a quitté le code avec les pas de la puissance.
   const classes = new Set(selecteursDe(COMBAT).flatMap((regle) => [...regle.selecteur.matchAll(/\.([\w-]+)/g)].map(([, classe]) => classe)));
-  for (const attendue of [
-    "combat", "combat-barre", "combat-etat", "combat-garde", "combat-commandes", "combat-plus-bouton", "combat-autres", "combat-aide", "combat-avis", "combat-panneau",
-    "combat-cadre", "combat-plateau", "combat-grille", "combat-coord", "combat-case", "combat-case-choix", "combat-jeton", "combat-pj", "combat-adv", "combat-rond",
-    "combat-initiales", "combat-nom-court", "combat-case-plus", "combat-plus-large", "combat-plus-etroit", "combat-legende", "combat-action", "combat-preparation",
-    "combat-qui", "combat-etapes", "combat-groupe", "combat-groupe-titre", "combat-capacite", "combat-degats", "combat-cout", "combat-desavantage", "combat-passifs",
-    "combat-cibles", "combat-origine", "combat-des", "combat-jet", "combat-contexte", "combat-chaine", "combat-de", "combat-bilan", "combat-lettres", "combat-choix",
-    "combat-reglages", "combat-case-liste", "combat-annonce", "combat-camps", "combat-camp", "combat-camp-pj", "combat-camp-adv", "combat-compte", "combat-fiche",
-    "combat-pastille", "combat-nom", "combat-sous", "combat-statut", "combat-actions", "combat-pion", "combat-fiche-corps", "combat-jauge", "combat-point",
-    "combat-zones", "combat-contre", "combat-valeurs", "combat-effets", "combat-journal", "combat-journal-tete", "combat-lignes", "combat-copie",
-    // Ce que le regard dans un navigateur a fait ajouter (la maquette).
-    "combat-raison", "combat-plateau-tete", "combat-plateau-survol", "combat-nom-debut", "combat-nom-numero", "combat-qui-suite", "combat-description",
-    "combat-sous-ligne", "combat-jauge-souffle",
-    // Ce que la mesure des cases a fait ajouter (des initiales de trois signes, rognées par le rond).
-    "combat-initiales-longues",
-    // Ce que la relecture de fin de groupe a fait ajouter.
-    "combat-assiste", "combat-mort", "combat-refus", "combat-fiche-avant", "combat-preparation-commence", "combat-preparation-lancer",
-  ]) {
-    assert.ok(classes.has(attendue), `.${attendue} n'a aucune règle`);
-  }
+  for (const attendue of [...CLASSES_DU_GROUPE_1, ...CLASSES_DU_GROUPE_2, "portee"]) assert.ok(classes.has(attendue), `.${attendue} n'a aucune règle`);
+  assert.equal(new Set(CLASSES_DU_GROUPE_2).size, 59);
+  assert.ok(!classes.has("combat-qui-suite"), ".combat-qui-suite a quitté le code");
+  // La liste est close : aucune classe hors d'elle, ni d'un nom nouveau, ni d'un nom parti.
+  assert.deepEqual(classesHorsDesListes(COMBAT), []);
+  assert.deepEqual(classesHorsDesListes(".combat-qui-suite { color: var(--texte-2); }\n.combat-bulle-corps { margin: 0; }"), ["combat-qui-suite", "combat-bulle-corps"]);
 });
 
 // ——— Le contour, réservé au focus ; la marque de la cible ———
@@ -318,9 +391,10 @@ test("combat.css — aucun outline hors du focus ; la cible est une bordure roug
   assert.deepEqual(opacites(".combat-fiche.morte { opacity: var(--opacite-inactif); }"), [".combat-fiche.morte"]);
 });
 
-// ——— Les onze couleurs ———
+// ——— Les quinze couleurs ———
 
-// Mission § 10.9 : [jeton, clair, sombre].
+// Mission § 10.9, puis le complément du groupe 2, § 4.12 (les quatre
+// dernières) : [jeton, clair, sombre].
 const COULEURS = [
   ["combat-pj", "#1e7a3c", "#3fae62"],
   ["combat-pj-doux", "#e2f2e7", "#163222"],
@@ -333,6 +407,11 @@ const COULEURS = [
   ["combat-reussite", "#1e7a3c", "#5cc38a"],
   ["combat-echec", "#b3261e", "#e8776e"],
   ["combat-alerte", "#8a5300", "#e6a85a"],
+  ["combat-portee", "#d9534f", "#e8776e"],
+  ["combat-portee-bord", "#c8372d", "#f19a92"],
+  // Le même gris dans les deux thèmes, redéclaré en sombre.
+  ["combat-cadre-jet", "#7d838d", "#7d838d"],
+  ["combat-cadre-jet-fond", "#ffffff", "#262a30"],
 ];
 
 function defautsDesCouleurs(css) {
@@ -354,9 +433,18 @@ function defautsDesCouleurs(css) {
   return defauts;
 }
 
-test("jetons.css — les onze couleurs du combat, dans les deux thèmes, exactement ; --largeur-combat ; aucun nom en « carte » ; rien de plus", () => {
+test("jetons.css — les quinze couleurs du combat, dans les deux thèmes, exactement ; --largeur-combat ; aucun nom en « carte » ; rien de plus", () => {
+  assert.equal(COULEURS.length, 15);
   assert.deepEqual(defautsDesCouleurs(JETONS), []);
   const refuse = (css, motif) => assert.match(defautsDesCouleurs(css).join("\n"), motif);
+  // Une couleur de trop, en clair puis en sombre ; une des quatre nouvelles changée ; la valeur sombre du cadre ôtée
+  // (elle vaut la claire, mais se redéclare : le bloc sombre porte les quinze).
+  refuse(JETONS.replace("--combat-cadre-jet-fond: #ffffff;", "--combat-cadre-jet-fond: #ffffff;\n  --combat-portee-fond: #fbe3e1;"), /jetons du combat, thème clair : .*combat-portee-fond/);
+  refuse(JETONS.replace("--combat-cadre-jet-fond: #262a30;", "--combat-cadre-jet-fond: #262a30;\n    --combat-hachure: #e8776e;"), /jetons du combat, thème sombre : .*combat-hachure/);
+  refuse(JETONS.replace("--combat-portee: #d9534f;", "--combat-portee: #d9534e;"), /--combat-portee clair : #d9534e/);
+  refuse(JETONS.replace("--combat-portee-bord: #f19a92;", "--combat-portee-bord: #c8372d;"), /--combat-portee-bord sombre : #c8372d/);
+  refuse(JETONS.replace(/\r?\n {4}--combat-cadre-jet: #7d838d;/, ""), /--combat-cadre-jet sombre : undefined/);
+  refuse(JETONS.replace("--combat-cadre-jet-fond: #262a30;", "--combat-cadre-jet-fond: #ffffff;"), /--combat-cadre-jet-fond sombre : #ffffff/);
   // Les deux valeurs de la maquette que la mission corrige, en sombre.
   refuse(JETONS.replace("--combat-adv: #e66b61;", "--combat-adv: #e0574d;"), /--combat-adv sombre : #e0574d/);
   refuse(JETONS.replace("--combat-sur-jeton: #0b1722;", "--combat-sur-jeton: #ffffff;"), /--combat-sur-jeton sombre : #ffffff/);
@@ -369,6 +457,56 @@ test("jetons.css — les onze couleurs du combat, dans les deux thèmes, exactem
   // Les contrôles voisins (tests/carte.test.js) : aucun jeton sombre en « carte », aucun jeton neuf qui commence par « carte- ».
   assert.deepEqual(Object.keys(sombresSeuls(JETONS)).filter((nom) => /carte/.test(nom) && nom !== "largeur-carte"), []);
   assert.doesNotMatch(JETONS, /@font-face|@import|url\(/);
+});
+
+// ——— Les longueurs du groupe 2 ———
+
+// Contrat § 10.1 : [jeton, valeur], au bloc clair, sans « combat » dans leur
+// nom. La dernière sert au créateur en vignettes (css/ecran.css).
+const LONGUEURS = [
+  ["largeur-bulle", "20rem"],
+  ["largeur-bulle-jet", "29.5rem"],
+  ["largeur-infobulle", "18rem"],
+  ["hauteur-bulle-max", "calc(100vh - var(--espace-6))"],
+  ["hauteur-volet", "45%"],
+  ["ligne-souris", "36px"],
+  ["fleche-bulle", "8px"],
+  ["taille-de-jet", "4rem"],
+  ["hachure-trait", "3px"],
+  ["hachure-pas", "9px"],
+  ["hachure-angle", "135deg"],
+  ["rayon-cadre", "4px"],
+  ["marge-cadre", "3px"],
+  ["largeur-vignette", "180px"],
+];
+
+function defautsDesLongueurs(css, feuille) {
+  const defauts = [];
+  const clair = jetons(css, "clair");
+  const sombre = sombresSeuls(css);
+  for (const [nom, attendue] of LONGUEURS) {
+    if (clair[nom] !== attendue) defauts.push(`--${nom} : ${clair[nom]}`);
+    if (nom in sombre) defauts.push(`--${nom} redéclaré dans le thème sombre`);
+    if (/combat/.test(nom)) defauts.push(`--${nom} porte « combat »`);
+    if (nom !== "largeur-vignette" && !feuille.includes(`var(--${nom})`)) defauts.push(`--${nom} ne sert pas dans css/combat.css`);
+  }
+  // La place de la bulle n'est pas un jeton : echelle.js l'écrit sur elle.
+  for (const nom of Object.keys(clair)) if (nom.startsWith("bulle-")) defauts.push(`--${nom} déclaré dans jetons.css`);
+  // La flèche de la feuille est celle que calculerPlace suppose.
+  if (clair["fleche-bulle"] !== `${FLECHE}px`) defauts.push(`--fleche-bulle (${clair["fleche-bulle"]}) diffère de FLECHE (${FLECHE})`);
+  return defauts;
+}
+
+test("jetons.css — les quatorze longueurs du groupe 2, au bloc clair, sans « combat » dans leur nom ; aucune --bulle-* ; --fleche-bulle égale FLECHE (js/ecrans/echelle.js)", () => {
+  assert.equal(FLECHE, 8);
+  assert.deepEqual(defautsDesLongueurs(JETONS, COMBAT), []);
+  const refuse = (css, motif, feuille = COMBAT) => assert.match(defautsDesLongueurs(css, feuille).join("\n"), motif);
+  refuse(JETONS.replace("--fleche-bulle: 8px;", "--fleche-bulle: 9px;"), /--fleche-bulle : 9px[\s\S]*diffère de FLECHE \(8\)/);
+  refuse(JETONS.replace("--ligne-souris: 36px;", "--ligne-souris: 44px;"), /--ligne-souris : 44px/);
+  refuse(JETONS.replace("--largeur-vignette: 180px;", ""), /--largeur-vignette : undefined/);
+  refuse(JETONS.replace("--combat-cadre-jet-fond: #262a30;", "--combat-cadre-jet-fond: #262a30;\n    --hauteur-volet: 60%;"), /--hauteur-volet redéclaré dans le thème sombre/);
+  refuse(JETONS.replace("--marge-cadre: 3px;", "--marge-cadre: 3px;\n  --bulle-gauche: 0px;"), /--bulle-gauche déclaré dans jetons\.css/);
+  refuse(JETONS, /--taille-de-jet ne sert pas/, COMBAT.replaceAll("var(--taille-de-jet)", "var(--cible-tactile)"));
 });
 
 // ——— Les contrastes ———
@@ -387,9 +525,32 @@ const PAIRES_DE_TEXTE = [
   ["accent", "fond-2"],
   ["accent", "accent-doux"],
   ["texte-sur-accent", "accent"],
+  // Dans le cadre d'un jet : ✓, ✗ et les chiffres.
+  ["combat-reussite", "combat-cadre-jet-fond"],
+  ["combat-echec", "combat-cadre-jet-fond"],
+  ["texte", "combat-cadre-jet-fond"],
 ];
-// Les ronds et les traits, à 3:1.
-const PAIRES_DE_TRAIT = [...["combat-pj", "combat-adv", "combat-mort", "accent"].flatMap((avant) => FONDS_DE_CASE.map((fond) => [avant, fond])), ["bordure", "fond"], ["bordure", "fond-2"]];
+// Les ronds et les traits, à 3:1 : au groupe 2, le bord du cadre d'un jet sur les deux fonds et sur le sien ; les traits
+// de la hachure et le bord d'une case hachurée sur les trois fonds d'une case.
+const PAIRES_DE_TRAIT = [
+  ...["combat-pj", "combat-adv", "combat-mort", "accent"].flatMap((avant) => FONDS_DE_CASE.map((fond) => [avant, fond])),
+  ["bordure", "fond"],
+  ["bordure", "fond-2"],
+  ...["fond", "fond-2", "combat-cadre-jet-fond"].map((fond) => ["combat-cadre-jet", fond]),
+  ...["combat-portee", "combat-portee-bord"].flatMap((avant) => FONDS_DE_CASE.map((fond) => [avant, fond])),
+];
+// Les contrastes du contrat (§ 10.1), remesurés : [thème, avant, fond, mesure arrondie au centième].
+const CONTRASTES_DU_CONTRAT = [
+  ["clair", "combat-portee", "fond", "3.96"], ["clair", "combat-portee", "accent-doux", "3.34"], ["clair", "combat-portee", "fond-2", "3.60"],
+  ["sombre", "combat-portee", "fond", "6.24"], ["sombre", "combat-portee", "accent-doux", "4.77"],
+  ["clair", "combat-portee-bord", "fond", "5.20"], ["clair", "combat-portee-bord", "accent-doux", "4.38"],
+  ["sombre", "combat-portee-bord", "fond", "8.36"], ["sombre", "combat-portee-bord", "accent-doux", "6.39"],
+  ["clair", "combat-cadre-jet", "fond-2", "3.47"], ["clair", "combat-cadre-jet", "combat-cadre-jet-fond", "3.82"],
+  ["sombre", "combat-cadre-jet", "fond-2", "4.18"], ["sombre", "combat-cadre-jet", "combat-cadre-jet-fond", "3.78"],
+  ["clair", "combat-reussite", "combat-cadre-jet-fond", "5.38"], ["sombre", "combat-reussite", "combat-cadre-jet-fond", "6.61"],
+  ["clair", "combat-echec", "combat-cadre-jet-fond", "6.54"], ["sombre", "combat-echec", "combat-cadre-jet-fond", "5.01"],
+  ["clair", "texte", "combat-cadre-jet-fond", "17.06"], ["sombre", "texte", "combat-cadre-jet-fond", "11.75"],
+];
 
 function contrastesFaibles(css) {
   const defauts = [];
@@ -414,6 +575,16 @@ test("jetons.css — le texte du combat contraste d'au moins 4,5:1, ses ronds et
   assert.match(contrastesFaibles(JETONS.replace("--combat-sur-jeton: #0b1722;", "--combat-sur-jeton: #ffffff;")).join("\n"), /sombre : --combat-sur-jeton sur --combat-pj, 2\.8\d:1 sous 4\.5/);
   assert.match(contrastesFaibles(JETONS.replace("--combat-mort: #6b717b;", "--combat-mort: #9aa0a8;")).join("\n"), /clair : --combat-mort sur --fond/);
   assert.match(contrastesFaibles(JETONS.replace("--combat-alerte: #8a5300;", "--combat-alerte: #c98a1e;")).join("\n"), /clair : --combat-alerte sur --fond/);
+  // Au groupe 2 : une hachure trop pâle sur le fond doux d'une case, un fond de cadre sombre qui avale son bord et son ✗.
+  assert.match(contrastesFaibles(JETONS.replace("--combat-portee: #d9534f;", "--combat-portee: #e8776e;")).join("\n"), /clair : --combat-portee sur --accent-doux, 2\.\d\d:1 sous 3/);
+  const fondAbime = contrastesFaibles(JETONS.replace("--combat-cadre-jet-fond: #262a30;", "--combat-cadre-jet-fond: #3a3f46;")).join("\n");
+  assert.match(fondAbime, /sombre : --combat-echec sur --combat-cadre-jet-fond, \d\.\d\d:1 sous 4\.5/);
+  assert.match(fondAbime, /sombre : --combat-cadre-jet sur --combat-cadre-jet-fond, \d\.\d\d:1 sous 3/);
+  // Les mesures du contrat, au centième.
+  for (const [theme, avant, fond, mesure] of CONTRASTES_DU_CONTRAT) {
+    const j = jetons(JETONS, theme);
+    assert.equal(contraste(j[avant], j[fond]).toFixed(2), mesure, `${theme} : --${avant} sur --${fond}`);
+  }
 
   // --combat-mort est une couleur de rond : comme texte sur le second fond, elle ne tient pas 4,5:1 (arbitrage § 7.3).
   for (const theme of ["clair", "sombre"]) {
@@ -434,30 +605,37 @@ test("jetons.css — le texte du combat contraste d'au moins 4,5:1, ses ronds et
   assert.equal(valeur(COMBAT, ".combat-pj .combat-rond", "background"), "var(--combat-pj)");
   assert.equal(valeur(COMBAT, ".combat-adv .combat-rond", "background"), "var(--combat-adv)");
   assert.equal(valeur(COMBAT, ".combat-rond", "color"), "var(--combat-sur-jeton)");
-  // Chacun des onze jetons sert.
+  // Chacun des quinze jetons sert, et chacun est mesuré, comme couleur ou comme fond.
   for (const [nom] of COULEURS) assert.ok(COMBAT.includes(`var(--${nom})`), `--${nom} ne sert à rien`);
+  const mesures = new Set([...PAIRES_DE_TEXTE, ...PAIRES_DE_TRAIT].flat());
+  assert.deepEqual(COULEURS.map(([nom]) => nom).filter((nom) => !mesures.has(nom)), []);
 });
 
 // ——— Les trois dispositions ———
 
-test("combat.css — une colonne ; à 56rem le plateau et l'action à gauche, les camps à droite ; à 80rem les PJ, le plateau, les adversaires", () => {
-  // Moins de 56rem : une colonne, dans l'ordre du document.
+test("combat.css — une colonne ; à 56rem le bandeau, le plateau et l'action à gauche, les camps à droite ; à 80rem les PJ, le bandeau et le plateau, les adversaires", () => {
+  // Moins de 56rem : une colonne, dans l'ordre du document. Le cadre est le repère de la bulle et de son onglet.
   assert.equal(valeur(COMBAT, ".combat-cadre", "display"), "grid");
+  assert.equal(valeur(COMBAT, ".combat-cadre", "position"), "relative");
   assert.equal(valeur(COMBAT, ".combat-cadre", "grid-template-columns"), "minmax(0, 1fr)");
   assert.equal(valeur(COMBAT, ".combat-cadre", "grid-template-areas"), null);
   for (const [selecteur, propriete] of selecteursDe(COMBAT).filter((regle) => regle.cadre === null).flatMap((regle) => declarations(regle.corps).map(([propriete]) => [regle.selecteur, propriete]))) {
     assert.ok(propriete !== "order", `${selecteur} : l'ordre est celui du document`);
-    if (/^\.combat-(?:plateau|action|preparation|camps|camp-pj|camp-adv)$/.test(selecteur)) assert.notEqual(propriete, "grid-area", selecteur);
+    if (/^\.combat-(?:bandeau|plateau|action|preparation|camps|camp-pj|camp-adv)$/.test(selecteur)) assert.notEqual(propriete, "grid-area", selecteur);
   }
-  // De 56 à 80rem.
-  assert.equal(valeur(COMBAT, ".combat-cadre", "grid-template-areas", MEDIA_56), "\"plateau camps\" \"action camps\"");
+  // De 56 à 80rem : le bandeau au-dessus de la carte, sur la largeur de sa colonne.
+  assert.equal(valeur(COMBAT, ".combat-cadre", "grid-template-areas", MEDIA_56), "\"bandeau camps\" \"plateau camps\" \"action camps\"");
+  assert.equal(valeur(COMBAT, ".combat-cadre", "grid-template-rows", MEDIA_56), "auto auto 1fr");
   assert.equal(valeur(COMBAT, ".combat-cadre", "grid-template-columns", MEDIA_56), "minmax(0, 2fr) minmax(0, 1fr)");
+  assert.equal(valeur(COMBAT, ".combat-bandeau", "grid-area", MEDIA_56), "bandeau");
   assert.equal(valeur(COMBAT, ".combat-plateau", "grid-area", MEDIA_56), "plateau");
   assert.equal(valeur(COMBAT, ".combat-action", "grid-area", MEDIA_56), "action");
   assert.equal(valeur(COMBAT, ".combat-preparation", "grid-area", MEDIA_56), "action");
   assert.equal(valeur(COMBAT, ".combat-camps", "grid-area", MEDIA_56), "camps");
   // 80rem et plus : l'enveloppe des camps s'efface, chacun prend sa colonne.
-  assert.equal(valeur(COMBAT, ".combat-cadre", "grid-template-areas", MEDIA_80), "\"pj plateau adv\" \"pj action adv\"");
+  assert.equal(valeur(COMBAT, ".combat-cadre", "grid-template-areas", MEDIA_80), "\"pj bandeau adv\" \"pj plateau adv\" \"pj action adv\"");
+  // La bulle et l'onglet, posés, n'ont pas de cellule.
+  for (const cadre of [null, MEDIA_56, MEDIA_80]) for (const posee of [".combat-bulle", ".combat-onglet"]) assert.equal(valeur(COMBAT, posee, "grid-area", cadre), null, `${cadre} ${posee}`);
   assert.equal(valeur(COMBAT, ".combat-camps", "display", MEDIA_80), "contents");
   assert.equal(valeur(COMBAT, ".combat-camp-pj", "grid-area", MEDIA_80), "pj");
   assert.equal(valeur(COMBAT, ".combat-camp-adv", "grid-area", MEDIA_80), "adv");
@@ -569,8 +747,29 @@ test("combat.css — le plateau : des pistes que rien n'élargit, des cases qui 
   assert.equal(valeur(COMBAT, ".combat-case-choix", "position"), "absolute");
   assert.equal(valeur(COMBAT, ".combat-case-choix", "inset"), "0");
   assert.equal(valeur(COMBAT, ".combat-jeton", "z-index"), "1");
-  // Les seuls positionnements absolus, avec la raison d'un bouton inactif et la région d'annonce.
-  assert.deepEqual(selecteursDe(COMBAT).filter((regle) => /position:\s*(?:absolute|fixed|sticky)/.test(regle.corps)).map((regle) => regle.selecteur), [".combat-case-choix", ".combat-raison", ".combat-annonce"]);
+  // Les seuls positionnements absolus, avec la raison d'un bouton inactif, la région d'annonce et la ligne entière du
+  // bandeau ; au groupe 2, le volet (fixé à la fenêtre), puis, posés, la bulle, son ✕, son onglet, les infobulles et
+  // leurs flèches.
+  assert.deepEqual(
+    selecteursDe(COMBAT)
+      .filter((regle) => /position:\s*(?:absolute|fixed|sticky)/.test(regle.corps))
+      .map((regle) => `${regle.cadre ?? ""} ${regle.selecteur} ${regle.corps.match(/position:\s*([\w-]+)/)[1]}`.trim()),
+    [
+      ".combat-case-choix absolute",
+      ".combat-bulle fixed",
+      ".combat-bulle-fermer absolute",
+      ".combat-onglet absolute",
+      ".combat-infobulle absolute",
+      ".combat-infobulle::before absolute",
+      ".combat-infobulle::after absolute",
+      ".combat-raison absolute",
+      ".combat-annonce absolute",
+      ".combat-bandeau-entier absolute",
+      `${MEDIA_56} .combat-bulle absolute`,
+      `${MEDIA_56} .combat-bulle::before absolute`,
+      `${MEDIA_56} .combat-bulle::after absolute`,
+    ],
+  );
   // L'en-tête de la carte ; sa seconde phrase ne se montre que là où une souris survole.
   assert.equal(valeur(COMBAT, ".combat-plateau-tete", "display"), "flex");
   assert.equal(valeur(COMBAT, ".combat-plateau-tete", "flex-wrap"), "wrap");
@@ -689,7 +888,7 @@ test("combat.css — la raison d'un bouton inactif ne s'écrit pas à côté de 
   // Au survol (souris, doigt) et au focus (clavier, doigt) du bouton qui la précède.
   for (const etat of ["hover", "focus"]) assert.equal(valeur(COMBAT, `.combat [aria-disabled="true"]:${etat} + .combat-raison`, "display"), "block", etat);
   // Chaque rangée qui porte un bouton à raison la tient sous elle.
-  for (const rangee of [".combat-commandes", ".combat-autres", ".combat-groupe", ".combat-cibles", ".combat-choix", ".combat-ligne"]) {
+  for (const rangee of [".combat-commandes", ".combat-autres", ".combat-groupe", ".combat-cibles", ".combat-choix", ".combat-ligne", ".combat-option"]) {
     assert.equal(valeur(COMBAT, rangee, "position"), "relative", rangee);
   }
   // Sur un grand écran, celle de « Fin de tour » se range sous lui, au bout de la barre (vu : elle paraissait sous « Nouveau combat »).
@@ -721,8 +920,10 @@ test("combat.css — comme sur la maquette : « Fin de tour » ferme la barre ; 
   // L'en-tête d'une fiche : deux lignes, et l'état dans la seconde, à la suite.
   assert.equal(valeur(COMBAT, ".combat-fiche summary", "grid-template-areas"), "\"pastille nom actions repli\" \"pastille sous sous repli\"");
   assert.equal(valeur(COMBAT, ".combat-sous-ligne", "grid-area"), "sous");
-  // Le point qui les sépare tient à la ligne : un état passé à la ligne ne commence pas par un point.
-  assert.equal(valeur(COMBAT, ".combat-sous:not(:last-child)::after", "content"), "\" ·\"");
+  // Le point qui les sépare tient à la ligne : un état passé à la ligne ne commence pas par un point. Il n'est que
+  // là : l'origine d'une capacité, dans une infobulle (« b · span.combat-sous », suivis de la description), n'en reçoit pas.
+  assert.equal(valeur(COMBAT, ".combat-sous-ligne .combat-sous:not(:last-child)::after", "content"), "\" ·\"");
+  assert.deepEqual(selecteursDe(COMBAT).filter((regle) => /\.combat-sous\b[^\s]*::after/.test(regle.selecteur) && !regle.selecteur.startsWith(".combat-sous-ligne ")).map((regle) => regle.selecteur), []);
   assert.equal(valeur(COMBAT, ".combat-statut", "white-space"), "nowrap");
   assert.ok(!selecteursDe(COMBAT).some((regle) => /\.combat-statut/.test(regle.selecteur) && /grid-area|justify-self/.test(regle.corps)), "l'état n'a plus de place à lui");
   // Un mort n'a plus d'action à montrer.
@@ -743,9 +944,9 @@ test("combat.css — comme sur la maquette : « Fin de tour » ferme la barre ; 
   assert.equal(valeur(COMBAT, ".combat-zones td:nth-child(3)", "text-align"), "right");
   assert.equal(valeur(COMBAT, ".combat-zones abbr", "text-decoration"), "none");
 
-  // Le titre du panneau : la suite plus bas que le nom.
-  assert.equal(valeur(COMBAT, ".combat-qui-suite", "font-weight"), "normal");
-  assert.equal(valeur(COMBAT, ".combat-qui-suite", "color"), "var(--texte-2)");
+  // Le titre du jet sous la carte (téléphone) : qui le joue, plus bas, dans le second gris.
+  assert.equal(valeur(COMBAT, ".combat-qui + .combat-sous", "font-size"), "var(--taille-petite)");
+  assert.equal(valeur(COMBAT, ".combat-sous", "color"), "var(--texte-2)");
   // Le texte de la capacité, dans son cadre.
   assert.match(valeur(COMBAT, ".combat-description", "border"), /solid var\(--separateur\)$/);
   assert.equal(valeur(COMBAT, ".combat-description", "background"), "var(--fond)");
@@ -858,9 +1059,9 @@ function enRem(expression, definis) {
   return nombre === undefined ? null : Number(nombre) * Number(facteur);
 }
 
-test("combat.css — toute cible fait 44 px, hors les cases ; le journal est limité à 18rem, à 24rem sur un grand écran, et défile", () => {
+test("combat.css — toute cible fait 44 px, hors les cases (et les lignes de la bulle sous une souris, plus bas) ; le journal est limité à 18rem, à 24rem sur un grand écran, et défile", () => {
   assert.equal(jetons(JETONS, "clair")["cible-tactile"], "44px");
-  for (const selecteur of [".combat button", ".combat select", ".combat textarea", ".combat input", ".combat label", ".combat-fiche summary", ".combat-capacite", ".combat-cibles button", ".combat-case-liste button"]) {
+  for (const selecteur of [".combat button", ".combat select", ".combat textarea", ".combat input", ".combat label", ".combat-fiche summary", ".combat-reglages summary", ".combat-capacite", ".combat-bulle .combat-capacite", ".combat-cibles button", ".combat-case-liste button"]) {
     assert.equal(valeur(COMBAT, selecteur, "min-height"), "var(--cible-tactile)", selecteur);
   }
   assert.equal(valeur(COMBAT, ".combat button", "min-width"), "var(--cible-tactile)");
@@ -885,6 +1086,282 @@ test("combat.css — toute cible fait 44 px, hors les cases ; le journal est lim
   assert.equal(enRem("calc(var(--espace-6) * 10)", definis), 20);
   assert.equal(enRem("20rem", definis), null);
   assert.equal(valeur(COMBAT, ".combat-lignes", "font-family"), "var(--police-chasse-fixe)");
+});
+
+// ——— Le groupe 2 : la bulle, ses lignes, la hachure, le bandeau, le journal ———
+
+// La feuille du dépôt aux fins de ligne simples, pour y écrire des feuilles fautives.
+const FEUILLE = COMBAT.replaceAll("\r\n", "\n");
+// Remplace un fragment présent une fois exactement : une feuille fautive qui ne changerait rien se verrait.
+function casser(css, cherche, remplace) {
+  assert.equal(css.split(cherche).length, 2, `fragment absent ou répété : ${cherche}`);
+  return css.replace(cherche, () => remplace);
+}
+// Ce qui manque à une feuille : [sélecteur, propriété, valeur attendue, cadre].
+const ecarts = (css, attendues) =>
+  attendues.filter(([selecteur, propriete, attendue, cadre]) => valeur(css, selecteur, propriete, cadre) !== attendue).map(([selecteur, propriete, attendue, cadre]) => `${cadre ?? ""} ${selecteur} { ${propriete}: ${valeur(css, selecteur, propriete, cadre)} } au lieu de ${attendue}`.trim());
+
+// Contrat § 10.3, la bulle.
+const ATTENDUES_DE_LA_BULLE = [
+  // Sous 56rem, le volet : fixé au bas de la fenêtre, sur toute sa largeur, 45 % de sa hauteur au plus ; une colonne
+  // souple, qui défile en elle-même ; sa poignée.
+  [".combat-bulle", "position", "fixed", null],
+  [".combat-bulle", "left", "0", null],
+  [".combat-bulle", "right", "0", null],
+  [".combat-bulle", "bottom", "0", null],
+  [".combat-bulle", "max-height", "var(--hauteur-volet)", null],
+  [".combat-bulle", "display", "flex", null],
+  [".combat-bulle", "flex-direction", "column", null],
+  [".combat-bulle", "overflow", "visible", null],
+  [".combat-bulle", "background", "var(--fond)", null],
+  [".combat-bulle-poignee", "display", "block", null],
+  [".combat-bulle-defile", "overflow-y", "auto", null],
+  [".combat-bulle-defile", "min-height", "0", null],
+  // À 56rem, posée sur le cadre par les propriétés de placerBulle : 20rem pour la liste, 29,5rem pour le jet, jamais
+  // plus que le cadre ; au-delà de la hauteur de la fenêtre moins 32 px, elle défile.
+  [".combat-bulle", "position", "absolute", MEDIA_56],
+  [".combat-bulle", "left", "var(--bulle-gauche)", MEDIA_56],
+  [".combat-bulle", "top", "var(--bulle-haut)", MEDIA_56],
+  [".combat-bulle", "right", "auto", MEDIA_56],
+  [".combat-bulle", "bottom", "auto", MEDIA_56],
+  [".combat-bulle", "width", "min(var(--largeur-bulle), 100%)", MEDIA_56],
+  [".combat-bulle", "max-height", "var(--hauteur-bulle-max)", MEDIA_56],
+  [".combat-bulle", "border", "var(--trait) solid var(--bordure)", MEDIA_56],
+  [".combat-bulle-jet", "width", "min(var(--largeur-bulle-jet), 100%)", MEDIA_56],
+  [".combat-bulle-poignee", "display", "none", MEDIA_56],
+  // L'onglet et les infobulles, posés de même, à toute largeur.
+  [".combat-onglet", "position", "absolute", null],
+  [".combat-onglet", "left", "var(--bulle-gauche)", null],
+  [".combat-onglet", "top", "var(--bulle-haut)", null],
+  [".combat-infobulle", "position", "absolute", null],
+  [".combat-infobulle", "left", "var(--bulle-gauche)", null],
+  [".combat-infobulle", "top", "var(--bulle-haut)", null],
+  [".combat-infobulle", "width", "var(--largeur-infobulle)", null],
+  [".combat-infobulle", "background", "var(--fond)", null],
+  [".combat-infobulle", "border", "var(--trait) solid var(--bordure)", null],
+  // Leur couche ne se positionne pas : le repère est la bulle, ou la zone sous la carte.
+  [".combat-infobulles", "position", "static", null],
+  [".combat-action", "position", "relative", null],
+  // L'attribut hidden l'emporte sur ce qui montre la bulle, l'onglet, l'infobulle et le bandeau.
+  [".combat-bulle[hidden]", "display", "none", null],
+  [".combat-onglet[hidden]", "display", "none", null],
+  [".combat-infobulle[hidden]", "display", "none", null],
+  [".combat-bandeau[hidden]", "display", "none", null],
+];
+
+// La flèche, deux triangles de bordures : pour chaque côté, le bord puis le fond, collés à la face qui regarde l'ancre,
+// placés le long d'elle par la propriété de la flèche. Celle de la bulle n'existe qu'à 56rem.
+const FACES = { droite: "right", gauche: "left", dessous: "bottom", dessus: "top" };
+function defautsDesFleches(css) {
+  const defauts = [];
+  for (const porteur of ["bulle", "infobulle"]) {
+    for (const [cote, face] of Object.entries(FACES)) {
+      const [avant, apres] = ["before", "after"].map((pseudo) => `.combat-${porteur}-${cote}::${pseudo}`);
+      if (valeur(css, avant, `border-${face}-color`) !== "var(--bordure)") defauts.push(`${avant} : le triangle du bord`);
+      if (valeur(css, apres, `border-${face}-color`) !== "var(--fond)") defauts.push(`${apres} : le triangle du fond`);
+      if (valeur(css, avant, face) !== "100%") defauts.push(`${avant} : ${face} ${valeur(css, avant, face)}`);
+      if (valeur(css, apres, face) !== "calc(100% - var(--trait))") defauts.push(`${apres} : ${face} ${valeur(css, apres, face)}`);
+      const long = face === "right" || face === "left" ? "top" : "left";
+      for (const pseudo of [avant, apres]) if (!/var\(--bulle-fleche\)/.test(valeur(css, pseudo, long) ?? "")) defauts.push(`${pseudo} : ${long} sans la propriété de la flèche`);
+    }
+  }
+  for (const [pseudo, cadre] of [[".combat-infobulle::before", null], [".combat-infobulle::after", null], [".combat-bulle::before", MEDIA_56], [".combat-bulle::after", MEDIA_56]]) {
+    if (valeur(css, pseudo, "content", cadre) !== "\"\"") defauts.push(`${pseudo} : sans contenu`);
+    if (valeur(css, pseudo, "border", cadre) !== "var(--fleche-bulle) solid transparent") defauts.push(`${pseudo} : ${valeur(css, pseudo, "border", cadre)}`);
+  }
+  for (const pseudo of [".combat-bulle::before", ".combat-bulle::after"]) if (valeur(css, pseudo, "content") !== null) defauts.push(`${pseudo} : une flèche au volet`);
+  for (const regle of selecteursDe(css)) {
+    if (/bulle|infobulle/.test(regle.selecteur) && /::(?:before|after)$/.test(regle.selecteur) && declarations(regle.corps).some(([propriete]) => /^(?:transform|box-shadow|rotate)$/.test(propriete))) defauts.push(`${regle.selecteur} : une flèche tournée ou ombrée`);
+  }
+  return defauts;
+}
+
+test("combat.css — la bulle : le volet sous 56rem ; à 56rem posée sur le cadre par les trois propriétés de placerBulle ; ses flèches, deux triangles de bordures ; l'onglet et les infobulles posés de même ; l'attribut hidden l'emporte", () => {
+  assert.deepEqual(ecarts(COMBAT, ATTENDUES_DE_LA_BULLE), []);
+  assert.deepEqual(defautsDesFleches(COMBAT), []);
+  // La largeur du jet suit celle de la liste, dans le même cadre : elle l'emporte.
+  assert.ok(rangDe(COMBAT, ".combat-bulle-jet", MEDIA_56) > rangDe(COMBAT, ".combat-bulle", MEDIA_56));
+  // Ce qui cache pèse plus que ce qui montre, et ne fait que cacher.
+  for (const montre of [".combat-bulle", ".combat-onglet", ".combat-infobulle", ".combat-bandeau"]) assert.ok(pese(poids(`${montre}[hidden]`)) > pese(poids(montre)), montre);
+  assert.deepEqual(selecteursDe(COMBAT).filter((regle) => /\[hidden\]/.test(regle.selecteur) && !/^\s*display:\s*none;\s*$/.test(regle.corps)).map((regle) => regle.selecteur), []);
+  // Le ✕ (ou « – »), dernier du document, se pose dans le coin de la bulle : son en-tête lui laisse sa place.
+  assert.equal(valeur(COMBAT, ".combat-bulle-fermer", "position"), "absolute");
+  assert.match(valeur(COMBAT, ".combat-bulle-tete", "padding"), /calc\(var\(--cible-tactile\) \+ var\(--espace-\d\)\)/);
+
+  // Armé : des feuilles fautives.
+  const fautive = (css, motif) => assert.match([...ecarts(css, ATTENDUES_DE_LA_BULLE), ...defautsDesFleches(css)].join("\n"), motif);
+  fautive(casser(FEUILLE, "  position: fixed;\n", "  position: absolute;\n"), /\.combat-bulle \{ position: absolute \} au lieu de fixed/);
+  fautive(casser(FEUILLE, "  max-height: var(--hauteur-volet);", "  max-height: 60%;"), /max-height: 60%/);
+  fautive(casser(FEUILLE, "    left: var(--bulle-gauche);\n    width: min(var(--largeur-bulle), 100%);", "    left: var(--bulle-x);\n    width: min(var(--largeur-bulle), 100%);"), /@media \(min-width: 56rem\) \.combat-bulle \{ left: var\(--bulle-x\) \}/);
+  fautive(casser(FEUILLE, "    width: min(var(--largeur-bulle-jet), 100%);", "    width: var(--largeur-bulle-jet);"), /\.combat-bulle-jet \{ width: var\(--largeur-bulle-jet\) \}/);
+  fautive(casser(FEUILLE, ".combat-bulle[hidden],\n", ""), /\.combat-bulle\[hidden\] \{ display: null \}/);
+  fautive(casser(FEUILLE, "  overflow: visible;\n", "  overflow: auto;\n"), /\.combat-bulle \{ overflow: auto \}/);
+  fautive(`${FEUILLE}\n.combat-bulle-droite::before {\n  transform: rotate(45deg);\n}\n`, /\.combat-bulle-droite::before : une flèche tournée/);
+  fautive(`${FEUILLE}\n.combat-bulle::before {\n  content: "";\n}\n`, /\.combat-bulle::before : une flèche au volet/);
+  fautive(casser(FEUILLE, "  border-right-color: var(--fond);", "  border-right-color: var(--fond-2);"), /\.combat-bulle-droite::after : le triangle du fond/);
+  fautive(casser(FEUILLE, "  bottom: calc(100% - var(--trait));", "  bottom: 100%;"), /\.combat-infobulle-dessous::after : bottom 100%/);
+});
+
+// Contrat § 10.3, les lignes de la bulle : 44 px au doigt, 36 sous une souris, pour elles seules.
+function defautsDesLignes(css) {
+  const defauts = [];
+  if (valeur(css, ".combat-bulle .combat-capacite", "min-height") !== "var(--cible-tactile)") defauts.push("une ligne de la bulle, au doigt : pas 44 px");
+  if (valeur(css, ".combat-bulle .combat-capacite", "min-height", MEDIA_SOURIS) !== "var(--ligne-souris)") defauts.push("une ligne de la bulle, sous une souris : pas 36 px");
+  for (const regle of selecteursDe(css)) {
+    for (const [propriete, v] of declarations(regle.corps)) {
+      const souris = /var\(--ligne-souris\)/.test(v);
+      const permise = regle.cadre === MEDIA_SOURIS && regle.selecteur === ".combat-bulle .combat-capacite" && propriete === "min-height";
+      if (souris && !permise) defauts.push(`36 px hors des lignes de la bulle : ${[regle.cadre, regle.selecteur].filter(Boolean).join(" ")} { ${propriete}: ${v} }`);
+      if (regle.cadre === MEDIA_SOURIS && !permise) defauts.push(`sous une souris, autre chose que les lignes de la bulle : ${regle.selecteur} { ${propriete}: ${v} }`);
+    }
+  }
+  return defauts;
+}
+
+test("combat.css — les lignes de la bulle : 44 px au doigt, 36 px sous une souris (pointer: fine), pour elles seules ; toute autre cible garde ses 44 px", () => {
+  assert.deepEqual(defautsDesLignes(COMBAT), []);
+  assert.equal(jetons(JETONS, "clair")["ligne-souris"], "36px");
+  // La règle des lignes pèse plus que celle de tous les boutons de l'écran.
+  assert.ok(pese(poids(".combat-bulle .combat-capacite")) > pese(poids(".combat button")));
+  const refuse = (css, motif) => assert.match(defautsDesLignes(css).join("\n"), motif);
+  // 36 px hors de la bulle : une capacité du panneau, un bouton quelconque, au doigt.
+  refuse(casser(FEUILLE, "@media (pointer: fine) {\n  .combat-bulle .combat-capacite {", "@media (pointer: fine) {\n  .combat-capacite {"), /36 px hors des lignes de la bulle : @media \(pointer: fine\) \.combat-capacite/);
+  refuse(casser(FEUILLE, ".combat button {\n  min-width: var(--cible-tactile);", ".combat button {\n  min-height: var(--ligne-souris);\n  min-width: var(--cible-tactile);"), /36 px hors des lignes de la bulle : \.combat button/);
+  refuse(casser(FEUILLE, ".combat-bulle .combat-capacite {\n  width: 100%;\n  min-height: var(--cible-tactile);", ".combat-bulle .combat-capacite {\n  width: 100%;\n  min-height: var(--ligne-souris);"), /au doigt : pas 44 px/);
+  refuse(casser(FEUILLE, "    min-height: var(--ligne-souris);\n  }\n}", "    min-height: var(--ligne-souris);\n  }\n\n  .combat-bulle-fermer {\n    min-width: 0;\n  }\n}"), /sous une souris, autre chose que les lignes de la bulle : \.combat-bulle-fermer/);
+});
+
+// Contrat § 10.3, la hachure.
+const HACHURE = "repeating-linear-gradient(var(--hachure-angle), var(--combat-portee) 0 var(--hachure-trait), transparent var(--hachure-trait) var(--hachure-pas))";
+function defautsDeLaHachure(css) {
+  const defauts = [];
+  if (valeur(css, ".combat-case.portee", "background-image") !== HACHURE) defauts.push(`la hachure : ${valeur(css, ".combat-case.portee", "background-image")}`);
+  if (valeur(css, ".combat-case.portee", "border-color") !== "var(--combat-portee-bord)") defauts.push("le bord d'une case hachurée");
+  const rang = rangDe(css, ".combat-case.portee");
+  for (const apres of [".combat-case.active", ".combat-case.possible"]) if (!(rang >= 0 && rang < rangDe(css, apres))) defauts.push(`la hachure n'est pas avant ${apres}`);
+  // Une règle d'état qui la suit ne pose que la couleur du fond : le raccourci l'effacerait (la case de qui joue, à la
+  // portée 0, resterait sans hachure).
+  for (const regle of selecteursDe(css).slice(rang + 1)) {
+    if (/^\.combat-case(?:\.[\w-]+|:[\w-]+)+$/.test(regle.selecteur) && declarations(regle.corps).some(([propriete]) => propriete === "background" || propriete === "background-image")) defauts.push(`${regle.selecteur} efface la hachure`);
+  }
+  if (valeur(css, ".combat-legende .portee .combat-rond", "background-image") !== HACHURE) defauts.push("la légende sans la hachure");
+  if (valeur(css, ".combat-legende .portee .combat-rond", "border-color") !== "var(--combat-portee-bord)") defauts.push("la légende sans le bord");
+  return defauts;
+}
+
+test("combat.css — la hachure de la portée : 3 px sur 9 à 135°, sous les jetons, avant .active et .possible, que rien n'efface ; la légende de même", () => {
+  assert.deepEqual(defautsDeLaHachure(COMBAT), []);
+  assert.deepEqual(["hachure-trait", "hachure-pas", "hachure-angle"].map((nom) => jetons(JETONS, "clair")[nom]), ["3px", "9px", "135deg"]);
+  const refuse = (css, motif) => assert.match(defautsDeLaHachure(css).join("\n"), motif);
+  // La hachure après .active : le bord de qui joue ne l'emporterait plus.
+  const bloc = FEUILLE.match(/\.combat-case\.portee \{[^}]*\}\n\n/)[0];
+  const deplacee = casser(casser(FEUILLE, bloc, ""), ".combat-case.possible {\n  border: var(--trait) dashed var(--accent);\n}\n\n", `.combat-case.possible {\n  border: var(--trait) dashed var(--accent);\n}\n\n${bloc}`);
+  refuse(deplacee, /la hachure n'est pas avant \.combat-case\.active/);
+  refuse(casser(FEUILLE, "  background-color: var(--accent-doux);\n}", "  background: var(--accent-doux);\n}"), /\.combat-case\.active efface la hachure/);
+  refuse(casser(FEUILLE, ".combat-case.portee {\n  background-image: repeating-linear-gradient(var(--hachure-angle)", ".combat-case.portee {\n  background-image: repeating-linear-gradient(var(--hachure-pas)"), /la hachure : repeating-linear-gradient\(var\(--hachure-pas\)/);
+  refuse(casser(FEUILLE, "  border-color: var(--combat-portee-bord);\n  border-radius: calc(var(--rayon) / 2);", "  border-radius: calc(var(--rayon) / 2);"), /la légende sans le bord/);
+});
+
+// Contrat § 10.3, le bandeau.
+const ATTENDUES_DU_BANDEAU = [
+  [".combat-bandeau", "background", "var(--fond-2)", null],
+  [".combat-bandeau", "border-left", "var(--trait-epais) solid var(--accent)", null],
+  [".combat-bandeau-en-cours", "border-left-color", "var(--combat-alerte)", null],
+  [".combat-bandeau-texte", "font-family", "var(--police-chasse-fixe)", null],
+  [".combat-bandeau-texte", "line-height", "var(--interligne)", null],
+  [".combat-bandeau-texte", "overflow", "hidden", null],
+  [".combat-bandeau-etiquette", "display", "none", null],
+  [".combat-bandeau-etiquette", "display", "block", MEDIA_56],
+  [".combat-bandeau", "grid-area", "bandeau", MEDIA_56],
+];
+function defautsDuBandeau(css) {
+  const defauts = ecarts(css, ATTENDUES_DU_BANDEAU);
+  if (!(rangDe(css, ".combat-bandeau-en-cours") > rangDe(css, ".combat-bandeau"))) defauts.push("la bordure du geste en cours ne l'emporte pas");
+  // Trois lignes au plus : trois fois l'interligne de sa propre taille de texte.
+  const hauteur = valeur(css, ".combat-bandeau-texte", "max-height");
+  const [, taille, lignes] = (hauteur ?? "").match(/^calc\(var\(--([\w-]+)\) \* var\(--interligne\) \* (\d+)\)$/) ?? [];
+  if (lignes !== "3" || `var(--${taille})` !== valeur(css, ".combat-bandeau-texte", "font-size")) defauts.push(`trois lignes au plus : ${hauteur}`);
+  // La ligne entière, cachée à la vue par le procédé de l'annonce, et lue.
+  for (const propriete of ["position", "width", "height", "margin", "overflow", "clip-path", "white-space"]) {
+    if (valeur(css, ".combat-bandeau-entier", propriete) !== valeur(css, ".combat-annonce", propriete)) defauts.push(`la ligne entière : ${propriete}`);
+  }
+  for (const propriete of ["display", "visibility"]) if (valeur(css, ".combat-bandeau-entier", propriete) !== null) defauts.push(`la ligne entière n'est plus lue : ${propriete}`);
+  return defauts;
+}
+
+test("combat.css — le bandeau : le second fond, la bordure de l'accent, de l'alerte en cours ; chasse fixe, trois lignes au plus ; la ligne entière cachée comme l'annonce ; l'étiquette cachée sous 56rem", () => {
+  assert.deepEqual(defautsDuBandeau(COMBAT), []);
+  const refuse = (css, motif) => assert.match(defautsDuBandeau(css).join("\n"), motif);
+  refuse(casser(FEUILLE, "var(--interligne) * 3)", "var(--interligne) * 4)"), /trois lignes au plus : calc\(var\(--taille-petite\) \* var\(--interligne\) \* 4\)/);
+  refuse(casser(FEUILLE, ".combat-bandeau-etiquette {\n  display: none;", ".combat-bandeau-etiquette {\n  display: block;"), /\.combat-bandeau-etiquette \{ display: block \} au lieu de none/);
+  refuse(`${casser(FEUILLE, ".combat-annonce,\n.combat-bandeau-entier {", ".combat-annonce {")}\n.combat-bandeau-entier {\n  display: none;\n}\n`, /la ligne entière : position[\s\S]*n'est plus lue : display/);
+  refuse(casser(FEUILLE, ".combat-bandeau-en-cours {\n  border-left-color: var(--combat-alerte);", ".combat-bandeau-en-cours {\n  border-left-color: var(--accent);"), /border-left-color: var\(--accent\) \} au lieu de var\(--combat-alerte\)/);
+});
+
+// Contrat § 10.3, le journal et le bandeau (le tableau du complément, § 4.8), le cadre d'un jet, les lignes barrées, les
+// causes ; la phrase de la limite.
+const ATTENDUES_DU_JOURNAL = [
+  [".combat-seg-pj", "color", "var(--combat-pj-texte)"],
+  [".combat-seg-pj", "font-weight", "var(--graisse-forte)"],
+  [".combat-seg-adv", "color", "var(--combat-adv-texte)"],
+  [".combat-seg-adv", "font-weight", "var(--graisse-forte)"],
+  [".combat-seg-capacite", "color", "var(--accent)"],
+  [".combat-seg-tour", "color", "var(--accent)"],
+  [".combat-seg-reussite", "color", "var(--combat-reussite)"],
+  [".combat-seg-echec", "color", "var(--combat-echec)"],
+  [".combat-seg-valeur", "color", "var(--combat-alerte)"],
+  [".combat-seg-valeur", "font-weight", "var(--graisse-forte)"],
+  [".combat-lignes .combat-mort", "color", "var(--combat-echec)"],
+  [".combat-bandeau .combat-mort", "color", "var(--combat-echec)"],
+  [".combat-bandeau .combat-mort", "font-weight", "var(--graisse-forte)"],
+  [".combat-seg-fin", "font-style", "italic"],
+  [".combat-seg-fin", "color", "var(--texte-2)"],
+  [".combat-cadre-jet", "border", "var(--trait) solid var(--combat-cadre-jet)"],
+  [".combat-cadre-jet", "background", "var(--combat-cadre-jet-fond)"],
+  [".combat-cadre-jet", "border-radius", "var(--rayon-cadre)"],
+  [".combat-cadre-jet", "padding", "0 var(--marge-cadre)"],
+  [".combat-cadre-jet", "box-decoration-break", "clone"],
+  [".combat-cadre-jet", "-webkit-box-decoration-break", "clone"],
+  [".combat-de-insecable", "white-space", "nowrap"],
+  [".combat-annulee", "text-decoration", "line-through"],
+  [".combat-cause-avantage", "color", "var(--combat-reussite)"],
+  [".combat-cause-desavantage", "color", "var(--combat-echec)"],
+  [".combat-limite", "color", "var(--combat-alerte)"],
+].map(([selecteur, propriete, attendue]) => [selecteur, propriete, attendue, null]);
+function defautsDuJournal(css) {
+  const defauts = ecarts(css, ATTENDUES_DU_JOURNAL);
+  // Ce qui se colore, et rien d'autre : un segment ne porte qu'une couleur, une graisse ou un italique.
+  for (const regle of selecteursDe(css)) {
+    if (!/\.combat-seg-[\w-]+$/.test(regle.selecteur)) continue;
+    for (const [propriete] of declarations(regle.corps)) if (!/^(?:color|font-weight|font-style)$/.test(propriete)) defauts.push(`${regle.selecteur} : ${propriete}`);
+  }
+  return defauts;
+}
+
+test("combat.css — le journal et le bandeau : les segments colorés, et rien d'autre ; le cadre d'un jet, qui suit la ligne ; un dé insécable ; les lignes barrées ; les causes ; la limite", () => {
+  assert.deepEqual(defautsDuJournal(COMBAT), []);
+  const refuse = (css, motif) => assert.match(defautsDuJournal(css).join("\n"), motif);
+  refuse(casser(FEUILLE, "  -webkit-box-decoration-break: clone;\n", ""), /-webkit-box-decoration-break: null/);
+  refuse(casser(FEUILLE, ".combat-seg-pj {\n  color: var(--combat-pj-texte);\n  font-weight: var(--graisse-forte);", ".combat-seg-pj {\n  color: var(--combat-pj-texte);"), /\.combat-seg-pj \{ font-weight: null \}/);
+  refuse(casser(FEUILLE, ".combat-seg-reussite {\n  color: var(--combat-reussite);", ".combat-seg-reussite {\n  color: var(--combat-reussite);\n  background: var(--combat-pj-doux);"), /\.combat-seg-reussite : background/);
+  refuse(casser(FEUILLE, ".combat-de-insecable {\n  white-space: nowrap;", ".combat-de-insecable {\n  white-space: normal;"), /\.combat-de-insecable \{ white-space: normal \}/);
+  refuse(casser(FEUILLE, "  border: var(--trait) solid var(--combat-cadre-jet);", "  border: var(--trait) solid var(--bordure);"), /\.combat-cadre-jet \{ border: var\(--trait\) solid var\(--bordure\) \}/);
+});
+
+// Contrat § 10.3 : ni transform, ni filter, ni container-type sur .combat et .combat-cadre (ni rien qui ferait d'eux le
+// repère d'un élément fixé à la fenêtre : le volet s'y accrocherait).
+const FONT_UN_REPERE = /^(?:transform|translate|rotate|scale|filter|backdrop-filter|perspective|container|container-type|contain|will-change|content-visibility)$/;
+function defautsDuRepere(css) {
+  return selecteursDe(css)
+    .filter((regle) => [".combat", ".combat-cadre", "#ecran:has(> .combat)"].includes(regle.selecteur))
+    .flatMap((regle) => declarations(regle.corps).filter(([propriete]) => FONT_UN_REPERE.test(propriete)).map(([propriete, v]) => `${regle.cadre ?? ""} ${regle.selecteur} { ${propriete}: ${v} }`.trim()));
+}
+
+test("combat.css — ni transform, ni filter, ni container-type sur .combat et .combat-cadre : le volet reste fixé à la fenêtre", () => {
+  assert.deepEqual(defautsDuRepere(COMBAT), []);
+  assert.deepEqual(defautsDuRepere(`${FEUILLE}\n.combat-cadre {\n  transform: translateZ(0);\n}\n`), [".combat-cadre { transform: translateZ(0) }"]);
+  assert.deepEqual(defautsDuRepere(casser(FEUILLE, "@media (min-width: 80rem) {\n", "@media (min-width: 80rem) {\n  .combat {\n    container-type: inline-size;\n  }\n\n")), ["@media (min-width: 80rem) .combat { container-type: inline-size }"]);
+  assert.deepEqual(defautsDuRepere(".combat-cadre { filter: none; }\n.combat-case { container-type: size; }"), [".combat-cadre { filter: none }"]);
 });
 
 // ——— Les textes des deux feuilles ———

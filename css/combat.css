@@ -1,15 +1,25 @@
-/* Le simulateur de combat (SPECIFICATION.md, § 17 ; l'interface, § 9).
+/* Le simulateur de combat (SPECIFICATION.md, § 17 ; l'interface, § 9 ; le
+   complément du lot 4, groupe 2, § 4).
 
    Cette feuille habille l'écran #/combat et lui seul : chaque règle commence
    par une classe « combat », pour ne rien changer au reste du site. Elle
    existe à part d'ecran.css parce que l'écran a ses propres dispositions et
    ses deux couleurs de camp.
 
-   L'ordre du document est celui du téléphone : la carte, le panneau
-   d'action, les deux camps, le journal. Les deux autres dispositions ne font
+   L'ordre du document est celui du téléphone : le bandeau, la carte, la
+   bulle (sur un téléphone, le volet qui monte du bas), la zone sous la
+   carte, les deux camps, le journal. Les deux autres dispositions ne font
    que placer. Toutes les valeurs viennent de jetons.css ; seules les deux
    largeurs des conditions @media (56rem, 80rem) sont écrites ici, car CSS
-   n'y lit pas de variable.
+   n'y lit pas de variable. La troisième condition, la souris (pointer:
+   fine), n'en a pas.
+
+   La place de la bulle, de son onglet et des infobulles se calcule dans
+   js/ecrans/echelle.js, qui l'écrit sur elles en trois propriétés (la
+   gauche, le haut, la flèche) que cette feuille lit sans valeur de repli :
+   c'est la seule écriture de style du code. Ni transform, ni filter, ni
+   container-type sur .combat et .combat-cadre : le volet, fixé à la
+   fenêtre, ne s'y accrocherait plus.
 
    Dans le code, la carte de 10 × 10 cases s'appelle « le plateau » : le mot
    « carte » désigne déjà la carte d'adversaire (§ 16.5). */
@@ -121,6 +131,26 @@
   display: flex;
 }
 
+/* « ↶ Annuler le dernier geste » : son signe, caché aux lecteurs d'écran,
+   garde sa distance au libellé, que la boîte souple du bouton ne laisse pas
+   à l'espace qui les sépare dans le texte. */
+.combat-annuler-geste {
+  gap: var(--espace-1);
+}
+
+.combat-signe {
+  flex: none;
+  line-height: 1;
+}
+
+/* À l'approche du plafond des événements, une phrase dans la couleur de
+   l'alerte, sous la barre (cachée quand elle est vide). */
+.combat-limite {
+  margin: var(--espace-2) 0 0;
+  color: var(--combat-alerte);
+  font-weight: var(--graisse-forte);
+}
+
 .combat-aide {
   margin: var(--espace-2) 0 var(--espace-3);
   color: var(--texte-2);
@@ -160,6 +190,12 @@
   background: var(--fond-2);
 }
 
+/* La zone sous la carte est le repère des infobulles qu'elle porte (les
+   causes d'un jet joué sous la carte, sur un téléphone). */
+.combat-action {
+  position: relative;
+}
+
 /* La fiche complète montre une carte d'adversaire, dont les dimensions sont
    du papier : elle défile dans son cadre plutôt que d'élargir la page. */
 .combat-panneau {
@@ -175,9 +211,11 @@
   outline: none;
 }
 
-/* Les trois dispositions */
+/* Les trois dispositions. Le cadre est aussi le repère de la bulle et de son
+   onglet, qui n'ont pas de cellule : ils se posent sur lui. */
 
 .combat-cadre {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
@@ -193,6 +231,59 @@
 
 .combat-camp {
   min-width: 0;
+}
+
+/* Le bandeau « Dernier événement », au-dessus de la carte : la dernière
+   ligne du journal, avec ses couleurs et ses cadres, sur trois lignes au
+   plus ; pendant un geste, après le premier dé, la ligne de ce geste, bordée
+   de l'alerte. Le texte coupé est caché aux lecteurs d'écran ; la ligne
+   entière le suit, cachée à la vue comme l'annonce des dés. Sur un
+   téléphone, ni étiquette, et « Journal ↓ » sous le texte, qui garde toute
+   la largeur. */
+.combat-bandeau {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--espace-2) var(--espace-3);
+  min-width: 0;
+  padding: var(--espace-2) var(--espace-3);
+  border: var(--trait) solid var(--separateur);
+  border-left: var(--trait-epais) solid var(--accent);
+  border-radius: var(--rayon);
+  background: var(--fond-2);
+  cursor: pointer;
+}
+
+.combat-bandeau-en-cours {
+  border-left-color: var(--combat-alerte);
+}
+
+.combat-bandeau-etiquette {
+  display: none;
+}
+
+/* Trois lignes au plus : la coupe (js/ecrans/combat_journal.js) mesure la
+   hauteur du texte contre trois fois son interligne ; ce qui dépasserait
+   encore est rogné. Un dé ne se coupe jamais (.combat-de-insecable). */
+.combat-bandeau-texte {
+  flex: 1 1 100%;
+  min-width: 0;
+  max-height: calc(var(--taille-petite) * var(--interligne) * 3);
+  overflow: hidden;
+  font-family: var(--police-chasse-fixe);
+  font-size: var(--taille-petite);
+  line-height: var(--interligne);
+  overflow-wrap: anywhere;
+}
+
+.combat-bandeau-coupe {
+  color: var(--texte-2);
+  font-weight: var(--graisse-forte);
+}
+
+.combat-bandeau-journal {
+  flex: none;
+  margin-left: auto;
 }
 
 /* Le plateau */
@@ -264,9 +355,18 @@
   background: var(--fond);
 }
 
+/* La portée de la capacité survolée : des traits rouge clair, sous les
+   jetons, sans les cacher. La règle précède celles de qui joue et d'une
+   arrivée possible, dont le bord l'emporte ; elles ne posent que la couleur
+   du fond, et la hachure reste sur la case de qui joue (portée 0). */
+.combat-case.portee {
+  background-image: repeating-linear-gradient(var(--hachure-angle), var(--combat-portee) 0 var(--hachure-trait), transparent var(--hachure-trait) var(--hachure-pas));
+  border-color: var(--combat-portee-bord);
+}
+
 .combat-case.active {
   border-color: var(--accent);
-  background: var(--accent-doux);
+  background-color: var(--accent-doux);
 }
 
 .combat-case.possible {
@@ -274,7 +374,7 @@
 }
 
 .combat-case.inactive {
-  background: var(--fond-2);
+  background-color: var(--fond-2);
 }
 
 /* Les cases font moins de 44 px sur un téléphone : c'est admis (§ 9). */
@@ -489,6 +589,357 @@
     var(--combat-mort);
 }
 
+/* « portée de la capacité survolée » : un carré hachuré comme les cases. */
+.combat-legende .portee .combat-rond {
+  border-color: var(--combat-portee-bord);
+  border-radius: calc(var(--rayon) / 2);
+  background-image: repeating-linear-gradient(var(--hachure-angle), var(--combat-portee) 0 var(--hachure-trait), transparent var(--hachure-trait) var(--hachure-pas));
+}
+
+/* La bulle d'options, accrochée à la case de qui joue (complément, § 4.1) :
+   la liste des capacités, la liste d'une case, ou le jet. Sur un téléphone,
+   elle est le volet qui monte du bas, sur 45 % de la fenêtre au plus, et
+   défile en elle-même ; à 56rem, elle se pose sur le cadre, à la place que
+   js/ecrans/echelle.js écrit, et sa flèche montre la case. Ni ombre ni
+   opacité : un bord et le fond de la page. */
+.combat-bulle {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  max-height: var(--hauteur-volet);
+  overflow: visible;
+  border-top: var(--trait) solid var(--bordure);
+  border-radius: calc(var(--rayon) * 2) calc(var(--rayon) * 2) 0 0;
+  background: var(--fond);
+  color: var(--texte);
+  font-size: var(--taille-petite);
+}
+
+/* La poignée du volet n'est qu'un repère : rien ne la saisit. */
+.combat-bulle-poignee {
+  display: block;
+  flex: none;
+  width: calc(var(--espace-6) + var(--espace-2));
+  height: var(--espace-1);
+  margin: var(--espace-2) auto var(--espace-1);
+  border-radius: var(--espace-1);
+  background: var(--bordure);
+}
+
+/* L'en-tête : le nom entier, puis les actions et le souffle ; ✕ (ou « – »),
+   dernier du document pour que Tab sorte après lui, se pose dans son coin. */
+.combat-bulle-tete {
+  flex: none;
+  padding: var(--espace-2) calc(var(--cible-tactile) + var(--espace-2)) var(--espace-2) var(--espace-3);
+  border-bottom: var(--trait) solid var(--separateur);
+}
+
+.combat-bulle-titre {
+  margin: 0;
+  font-size: var(--taille-texte);
+  line-height: var(--interligne-titre);
+  overflow-wrap: anywhere;
+}
+
+.combat-bulle-sous {
+  margin: 0;
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+/* Ce qui défile dans la bulle, et jamais la page : au bout, le défilement
+   s'arrête là. */
+.combat-bulle-defile {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--espace-2) var(--espace-3) var(--espace-3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.combat-bulle-fermer {
+  position: absolute;
+  top: var(--espace-1);
+  right: var(--espace-1);
+  padding: 0;
+  border: var(--trait) solid var(--bordure);
+  border-radius: var(--rayon);
+  background: transparent;
+  color: var(--texte-2);
+  cursor: pointer;
+}
+
+/* Les passifs, en pied de la liste : chacun prend le focus et ouvre son
+   infobulle. */
+.combat-bulle-pied {
+  margin: var(--espace-2) 0 0;
+  padding-top: var(--espace-2);
+  border-top: var(--trait) solid var(--separateur);
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+.combat-bulle-pied b {
+  color: var(--texte);
+  font-weight: var(--graisse-forte);
+}
+
+.combat-passif {
+  border-bottom: var(--trait) dotted var(--texte-2);
+  color: var(--texte);
+  cursor: help;
+}
+
+/* Une ligne par capacité et par puissance, sur toute la largeur, le coût à
+   droite. Elle tient sous elle la raison d'une ligne inactive et l'aperçu
+   qu'un doigt y ouvre. Ses 44 px deviennent 36 sous une souris, plus bas :
+   pour les lignes de la bulle seules. */
+.combat-option {
+  position: relative;
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.combat-bulle .combat-groupe-titre {
+  flex-basis: 100%;
+}
+
+.combat-bulle .combat-capacite {
+  width: 100%;
+  min-height: var(--cible-tactile);
+}
+
+.combat-bulle .combat-cout {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.combat-intervention {
+  padding: 0 var(--espace-1);
+  border: var(--trait) solid var(--bordure);
+  border-radius: var(--rayon);
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+/* L'aperçu d'une ligne, ouvert sous elle au doigt : la description, la
+   portée, les causes, et « Jouer … ». */
+.combat-apercu {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--espace-1);
+  margin: var(--espace-1) 0 var(--espace-2);
+  padding: var(--espace-2) var(--espace-3);
+  border: var(--trait) solid var(--accent);
+  border-radius: var(--rayon);
+  background: var(--accent-doux);
+  font-size: var(--taille-petite);
+}
+
+.combat-apercu p {
+  margin: 0;
+}
+
+/* La liste d'une case, dans la bulle : la bulle la sépare déjà du reste. */
+.combat-bulle .combat-case-liste {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+/* Le jet dans la bulle (29,5rem) : des dés de 64 px, et ses blocs empilés
+   dans l'ordre du document, que la grille d'un grand écran ne place plus,
+   le pied sous les dés, un trait au-dessus de chaque bloc du pied. */
+.combat-bulle .combat-de {
+  width: var(--taille-de-jet);
+  height: var(--taille-de-jet);
+}
+
+.combat-bulle .combat-chaine .combat-de {
+  width: auto;
+  min-width: var(--taille-de-jet);
+}
+
+.combat-bulle .combat-des {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espace-3);
+}
+
+.combat-bulle .combat-reglages,
+.combat-bulle .combat-assiste {
+  padding-top: var(--espace-3);
+  padding-left: 0;
+  border-top: var(--trait) solid var(--separateur);
+  border-left: 0;
+}
+
+/* L'onglet : la bulle réduite après le premier dé, accrochée au jeton
+   (« Taloche [1] : rouvrir »). */
+.combat-onglet {
+  position: absolute;
+  top: var(--bulle-haut);
+  left: var(--bulle-gauche);
+  z-index: 3;
+  max-width: 100%;
+  padding: 0 var(--espace-3);
+  border: var(--trait) solid var(--accent);
+  border-radius: var(--cible-tactile);
+  background: var(--fond);
+  color: var(--accent);
+  font-size: var(--taille-petite);
+  font-weight: var(--graisse-forte);
+  cursor: pointer;
+}
+
+/* Les infobulles d'une ligne, d'un passif ou d'une cause : liées à leur
+   déclencheur, jamais focalisables. Leur couche ne se positionne pas : elles
+   se posent sur la bulle, ou sur la zone sous la carte, à la place que
+   js/ecrans/echelle.js écrit. */
+.combat-infobulles {
+  position: static;
+  flex: none;
+}
+
+.combat-infobulle {
+  position: absolute;
+  top: var(--bulle-haut);
+  left: var(--bulle-gauche);
+  z-index: 4;
+  width: var(--largeur-infobulle);
+  max-width: 100%;
+  padding: var(--espace-2) var(--espace-3);
+  border: var(--trait) solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--fond);
+  color: var(--texte);
+  font-size: var(--taille-petite);
+  font-weight: normal;
+  line-height: var(--interligne);
+  text-align: left;
+}
+
+.combat-infobulle p {
+  margin: var(--espace-1) 0 0;
+}
+
+.combat-infobulle-titre {
+  font-weight: var(--graisse-forte);
+}
+
+.combat-infobulle-cout {
+  color: var(--texte-2);
+}
+
+/* L'origine d'une capacité, sous un titre ou dans une infobulle. */
+.combat-sous {
+  color: var(--texte-2);
+}
+
+/* La flèche : deux triangles de bordures, le bord puis le fond, posés le
+   long du côté qui regarde l'ancre, en face de son milieu (la propriété de
+   la flèche, écrite par js/ecrans/echelle.js). Celle de la bulle n'existe
+   qu'à 56rem ; le volet n'en a pas. */
+.combat-infobulle::before,
+.combat-infobulle::after {
+  content: "";
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: var(--fleche-bulle) solid transparent;
+  pointer-events: none;
+}
+
+.combat-bulle-droite::before,
+.combat-bulle-droite::after,
+.combat-infobulle-droite::before,
+.combat-infobulle-droite::after {
+  top: calc(var(--bulle-fleche) - var(--fleche-bulle) - var(--trait));
+  right: 100%;
+}
+
+.combat-bulle-droite::before,
+.combat-infobulle-droite::before {
+  border-right-color: var(--bordure);
+}
+
+.combat-bulle-droite::after,
+.combat-infobulle-droite::after {
+  right: calc(100% - var(--trait));
+  border-right-color: var(--fond);
+}
+
+.combat-bulle-gauche::before,
+.combat-bulle-gauche::after,
+.combat-infobulle-gauche::before,
+.combat-infobulle-gauche::after {
+  top: calc(var(--bulle-fleche) - var(--fleche-bulle) - var(--trait));
+  left: 100%;
+}
+
+.combat-bulle-gauche::before,
+.combat-infobulle-gauche::before {
+  border-left-color: var(--bordure);
+}
+
+.combat-bulle-gauche::after,
+.combat-infobulle-gauche::after {
+  left: calc(100% - var(--trait));
+  border-left-color: var(--fond);
+}
+
+.combat-bulle-dessous::before,
+.combat-bulle-dessous::after,
+.combat-infobulle-dessous::before,
+.combat-infobulle-dessous::after {
+  bottom: 100%;
+  left: calc(var(--bulle-fleche) - var(--fleche-bulle) - var(--trait));
+}
+
+.combat-bulle-dessous::before,
+.combat-infobulle-dessous::before {
+  border-bottom-color: var(--bordure);
+}
+
+.combat-bulle-dessous::after,
+.combat-infobulle-dessous::after {
+  bottom: calc(100% - var(--trait));
+  border-bottom-color: var(--fond);
+}
+
+.combat-bulle-dessus::before,
+.combat-bulle-dessus::after,
+.combat-infobulle-dessus::before,
+.combat-infobulle-dessus::after {
+  top: 100%;
+  left: calc(var(--bulle-fleche) - var(--fleche-bulle) - var(--trait));
+}
+
+.combat-bulle-dessus::before,
+.combat-infobulle-dessus::before {
+  border-top-color: var(--bordure);
+}
+
+.combat-bulle-dessus::after,
+.combat-infobulle-dessus::after {
+  top: calc(100% - var(--trait));
+  border-top-color: var(--fond);
+}
+
+/* Caché, ce qui se montre en boîte souple ou en bloc posé reste caché : son
+   attribut l'emporte sur sa règle, à toute largeur. */
+.combat-bulle[hidden],
+.combat-onglet[hidden],
+.combat-infobulle[hidden],
+.combat-bandeau[hidden] {
+  display: none;
+}
+
 /* Le panneau d'action et la préparation */
 
 .combat-preparation h2 {
@@ -502,17 +953,54 @@
   min-height: var(--cible-tactile);
 }
 
+/* En démonstration, un bloc à part, sous celui des personnages : le bouton
+   qui ajoute le personnage de démonstration, la place de sa question, puis
+   la phrase qui dit qu'il est gardé. */
+.combat-preparation-demonstration {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espace-2);
+  margin: 0 0 var(--espace-3);
+}
+
+.combat-preparation-question,
+.combat-preparation-phrase {
+  flex: 1 1 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.combat-preparation-question:empty {
+  display: none;
+}
+
 .combat-qui {
   margin: 0 0 var(--espace-2);
   font-size: var(--taille-sous-titre);
   overflow-wrap: anywhere;
 }
 
-/* Qui joue se lit d'abord ; ses actions et son souffle suivent, plus bas. */
-.combat-qui-suite {
+/* Sur un téléphone, le jet sous la carte : son titre, puis qui le joue, ses
+   actions et son souffle, plus bas. */
+.combat-qui + .combat-sous {
+  margin: 0 0 var(--espace-3);
+  font-size: var(--taille-petite);
+}
+
+/* Sur un grand écran, la zone sous la carte ne dit que cela : le jet se joue
+   dans la bulle. */
+.combat-action-phrase {
+  margin: 0;
   color: var(--texte-2);
-  font-size: var(--taille-texte);
-  font-weight: normal;
+  font-size: var(--taille-petite);
+}
+
+/* Quand un adversaire attaque, qui se défend, sous les étapes. */
+.combat-defenseur {
+  margin: 0 0 var(--espace-2);
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
 }
 
 .combat-etapes {
@@ -661,8 +1149,8 @@
 }
 
 /* Un bouton du site rendu inactif (« Fin de tour » pendant un geste, « Lancer
-   le combat », « Ajouter », « Copier », « Confirmer », un pas de la
-   puissance) : le même aspect, trait discontinu, fond transparent, texte
+   le combat », « Ajouter », « Copier », « Confirmer », « Annuler le dernier
+   geste ») : le même aspect, trait discontinu, fond transparent, texte
    gris, sans opacité. Il gardait l'aspect d'un bouton actif, et rien ne le
    disait avant l'appui sur un téléphone, qui n'a pas de curseur. */
 .combat .bouton[aria-disabled="true"] {
@@ -753,8 +1241,11 @@
 }
 
 /* La seule région polie de l'écran : elle parle, le bilan visible montre.
-   Elle reste dans la page, hors de la vue, pour les lecteurs d'écran. */
-.combat-annonce {
+   Elle reste dans la page, hors de la vue, pour les lecteurs d'écran. La
+   ligne entière du bandeau, qu'ils lisent à la place du texte coupé, se
+   cache de même ; elle n'est pas une région. */
+.combat-annonce,
+.combat-bandeau-entier {
   position: absolute;
   width: var(--trait);
   height: var(--trait);
@@ -797,6 +1288,76 @@
   margin: 0 0 var(--espace-2);
   color: var(--texte-2);
   font-size: var(--taille-petite);
+}
+
+/* « Réglages à la main (avant le premier dé) », replié : son intitulé est
+   une cible comme une autre. */
+.combat-reglages summary {
+  min-height: var(--cible-tactile);
+  padding: var(--espace-2) 0;
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+  cursor: pointer;
+}
+
+/* Le contexte du jet : les avantages et désavantages, dont le nombre porte
+   « ⓘ » et ouvre sa cause (une infobulle au survol et au focus, sous la
+   ligne au doigt) ; le type de défense, au choix. Les causes se lisent dans
+   la couleur de la réussite (un avantage) ou de l'échec (un désavantage). */
+.combat-cause {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espace-1);
+  padding: 0 var(--espace-2);
+  border: var(--trait) solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--fond);
+  color: var(--texte);
+  cursor: help;
+}
+
+.combat-cause-signe {
+  color: var(--accent);
+}
+
+.combat-cause-explication {
+  margin: var(--espace-1) 0 var(--espace-2);
+  padding: var(--espace-2) var(--espace-3);
+  border: var(--trait) solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--fond);
+  font-size: var(--taille-petite);
+}
+
+.combat-cause-explication p {
+  margin: 0 0 var(--espace-1);
+}
+
+.combat-cause-avantage {
+  color: var(--combat-reussite);
+}
+
+.combat-cause-desavantage {
+  color: var(--combat-echec);
+}
+
+/* La description d'une source, entre guillemets, à la suite de sa phrase. */
+.combat-citation {
+  color: var(--texte-2);
+  font-style: italic;
+}
+
+.combat-defense {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espace-2);
+  margin: var(--espace-2) 0 0;
+}
+
+.combat-defense .champ {
+  width: auto;
+  margin-bottom: 0;
 }
 
 /* Le texte de la capacité, toujours montré (mode assisté) : dans son cadre,
@@ -1068,8 +1629,9 @@
 }
 
 /* Le point qui les sépare tient à la ligne, non à l'état : un état passé à
-   la ligne ne commence pas par un point. */
-.combat-sous:not(:last-child)::after {
+   la ligne ne commence pas par un point. Il n'est que là : une origine, dans
+   une infobulle ou un intitulé, n'en porte pas. */
+.combat-sous-ligne .combat-sous:not(:last-child)::after {
   content: " ·";
 }
 
@@ -1333,11 +1895,73 @@
   font-weight: var(--graisse-forte);
 }
 
-/* Seule la phrase de la mort est en évidence, comme sur la maquette, et non
-   la ligne entière. */
-.combat-lignes .combat-mort {
+/* Les segments d'une ligne, dans la liste et dans le bandeau (complément,
+   § 4.8), et rien d'autre : qui agit et sa cible, gras dans la couleur de
+   leur camp ; la capacité jouée et « — Tour… — », l'accent ; ✓ et ✗ ; la
+   lettre et sa valeur, le nombre ajusté, gras dans la couleur de l'alerte ;
+   la phrase de la mort, seule en évidence comme sur la maquette, et non la
+   ligne entière ; « Fin du tour… », en retrait. Un nom répété, les sources,
+   les raisons, la zone et le bilan gardent la couleur du texte. */
+.combat-seg-pj {
+  color: var(--combat-pj-texte);
+  font-weight: var(--graisse-forte);
+}
+
+.combat-seg-adv {
+  color: var(--combat-adv-texte);
+  font-weight: var(--graisse-forte);
+}
+
+.combat-seg-capacite,
+.combat-seg-tour {
+  color: var(--accent);
+}
+
+.combat-seg-reussite {
+  color: var(--combat-reussite);
+}
+
+.combat-seg-echec {
+  color: var(--combat-echec);
+}
+
+.combat-seg-valeur {
+  color: var(--combat-alerte);
+  font-weight: var(--graisse-forte);
+}
+
+.combat-lignes .combat-mort,
+.combat-bandeau .combat-mort {
   color: var(--combat-echec);
   font-weight: var(--graisse-forte);
+}
+
+.combat-seg-fin {
+  color: var(--texte-2);
+  font-style: italic;
+}
+
+/* Les dés d'un même jet, entourés d'un cadre fin qui suit la ligne quand
+   elle passe à la suivante. Une coupure ne tombe jamais au milieu d'un dé,
+   et aucune espace insécable n'entre dans la page : un copier à la main
+   redonne le texte. */
+.combat-cadre-jet {
+  padding: 0 var(--marge-cadre);
+  border: var(--trait) solid var(--combat-cadre-jet);
+  border-radius: var(--rayon-cadre);
+  background: var(--combat-cadre-jet-fond);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.combat-de-insecable {
+  white-space: nowrap;
+}
+
+/* Les lignes d'un geste annulé, barrées à l'écran ; le texte copié ne l'est
+   pas. */
+.combat-annulee {
+  text-decoration: line-through;
 }
 
 .combat-copie {
@@ -1349,9 +1973,11 @@
   margin-bottom: 0;
 }
 
-/* De 56rem à 80rem : le plateau et le panneau d'action à gauche, les deux
-   camps à droite. Un jeton montre son nom court à côté de son rond ; trois
-   par case, le « +k » dans une colonne à part pour ne prendre aucune ligne.
+/* De 56rem à 80rem : le bandeau, le plateau et la zone sous la carte à
+   gauche, les deux camps à droite ; la bulle, posée sur le cadre, à côté de
+   la case de qui joue. Un jeton montre son nom court à côté de son rond ;
+   trois par case, le « +k » dans une colonne à part pour ne prendre aucune
+   ligne.
 
    Le nom court se mesure sur la case : 15 % de son côté, comme sur la
    maquette (10,5 px dans une case de 72), jamais plus que le petit texte du
@@ -1412,10 +2038,65 @@
 
   .combat-cadre {
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto 1fr;
     grid-template-areas:
+      "bandeau camps"
       "plateau camps"
       "action camps";
+  }
+
+  /* Le bandeau, sur la largeur de la colonne de la carte : son étiquette,
+     sur deux lignes, puis le texte, puis « Journal ↓ », sur une rangée. */
+  .combat-bandeau {
+    grid-area: bandeau;
+    flex-wrap: nowrap;
+  }
+
+  .combat-bandeau-etiquette {
+    display: block;
+    flex: none;
+    width: min-content;
+    color: var(--texte-2);
+    font-size: var(--taille-petite);
+    line-height: var(--interligne-titre);
+    text-transform: uppercase;
+  }
+
+  .combat-bandeau-texte {
+    flex: 1 1 0;
+  }
+
+  /* La bulle se pose sur le cadre, à la place calculée, et défile en
+     elle-même au-delà de la hauteur de la fenêtre moins 32 px : 20rem pour
+     la liste, 29,5rem pour le jet, jamais plus que le cadre. */
+  .combat-bulle {
+    position: absolute;
+    top: var(--bulle-haut);
+    right: auto;
+    bottom: auto;
+    left: var(--bulle-gauche);
+    width: min(var(--largeur-bulle), 100%);
+    max-height: var(--hauteur-bulle-max);
+    border: var(--trait) solid var(--bordure);
+    border-radius: var(--rayon);
+  }
+
+  .combat-bulle-jet {
+    width: min(var(--largeur-bulle-jet), 100%);
+  }
+
+  .combat-bulle-poignee {
+    display: none;
+  }
+
+  .combat-bulle::before,
+  .combat-bulle::after {
+    content: "";
+    position: absolute;
+    width: 0;
+    height: 0;
+    border: var(--fleche-bulle) solid transparent;
+    pointer-events: none;
   }
 
   .combat-plateau {
@@ -1614,12 +2295,13 @@
 }
 
 /* 80rem et plus : la disposition de la maquette. Les personnages, puis le
-   plateau et le panneau d'action, puis les adversaires ; l'enveloppe des
-   deux camps s'efface pour que chacun prenne sa colonne. */
+   bandeau, le plateau et la zone sous la carte, puis les adversaires ;
+   l'enveloppe des deux camps s'efface pour que chacun prenne sa colonne. */
 @media (min-width: 80rem) {
   .combat-cadre {
     grid-template-columns: minmax(0, 2fr) minmax(0, 5fr) minmax(0, 2fr);
     grid-template-areas:
+      "pj bandeau adv"
       "pj plateau adv"
       "pj action adv";
   }
@@ -1634,5 +2316,14 @@
 
   .combat-camp-adv {
     grid-area: adv;
+  }
+}
+
+/* Avec une souris, les lignes de la bulle font 36 px de haut ; au doigt,
+   44 (complément, § 4.1). Cela amende « toute cible fait 44 px hors des
+   cases » pour elles seules : toute autre cible garde ses 44 px. */
+@media (pointer: fine) {
+  .combat-bulle .combat-capacite {
+    min-height: var(--ligne-souris);
   }
 }

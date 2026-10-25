@@ -7,6 +7,10 @@
 // quand elle a changé, et la règle des volets (ouverts ou repliés). Les
 // noms viennent de la démonstration. La mise en page se regarde dans un vrai
 // navigateur.
+//
+// Au groupe 2 (contrat du groupe 2, § 8.5, § 9.9, § 9.11 et § 14, É4) : les
+// actions restantes écrites telles que la vue les dit, et le focus rendu
+// sans faire défiler la page.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -24,6 +28,12 @@ const zone = (faces, nombreDeFaces, nom, armure, max, etat = null, resistance = 
   resistance: { valeur: resistance, max: 5 },
 });
 
+/**
+ * Les actions restantes, à la forme de vueFiche(…).actions (contrat du
+ * groupe 2, § 8.5) : le texte vient de la vue, la partie ne le calcule pas.
+ */
+const actionsDe = (reste, max) => ({ reste, max, texte: `actions restantes : ${reste} sur ${max}` });
+
 /** La fiche d'Aubépine, à la forme de vueFiche ; « retouches » en remplace des champs. */
 function aubepine(retouches = {}) {
   return {
@@ -34,7 +44,7 @@ function aubepine(retouches = {}) {
     sousTitre: "Marmiton · Saucier",
     statut: null,
     marques: [],
-    actions: { reste: 1, max: 2 },
+    actions: actionsDe(1, 2),
     souffle: { valeur: 3, max: 10, absent: false },
     corps: { valeur: 10, max: 10 },
     zones: [
@@ -72,7 +82,7 @@ function adversaire(id, nom, initiales, retouches = {}) {
     sousTitre: "Commis, Rôtisseur ×1,4",
     statut: null,
     marques: [],
-    actions: { reste: 1, max: 1 },
+    actions: actionsDe(1, 1),
     souffle: { valeur: 5, max: 5, absent: false },
     corps: { valeur: 10, max: 10 },
     zones: [zone("2-19", 18, "Corps", 4, 4), zone("20", 1, "Toque haute", 0, 0)],
@@ -219,7 +229,7 @@ test("l'en-tête : la pastille, le nom entier, la ligne, l'état, les actions en
     const actions = resume.querySelector(".combat-actions");
     assert.deepEqual(actions.children.map((pion) => pion.className), ["combat-pion", "combat-pion vide"]);
     assert.equal(actions.getAttribute("role"), "img");
-    assert.equal(actions.getAttribute("aria-label"), "1 action sur 2");
+    assert.equal(actions.getAttribute("aria-label"), "actions restantes : 1 sur 2");
     // Lu d'un trait, l'en-tête garde ses mots séparés.
     assert.equal(texteDe(resume), "A Aubépine Crèmebrûlée Marmiton · Saucier joue");
 
@@ -227,7 +237,7 @@ test("l'en-tête : la pastille, le nom entier, la ligne, l'état, les actions en
     const sobre = ficheDe(partie, "adv3").querySelector("summary");
     assert.deepEqual(sobre.children.map((enfant) => enfant.className), ["combat-pastille", "combat-nom", "combat-actions"]);
     assert.equal(texteDe(sobre.querySelector(".combat-nom")), "Marmiton de corvée n° 1");
-    assert.equal(sobre.querySelector(".combat-actions").getAttribute("aria-label"), "1 action sur 1");
+    assert.equal(sobre.querySelector(".combat-actions").getAttribute("aria-label"), "actions restantes : 1 sur 1");
     assert.equal(texteDe(ficheDe(partie, "adv2").querySelector(".combat-sous")), "Commis, Rôtisseur ×1,4");
     // Un état sans ligne : la ligne sous le nom ne porte que lui.
     partie.rendre({ pj: [aubepine({ statut: "joue", marques: ["joue"] })], adv: [chef(), marmiton1({ sousTitre: "", statut: "a joué" })] }, { etroit: false });
@@ -242,23 +252,47 @@ test("l'en-tête : la pastille, le nom entier, la ligne, l'état, les actions en
   }
 });
 
-test("les actions restantes s'accordent, et passent aux nombres au-delà de trente", () => {
+test("les actions restantes : le texte de la vue, en pastilles, puis en toutes lettres au-delà de trente", () => {
   const { partie, retirer } = monter({
-    pj: [aubepine({ actions: { reste: 2, max: 2 } })],
-    adv: [chef({ actions: { reste: 0, max: 1 } }), marmiton1({ actions: { reste: 12, max: 31 } }), marmiton2({ actions: { reste: 30, max: 30 } })],
+    pj: [aubepine({ actions: actionsDe(2, 2) })],
+    adv: [chef({ actions: actionsDe(0, 1) }), marmiton1({ actions: actionsDe(12, 31) }), marmiton2({ actions: actionsDe(30, 30) })],
   });
   try {
-    const actionsDe = (id) => ficheDe(partie, id).querySelector(".combat-actions");
-    assert.equal(actionsDe("pj1").getAttribute("aria-label"), "2 actions sur 2");
-    assert.deepEqual(actionsDe("pj1").children.map((pion) => pion.className), ["combat-pion", "combat-pion"]);
-    assert.equal(actionsDe("adv2").getAttribute("aria-label"), "0 action sur 1");
-    assert.deepEqual(actionsDe("adv2").children.map((pion) => pion.className), ["combat-pion vide"]);
-    assert.equal(actionsDe("adv4").children.length, 30);
-    assert.equal(actionsDe("adv3").children.length, 0);
-    assert.equal(texteDe(actionsDe("adv3")), "12 actions sur 31");
+    const pastillesDe = (id) => ficheDe(partie, id).querySelector(".combat-actions");
+    assert.equal(pastillesDe("pj1").getAttribute("aria-label"), "actions restantes : 2 sur 2");
+    assert.deepEqual(pastillesDe("pj1").children.map((pion) => pion.className), ["combat-pion", "combat-pion"]);
+    assert.equal(pastillesDe("adv2").getAttribute("aria-label"), "actions restantes : 0 sur 1");
+    assert.deepEqual(pastillesDe("adv2").children.map((pion) => pion.className), ["combat-pion vide"]);
+    assert.equal(pastillesDe("adv4").children.length, 30);
+    assert.equal(pastillesDe("adv3").children.length, 0);
+    assert.equal(texteDe(pastillesDe("adv3")), "actions restantes : 12 sur 31");
+    assert.equal(pastillesDe("adv3").hasAttribute("aria-label"), false, "écrit en toutes lettres, il n'a pas besoin d'un nom");
   } finally {
     retirer();
   }
+});
+
+test("« actions restantes : 1 sur 2 » : l'en-tête écrit le texte de la vue tel quel, et « 1 action sur 2 » ne s'écrit plus nulle part", () => {
+  // Un texte que les nombres ne donneraient pas : la partie le recopie, elle ne le refait pas.
+  const dit = "actions restantes : 7 sur 9";
+  const { partie, retirer } = monter({
+    pj: [aubepine({ actions: { reste: 1, max: 2, texte: dit } })],
+    adv: [chef({ actions: { reste: 12, max: 31, texte: dit } })],
+  });
+  try {
+    assert.equal(ficheDe(partie, "pj1").querySelector(".combat-actions").getAttribute("aria-label"), dit);
+    assert.deepEqual(ficheDe(partie, "pj1").querySelector(".combat-actions").children.map((pion) => pion.className), ["combat-pion", "combat-pion vide"], "les pastilles suivent les nombres");
+    assert.equal(texteDe(ficheDe(partie, "adv2").querySelector(".combat-actions")), dit);
+    // Le texte change seul : l'en-tête se refait.
+    partie.rendre({ pj: [aubepine({ actions: { reste: 1, max: 2, texte: "actions restantes : 1 sur 2" } })], adv: [chef()] }, { etroit: false });
+    assert.equal(ficheDe(partie, "pj1").querySelector(".combat-actions").getAttribute("aria-label"), "actions restantes : 1 sur 2");
+    // Nulle part l'ancienne forme, ni dans un texte ni dans un attribut.
+    const ecrit = [partie.noeud, ...partie.noeud.descendants()].map((noeud) => [...noeud.attributs.values()].join(" ")).join(" ") + partie.noeud.textContent;
+    assert.doesNotMatch(ecrit, /\d+ actions? sur \d+/);
+  } finally {
+    retirer();
+  }
+  assert.doesNotMatch(SOURCE, /action sur|\baccorder\(/, "le module ne fabrique plus le compte des actions");
 });
 
 test("le souffle et le corps : en cases avec leur nombre, en nombres seuls au-delà de trente, « — » sans souffle", () => {
@@ -527,20 +561,20 @@ test("un état qui change seul (« a joué », les actions, une marque) ne refai
     const table = fiche.querySelector("table");
     const jauge = fiche.querySelector(".combat-jauge");
     const nom = fiche.querySelector(".combat-nom");
-    partie.rendre({ pj: [aubepine()], adv: [chef({ statut: "a joué", marques: [], actions: { reste: 0, max: 1 } }), marmiton1(), marmiton2()] }, { etroit: false });
+    partie.rendre({ pj: [aubepine()], adv: [chef({ statut: "a joué", marques: [], actions: actionsDe(0, 1) }), marmiton1(), marmiton2()] }, { etroit: false });
     assert.equal(texteDe(fiche.querySelector(".combat-statut")), "a joué");
-    assert.equal(fiche.querySelector(".combat-actions").getAttribute("aria-label"), "0 action sur 1");
+    assert.equal(fiche.querySelector(".combat-actions").getAttribute("aria-label"), "actions restantes : 0 sur 1");
     assert.notEqual(fiche.querySelector(".combat-nom"), nom, "l'en-tête est refait");
     assert.equal(fiche.querySelector("table"), table, "le corps ne l'est pas");
     assert.equal(fiche.querySelector(".combat-jauge"), jauge);
     // Une marque seule : ni l'en-tête ni le corps, la classe suffit.
     const nomRefait = fiche.querySelector(".combat-nom");
-    partie.rendre({ pj: [aubepine()], adv: [chef({ statut: "a joué", marques: ["ciblee"], actions: { reste: 0, max: 1 } }), marmiton1(), marmiton2()] }, { etroit: false });
+    partie.rendre({ pj: [aubepine()], adv: [chef({ statut: "a joué", marques: ["ciblee"], actions: actionsDe(0, 1) }), marmiton1(), marmiton2()] }, { etroit: false });
     assert.equal(fiche.className, "combat-fiche ciblee");
     assert.equal(fiche.querySelector(".combat-nom"), nomRefait);
     assert.equal(fiche.querySelector("table"), table);
     // Le corps qui change (elle perd du corps) se refait, lui.
-    partie.rendre({ pj: [aubepine()], adv: [chef({ statut: "a joué", marques: ["ciblee"], actions: { reste: 0, max: 1 }, corps: { valeur: 4, max: 10 } }), marmiton1(), marmiton2()] }, { etroit: false });
+    partie.rendre({ pj: [aubepine()], adv: [chef({ statut: "a joué", marques: ["ciblee"], actions: actionsDe(0, 1), corps: { valeur: 4, max: 10 } }), marmiton1(), marmiton2()] }, { etroit: false });
     assert.notEqual(fiche.querySelector("table"), table);
     assert.equal(texteDe(fiche.querySelectorAll(".combat-jauge")[1]), "Corps 4/10");
   } finally {
@@ -700,7 +734,7 @@ test("un geste que le navigateur n'a pas encore annoncé est déjà un choix au 
 
 test("à sa mort une fiche se replie, même ouverte par la personne ; rouverte ensuite, elle le reste", () => {
   const etroit = { etroit: true };
-  const mort = { marques: ["morte"], statut: "mort au tour 2", actions: { reste: 0, max: 1 } };
+  const mort = { marques: ["morte"], statut: "mort au tour 2", actions: actionsDe(0, 1) };
   const { partie, retirer } = monter({ pj: [aubepine({ marques: ["joue"] })], adv: [chef(), marmiton1(), marmiton2()] }, etroit);
   try {
     // La personne a ouvert la fiche du Marmiton qu'elle vise.
@@ -957,8 +991,27 @@ test("le focus : il reste où il est quand rien ne change, suit le bouton de mê
     ailleurs.focus();
     partie.rendre(vue("B2"), { etroit: false });
     assert.equal(document.activeElement, ailleurs);
+
+    // Les cinq focus du contrôle n'ont pas d'options ; les cinq que la
+    // partie a rendus (le champ neuf, l'en-tête trois fois, le titre du
+    // camp) se posent sans faire défiler la page (compl. § 4.5).
+    const rendus = document.focalisations.filter((focalisation) => focalisation.options !== undefined);
+    assert.equal(document.focalisations.length, 10);
+    assert.deepEqual(rendus.map((focalisation) => focalisation.noeud.tagName), ["INPUT", "SUMMARY", "SUMMARY", "H2", "SUMMARY"]);
+    assert.deepEqual(rendus.map((focalisation) => focalisation.options), Array(5).fill({ preventScroll: true }));
+    assert.equal(document.defilements.length, 0);
   } finally {
     retirer();
+  }
+});
+
+test("le focus ne fait jamais défiler la page : chaque focus du module porte preventScroll, et rien ne défile", () => {
+  // Contrat du groupe 2, § 0.2 (règle 2) et § 9.11.
+  const focus = SOURCE.match(/\.focus\([^)]*\)/g) ?? [];
+  assert.equal(focus.length, 3, "le même nœud, le titre du camp, le bouton de même rôle ou l'en-tête");
+  assert.deepEqual([...new Set(focus)], [".focus({ preventScroll: true })"]);
+  for (const interdit of ["scrollIntoView", "scrollTo", "scrollBy", "window.scroll", "scrollTop"]) {
+    assert.ok(!SOURCE.includes(interdit), `« ${interdit} » n'a pas sa place dans les fiches`);
   }
 });
 

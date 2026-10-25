@@ -7,12 +7,15 @@
    l'appareil. Le texte contraste d'au moins 4,5:1 avec chacun de ses fonds,
    et les bordures des champs d'au moins 3:1 ; tests/site.test.js le mesure.
    Le simulateur de combat (§ 17) est l'exception à la couleur unique : le
-   vert de ses personnages et le rouge de ses adversaires, plus bas.
+   vert de ses personnages et le rouge de ses adversaires, plus bas, et les
+   quatre couleurs de sa hachure et du cadre d'un jet.
 
    Seule exception, que CSS impose : une condition @media ne lit pas les
    variables. La largeur où la liste et la fiche se placent côte à côte
    (56rem) est donc écrite dans ecran.css, et les deux largeurs du simulateur
-   (56rem, 80rem) dans combat.css. */
+   (56rem, 80rem) dans combat.css ; sa troisième condition, la souris
+   (pointer: fine), n'a pas de largeur. La place de la bulle du combat n'est
+   pas un jeton : js/ecrans/echelle.js l'écrit sur la bulle même. */
 
 :root {
   color-scheme: light dark;
@@ -49,6 +52,29 @@
   --largeur-carte: 9rem;
   --largeur-etiquette: 3.5rem;
 
+  /* Le simulateur de combat (§ 17 ; lot 4, groupe 2) : la bulle d'options
+     et son jet, le volet qui la remplace sur un téléphone, les infobulles,
+     la flèche (égale à la constante FLECHE de js/ecrans/echelle.js), une
+     ligne de la bulle sous une souris, les dés d'un jet dans la bulle, la
+     hachure de la portée (des traits de 3 px tous les 9, à 135°) et le cadre
+     des dés d'un jet au journal. Aucun de ces noms ne porte « combat » :
+     les contrôles le réservent aux couleurs. La dernière largeur est celle
+     d'une vignette du créateur de personnage (§ 15). */
+  --largeur-bulle: 20rem;
+  --largeur-bulle-jet: 29.5rem;
+  --largeur-infobulle: 18rem;
+  --hauteur-bulle-max: calc(100vh - var(--espace-6));
+  --hauteur-volet: 45%;
+  --ligne-souris: 36px;
+  --fleche-bulle: 8px;
+  --taille-de-jet: 4rem;
+  --hachure-trait: 3px;
+  --hachure-pas: 9px;
+  --hachure-angle: 135deg;
+  --rayon-cadre: 4px;
+  --marge-cadre: 3px;
+  --largeur-vignette: 180px;
+
   --fond: #ffffff;
   --fond-2: #f3f4f6;
   --texte: #1a1c20;
@@ -76,6 +102,15 @@
   --combat-reussite: #1e7a3c;
   --combat-echec: #b3261e;
   --combat-alerte: #8a5300;
+  /* La portée d'une capacité survolée : les traits de la hachure, rouge
+     clair sur le fond d'une case, et le bord des cases hachurées. Le cadre
+     des dés d'un jet : son bord, un gris qui tient 3:1 sur les deux fonds et
+     sur le sien, dans les deux thèmes (il garde sa valeur en sombre, et y
+     est redéclaré), et son fond, où ✓, ✗ et les chiffres tiennent 5:1. */
+  --combat-portee: #d9534f;
+  --combat-portee-bord: #c8372d;
+  --combat-cadre-jet: #7d838d;
+  --combat-cadre-jet-fond: #ffffff;
 
   /* La fiche de personnage (§ 15.4) : les couleurs et les polices du modèle
      de fiche. Elle est du papier : elle garde ces couleurs dans le thème
@@ -149,5 +184,9 @@
     --combat-reussite: #5cc38a;
     --combat-echec: #e8776e;
     --combat-alerte: #e6a85a;
+    --combat-portee: #e8776e;
+    --combat-portee-bord: #f19a92;
+    --combat-cadre-jet: #7d838d;
+    --combat-cadre-jet-fond: #262a30;
   }
 }

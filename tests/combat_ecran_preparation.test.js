@@ -7,6 +7,12 @@
 // rendu à l'autre quand leur vue n'a pas changé, refaits quand elle a
 // changé. Les noms viennent de la démonstration. La mise en page se regarde
 // dans un vrai navigateur.
+//
+// Au groupe 2 (contrat du groupe 2, § 8.8, § 9.9, § 9.11 et § 14, É4) : le
+// bouton « Ajouter le personnage de démonstration », en démonstration
+// seulement, que la liste soit vide, pleine ou attendue ; la zone de sa
+// question, qui survit à tout rendu ; la phrase que l'écran passe ; le lien
+// de la raison de la rencontre vers #/rencontre ; le focus sans défiler.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -17,8 +23,14 @@ const { creer } = await import("../js/ecrans/combat_preparation.js");
 const SOURCE = readFileSync(new URL("../js/ecrans/combat_preparation.js", import.meta.url), "utf8");
 
 const DEJA = "Ce personnage est déjà dans le combat.";
-const COMPOSEZ = "Composez d'abord une rencontre";
+// La raison d'une rencontre vide, et son lien, à la forme de vuePreparation (contrat du groupe 2, § 8.8).
+const COMPOSEZ = "Composez d'abord une rencontre à l'écran Rencontre.";
+const LIEN = { avant: "Composez d'abord une rencontre à l'", texte: "écran Rencontre", apres: ".", adresse: "#/rencontre" };
 const IL_FAUT = "Il faut au moins un personnage et un adversaire.";
+const AJOUTER_LA_DEMONSTRATION = "Ajouter le personnage de démonstration";
+// La phrase que l'écran passe quand le personnage de démonstration est gardé (contrat, annexe B, 15).
+const GARDE = "Le personnage « Aubépine Crèmebrûlée » est sur cet appareil.";
+const EN_DEMONSTRATION = { demonstration: true, phraseDeDemonstration: null };
 
 /** Une vue de préparation, à la forme de vuePreparation ; « retouches » en remplace des morceaux. */
 function vueDe(retouches = {}) {
@@ -38,7 +50,7 @@ function vueDe(retouches = {}) {
       ],
       vide: null,
     },
-    rencontre: { actif: false, raison: COMPOSEZ },
+    rencontre: { actif: false, raison: COMPOSEZ, lien: LIEN },
     quiCommence: [
       { camp: "pj", libelle: "Les PJ", choisi: true, commande: { preparer: { type: "qui_commence", camp: "pj" } } },
       { camp: "adv", libelle: "Les adversaires", choisi: false, commande: { preparer: { type: "qui_commence", camp: "adv" } } },
@@ -67,18 +79,46 @@ function actionsEspionnes() {
       lancer: noter("lancer"),
       ouvrirFiche: noter("ouvrirFiche"),
       ouvrirCase: noter("ouvrirCase"),
+      ajouterLaDemonstration: noter("ajouterLaDemonstration"),
     },
   };
 }
 
-/** Une préparation posée dans la page, et de quoi la défaire. */
-function monter(vue = vueDe()) {
+/** Une préparation posée dans la page, et de quoi la défaire ; « ecran » est la mémoire que l'écran lui passe. */
+function monter(vue = vueDe(), ecran = {}) {
   const retirer = installerDom();
   const { appels, actions } = actionsEspionnes();
   const partie = creer(actions);
   document.body.append(partie.noeud);
-  if (vue) partie.rendre(vue, {});
+  if (vue) partie.rendre(vue, ecran);
   return { partie, appels, retirer };
+}
+
+/** Les classes des enfants de la section, dans l'ordre du document. */
+const ordreDesBlocs = (partie) => partie.noeud.children.map((enfant) => enfant.className || enfant.tagName);
+const BLOCS = [
+  "H2",
+  "combat-preparation-bloc combat-preparation-personnages",
+  "combat-preparation-bloc combat-preparation-adversaires",
+  "combat-preparation-bloc combat-preparation-rencontre",
+  "combat-preparation-bloc combat-preparation-commence",
+  "combat-preparation-bloc combat-preparation-lancer",
+  "combat-preparation-bloc combat-preparation-notes",
+  "combat-case-liste",
+];
+const BLOCS_EN_DEMONSTRATION = [...BLOCS.slice(0, 2), "combat-preparation-demonstration", ...BLOCS.slice(2)];
+
+/** Relève les nœuds retirés de leur parent : un nœud retiré puis remis perd le focus dans un navigateur. */
+function releverLesRetraits(noeuds) {
+  const retires = [];
+  for (const noeud of noeuds) {
+    const retirer = noeud.remove;
+    noeud.remove = function retire() {
+      if (this.parentNode) retires.push(this);
+      return retirer.call(this);
+    };
+  }
+  return retires;
 }
 
 const repere = (partie, nom) => partie.noeud.querySelector(`[data-repere=${nom}]`);
@@ -448,6 +488,191 @@ test("« Placer la rencontre préparée » : inactif tant qu'elle est vide ou qu
   }
 });
 
+test("la raison d'une rencontre vide mène à l'écran Rencontre : « écran Rencontre » est un lien vers #/rencontre", () => {
+  const { partie, appels, retirer } = monter();
+  try {
+    let placer = repere(partie, "rencontre");
+    const raison = raisonDe(partie, placer);
+    assert.equal(inactif(placer), true);
+    assert.equal(raison.hidden, false);
+    // Lue d'un trait (aria-describedby), c'est le texte entier de la vue.
+    assert.equal(raison.textContent, COMPOSEZ);
+    // Écrite en trois morceaux, le lien au milieu.
+    assert.equal(raison.childNodes.length, 3);
+    assert.deepEqual(raison.childNodes.map((morceau) => morceau.textContent), [LIEN.avant, LIEN.texte, LIEN.apres]);
+    const liens = [...raison.querySelectorAll("a")];
+    assert.equal(liens.length, 1);
+    assert.equal(liens[0].getAttribute("href"), "#/rencontre");
+    assert.equal(texteDe(liens[0]), "écran Rencontre");
+    assert.equal(raison.childNodes[1], liens[0]);
+    // Le lien n'est pas le bouton : le bouton inactif ne fait toujours rien.
+    placer.click();
+    assert.deepEqual(appels, []);
+
+    // Une autre raison, sans lien : du texte seul.
+    const plafond = "La rencontre porterait le combat au-delà de 60 adversaires.";
+    partie.rendre(vueDe({ rencontre: { actif: false, raison: plafond, lien: null } }), {});
+    placer = repere(partie, "rencontre");
+    assert.equal(texteDe(raisonDe(partie, placer)), plafond);
+    assert.equal(raisonDe(partie, placer).querySelectorAll("a").length, 0);
+    // Le bouton actif : ni raison, ni lien.
+    partie.rendre(vueDe({ rencontre: { actif: true, raison: null, lien: null } }), {});
+    placer = repere(partie, "rencontre");
+    assert.equal(raisonDe(partie, placer).hidden, true);
+    assert.equal(raisonDe(partie, placer).childNodes.length, 0);
+    assert.equal(partie.noeud.querySelectorAll("a[href=\"#/rencontre\"]").length, 0);
+    // La rencontre de nouveau vide : le lien revient.
+    partie.rendre(vueDe(), {});
+    assert.equal(partie.noeud.querySelectorAll("a[href=\"#/rencontre\"]").length, 1);
+  } finally {
+    retirer();
+  }
+});
+
+test("en démonstration, « Ajouter le personnage de démonstration » suit les personnages : liste pleine, vide, ou attendue", () => {
+  const listes = {
+    pleine: vueDe().personnages,
+    vide: { attente: false, phrases: [], options: [] },
+    attendue: { attente: true, phrases: [], options: [] },
+  };
+  for (const [nom, personnages] of Object.entries(listes)) {
+    const { partie, appels, retirer } = monter(vueDe({ personnages }), EN_DEMONSTRATION);
+    try {
+      // Un bloc à part, juste après celui des personnages.
+      assert.deepEqual(ordreDesBlocs(partie), BLOCS_EN_DEMONSTRATION, nom);
+      const bloc = partie.noeud.children[2];
+      assert.equal(bloc.tagName, "DIV");
+      const bouton = repere(partie, "ajouter-demonstration");
+      assert.equal(bouton.parentNode, bloc, nom);
+      assert.equal(bouton.tagName, "BUTTON");
+      assert.equal(bouton.getAttribute("type"), "button");
+      assert.equal(bouton.className, "bouton secondaire");
+      assert.equal(texteDe(bouton), AJOUTER_LA_DEMONSTRATION);
+      assert.equal(inactif(bouton), false);
+      // Sous le bouton, la zone de sa question, vide ; aucune phrase tant que l'écran n'en dit pas.
+      const zone = partie.noeud.querySelector(".combat-preparation-question");
+      assert.deepEqual(bloc.children, [bouton, zone], nom);
+      assert.equal(zone.tagName, "DIV");
+      assert.equal(zone.childNodes.length, 0);
+      assert.equal(partie.noeud.querySelectorAll(".combat-preparation-phrase").length, 0);
+      // Le clic donne la zone à l'écran, qui y ouvre la question ; rien n'entre au combat d'ici.
+      bouton.click();
+      assert.deepEqual(appels, [["ajouterLaDemonstration", zone]], nom);
+      assert.equal(appels[0][1], zone);
+    } finally {
+      retirer();
+    }
+  }
+  // La phrase « Aucun personnage enregistré… » précède le bloc ; l'attente aussi.
+  const { partie, retirer } = monter(vueDe({ personnages: listes.vide }), EN_DEMONSTRATION);
+  try {
+    assert.ok(texteDe(partie.noeud.children[1]).startsWith("Aucun personnage enregistré à ajouter."));
+    assert.equal(texteDe(partie.noeud.children[2]), AJOUTER_LA_DEMONSTRATION);
+    partie.rendre(vueDe({ personnages: listes.attendue }), EN_DEMONSTRATION);
+    assert.equal(texteDe(partie.noeud.children[1]), "Lecture des personnages en ligne…");
+    assert.equal(texteDe(partie.noeud.children[2]), AJOUTER_LA_DEMONSTRATION);
+  } finally {
+    retirer();
+  }
+});
+
+test("en mode réel, ni bouton de démonstration, ni zone, ni phrase", () => {
+  for (const ecran of [{}, undefined, { demonstration: false, phraseDeDemonstration: GARDE }, { demonstration: "oui", phraseDeDemonstration: GARDE }]) {
+    const retirer = installerDom();
+    try {
+      const { appels, actions } = actionsEspionnes();
+      const partie = creer(actions);
+      document.body.append(partie.noeud);
+      for (const personnages of [vueDe().personnages, { attente: false, phrases: [], options: [] }]) {
+        partie.rendre(vueDe({ personnages }), ecran);
+        assert.deepEqual(ordreDesBlocs(partie), BLOCS, JSON.stringify(ecran));
+        assert.equal(repere(partie, "ajouter-demonstration"), null);
+        assert.equal(partie.noeud.querySelectorAll(".combat-preparation-demonstration").length, 0);
+        assert.equal(partie.noeud.querySelectorAll(".combat-preparation-question").length, 0);
+        assert.equal(partie.noeud.querySelectorAll(".combat-preparation-phrase").length, 0);
+        assert.ok(!texteDe(partie.noeud).includes("démonstration"));
+      }
+      assert.deepEqual(appels, []);
+    } finally {
+      retirer();
+    }
+  }
+});
+
+test("la zone de la question survit à tout rendu : jamais refaite, jamais retirée, et le focus qu'elle tient reste", () => {
+  const { partie, appels, retirer } = monter(vueDe(), EN_DEMONSTRATION);
+  try {
+    const zone = partie.noeud.querySelector(".combat-preparation-question");
+    const bloc = zone.parentNode;
+    const bouton = repere(partie, "ajouter-demonstration");
+    const retraits = releverLesRetraits([zone, bloc, bouton]);
+    // L'écran y ouvre la question de garderRecu, et son focus s'y pose.
+    const garder = document.createElement("button");
+    garder.textContent = "Garder les deux";
+    zone.append(garder);
+    garder.focus({ preventScroll: true });
+    const focus = document.focalisations.length;
+
+    // La liste se relit (un personnage de plus), la phrase paraît, puis change, puis s'en va ;
+    // l'attente revient ; la rencontre et le lancement changent.
+    const relue = { attente: false, phrases: [], options: [...vueDe().personnages.options, { cle: "p-demo", nom: "Aubépine Fleurdesel", actif: true, raison: null }] };
+    partie.rendre(vueDe({ personnages: relue }), EN_DEMONSTRATION);
+    partie.rendre(vueDe({ personnages: relue }), { demonstration: true, phraseDeDemonstration: GARDE });
+    partie.rendre(vueDe({ personnages: { attente: true, phrases: [], options: [] } }), { demonstration: true, phraseDeDemonstration: GARDE });
+    partie.rendre(vueDe({ personnages: relue, rencontre: { actif: true, raison: null, lien: null } }), { demonstration: true, phraseDeDemonstration: "Le personnage « Aubépine Fleurdesel » est sur cet appareil." });
+    partie.rendre(vueDe({ lancer: { actif: true, raison: null } }), EN_DEMONSTRATION);
+
+    assert.deepEqual(retraits, [], "ni la zone, ni son bloc, ni le bouton ne quittent la page");
+    assert.equal(partie.noeud.querySelector(".combat-preparation-question"), zone);
+    assert.equal(bloc.parentNode, partie.noeud);
+    assert.equal(partie.noeud.children[2], bloc);
+    assert.equal(repere(partie, "ajouter-demonstration"), bouton);
+    assert.deepEqual(zone.children, [garder], "la question ouverte est toujours là");
+    assert.equal(document.activeElement, garder);
+    assert.equal(document.focalisations.length, focus, "personne ne reprend le focus à la question");
+    // Le clic donne toujours la même zone.
+    bouton.click();
+    assert.deepEqual(appels, [["ajouterLaDemonstration", zone]]);
+  } finally {
+    retirer();
+  }
+});
+
+test("la phrase de la démonstration : sous la zone quand l'écran en dit une, et elle seule change", () => {
+  const { partie, retirer } = monter(vueDe(), EN_DEMONSTRATION);
+  try {
+    const bloc = partie.noeud.querySelector(".combat-preparation-demonstration");
+    const [bouton, zone] = bloc.children;
+    partie.rendre(vueDe(), { demonstration: true, phraseDeDemonstration: GARDE });
+    const phrase = bloc.querySelector(".combat-preparation-phrase");
+    assert.equal(phrase.tagName, "P");
+    assert.equal(phrase.className, "combat-preparation-phrase");
+    assert.equal(texteDe(phrase), GARDE);
+    assert.deepEqual(bloc.children, [bouton, zone, phrase]);
+    // Un autre personnage gardé : la même phrase, son texte changé.
+    const autre = "Le personnage « Aubépine Fleurdesel » est sur cet appareil.";
+    partie.rendre(vueDe(), { demonstration: true, phraseDeDemonstration: autre });
+    assert.equal(bloc.querySelector(".combat-preparation-phrase"), phrase);
+    assert.equal(texteDe(phrase), autre);
+    // Rien à dire : rien d'écrit.
+    for (const rien of [null, undefined, ""]) {
+      partie.rendre(vueDe(), { demonstration: true, phraseDeDemonstration: rien });
+      assert.equal(bloc.querySelectorAll(".combat-preparation-phrase").length, 0);
+      assert.deepEqual(bloc.children, [bouton, zone]);
+    }
+    // Une phrase reste du texte, et ne commande pas le sens de l'écriture.
+    const renverse = String.fromCodePoint(0x202e);
+    partie.rendre(vueDe(), { demonstration: true, phraseDeDemonstration: `${renverse}<img src=x onerror=alert(1)>` });
+    assert.equal(partie.noeud.querySelectorAll("img").length, 0);
+    assert.equal(bloc.querySelector(".combat-preparation-phrase").textContent, "<img src=x onerror=alert(1)>");
+    // Aucune région d'annonce : la seule de l'écran dit les dés.
+    assert.equal(partie.noeud.querySelectorAll("[aria-live]").length, 0);
+    assert.equal(partie.noeud.querySelectorAll("[role]").length, 1, "le seul rôle est celui du groupe « Qui commence »");
+  } finally {
+    retirer();
+  }
+});
+
 test("« Qui commence » : le camp choisi est marqué, chaque bouton rend sa commande", () => {
   const { partie, appels, retirer } = monter();
   try {
@@ -606,6 +831,8 @@ test("le focus suit le bouton quand son bloc se refait, et ne bouge pas sinon", 
     const apres = repere(partie, "ajouter-personnage");
     assert.notEqual(apres, avant);
     assert.equal(document.activeElement, apres, "le focus est rendu au bouton de même rôle");
+    // Sans faire défiler la page (compl. § 4.5).
+    assert.deepEqual(document.focalisations.at(-1), { noeud: apres, options: { preventScroll: true } });
 
     // Un autre bloc se refait : le focus reste où il est.
     partie.rendre(vueDe({ lancer: { actif: true, raison: null }, personnages: { attente: false, phrases: [], options: [{ ...vue.personnages.options[0], actif: false, raison: DEJA }, vue.personnages.options[1]] } }), {});
@@ -624,8 +851,20 @@ test("le focus suit le bouton quand son bloc se refait, et ne bouge pas sinon", 
     partie.rendre(vueDe({ lancer: { actif: false, raison: "Il manque un adversaire." } }), {});
     assert.equal(document.activeElement, repere(partie, "lancer"));
     assert.equal(inactif(document.activeElement), true);
+    assert.deepEqual(document.focalisations.at(-1), { noeud: repere(partie, "lancer"), options: { preventScroll: true } });
+    assert.equal(document.defilements.length, 0);
   } finally {
     retirer();
+  }
+});
+
+test("le focus ne fait jamais défiler la page : chaque focus du module porte preventScroll, et rien ne défile", () => {
+  // Contrat du groupe 2, § 0.2 (règle 2) et § 9.11.
+  const focus = SOURCE.match(/\.focus\([^)]*\)/g) ?? [];
+  assert.ok(focus.length > 0, "le module rend le focus au bouton de même rôle");
+  assert.deepEqual([...new Set(focus)], [".focus({ preventScroll: true })"]);
+  for (const interdit of ["scrollIntoView", "scrollTo", "scrollBy", "window.scroll", "scrollTop"]) {
+    assert.ok(!SOURCE.includes(interdit), `« ${interdit} » n'a pas sa place dans la préparation`);
   }
 });
 

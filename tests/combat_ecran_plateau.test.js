@@ -8,6 +8,11 @@
 // poser avant le lancement, les nœuds gardés d'un rendu à l'autre. Les noms
 // viennent de la démonstration. La taille des cases et le glisser-déposer
 // se regardent dans un vrai navigateur.
+//
+// Au groupe 2 (contrat du groupe 2, § 8.5, § 9.9, § 9.11 et § 14, É4) : les
+// hachures de la portée, qui ne récrivent que les cases dont la marque
+// change ; la légende qui les dit ; la raison d'un jeton, dans son titre et
+// dans le texte caché de la carte ; le focus, qui ne fait pas défiler.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -95,8 +100,8 @@ function monter(vue = vueDe()) {
 
 const caseDe = (partie, nom) => partie.noeud.querySelector(`[data-case=${nom}]`);
 const jetonsDe = (partie, nom) => [...caseDe(partie, nom).querySelectorAll(".combat-jeton")];
-/** Le jeton d'un protagoniste, retrouvé par son nom entier (son titre). */
-const jetonDe = (partie, id) => [...partie.noeud.querySelectorAll(".combat-jeton")].find((b) => b.getAttribute("title") === PROTAGONISTES[id].entier) ?? null;
+/** Le jeton d'un protagoniste, retrouvé par son nom entier (la première ligne de son titre). */
+const jetonDe = (partie, id) => [...partie.noeud.querySelectorAll(".combat-jeton")].find((b) => b.getAttribute("title").split("\n")[0] === PROTAGONISTES[id].entier) ?? null;
 const classesDe = (noeud) => noeud.className.split(/\s+/).filter(Boolean);
 const inactif = (bouton) => bouton.getAttribute("aria-disabled") === "true";
 const choixDe = (partie, nom) => caseDe(partie, nom).querySelector(".combat-case-choix");
@@ -117,6 +122,34 @@ function compterLesEcritures(noeuds) {
   return () => ecritures;
 }
 
+/**
+ * Relève chaque écriture de la classe des nœuds donnés : le nœud, autant de
+ * fois qu'elle est écrite. La classe s'écrit par className, que
+ * compterLesEcritures ne voit pas.
+ */
+function releverLesClasses(noeuds) {
+  const ecrites = [];
+  for (const noeud of noeuds) {
+    const descripteur = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(noeud), "className");
+    Object.defineProperty(noeud, "className", {
+      configurable: true,
+      get() {
+        return descripteur.get.call(this);
+      },
+      set(valeur) {
+        ecrites.push(noeud);
+        descripteur.set.call(this, valeur);
+      },
+    });
+  }
+  return ecrites;
+}
+
+/** Les cases hachurées, dans l'ordre du document. */
+const hachurees = (partie) => [...partie.noeud.querySelectorAll(".combat-case.portee")].map((c) => c.getAttribute("data-case"));
+const nomsDesCases = (noeuds) => noeuds.map((c) => c.getAttribute("data-case")).sort();
+const EN_COURS = "Une action est en cours.";
+
 test("le plateau : cent cases de A1 à J10, leurs repères, la légende", () => {
   const { partie, retirer } = monter();
   try {
@@ -124,7 +157,7 @@ test("le plateau : cent cases de A1 à J10, leurs repères, la légende", () => 
     assert.equal(noeud.tagName, "SECTION");
     assert.equal(noeud.className, "combat-plateau");
     assert.equal(noeud.getAttribute("aria-label"), "Carte");
-    assert.deepEqual(noeud.children.map((enfant) => enfant.className), ["combat-plateau-tete", "combat-grille", "combat-legende"]);
+    assert.deepEqual(noeud.children.map((enfant) => enfant.className), ["combat-plateau-tete", "combat-grille", "combat-legende", "combat-raison"]);
 
     // L'en-tête de la maquette : ce qu'est la carte, comment s'y compte une
     // distance ; et, à part, où lire un nom entier (la feuille ne le montre
@@ -157,14 +190,25 @@ test("le plateau : cent cases de A1 à J10, leurs repères, la légende", () => 
     assert.equal(new Set(cases.map((c) => c.getAttribute("data-case"))).size, 100);
     assert.ok(cases.every((c) => c.tagName === "DIV"), "une case n'est pas un bouton : elle en contient");
 
+    // La légende gagne la portée de la capacité survolée (compl. § 4.2) : son
+    // rond porte la classe des cases hachurées.
     const legende = [...noeud.querySelectorAll(".combat-legende li")];
-    assert.deepEqual(legende.map(texteDe), ["personnage", "adversaire", "joue", "cible", "mort, barré"]);
-    assert.deepEqual(legende.map((li) => li.className), ["combat-pj", "combat-adv", "joue", "cible", "mort"]);
+    assert.deepEqual(legende.map(texteDe), ["personnage", "adversaire", "joue", "cible", "mort, barré", "portée de la capacité survolée"]);
+    assert.deepEqual(legende.map((li) => li.className), ["combat-pj", "combat-adv", "joue", "cible", "mort", "portee"]);
     assert.ok(legende.every((li) => li.children.length === 1 && li.children[0].className === "combat-rond"));
+    assert.equal(noeud.querySelectorAll(".combat-legende li.portee .combat-rond").length, 1);
+    // Aucune case n'est hachurée tant qu'on ne survole rien.
+    assert.equal(noeud.querySelectorAll(".combat-case.portee").length, 0);
+
+    // Le texte caché de la raison d'un jeton : un seul, vide, sans rien qui s'y actionne.
+    const raison = noeud.querySelector("#combat-plateau-raison");
+    assert.equal(raison.tagName, "SPAN");
+    assert.equal(raison.hidden, true);
+    assert.equal(texteDe(raison), "");
 
     // Toute classe est du combat, ou un état que nomme le contrat ; aucune ne
     // touche à la carte d'adversaire.
-    const etats = ["active", "possible", "inactive", "joue", "cible", "mort", "inactif"];
+    const etats = ["active", "possible", "inactive", "joue", "cible", "mort", "inactif", "portee"];
     const classes = [noeud, ...noeud.descendants()].flatMap(classesDe);
     for (const classe of classes) {
       assert.ok(classe.startsWith("combat-") || etats.includes(classe), `classe inattendue : ${classe}`);
@@ -595,6 +639,148 @@ test("d'un rendu à l'autre : rien ne s'écrit quand la vue n'a pas changé, et 
   }
 });
 
+test("hachurer : la classe « portee » sur les cases nommées, et seules les cases dont la marque change sont récrites ; null l'efface", () => {
+  const vue = () => vueDe({ jetons: { pj1: { marque: "joue" }, adv3: { choix: CHOISIR("adv3") } }, cases: { D4: { active: true } } });
+  const { partie, retirer } = monter(vue());
+  try {
+    const lesCases = [...partie.noeud.querySelectorAll(".combat-case")];
+    const tous = [partie.noeud, ...partie.noeud.descendants()];
+    const noeuds = Object.fromEntries(["pj1", "adv2", "adv3", "adv4"].map((id) => [id, jetonDe(partie, id)]));
+    const ecritures = compterLesEcritures(tous);
+    const classes = releverLesClasses(lesCases);
+    const desJetons = releverLesClasses(Object.values(noeuds));
+    // Le survol d'une ligne de la bulle ne prend pas le focus : un jeton qui l'a le garde.
+    noeuds.adv3.focus({ preventScroll: true });
+
+    partie.hachurer(["C3", "D4", "E5"]);
+    assert.deepEqual(hachurees(partie), ["C3", "D4", "E5"]);
+    assert.deepEqual(classesDe(caseDe(partie, "C3")), ["combat-case", "portee"]);
+    assert.deepEqual(classesDe(caseDe(partie, "D4")), ["combat-case", "active", "portee"], "la case de qui joue garde sa marque");
+    assert.deepEqual(nomsDesCases(classes), ["C3", "D4", "E5"], "seules les trois cases hachurées sont récrites");
+    assert.equal(ecritures(), 0, "ni attribut, ni enfant : rien d'autre n'est refait");
+    assert.deepEqual(desJetons, [], "aucun jeton n'est récrit");
+    assert.deepEqual([partie.noeud, ...partie.noeud.descendants()], tous, "les mêmes nœuds, dans le même ordre");
+    assert.equal(document.activeElement, noeuds.adv3);
+    assert.deepEqual(classesDe(noeuds.adv3), ["combat-jeton", "combat-adv"]);
+
+    // Une autre portée : seules les cases qui gagnent ou perdent la marque.
+    classes.length = 0;
+    partie.hachurer(["D4", "E5", "F6"]);
+    assert.deepEqual(hachurees(partie), ["D4", "E5", "F6"]);
+    assert.deepEqual(nomsDesCases(classes), ["C3", "F6"]);
+    // La même portée, dans un autre ordre : rien.
+    classes.length = 0;
+    partie.hachurer(["F6", "E5", "D4"]);
+    assert.deepEqual(classes, []);
+
+    // Les hachures tiennent d'un rendu à l'autre : c'est l'infobulle qui les efface.
+    partie.rendre(vue(), {});
+    assert.deepEqual(hachurees(partie), ["D4", "E5", "F6"]);
+    assert.deepEqual(classes, [], "une vue égale ne récrit aucune case hachurée");
+
+    // null les efface toutes, et rien d'autre.
+    partie.hachurer(null);
+    assert.deepEqual(hachurees(partie), []);
+    assert.deepEqual(nomsDesCases(classes), ["D4", "E5", "F6"]);
+    assert.deepEqual(classesDe(caseDe(partie, "D4")), ["combat-case", "active"]);
+    assert.equal(ecritures(), 0);
+    assert.deepEqual(desJetons, []);
+
+    // Un nom qui n'est pas une case ne hachure rien ; une liste vide efface.
+    partie.hachurer(["K11", "__proto__", "a1", "A1"]);
+    assert.deepEqual(hachurees(partie), ["A1"]);
+    partie.hachurer([]);
+    assert.deepEqual(hachurees(partie), []);
+    assert.equal(document.defilements.length, 0);
+  } finally {
+    retirer();
+  }
+});
+
+test("hachurer avant la première vue : les cases se marquent à son arrivée", () => {
+  const { partie, retirer } = monter(null);
+  try {
+    partie.hachurer(["B2"]);
+    assert.deepEqual(hachurees(partie), []);
+    partie.rendre(vueDe(), {});
+    assert.deepEqual(hachurees(partie), ["B2"]);
+  } finally {
+    retirer();
+  }
+});
+
+test("après le premier dé, un candidat qui attend porte sa raison : une seconde ligne dans son titre, et le texte caché de la carte", () => {
+  // Le Chef joue, son geste est payé : les deux Marmitons, qui pourraient
+  // jouer, attendent ; Aubépine n'est pas de son camp, et n'a pas de raison.
+  const essai = "Raison d'essai.";
+  const pendant = (retouches = {}) =>
+    vueDe({
+      jetons: { adv2: { marque: "joue" }, adv3: { inactif: true, raison: EN_COURS }, adv4: { inactif: true, raison: essai }, ...retouches },
+      cases: { F6: { active: true } },
+    });
+  const { partie, appels, retirer } = monter(pendant());
+  try {
+    const raison = partie.noeud.querySelector("#combat-plateau-raison");
+    assert.equal(raison.className, "combat-raison");
+    assert.equal(raison.hidden, true, "caché : il ne se lit que par les jetons qui le nomment");
+    assert.equal(partie.noeud.querySelectorAll("[id]").length, 1, "un seul identifiant de page, celui de la carte");
+
+    const marmiton = jetonDe(partie, "adv3");
+    assert.equal(marmiton.getAttribute("title"), `Marmiton de corvée n° 1\n${EN_COURS}`);
+    assert.equal(marmiton.getAttribute("aria-describedby"), "combat-plateau-raison");
+    assert.equal(marmiton.getAttribute("aria-label"), "Marmiton de corvée n° 1, adversaire, case D4", "le nom accessible ne change pas");
+    assert.equal(inactif(marmiton), true);
+    assert.deepEqual(classesDe(marmiton), ["combat-jeton", "combat-adv", "inactif"]);
+    marmiton.click();
+    assert.deepEqual(appels, []);
+    assert.equal(jetonDe(partie, "adv4").getAttribute("title"), `Marmiton de corvée n° 2\n${essai}`);
+    for (const id of ["pj1", "adv2"]) {
+      assert.equal(jetonDe(partie, id).getAttribute("title"), PROTAGONISTES[id].entier, `${id} : sans raison, le nom entier seul`);
+      assert.equal(jetonDe(partie, id).hasAttribute("aria-describedby"), false);
+    }
+    // Attendre n'est pas être écarté par un choix : aucune case ne l'est.
+    assert.equal(partie.noeud.querySelectorAll(".combat-case.inactive").length, 0);
+
+    // Le texte caché est celui du jeton focalisé ou survolé.
+    assert.equal(texteDe(raison), "");
+    marmiton.declencher("focus");
+    assert.equal(texteDe(raison), EN_COURS);
+    jetonDe(partie, "adv4").declencher("pointerenter");
+    assert.equal(texteDe(raison), essai);
+    // Un jeton sans raison ne le touche pas : il ne le nomme pas.
+    jetonDe(partie, "adv2").declencher("pointerenter");
+    jetonDe(partie, "pj1").declencher("focus");
+    assert.equal(texteDe(raison), essai);
+    marmiton.declencher("pointerenter");
+    assert.equal(texteDe(raison), EN_COURS);
+
+    // La raison du jeton montré change : le texte caché suit, sans rien refaire.
+    partie.rendre(pendant({ adv3: { inactif: true, raison: essai } }), {});
+    assert.equal(jetonDe(partie, "adv3"), marmiton);
+    assert.equal(texteDe(raison), essai);
+
+    // L'action finie : la seconde ligne et le lien s'en vont, le bouton reste le même.
+    partie.rendre(vueDe({ jetons: { adv3: { choix: CHOISIR("adv3") } } }), {});
+    assert.equal(jetonDe(partie, "adv3"), marmiton);
+    assert.equal(marmiton.getAttribute("title"), "Marmiton de corvée n° 1");
+    assert.equal(marmiton.hasAttribute("aria-describedby"), false);
+    assert.equal(inactif(marmiton), false);
+
+    // Quand on ne joue pas, rien n'est écarté : aucune raison ne se dit.
+    partie.rendre(pendant(), { arrete: true });
+    assert.equal(marmiton.getAttribute("title"), "Marmiton de corvée n° 1");
+    assert.equal(partie.noeud.querySelectorAll("[aria-describedby]").length, 0);
+    // Une raison qui commande le sens de l'écriture le perd, au titre comme au texte caché.
+    const renverse = String.fromCodePoint(0x202e);
+    partie.rendre(pendant({ adv3: { inactif: true, raison: `${renverse}${EN_COURS}` } }), {});
+    assert.equal(marmiton.getAttribute("title"), `Marmiton de corvée n° 1\n${EN_COURS}`);
+    marmiton.declencher("focus");
+    assert.equal(raison.textContent, EN_COURS);
+  } finally {
+    retirer();
+  }
+});
+
 test("un jeton qui se déplace change de case ; un jeton retiré quitte la page", () => {
   const { partie, retirer } = monter(vueDe());
   try {
@@ -715,6 +901,9 @@ test("avant le lancement : le jeton posé suit l'écran qui redessine, et reçoi
     assert.equal(aubepine.getAttribute("aria-label"), "Aubépine Crèmebrûlée, personnage, case C3");
     assert.equal(bouton.parentNode, null, "le bouton de la case a quitté la page");
     assert.equal(document.activeElement, aubepine, "le focus ne reste pas sur un bouton retiré");
+    // Le focus se pose sans faire défiler la page (compl. § 4.5).
+    assert.deepEqual(document.focalisations.at(-1), { noeud: aubepine, options: { preventScroll: true } });
+    assert.equal(document.defilements.length, 0);
     assert.equal(partie.noeud.querySelectorAll(".combat-case-choix").length, 0);
   } finally {
     retirer();
@@ -974,4 +1163,14 @@ test("le module : il n'écrit ni HTML ni style, n'importe que dom.js et deux con
   assert.match(SOURCE, /^\/\/ Le plateau du combat \(SPECIFICATION\.md, § 17/);
   // « Carte » est le nom de la région à l'écran ; aucune classe ne le porte.
   assert.ok(!/["'`. ]combat-[\w-]*carte/i.test(SOURCE) && !/carte-/i.test(SOURCE), "aucune classe en « carte »");
+});
+
+test("le focus ne fait jamais défiler la page : chaque focus du module porte preventScroll, et rien ne défile", () => {
+  // Contrat du groupe 2, § 0.2 (règle 2) et § 9.11.
+  const focus = SOURCE.match(/\.focus\([^)]*\)/g) ?? [];
+  assert.ok(focus.length > 0, "le module rend le focus au jeton posé");
+  assert.deepEqual([...new Set(focus)], [".focus({ preventScroll: true })"]);
+  for (const interdit of ["scrollIntoView", "scrollTo", "scrollBy", "window.scroll", "scrollTop"]) {
+    assert.ok(!SOURCE.includes(interdit), `« ${interdit} » n'a pas sa place dans le plateau`);
+  }
 });
