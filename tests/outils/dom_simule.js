@@ -3,10 +3,20 @@
 //
 // Les écrans fabriquent leurs éléments par js/ecrans/dom.js : createElement,
 // setAttribute, append, addEventListener. Ce document en tient la trace, sans
-// mise en page ni style : il permet de vérifier qu'un bouton existe, qu'il
-// est actif ou non, et quel texte l'accompagne. Aucune dépendance : le
-// contrôle vaut ce que vaut ce simulacre, et les essais dans un vrai
-// navigateur (Firefox, Chromium) le complètent.
+// mise en page ni feuille de style : il permet de vérifier qu'un bouton
+// existe, qu'il est actif ou non, et quel texte l'accompagne. Aucune
+// dépendance : le contrôle vaut ce que vaut ce simulacre, et les essais dans
+// un vrai navigateur (Firefox, Chromium) le complètent.
+//
+// Pour la bulle du combat (contrat du lot 4, groupe 2, § 11), il relève ce
+// que le code écrit et demande, sans rien calculer : les propriétés posées
+// sur le style d'un élément (ecritures), chaque focus et ses options
+// (document.focalisations), chaque scrollIntoView (document.defilements).
+// La boîte d'un élément est celle qu'un contrôle lui prête (rectangle) ; la
+// fenêtre fait 1 280 × 800 px (documentElement). Toujours sans propagation,
+// ni matchMedia, ni ResizeObserver : un écouteur en capture, keydown,
+// pointerenter, pointerleave, pointerdown ({ pointerType }) et toggle se
+// déclenchent à la main (declencher).
 
 // Ce que rend querySelectorAll dans un navigateur : une NodeList, qui se
 // parcourt (for…of, forEach, un indice, length, item) mais n'a ni filter, ni
@@ -54,7 +64,15 @@ class Noeud {
   get isConnected() {
     let noeud = this;
     while (noeud.parentNode) noeud = noeud.parentNode;
-    return noeud === document?.body;
+    return noeud === document?.documentElement;
+  }
+
+  /** Vrai pour ce nœud lui-même et pour chacun de ses descendants. */
+  contains(autre) {
+    for (let noeud = autre; noeud; noeud = noeud.parentNode) {
+      if (noeud === this) return true;
+    }
+    return false;
   }
 
   remove() {
@@ -76,6 +94,36 @@ class Texte extends Noeud {
   }
 }
 
+// Le style d'un élément : ses propriétés, et le relevé de chaque écriture,
+// dans l'ordre (ecritures : [nom, valeur] ; [nom, null] pour un retrait).
+// Comme dans un navigateur, une valeur vide ou nulle retire la propriété, et
+// une propriété absente se lit « ».
+class Style {
+  #valeurs = new Map();
+
+  constructor() {
+    this.ecritures = [];
+  }
+
+  setProperty(nom, valeur) {
+    const texte = valeur === null ? "" : String(valeur);
+    if (texte === "") this.#valeurs.delete(nom);
+    else this.#valeurs.set(nom, texte);
+    this.ecritures.push([nom, texte]);
+  }
+
+  getPropertyValue(nom) {
+    return this.#valeurs.get(nom) ?? "";
+  }
+
+  removeProperty(nom) {
+    const avant = this.getPropertyValue(nom);
+    this.#valeurs.delete(nom);
+    this.ecritures.push([nom, null]);
+    return avant;
+  }
+}
+
 // Les attributs qui sont aussi des propriétés booléennes.
 const BOOLEENS = ["hidden", "disabled", "checked", "required"];
 
@@ -88,6 +136,12 @@ class Element extends Noeud {
     this.ecouteurs = new Map();
     this.value = "";
     this.files = [];
+    // Une propriété propre : un contrôle peut la remplacer par la sienne.
+    this.style = new Style();
+    // La boîte que lui prête un contrôle : { left, top, width, height }.
+    this.rectangle = null;
+    this.scrollTop = 0;
+    this.scrollHeight = 0;
     for (const nom of BOOLEENS) {
       Object.defineProperty(this, nom, {
         get: () => this.attributs.has(nom),
@@ -173,13 +227,25 @@ class Element extends Noeud {
     return this.declencher("click");
   }
 
-  focus() {
-    if (document) document.activeElement = this;
+  /** Le focus, et son relevé : { noeud, options } (preventScroll…). */
+  focus(options) {
+    if (!document) return;
+    document.activeElement = this;
+    document.focalisations.push({ noeud: this, options });
   }
 
   select() {}
 
-  scrollIntoView() {}
+  /** Rien ne défile ici : la demande est relevée, { noeud, options }. */
+  scrollIntoView(options) {
+    document?.defilements.push({ noeud: this, options });
+  }
+
+  /** La boîte prêtée par un contrôle (rectangle), des zéros sinon. */
+  getBoundingClientRect() {
+    const { left = 0, top = 0, width = 0, height = 0 } = this.rectangle ?? {};
+    return { left, top, width, height, right: left + width, bottom: top + height, x: left, y: top };
+  }
 
   *descendants() {
     for (const enfant of this.children) {
@@ -228,11 +294,22 @@ class Element extends Noeud {
 
 let document = null;
 
-/** Installe le document simulé dans globalThis ; rend une fonction qui le retire. */
+/**
+ * Installe le document simulé dans globalThis, ses relevés vides ; rend une
+ * fonction qui le retire. La page : html (une fenêtre de 1 280 × 800 px),
+ * puis body.
+ */
 export function installerDom() {
+  const racine = new Element("html");
+  Object.assign(racine, { clientWidth: 1280, clientHeight: 800 });
+  const corps = new Element("body");
+  racine.append(corps);
   document = {
     title: "",
-    body: new Element("body"),
+    documentElement: racine,
+    body: corps,
+    focalisations: [],
+    defilements: [],
     createElement: (balise) => new Element(balise),
     createElementNS: (_espace, balise) => new Element(balise),
     getElementById: (id) => document.body.querySelector(`#${id}`),

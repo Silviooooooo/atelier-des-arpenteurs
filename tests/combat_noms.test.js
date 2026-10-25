@@ -4,8 +4,13 @@
 //
 // Chaque règle est vue des deux côtés : deux exemplaires se numérotent, un
 // seul non ; deux premiers mots confondus gardent leur nom entier, deux
-// premiers mots distincts non ; des initiales confondues s'allongent, des
-// initiales distinctes restent d'une lettre.
+// premiers mots distincts non ; des noms de même première lettre prennent
+// une seconde, un nom seul à porter la sienne garde une lettre.
+//
+// Les initiales suivent le complément du groupe 2 du lot 4 (§ 4.11) : la
+// première lettre, puis la première qui distingue, deux signes au plus. Les
+// attentes du groupe 1 (une lettre de plus à chacun, tant qu'il le fallait)
+// sont réécrites.
 //
 // Tous les noms viennent de la démonstration, ou sont inventés pour l'essai.
 
@@ -160,38 +165,40 @@ test("nommer : les initiales d'un exemplaire portent son numéro", () => {
   assert.deepEqual(champ(noms, "initiales"), { adv1: "M1", adv2: "M2", adv3: "C" });
 });
 
-test("nommer : tant que deux protagonistes différents ont les mêmes initiales, chacun prend une lettre de plus", () => {
+test("nommer : entre noms de même première lettre, chacun prend la seconde, à la première position où ils diffèrent", () => {
   const noms = nommer(liste(["adv", "Marmiton de corvée"], ["adv", "Marmiton de corvée"], ["adv", "Mitron"], ["pj", "Aubépine"]));
-  assert.deepEqual(champ(noms, "initiales"), { adv1: "Ma1", adv2: "Ma2", adv3: "Mi", pj4: "A" }, "celui qui n'est confondu avec personne garde une lettre");
+  assert.deepEqual(champ(noms, "initiales"), { adv1: "MA1", adv2: "MA2", adv3: "MI", pj4: "A" }, "celui qui est seul à sa première lettre la garde seule");
 
+  // La position est celle du groupe entier : ceux qu'elle ne sépare pas ne vont pas plus loin, ils reçoivent une marque.
   const trois = nommer(liste(["adv", "Marmiton"], ["adv", "Maraîcher"], ["adv", "Mitron"]));
-  assert.deepEqual(champ(trois, "initiales"), { adv1: "Marm", adv2: "Mara", adv3: "Mi" }, "ceux qui restent confondus continuent seuls");
+  assert.deepEqual(champ(trois, "initiales"), { adv1: `MA${PRIME}`, adv2: `MA${SECONDE}`, adv3: "MI" });
 });
 
-test("nommer : les exemplaires d'un même adversaire ne s'allongent pas l'un l'autre", () => {
+test("nommer : les exemplaires d'un même adversaire ne forment pas un groupe à eux seuls", () => {
   const noms = nommer(liste(["adv", "Marmiton de corvée"], ["adv", "Marmiton de corvée"], ["adv", "Marmiton de corvée"]));
   assert.deepEqual(champ(noms, "initiales"), { adv1: "M1", adv2: "M2", adv3: "M3" });
 });
 
-test("nommer : les lettres de plus sont celles du nom, telles qu'écrites, blancs et signes sautés", () => {
+test("nommer : la seconde est un signe du nom, en majuscule ; les blancs n'occupent aucune position, une apostrophe en occupe une", () => {
   const noms = nommer(liste(["adv", "Chef de partie"], ["adv", "Chef de rang"]));
-  assert.deepEqual(champ(noms, "initiales"), { adv1: "Chefdep", adv2: "Chefder" });
+  assert.deepEqual(champ(noms, "initiales"), { adv1: "CP", adv2: "CR" });
 
   const signes = nommer(liste(["adv", "L'Ogre"], ["adv", "L'Orge"]));
-  assert.deepEqual(champ(signes, "initiales"), { adv1: "LOg", adv2: "LOr" });
+  assert.deepEqual(champ(signes, "initiales"), { adv1: "LG", adv2: "LR" });
 });
 
-test("nommer : un nom plus court qu'un autre s'arrête quand il est épuisé, sans marque s'ils se distinguent", () => {
+test("nommer : au-delà d'un nom, l'absence compte comme une valeur ; le nom fini n'ajoute rien, sans marque s'ils se distinguent", () => {
   const noms = nommer(liste(["adv", "Ma"], ["adv", "Mat"]));
-  assert.deepEqual(champ(noms, "initiales"), { adv1: "Ma", adv2: "Mat" });
+  assert.deepEqual(champ(noms, "initiales"), { adv1: "M", adv2: "MT" });
 });
 
-test("nommer : un nom épuisé, ceux qui restent confondus reçoivent une marque, dans l'ordre d'ajout", () => {
+test("nommer : sans position qui les distingue, ceux qui restent confondus reçoivent une marque, dans l'ordre d'ajout", () => {
   const pj = nommer(liste(["pj", "Aubépine"], ["pj", "Aubépine"]));
-  assert.deepEqual(champ(pj, "initiales"), { pj1: `Aubépine${PRIME}`, pj2: `Aubépine${SECONDE}` });
+  assert.deepEqual(champ(pj, "initiales"), { pj1: `A${PRIME}`, pj2: `A${SECONDE}` });
 
+  // Les mêmes lettres confondent, quel que soit le numéro : « C » et « C1 », « C2 ».
   const meles = nommer(liste(["pj", "Chef"], ["adv", "Chef"], ["adv", "Chef"]));
-  assert.deepEqual(champ(meles, "initiales"), { pj1: `Chef${PRIME}`, adv2: `Chef${SECONDE}1`, adv3: `Chef${SECONDE}2` }, "la marque, puis le numéro d'exemplaire");
+  assert.deepEqual(champ(meles, "initiales"), { pj1: `C${PRIME}`, adv2: `C${SECONDE}1`, adv3: `C${SECONDE}2` }, "la marque, puis le numéro d'exemplaire");
 
   const sansLettre = nommer(liste(["adv", "!!!"], ["adv", "***"]));
   assert.deepEqual(champ(sansLettre, "initiales"), { adv1: `?${PRIME}`, adv2: `?${SECONDE}` });
@@ -199,7 +206,7 @@ test("nommer : un nom épuisé, ceux qui restent confondus reçoivent une marque
 
 test("nommer : les marques ne vont qu'à ceux qui restent confondus", () => {
   const noms = nommer(liste(["pj", "Ma"], ["pj", "Ma"], ["adv", "Mat"], ["adv", "Chef"]));
-  assert.deepEqual(champ(noms, "initiales"), { pj1: `Ma${PRIME}`, pj2: `Ma${SECONDE}`, adv3: "Mat", adv4: "C" });
+  assert.deepEqual(champ(noms, "initiales"), { pj1: `M${PRIME}`, pj2: `M${SECONDE}`, adv3: "MT", adv4: "C" });
 });
 
 test("nommer : au-delà de quatre confondus, les marques s'ajoutent", () => {
@@ -208,7 +215,11 @@ test("nommer : au-delà de quatre confondus, les marques s'ajoutent", () => {
   assert.equal(new Set(Object.values(champ(noms, "initiales"))).size, 6);
 });
 
-test("nommer : dans un combat plein, toutes les initiales sont distinctes", () => {
+// Les lettres d'initiales : sans le numéro d'exemplaire ni les marques.
+const MARQUES = [PRIME, SECONDE, TIERCE, QUARTE];
+const lettresDe = ({ initiales, exemplaire }) => [...(exemplaire === null ? initiales : initiales.slice(0, -String(exemplaire).length))].filter((signe) => !MARQUES.includes(signe));
+
+test("nommer : dans un combat plein, toutes les initiales sont distinctes, de deux signes au plus", () => {
   const adversaires = ["Marmiton de corvée", "Marmiton de salle", "Maraîcher", "Chef de partie", "Chef de rang"].flatMap((nom) => Array.from({ length: 12 }, () => ["adv", nom]));
   const pj = ["Aubépine Crèmebrûlée", "Aubépine", "Amande", "Basilic", "Cerfeuil", "Ciboule", "Mélisse", "Marjolaine", "Origan", "Persil", "Romarin", "Sarriette"].map((nom) => ["pj", nom]);
   const noms = nommer(liste(...pj, ...adversaires));
@@ -216,6 +227,7 @@ test("nommer : dans un combat plein, toutes les initiales sont distinctes", () =
   assert.equal(initiales.length, 72);
   assert.equal(new Set(initiales).size, 72);
   assert.equal(new Set(Object.values(champ(noms, "court"))).size, 72);
+  for (const nom of Object.values(noms)) assert.ok(lettresDe(nom).length <= 2, nom.initiales);
 });
 
 // Relecture de fin de groupe (lot 4) : la confusion se jugeait sur les lettres
@@ -227,11 +239,11 @@ const distincts = (noms, nom) => {
 };
 
 test("nommer : un nom qui finit par un chiffre ne prend ni les initiales ni le jeton d'un exemplaire", () => {
-  // « Commis 1 », à côté de deux « Commis » : sans rien de plus, le premier des deux s'écrirait comme lui.
+  // « Commis 1 », à côté de deux « Commis » : sans rien de plus, le premier des deux s'écrirait comme lui (« C1 »).
   const commis = nommer(liste(["adv", "Commis 1"], ["adv", "Commis"], ["adv", "Commis"]));
   assert.deepEqual(champ(commis, "court"), { adv1: "Commis 1", adv2: "Commis n° 1", adv3: "Commis n° 2" }, "le journal les distinguait déjà");
   assert.deepEqual(champ(commis, "jeton"), { adv1: "Commis 1", adv2: "Commis n° 1", adv3: "Commis n° 2" }, "les exemplaires gardent « n° k », tous les deux");
-  assert.deepEqual(champ(commis, "initiales"), { adv1: `Commis1${PRIME}`, adv2: `Commis${SECONDE}1`, adv3: `Commis${SECONDE}2` }, "les deux noms épuisés, une marque les sépare");
+  assert.deepEqual(champ(commis, "initiales"), { adv1: `C1${PRIME}`, adv2: `C${SECONDE}1`, adv3: `C${SECONDE}2` }, "la seconde ne les sépare pas : une marque le fait");
 
   // « A2 » seul, à côté de deux « A » : les jetons se distinguaient déjà (« A2 », « A 2 »), pas les initiales.
   const a = nommer(liste(["adv", "A2"], ["adv", "A"], ["adv", "A"]));
@@ -256,14 +268,14 @@ test("nommer : un chiffre final qui ne rencontre aucun exemplaire ne change rien
   // « Commis 3 » : aucun des deux « Commis » ne porte le numéro 3.
   const noms = nommer(liste(["adv", "Commis 3"], ["adv", "Commis"], ["adv", "Commis"]));
   assert.deepEqual(champ(noms, "jeton"), { adv1: "Commis 3", adv2: "Commis 1", adv3: "Commis 2" });
-  assert.deepEqual(champ(noms, "initiales"), { adv1: "Commis3", adv2: "Commis1", adv3: "Commis2" });
+  assert.deepEqual(champ(noms, "initiales"), { adv1: "C3", adv2: "C1", adv3: "C2" });
   // Dès qu'un troisième « Commis » s'ajoute, le numéro 3 existe : tout se sépare.
   const trois = nommer(liste(["adv", "Commis 3"], ["adv", "Commis"], ["adv", "Commis"], ["adv", "Commis"]));
   assert.deepEqual(champ(trois, "jeton"), { adv1: "Commis 3", adv2: "Commis n° 1", adv3: "Commis n° 2", adv4: "Commis n° 3" });
-  assert.deepEqual(champ(trois, "initiales"), { adv1: `Commis3${PRIME}`, adv2: `Commis${SECONDE}1`, adv3: `Commis${SECONDE}2`, adv4: `Commis${SECONDE}3` });
-  // Les lettres seules confondent toujours, quel que soit le numéro : un seul et des exemplaires s'allongent ensemble.
+  assert.deepEqual(champ(trois, "initiales"), { adv1: `C3${PRIME}`, adv2: `C${SECONDE}1`, adv3: `C${SECONDE}2`, adv4: `C${SECONDE}3` });
+  // Un seul et des exemplaires de même première lettre forment un groupe, quel que soit le numéro : chacun prend sa seconde.
   const lettres = nommer(liste(["adv", "Mitron"], ["adv", "Marmiton de corvée"], ["adv", "Marmiton de corvée"]));
-  assert.deepEqual(champ(lettres, "initiales"), { adv1: "Mi", adv2: "Ma1", adv3: "Ma2" });
+  assert.deepEqual(champ(lettres, "initiales"), { adv1: "MI", adv2: "MA1", adv3: "MA2" });
 });
 
 test("nommer : dans un combat plein de noms à chiffres, toutes les initiales sont distinctes, et tous les jetons", () => {
@@ -286,6 +298,76 @@ test("nommer : dans un combat plein de noms à chiffres, toutes les initiales so
   );
   assert.equal(Object.keys(noms).length, 57);
   for (const nom of ["initiales", "jeton", "court", "entier"]) distincts(noms, nom);
+});
+
+// ─── Les initiales du groupe 2 (complément, § 4.11) ───────────────────────
+//
+// La décision de l'auteur du 25/10/2026, par ses exemples, puis règle par
+// règle. Les noms sont ceux de la démonstration, et ceux d'essai que permet
+// le contrat du groupe 2.
+
+const ESPACE_SANS_CHASSE = String.fromCodePoint(0x200b);
+
+test("initiales — les exemples du complément : AC et AF, MA et MO, M1, MA12 ; MA prime, MA seconde et MO", () => {
+  assert.deepEqual(champ(nommer(liste(["pj", "Aubépine Crèmebrûlée"], ["pj", "Aubépine Fleurdesel"])), "initiales"), { pj1: "AC", pj2: "AF" });
+  assert.deepEqual(champ(nommer(liste(["adv", "Marmiton de corvée"], ["adv", "Mouette chapardeuse"])), "initiales"), { adv1: "MA", adv2: "MO" });
+  // Des Marmitons seuls à porter leur M : « M1 », « M2 ».
+  const demonstration = nommer(liste(["pj", "Aubépine Crèmebrûlée"], ["adv", "Chef de partie"], ["adv", "Marmiton de corvée"], ["adv", "Marmiton de corvée"]));
+  assert.deepEqual(champ(demonstration, "initiales"), { pj1: "A", adv2: "C", adv3: "M1", adv4: "M2" });
+  // Le douzième Marmiton, à côté de la Mouette.
+  const douze = nommer(liste(...Array.from({ length: 12 }, () => ["adv", "Marmiton de corvée"]), ["adv", "Mouette chapardeuse"]));
+  assert.deepEqual([douze.adv1.initiales, douze.adv12.initiales, douze.adv13.initiales], ["MA1", "MA12", "MO"]);
+  // La seconde est celle du groupe entier : les deux Marmitons y restent confondus, une marque les sépare.
+  const trois = nommer(liste(["adv", "Marmiton de corvée"], ["adv", "Marmiton de corvée bis"], ["adv", "Mouette chapardeuse"]));
+  assert.deepEqual(champ(trois, "initiales"), { adv1: `MA${PRIME}`, adv2: `MA${SECONDE}`, adv3: "MO" });
+});
+
+test("initiales — le premier signe se compare par sa clé : « É… » et « E… » font un groupe, la casse aussi ; chacun garde sa majuscule", () => {
+  assert.deepEqual(champ(nommer(liste(["adv", "Émincer"], ["adv", "Emincer bis"])), "initiales"), { adv1: "É", adv2: "EB" });
+  assert.deepEqual(champ(nommer(liste(["pj", "aubépine Crèmebrûlée"], ["pj", "Aubépine Fleurdesel"])), "initiales"), { pj1: "AC", pj2: "AF" });
+  // Seul à sa première lettre, chacun n'en garde qu'une.
+  assert.deepEqual(champ(nommer(liste(["adv", "Émincer"], ["adv", "Chef de partie"])), "initiales"), { adv1: "É", adv2: "C" });
+});
+
+test("initiales — les positions comptent tout signe de clé non vide : un tiret peut être la seconde (cas à trancher) ; un signe invisible n'en occupe aucune", () => {
+  // Le cas à trancher au compte rendu (contrat du groupe 2, § 7.1) : tel que le contrat l'écrit, le tiret est la seconde.
+  assert.deepEqual(champ(nommer(liste(["adv", "Chef-de-partie"], ["adv", "Chef de partie"])), "initiales"), { adv1: "C-", adv2: "CD" });
+  // Un signe invisible a une clé vide : il est ôté de la suite, et le « o » qui le suit est en position 1.
+  assert.deepEqual(champ(nommer(liste(["adv", "Marmiton de corvée"], ["adv", `M${ESPACE_SANS_CHASSE}ouette chapardeuse`])), "initiales"), { adv1: "MA", adv2: "MO" });
+});
+
+test("initiales — deux signes au plus, quelle que soit la longueur commune ; une majuscule est un seul point de code", () => {
+  // Le groupe 1 allongeait jusqu'à la première différence ; la seconde est désormais un seul signe.
+  assert.deepEqual(champ(nommer(liste(["adv", "Marmiton de corvée"], ["adv", "Marmiton de corvée bis"])), "initiales"), { adv1: "M", adv2: "MB" });
+  // « ß » s'écrit « SS » en majuscule : seul le premier signe compte, en première comme en seconde.
+  assert.deepEqual(champ(nommer(liste(["pj", "Aß"], ["pj", "Ab"])), "initiales"), { pj1: "AS", pj2: "AB" });
+  assert.equal(nommer(liste(["pj", "ßa"])).pj1.initiales, "S");
+});
+
+test("initiales — un combat plein des noms de la démonstration et d'essai : 72 initiales distinctes, de deux signes au plus", () => {
+  const nomsDEssai = ["Aubépine Crèmebrûlée", "Aubépine Fleurdesel", "Mouette chapardeuse", "Marmiton de corvée", "Marmiton de corvée bis", "Chef de partie"];
+  const pj = [...nomsDEssai, ...nomsDEssai].map((nom) => ["pj", nom]);
+  const adversaires = ["Marmiton de corvée", "Marmiton de corvée bis", "Mouette chapardeuse", "Chef de partie", "Brûlot → ✓ contre tous"].flatMap((nom) => Array.from({ length: 12 }, () => ["adv", nom]));
+  const noms = nommer(liste(...pj, ...adversaires));
+  assert.equal(Object.keys(noms).length, 72);
+  distincts(noms, "initiales");
+  for (const nom of Object.values(noms)) assert.ok(lettresDe(nom).length <= 2, nom.initiales);
+  // Quelques-unes, mot pour mot : deux PJ de même nom se marquent, les six familles « MA » aussi, le Brûlot est seul à son B.
+  assert.deepEqual([noms.pj1.initiales, noms.pj7.initiales, noms.pj4.initiales, noms.adv13.initiales, noms.adv49.initiales, noms.adv72.initiales], [
+    `AC${PRIME}`,
+    `AC${SECONDE}`,
+    `MA${PRIME}`,
+    `MA${QUARTE}${PRIME}1`,
+    `C${TIERCE}1`,
+    "B12",
+  ]);
+});
+
+test("initiales — un nom hostile dont la seconde est une marque ne prend pas les initiales d'un autre", () => {
+  // Sans le filet, « A » suivi d'une prime s'écrirait comme le premier « A », marqué.
+  const noms = nommer(liste(["pj", "A"], ["pj", "A"], ["pj", `A${PRIME}x`]));
+  assert.deepEqual(champ(noms, "initiales"), { pj1: `A${PRIME}`, pj2: `A${SECONDE}`, pj3: `A${PRIME}${PRIME}` });
+  distincts(noms, "initiales");
 });
 
 test("nommer : retirer un exemplaire renumérote, et le dernier resté perd son numéro", () => {

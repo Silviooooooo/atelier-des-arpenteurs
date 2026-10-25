@@ -228,19 +228,20 @@ test("noms — clé sans casse, accents, espaces ni signe invisible ; résolutio
   assert.deepEqual(deux.resoudre("marmiton"), { nom: null, candidats: ["Marmiton", "Marmiton\u200B"] });
 });
 
-// ─── Le signe invisible (lot 4, § 6.3) ──────────────────────────────────────
+// ─── Le signe invisible (lot 4, § 6.3 ; groupe 2, compl. § 5.4) ────────────
 //
-// Les vingt et un signes de format que la comparaison des noms retire, dits
+// Les vingt-deux signes de format que la comparaison des noms retire, dits
 // par leur code : un fichier du dépôt n'écrit jamais le signe lui-même, que
-// personne ne verrait.
+// personne ne verrait. U+061C, la marque de lettre arabe, y est entré au
+// groupe 2 du lot 4.
 const SIGNES_INVISIBLES = [
-  0x00ad, 0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e,
+  0x00ad, 0x061c, 0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e,
   0x2060, 0x2061, 0x2062, 0x2063, 0x2064, 0x2066, 0x2067, 0x2068, 0x2069, 0xfeff,
 ];
 const codeDit = (code) => `U+${code.toString(16).toUpperCase().padStart(4, "0")}`;
 
-test("noms — les vingt et un signes invisibles de la liste, chacun retiré ; aucun autre signe ne l'est", () => {
-  assert.equal(SIGNES_INVISIBLES.length, 21);
+test("noms — les vingt-deux signes invisibles de la liste, U+061C compris, chacun retiré ; aucun autre signe ne l'est", () => {
+  assert.equal(SIGNES_INVISIBLES.length, 22);
   for (const code of SIGNES_INVISIBLES) {
     const signe = String.fromCodePoint(code);
     assert.equal(sansSignesInvisibles(`Mar${signe}miton`), "Marmiton", codeDit(code));
@@ -250,7 +251,7 @@ test("noms — les vingt et un signes invisibles de la liste, chacun retiré ; a
     assert.equal(nomCompare(`Marmiton ${signe}`), "Marmiton", codeDit(code));
     assert.deepEqual(repertoire(["Marmiton"]).resoudre(`Marmiton${signe}`), { nom: "Marmiton", facon: "approchee" }, codeDit(code));
   }
-  // Aucun autre : de tout Unicode, ces vingt et un points de code sont les seuls à disparaître.
+  // Aucun autre : de tout Unicode, ces vingt-deux points de code sont les seuls à disparaître.
   const retires = [];
   for (let code = 0; code <= 0x10ffff; code += 1) {
     if (code >= 0xd800 && code <= 0xdfff) continue;
@@ -258,8 +259,9 @@ test("noms — les vingt et un signes invisibles de la liste, chacun retiré ; a
   }
   assert.deepEqual(retires.map(codeDit), SIGNES_INVISIBLES.map(codeDit));
   // Les voisins de la liste restent, dans le texte comme dans la clé : les signes qui bordent chaque
-  // plage, U+2065 (non attribué, au milieu d'une plage), U+061C et U+180E (invisibles, hors liste).
-  for (const code of [0x00ac, 0x00ae, 0x061c, 0x180e, 0x2010, 0x2065, 0x206a, 0xfefe, 0xe0001]) {
+  // plage ou chaque signe seul (U+061B et U+061D, de part et d'autre de U+061C), U+2065 (non
+  // attribué, au milieu d'une plage) et U+180E (invisible, hors liste).
+  for (const code of [0x00ac, 0x00ae, 0x061b, 0x061d, 0x180e, 0x2010, 0x2065, 0x206a, 0xfefe, 0xe0001]) {
     const voisin = String.fromCodePoint(code);
     assert.equal(sansSignesInvisibles(`Mar${voisin}miton`), `Mar${voisin}miton`, codeDit(code));
     assert.equal(cle(`Mar${voisin}miton`), `mar${voisin}miton`, codeDit(code));
@@ -278,7 +280,7 @@ test("noms — les vingt et un signes invisibles de la liste, chacun retiré ; a
   assert.deepEqual([sansSignesInvisibles(null), sansSignesInvisibles(undefined), nomCompare(null)], ["", "", ""]);
 });
 
-test("E3 — un signe invisible ne cache pas un doublon : un bloc, un élément (et l'espace que le signe cachait), une capacité de même puissance", async () => {
+test("E3 — un signe invisible ne cache pas un doublon : un bloc, un élément (et l'espace que le signe cachait), une capacité, de même puissance ou non", async () => {
   const lignes = {};
   const { banque, anomalies } = await importer(
     variante((feuilles) => {
@@ -288,7 +290,7 @@ test("E3 — un signe invisible ne cache pas un doublon : un bloc, un élément 
       lignes.element = feuilles[2].lignes.length;
       feuilles[3].lignes.push(["Vif\u200B", "N", null, null, null, "Doublon de puissance.", "E3 : le même nom au signe près, la même puissance"]);
       lignes.vif = feuilles[3].lignes.length;
-      feuilles[3].lignes.push(["Goûter\u00AD", 1, null, null, null, "Une autre puissance.", "Pas d'E3 : la puissance diffère"]);
+      feuilles[3].lignes.push(["Goûter\u00AD", 1, null, null, null, "Une autre puissance.", "E3 : le même nom au signe près, quelle que soit la puissance"]);
       lignes.gouter = feuilles[3].lignes.length;
     }),
   );
@@ -299,17 +301,21 @@ test("E3 — un signe invisible ne cache pas un doublon : un bloc, un élément 
     ["E3", "L'élément « Collant \u2060 » est déjà défini ligne 5."],
     ["A4", "L'élément « Collant \u2060 » n'est porté par rien : ni bloc, ni capacité, ni paramètre transmis."],
   ]);
-  // L'import garde deux capacités, telles qu'écrites ; le contrôle confronte leurs variantes.
+  // L'import garde deux capacités, telles qu'écrites ; le contrôle les confronte par leurs noms
+  // (compl. § 5.4) : deux noms écrits différents n'ont que le message neuf, à la ligne de la seconde.
   assert.deepEqual(banque.capacites.filter((c) => cle(c.nom) === "vif").map((c) => c.nom), ["Vif", "Vif\u200B"]);
   assert.deepEqual(de("Capacites", lignes.vif), [
-    ["E3", "La capacité « Vif\u200B » a déjà une variante de puissance « N », ligne 24."],
+    ["E3", "La capacité « Vif\u200B » ne diffère de celle de la ligne 24 que par un signe invisible."],
     ["A3", "La capacité « Vif\u200B » n'est rattachée à aucun bloc."],
   ]);
-  // Une autre puissance n'est pas un doublon (§ 6.3 : même nom et même puissance).
-  assert.deepEqual(de("Capacites", lignes.gouter), [["A3", "La capacité « Goûter\u00AD » n'est rattachée à aucun bloc."]]);
-  // Rien d'autre ne bouge : les anomalies annoncées, et ces six-là.
-  assert.equal(anomalies.length, ANNONCEES.length + 6);
-  assert.equal(anomalies.filter((a) => a.code === "E3").length, ANNONCEES.filter(([code]) => code === "E3").length + 3);
+  // Une autre puissance ne change rien : la lecture d'avant (« puissances différentes : sans E3 ») s'inverse.
+  assert.deepEqual(de("Capacites", lignes.gouter), [
+    ["E3", "La capacité « Goûter\u00AD » ne diffère de celle de la ligne 22 que par un signe invisible."],
+    ["A3", "La capacité « Goûter\u00AD » n'est rattachée à aucun bloc."],
+  ]);
+  // Rien d'autre ne bouge : les anomalies annoncées, et ces sept-là.
+  assert.equal(anomalies.length, ANNONCEES.length + 7);
+  assert.equal(anomalies.filter((a) => a.code === "E3").length, ANNONCEES.filter(([code]) => code === "E3").length + 4);
 });
 
 // Les anomalies d'une ligne d'une feuille : [code, message].
@@ -320,9 +326,10 @@ const E3_ANNONCEES = ANNONCEES.filter(([code]) => code === "E3").length;
 // La première définition peut être celle qui porte le signe : la table des
 // doublons se range, comme elle se lit, sous le nom comparé. Et les lignes de
 // deux capacités de même nom peuvent s'entrelacer dans la feuille : le
-// doublon est toujours la ligne la plus basse, et la ligne citée la plus
-// haute, quelle que soit celle qui porte le signe.
-test("E3 — le signe invisible sur la première définition, et des variantes entrelacées : la ligne la plus basse est le doublon, la plus haute est citée", async () => {
+// doublon est toujours la capacité dont la première ligne est la plus basse,
+// à cette ligne, et la ligne citée la première de l'autre, quelle que soit
+// celle qui porte le signe (compl. § 5.4).
+test("E3 — le signe invisible sur la première définition, et des variantes entrelacées : le doublon est la définition qui commence le plus bas, la plus haute est citée", async () => {
   const lignes = {};
   const { banque, anomalies } = await importer(
     variante((feuilles) => {
@@ -337,9 +344,9 @@ test("E3 — le signe invisible sur la première définition, et des variantes e
       // « Blanchir » suivi de U+200B aux puissances 1 et 2, et « Blanchir » à la puissance 2, écrit entre les deux.
       feuilles[3].lignes.push(["Blanchir\u200B", 1, null, null, null, "La puissance 1.", "Le nom suivi de U+200B"]);
       lignes.haute = feuilles[3].lignes.length;
-      feuilles[3].lignes.push(["Blanchir", 2, null, null, null, "La puissance 2.", "Le même nom, sans signe"]);
+      feuilles[3].lignes.push(["Blanchir", 2, null, null, null, "La puissance 2.", "E3 : le même nom sans signe, qui commence une ligne plus bas"]);
       lignes.milieu = feuilles[3].lignes.length;
-      feuilles[3].lignes.push(["Blanchir\u200B", 2, null, null, null, "Doublon de puissance.", "E3 : la puissance 2 est écrite une ligne plus haut"]);
+      feuilles[3].lignes.push(["Blanchir\u200B", 2, null, null, null, "Une autre puissance.", "Pas d'E3 : une autre puissance du nom écrit deux lignes plus haut"]);
       lignes.basse = feuilles[3].lignes.length;
     }),
   );
@@ -358,8 +365,13 @@ test("E3 — le signe invisible sur la première définition, et des variantes e
     ["Blanchir", [lignes.milieu]],
   ]);
   assert.deepEqual(de("Capacites", lignes.haute).map(([code]) => code), ["A3"]);
-  assert.deepEqual(de("Capacites", lignes.milieu).map(([code]) => code), ["A3"]);
-  assert.deepEqual(de("Capacites", lignes.basse), [["E3", `La capacité « Blanchir\u200B » a déjà une variante de puissance « 2 », ligne ${lignes.milieu}.`]]);
+  // La capacité qui commence le plus bas est le doublon, à sa première ligne ; elle cite la plus haute,
+  // celle qui porte le signe. La ligne basse, une autre puissance du nom écrit en haut, n'en est pas un.
+  assert.deepEqual(de("Capacites", lignes.milieu), [
+    ["E3", `La capacité « Blanchir » ne diffère de celle de la ligne ${lignes.haute} que par un signe invisible.`],
+    ["A3", "La capacité « Blanchir » n'est rattachée à aucun bloc."],
+  ]);
+  assert.deepEqual(de("Capacites", lignes.basse), []);
   // Rien d'autre : trois E3, deux A4, deux A3.
   assert.equal(nombreDE3(anomalies), E3_ANNONCEES + 3);
   assert.equal(anomalies.length, ANNONCEES.length + 7);
@@ -404,16 +416,17 @@ test("E3 — exactement : la casse, un accent ou une espace intérieure font un 
 });
 
 // Deux capacités dont les noms ne diffèrent que d'un signe invisible, et dont
-// les puissances diffèrent : la lecture retenue (§ 6.3, § 12). L'import en
-// garde deux, et ce n'est pas un doublon. La seconde, que rien ne cite sous ce
-// nom-là, se dit par A3. Un renvoi exact prend celle qu'il écrit ; un renvoi
-// approché ne sait plus laquelle, et devient une erreur (E4, renvoi ambigu)
-// dont les deux candidats ne se distinguent pas à l'écran.
-test("E3 — à un signe invisible près mais d'une autre puissance : deux capacités, sans doublon ; un renvoi approché vers ce nom devient ambigu (E4)", async () => {
+// les puissances diffèrent. L'import en garde deux ; la lecture d'avant (pas
+// de doublon) s'inverse au groupe 2 du lot 4 (compl. § 5.4) : rien ne les
+// distingue à l'écran, et c'est un E3. La seconde, que rien ne cite sous ce
+// nom-là, se dit aussi par A3. Un renvoi exact prend celle qu'il écrit ; un
+// renvoi approché ne sait plus laquelle, et devient une erreur (E4, renvoi
+// ambigu) dont les deux candidats ne se distinguent pas à l'écran.
+test("E3 — à un signe invisible près, d'une autre puissance : deux capacités, et un E3 ; un renvoi approché vers ce nom devient ambigu (E4)", async () => {
   const lignes = {};
   const { banque, anomalies } = await importer(
     variante((feuilles) => {
-      feuilles[3].lignes.push(["Goûter\u200B", 1, null, null, null, "Une autre puissance.", "Pas d'E3 : la puissance diffère ; A3"]);
+      feuilles[3].lignes.push(["Goûter\u200B", 1, null, null, null, "Une autre puissance.", "E3 : le même nom au signe près, une autre puissance ; A3"]);
       lignes.capacite = feuilles[3].lignes.length;
       feuilles[1].lignes.push(["Bocal", null, "Goûter, gouter", null, "Un renvoi exact, puis le même à l'accent près : E4, ambigu", "Équipement"]);
       lignes.bloc = feuilles[1].lignes.length;
@@ -424,15 +437,85 @@ test("E3 — à un signe invisible près mais d'une autre puissance : deux capac
     ["Goûter\u200B", ["1"]],
   ]);
   const de = surLaLigne(anomalies);
-  assert.deepEqual(de("Capacites", lignes.capacite), [["A3", "La capacité « Goûter\u200B » n'est rattachée à aucun bloc."]]);
+  assert.deepEqual(de("Capacites", lignes.capacite), [
+    ["E3", "La capacité « Goûter\u200B » ne diffère de celle de la ligne 22 que par un signe invisible."],
+    ["A3", "La capacité « Goûter\u200B » n'est rattachée à aucun bloc."],
+  ]);
   assert.deepEqual(de("Blocs", lignes.bloc), [["E4", "Le bloc « Bocal » cite la capacité « gouter », introuvable dans Capacites (renvoi ambigu : « Goûter », « Goûter\u200B »)."]]);
-  assert.equal(nombreDE3(anomalies), E3_ANNONCEES);
-  assert.equal(anomalies.length, ANNONCEES.length + 2);
+  assert.equal(nombreDE3(anomalies), E3_ANNONCEES + 1);
+  assert.equal(anomalies.length, ANNONCEES.length + 3);
   // Sans la seconde capacité, le même renvoi est retrouvé, et signalé (A1).
   const seul = await importer(variante((feuilles) => feuilles[1].lignes.push(["Bocal", null, "Goûter, gouter", null, "Un renvoi à l'accent près", "Équipement"])));
   assert.deepEqual(surLaLigne(seul.anomalies)("Blocs", lignes.bloc), [
     ["A1", "Le bloc « Bocal » cite « gouter » pour la capacité « Goûter » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
   ]);
+});
+
+// E3 élargi (compl. § 5.4) : « Goûter » aux puissances 0 (ligne 22) et 2, et
+// « Goûter » suivi de U+00AD à la puissance 1. Aucune puissance commune :
+// un E3 quand même, au message neuf. Les deux variantes du nom écrit
+// « Goûter » ne sont pas un doublon.
+test("E3 élargi — « Goûter » suivi de U+00AD, puissance 1, à côté de « Goûter » aux puissances 0 et 2 : un E3, au message neuf ; deux variantes d'un même nom écrit, aucun", async () => {
+  const lignes = {};
+  const { banque, anomalies } = await importer(
+    variante((feuilles) => {
+      feuilles[3].lignes.push(["Goûter", 2, null, null, null, "La puissance 2.", "Pas d'E3 : une autre puissance du même nom écrit"]);
+      lignes.puissance2 = feuilles[3].lignes.length;
+      feuilles[3].lignes.push(["Goûter\u00AD", 1, null, null, null, "La puissance 1.", "E3 : le même nom au signe près, aucune puissance commune"]);
+      lignes.signe = feuilles[3].lignes.length;
+    }),
+  );
+  assert.deepEqual(banque.capacites.filter((c) => cle(c.nom) === "gouter").map((c) => [c.nom, c.variantes.map((v) => [v.puissance, v.brut.ligne])]), [
+    ["Goûter", [["0", 22], ["2", lignes.puissance2]]],
+    ["Goûter\u00AD", [["1", lignes.signe]]],
+  ]);
+  const de = surLaLigne(anomalies);
+  assert.deepEqual(de("Capacites", 22), []);
+  assert.deepEqual(de("Capacites", lignes.puissance2), []);
+  assert.deepEqual(de("Capacites", lignes.signe), [
+    ["E3", "La capacité « Goûter\u00AD » ne diffère de celle de la ligne 22 que par un signe invisible."],
+    ["A3", "La capacité « Goûter\u00AD » n'est rattachée à aucun bloc."],
+  ]);
+  assert.equal(nombreDE3(anomalies), E3_ANNONCEES + 1);
+  assert.equal(anomalies.length, ANNONCEES.length + 2);
+});
+
+// Trois noms écrits d'un même groupe : « Sauce piquante » (lignes 5 à 8 du
+// classeur d'essai, puissances 1, 2, 3 et un doublon de la 2), puis le même
+// nom avec U+200B au milieu, puis avec U+00AD au bout. Chacune des deux
+// autres reçoit un E3 à sa propre première ligne, qui cite la ligne 5 ; une
+// autre puissance d'un nom écrit n'en reçoit pas, une même puissance garde
+// le message d'avant, qui cite la ligne de ce nom écrit.
+test("E3 élargi — trois noms d'un groupe : deux E3, chacun à la première ligne de sa capacité, citant la première ; une même puissance d'un même nom écrit garde l'ancien message", async () => {
+  const lignes = {};
+  const { anomalies } = await importer(
+    variante((feuilles) => {
+      feuilles[3].lignes.push(["Sauce\u200B piquante", 1, null, null, null, "La puissance 1.", "E3 : le nom de la ligne 5, U+200B au milieu"]);
+      lignes.milieu = feuilles[3].lignes.length;
+      feuilles[3].lignes.push(["Sauce piquante\u00AD", 3, null, null, null, "La puissance 3.", "E3 : le nom de la ligne 5, U+00AD au bout"]);
+      lignes.bout = feuilles[3].lignes.length;
+      feuilles[3].lignes.push(["Sauce\u200B piquante", 2, null, null, null, "La puissance 2.", "Pas d'E3 : une autre puissance d'un nom déjà signalé"]);
+      lignes.autrePuissance = feuilles[3].lignes.length;
+      feuilles[3].lignes.push(["Sauce\u200B piquante", 1, null, null, null, "Doublon de puissance.", "E3 : même nom écrit, même puissance"]);
+      lignes.doublon = feuilles[3].lignes.length;
+    }),
+  );
+  const de = surLaLigne(anomalies);
+  assert.deepEqual(de("Capacites", lignes.milieu), [
+    ["E3", "La capacité « Sauce\u200B piquante » ne diffère de celle de la ligne 5 que par un signe invisible."],
+    ["A3", "La capacité « Sauce\u200B piquante » n'est rattachée à aucun bloc."],
+  ]);
+  assert.deepEqual(de("Capacites", lignes.bout), [
+    ["E3", "La capacité « Sauce piquante\u00AD » ne diffère de celle de la ligne 5 que par un signe invisible."],
+    ["A3", "La capacité « Sauce piquante\u00AD » n'est rattachée à aucun bloc."],
+  ]);
+  assert.deepEqual(de("Capacites", lignes.autrePuissance), []);
+  assert.deepEqual(de("Capacites", lignes.doublon), [["E3", `La capacité « Sauce\u200B piquante » a déjà une variante de puissance « 1 », ligne ${lignes.milieu}.`]]);
+  // La première ne reçoit rien de plus que le doublon que le classeur d'essai annonce (ligne 8).
+  assert.deepEqual(de("Capacites", 5), []);
+  assert.deepEqual(de("Capacites", 8), [["E3", "La capacité « Sauce piquante » a déjà une variante de puissance « 2 », ligne 6."]]);
+  assert.equal(nombreDE3(anomalies), E3_ANNONCEES + 3);
+  assert.equal(anomalies.length, ANNONCEES.length + 5);
 });
 
 test("A1 — un renvoi qui ne diffère que d'un signe invisible est résolu, et signalé : capacité, élément, paramètre", async () => {

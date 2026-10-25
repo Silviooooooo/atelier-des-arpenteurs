@@ -12,13 +12,14 @@
 // lit le classeur : ils se comparent donc sans lui, partout. La banque, elle,
 // garde le nom tel qu'il est écrit.
 
-// Les vingt et un signes de format retirés, et eux seuls : le trait d'union
-// conditionnel (U+00AD), les espaces et liants sans chasse et les marques de
-// sens (U+200B à U+200F), les commandes de sens de l'écriture (U+202A à
-// U+202E, U+2066 à U+2069), le liant de mots et les opérateurs invisibles
-// (U+2060 à U+2064), la marque d'ordre des octets (U+FEFF). U+2065, non
-// attribué, et U+061C n'en sont pas.
-const SIGNES_INVISIBLES = /[\u00AD\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/gu;
+// Les vingt-deux signes de format retirés, et eux seuls : le trait d'union
+// conditionnel (U+00AD), la marque de lettre arabe (U+061C, une marque de
+// sens, entrée au groupe 2 du lot 4), les espaces et liants sans chasse et
+// les marques de sens (U+200B à U+200F), les commandes de sens de l'écriture
+// (U+202A à U+202E, U+2066 à U+2069), le liant de mots et les opérateurs
+// invisibles (U+2060 à U+2064), la marque d'ordre des octets (U+FEFF).
+// U+2065, non attribué, n'en est pas.
+const SIGNES_INVISIBLES = /[\u00AD\u061C\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/gu;
 
 /** Un texte sans ses signes de format invisibles ; rien d'autre n'y change. */
 export function sansSignesInvisibles(texte) {

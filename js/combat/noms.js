@@ -9,6 +9,10 @@
 // et retirer un protagoniste avant le lancement renumérote donc les siens
 // sans rien de plus. Rien de ce qu'il rend n'est gardé avec le combat.
 //
+// Les initiales suivent la décision de l'auteur du 25/10/2026 (complément
+// du groupe 2, § 4.11) : la première lettre, puis, entre noms de même
+// première lettre, la première qui les distingue ; deux signes au plus.
+//
 // Ce sont des règles d'interface, non des règles du jeu. Un nom est une
 // donnée hostile : il n'est jamais interprété, seulement découpé.
 
@@ -16,15 +20,36 @@ import { cle } from "../banque/noms.js";
 
 const LETTRE_OU_CHIFFRE = /[\p{L}\p{N}]/u;
 
-// Les marques qui départagent des protagonistes dont le nom entier ne suffit
-// plus à faire des initiales distinctes : prime, seconde, tierce, quarte.
-// Elles sont données par leur code, pour qu'un éditeur ne les change pas en
-// apostrophes.
+// Les marques qui départagent des protagonistes que leurs initiales ne
+// distinguent pas : prime, seconde, tierce, quarte. Elles sont données par
+// leur code, pour qu'un éditeur ne les change pas en apostrophes.
 const MARQUES = [0x2032, 0x2033, 0x2034, 0x2057].map((code) => String.fromCodePoint(code));
 
 function marque(rang) {
   const derniere = MARQUES.length;
   return rang <= derniere ? MARQUES[rang - 1] : MARQUES[derniere - 1] + marque(rang - derniere);
+}
+
+/** Un signe en majuscule : le premier point de code de sa majuscule (« ß » donne « S »). */
+function majuscule(signe) {
+  return String.fromCodePoint(signe.toUpperCase().codePointAt(0));
+}
+
+/**
+ * La suite d'un nom, que lisent ses initiales : ses signes à partir de sa
+ * première lettre ou de son premier chiffre, chacun avec sa clé (cle(), la
+ * comparaison du § 6.3 : sans casse, accents, espaces ni signe invisible).
+ * Les signes de clé vide sont ôtés ; tout autre compte, tirets et
+ * apostrophes compris. Vide pour un nom sans lettre ni chiffre.
+ */
+function suiteDe(nom) {
+  const signes = [...nom];
+  const debut = signes.findIndex((signe) => LETTRE_OU_CHIFFRE.test(signe));
+  if (debut < 0) return [];
+  return signes
+    .slice(debut)
+    .map((signe) => ({ signe, cle: cle(signe) }))
+    .filter((entree) => entree.cle !== "");
 }
 
 /**
@@ -53,14 +78,17 @@ export function premierMot(nom) {
  * - Le jeton est le nom court, où « n° k » devient « k ». Un nom peut finir
  *   par un chiffre : si « Commis 1 » côtoie deux « Commis », ces deux-là
  *   gardent « n° k » sur leur jeton, qui serait sinon celui de l'autre.
- * - Les initiales sont le premier signe du nom qui est une lettre ou un
- *   chiffre, en majuscule (« ? » faute d'un tel signe), puis le numéro
- *   d'exemplaire. Tant que deux protagonistes qui ne sont pas des exemplaires
- *   du même adversaire ont les mêmes lettres, ou que leurs initiales
- *   s'écriraient de même, numéro compris, chacun prend une lettre de plus de
- *   son nom ; quand un nom est épuisé, ceux qui restent confondus reçoivent
- *   une marque, dans l'ordre d'ajout. Deux protagonistes différents n'ont
- *   donc jamais les mêmes initiales.
+ * - Les initiales (compl. § 4.11) : la première lettre ou le premier chiffre
+ *   du nom, en majuscule (« ? » faute d'un tel signe). Les protagonistes
+ *   dont ce premier signe a la même clé, hors exemplaires d'un même
+ *   adversaire, forment un groupe ; dans un groupe de deux ou plus, chacun
+ *   ajoute, en majuscule, le signe de son nom à la première position où les
+ *   clés ne sont pas toutes égales (au-delà d'un nom, l'absence compte comme
+ *   une valeur, et ce nom n'ajoute rien). Deux signes au plus. Ceux qui se
+ *   confondent encore (mêmes lettres, ou une initiale écrite, numéro
+ *   compris, égale à une autre) reçoivent une marque, dans l'ordre d'ajout ;
+ *   le numéro d'exemplaire vient à la fin. Deux protagonistes différents
+ *   n'ont donc jamais les mêmes initiales.
  */
 export function nommer(liste) {
   // Les exemplaires d'un même adversaire partagent tout sauf leur numéro :
@@ -72,12 +100,11 @@ export function nommer(liste) {
     const nom = String(brut ?? "");
     let famille = camp === "adv" ? familleDeLAdversaire.get(nom) : undefined;
     if (!famille) {
-      const signes = [...nom].filter((signe) => LETTRE_OU_CHIFFRE.test(signe));
       famille = {
         nom,
         mot: premierMot(nom),
-        signes: signes.length > 0 ? [signes[0].toUpperCase(), ...signes.slice(1)] : ["?"],
-        longueur: 1,
+        suite: suiteDe(nom),
+        lettres: "",
         membres: 0,
         entier: false,
         marque: "",
@@ -89,6 +116,8 @@ export function nommer(liste) {
     return { id, famille, rang: famille.membres };
   });
 
+  // Les familles regroupées par une valeur, dans l'ordre d'ajout ; seuls
+  // restent les groupes de deux familles ou plus.
   const confondues = (cleDe) => {
     const groupes = new Map();
     for (const famille of familles) {
@@ -107,54 +136,66 @@ export function nommer(liste) {
   // qu'un membre, sinon une fois par exemplaire, avec le sien.
   const numerotes = (famille, ecrire) => (famille.membres > 1 ? Array.from({ length: famille.membres }, (_, rang) => ecrire(rang + 1)) : [ecrire(null)]);
 
-  const lettres = (famille) => famille.signes.slice(0, famille.longueur).join("");
-  const initialesDe = (famille, exemplaire) => `${lettres(famille)}${famille.marque}${exemplaire ?? ""}`;
-
-  // Les familles que leurs initiales confondent. Les lettres seules les
-  // confondent déjà, quel que soit le numéro (« M » et « M1 » s'allongent en
-  // « Mi » et « Ma1 ») ; et un nom peut finir par un chiffre : « Commis 1 » à
-  // côté de deux « Commis » s'écrirait « Commis1 », comme le premier des
-  // deux. Deux familles se confondent donc quand elles ont les mêmes
-  // lettres, ou quand l'une de leurs initiales, numéro compris, est aussi
-  // celle de l'autre ; les groupes sont ceux que ces rencontres relient, de
-  // proche en proche.
-  const confonduesParLeursInitiales = () => {
-    const chef = new Map(familles.map((famille) => [famille, famille]));
-    const chefDe = (famille) => {
-      let courant = famille;
-      while (chef.get(courant) !== courant) courant = chef.get(courant);
-      return courant;
-    };
-    const premiere = new Map();
-    for (const famille of familles) {
-      const reperes = [`lettres:${lettres(famille)}`, ...numerotes(famille, (exemplaire) => `ecrit:${initialesDe(famille, exemplaire)}`)];
-      for (const repere of reperes) {
-        if (premiere.has(repere)) chef.set(chefDe(famille), chefDe(premiere.get(repere)));
-        else premiere.set(repere, famille);
-      }
-    }
-    return confondues(chefDe);
-  };
-
-  for (;;) {
-    let allonge = false;
-    for (const groupe of confonduesParLeursInitiales()) {
+  // Les initiales. La première : le premier signe de la suite, en majuscule.
+  // Les familles dont ce signe a la même clé forment un groupe (« É » et
+  // « E » en font un) ; celles qui n'en ont pas, aussi.
+  for (const famille of familles) famille.lettres = famille.suite.length > 0 ? majuscule(famille.suite[0].signe) : "?";
+  for (const groupe of confondues((famille) => famille.suite[0]?.cle ?? null)) {
+    // La seconde : à la première position où les clés du groupe ne sont pas
+    // toutes égales, la même pour tout le groupe ; un nom déjà fini n'y a
+    // rien, et n'ajoute rien. Sans une telle position, aucune seconde.
+    const longueur = Math.max(...groupe.map((famille) => famille.suite.length));
+    for (let position = 1; position < longueur; position += 1) {
+      if (new Set(groupe.map((famille) => famille.suite[position]?.cle ?? null)).size === 1) continue;
       for (const famille of groupe) {
-        if (famille.longueur < famille.signes.length) {
-          famille.longueur += 1;
-          allonge = true;
-        }
+        const entree = famille.suite[position];
+        if (entree) famille.lettres += majuscule(entree.signe);
       }
+      break;
     }
-    if (!allonge) break;
   }
-  // Une marque n'est ni une lettre ni un chiffre : posée entre les lettres et
-  // le numéro, elle sépare à coup sûr ceux qui restent confondus, entre eux
-  // comme de tous les autres.
-  for (const groupe of confonduesParLeursInitiales()) {
+
+  const initialesDe = (famille, exemplaire) => `${famille.lettres}${famille.marque}${exemplaire ?? ""}`;
+  const ecrites = (famille) => numerotes(famille, (exemplaire) => initialesDe(famille, exemplaire));
+
+  // Les familles que leurs initiales confondent encore. Les lettres seules
+  // les confondent déjà, quel que soit le numéro (« M » et « M1 ») ; et un
+  // nom peut finir par un chiffre : « Commis 1 » à côté de deux « Commis »
+  // s'écrirait « C1 », comme le premier des deux. Deux familles se
+  // confondent donc quand elles ont les mêmes lettres, ou quand l'une de
+  // leurs initiales, numéro compris, est aussi celle de l'autre ; les groupes
+  // sont ceux que ces rencontres relient, de proche en proche.
+  const chef = new Map(familles.map((famille) => [famille, famille]));
+  const chefDe = (famille) => {
+    let courant = famille;
+    while (chef.get(courant) !== courant) courant = chef.get(courant);
+    return courant;
+  };
+  const premiere = new Map();
+  for (const famille of familles) {
+    for (const repere of [`lettres:${famille.lettres}`, ...ecrites(famille).map((ecrite) => `ecrit:${ecrite}`)]) {
+      if (premiere.has(repere)) chef.set(chefDe(famille), chefDe(premiere.get(repere)));
+      else premiere.set(repere, famille);
+    }
+  }
+  // Une marque n'est ni une lettre, ni un chiffre, ni un signe ordinaire :
+  // posée entre les lettres et le numéro, elle sépare ceux qui restent
+  // confondus, entre eux comme de tous les autres.
+  for (const groupe of confondues(chefDe)) {
     groupe.forEach((famille, rang) => {
       famille.marque = marque(rang + 1);
     });
+  }
+  // Un filet, pour un nom hostile dont la seconde serait elle-même une
+  // marque (une lettre suivie d'une prime) : la marque d'un autre
+  // l'écrirait de même. Dans l'ordre d'ajout, une famille dont une initiale
+  // est déjà prise reçoit une marque de plus, la première qui la rend libre.
+  // Sur tout autre nom, il ne change rien.
+  const prises = new Set();
+  for (const famille of familles) {
+    const avant = famille.marque;
+    for (let rang = 1; ecrites(famille).some((ecrite) => prises.has(ecrite)); rang += 1) famille.marque = avant + marque(rang);
+    for (const ecrite of ecrites(famille)) prises.add(ecrite);
   }
 
   // Le jeton d'un exemplaire écrit « k » pour « n° k ». Quand ce jeton serait

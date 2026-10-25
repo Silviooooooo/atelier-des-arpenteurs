@@ -5,6 +5,11 @@
 //
 // Chaque règle est vue des deux côtés : ce qui passe, puis la même donnée,
 // changée d'un seul champ, qui ne passe plus.
+//
+// Au groupe 2 du lot 4 (contrat du groupe, § 14, lot N0) : les bornes d'un
+// combat (15 000 événements, l'alerte, la tranche du rejeu) et leur écriture,
+// la version 2 des règles, l'événement « annuler », le réglage « defense »,
+// la maîtrise d'une façon, l'égalité du dé de défense, SANS_ANNULATION.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -20,6 +25,7 @@ import {
   COTE,
   DIFFICULTES,
   ELEMENTS_COMBAT,
+  EVENEMENTS_ALERTE,
   EVENEMENTS_MAX,
   FACES_LOCALISATION,
   FACE_CONTRE,
@@ -33,12 +39,15 @@ import {
   PLAFOND_EXEMPLAIRES,
   PLAFOND_PJ,
   REGLES,
+  REJEU_TRANCHE,
   REUSSITES_MAX,
   ROLES,
   ROLES_PASSIFS,
   ROLES_SANS_BOUTON,
+  SANS_ANNULATION,
   SIGNES,
   TIRAGES_MAX,
+  ecrireEnMilliers,
   geler,
   raisonValide,
 } from "../js/combat/regles.js";
@@ -119,13 +128,14 @@ test("regles — la face de contre-attaque d'un adversaire est celle de la notat
 });
 
 test("regles — le plateau, les plafonds, les bornes", () => {
-  assert.equal(REGLES, 1);
+  // La version 2, celle du groupe 2 (décision de l'auteur, 25/10/2026).
+  assert.equal(REGLES, 2);
   assert.equal(COTE, 10);
   assert.equal(COLONNES, "ABCDEFGHIJ");
   assert.equal(COLONNES.length, COTE);
   for (const nom of ["A1", "A10", "J1", "J10", "D4"]) assert.ok(MOTIF_CASE.test(nom), nom);
   for (const nom of ["A0", "A11", "K1", "a1", "A01", " A1", "A1 ", "AA1", "", "A", "10"]) assert.ok(!MOTIF_CASE.test(nom), `« ${nom} » n'est pas une case`);
-  assert.deepEqual([PLAFOND_PJ, PLAFOND_ADVERSAIRES, PLAFOND_EXEMPLAIRES, EVENEMENTS_MAX], [12, 60, 12, 5000]);
+  assert.deepEqual([PLAFOND_PJ, PLAFOND_ADVERSAIRES, PLAFOND_EXEMPLAIRES, EVENEMENTS_MAX], [12, 60, 12, 15000]);
   assert.deepEqual([IDENTIFIANTS_MAX, TIRAGES_MAX], [99999, 100]);
   assert.deepEqual([ACTIONS_PJ, REUSSITES_MAX, FACES_LOCALISATION], [2, 3, 20]);
   assert.deepEqual(LETTRES, ["A", "B", "C"]);
@@ -149,6 +159,48 @@ test("regles — le plateau, les plafonds, les bornes", () => {
   });
   assert.equal(PARAMETRE_LOC, "loc_multiple");
   assert.deepEqual(ELEMENTS_COMBAT, { intervention: "Intervention", passif: "Passif", degats: "Dégâts", portee: "Portée", locMultiple: "Localisation multiple", centre: "Centré" });
+});
+
+test("regles — un combat : 15 000 événements, l'alerte à 13 500 (90 %), le rejeu par tranches de 1 000 ; leurs phrases", () => {
+  assert.deepEqual([EVENEMENTS_MAX, EVENEMENTS_ALERTE, REJEU_TRANCHE], [15000, 13500, 1000]);
+  assert.equal(EVENEMENTS_ALERTE * 10, EVENEMENTS_MAX * 9);
+  // Une tranche entière tient sous la borne, et la borne en compte un nombre rond.
+  assert.equal(EVENEMENTS_MAX % REJEU_TRANCHE, 0);
+  // Les deux phrases du contrat (§ 4.1), mot pour mot, écrites par les constantes.
+  assert.equal(`Ce combat a atteint ${ecrireEnMilliers(EVENEMENTS_MAX)} événements : commencez-en un nouveau.`, "Ce combat a atteint 15 000 événements : commencez-en un nouveau.");
+  assert.equal(
+    `Ce combat approche de sa limite (${ecrireEnMilliers(EVENEMENTS_ALERTE)} événements sur ${ecrireEnMilliers(EVENEMENTS_MAX)}) : copiez ou téléchargez le journal ; au-delà, il faudra en commencer un nouveau.`,
+    "Ce combat approche de sa limite (13 500 événements sur 15 000) : copiez ou téléchargez le journal ; au-delà, il faudra en commencer un nouveau.",
+  );
+});
+
+test("ecrireEnMilliers — par tranches de trois chiffres, séparées d'une espace ordinaire, de 999 à 1 000 000", () => {
+  const ESPACE = String.fromCodePoint(0x20);
+  const attendus = [
+    [0, "0"], [7, "7"], [999, "999"], [1000, "1 000"], [1001, "1 001"], [9999, "9 999"], [10000, "10 000"], [13500, "13 500"], [15000, "15 000"],
+    [99999, "99 999"], [100000, "100 000"], [200000, "200 000"], [999999, "999 999"], [1000000, "1 000 000"],
+  ];
+  for (const [nombre, texte] of attendus) {
+    const ecrit = ecrireEnMilliers(nombre);
+    assert.equal(ecrit, texte, String(nombre));
+    // Seulement des chiffres et des U+0020 : ni U+00A0 ni U+202F, quoi que dise l'appareil.
+    for (const signe of INSECABLES) assert.ok(!ecrit.includes(signe), `${nombre} : une espace insécable`);
+    assert.ok([...ecrit].every((signe) => signe === ESPACE || (signe >= "0" && signe <= "9")), `${nombre} : « ${ecrit} »`);
+    assert.equal(ecrit.split(ESPACE).join(""), String(nombre));
+  }
+  // La forme d'une photographie écrit ses bornes de même.
+  assert.equal(validerPhoto(retouchee(pjEssai(), (valeurs) => (valeurs.souffle = -1))).erreur, "le souffle n'est pas un entier de 0 à 9 999.");
+});
+
+test("SANS_ANNULATION — ni geste en attente ni maillon, gelée, et c'est elle que porte l'état d'essai", () => {
+  assert.deepEqual(SANS_ANNULATION, { attente: null, pile: null });
+  assert.deepEqual(Object.keys(SANS_ANNULATION), ["attente", "pile"]);
+  assert.ok(Object.isFrozen(SANS_ANNULATION));
+  assert.throws(() => {
+    SANS_ANNULATION.pile = {};
+  }, TypeError);
+  const etat = etatEssai(miseEnPlaceEssai([{ photo: pjEssai(), case: "C3" }, { photo: adversaireEssai(), case: "D4" }]));
+  assert.equal(etat.annulation, SANS_ANNULATION, "l'objet même, partagé par tous les états");
 });
 
 test("regles — les difficultés du livret, de 2 à 10, en minuscules", () => {
@@ -189,7 +241,7 @@ test("regles — les signes du journal sont ceux que disent leurs codes, et aucu
 });
 
 test("regles — les constantes sont gelées : aucun module ne peut les changer pour les autres", () => {
-  for (const constante of [FACE_CONTRE, GRILLE_PJ, LETTRES, DIFFICULTES, ELEMENTS_COMBAT, ROLES, ROLES_PASSIFS, ROLES_SANS_BOUTON, SIGNES, BORNES_PHOTO]) {
+  for (const constante of [FACE_CONTRE, GRILLE_PJ, LETTRES, DIFFICULTES, ELEMENTS_COMBAT, ROLES, ROLES_PASSIFS, ROLES_SANS_BOUTON, SIGNES, BORNES_PHOTO, SANS_ANNULATION]) {
     assert.ok(geleEnProfondeur(constante));
   }
   assert.throws(() => ROLES.push("autre"), TypeError);
@@ -302,6 +354,7 @@ const EXEMPLES = [
   { type: "regler", champ: "difficulte", valeur: 6 },
   { type: "regler", champ: "x", valeur: 3 },
   { type: "regler", champ: "jauge", valeur: 1 },
+  { type: "regler", champ: "defense", valeur: "precise" },
   { type: "regler", champ: "modificateur", valeur: 1, raison: "Minutie" },
   { type: "regler", champ: "modificateur", valeur: 0 },
   { type: "regler", champ: "avantages", valeur: -2, raison: "Sol glissant" },
@@ -324,11 +377,16 @@ const EXEMPLES = [
   { type: "appliquer" },
   { type: "passer", qui: "adv12" },
   { type: "fin_de_tour" },
+  { type: "annuler" },
 ];
 
-const TYPES = ["lancer", "capacite", "regler", "revenir", "confirmer", "de", "relancer", "garder", "exploser", "degats", "decaler", "esquive", "appliquer", "passer", "fin_de_tour"];
+const TYPES = [
+  "lancer", "capacite", "regler", "revenir", "confirmer", "de", "relancer", "garder", "exploser", "degats", "decaler", "esquive", "appliquer", "passer", "fin_de_tour",
+  "annuler",
+];
 
-test("validerEvenement — chacun des quinze types, bien formé, est rendu en copie gelée", () => {
+test("validerEvenement — chacun des seize types, bien formé, est rendu en copie gelée", () => {
+  assert.equal(TYPES.length, 16);
   assert.deepEqual([...new Set(EXEMPLES.map((exemple) => exemple.type))], TYPES);
   for (const exemple of EXEMPLES) {
     const rendu = validerEvenement(parJson(exemple));
@@ -450,6 +508,9 @@ test("validerEvenement — chaque champ mal typé", () => {
     { type: "regler", champ: "x", valeur: null },
     { type: "regler", champ: "x", valeur: Number.NaN },
     { type: "regler", champ: "jauge", valeur: -1 },
+    { type: "regler", champ: "defense", valeur: null },
+    { type: "regler", champ: "defense", valeur: "précise" },
+    { type: "regler", champ: "defense", valeur: 1 },
     { type: "regler", champ: "modificateur", valeur: 1.5, raison: "Minutie" },
     { type: "regler", champ: "avantages", valeur: Infinity, raison: "Minutie" },
     // de : des faces, et des valeurs que ce dé peut montrer.
@@ -541,6 +602,34 @@ test("validerEvenement — un nom hérité de tout objet n'est ni un type ni un 
   }
 });
 
+test("validerEvenement — « annuler » se lit sans champ ; un champ de plus est un refus, et un contenu le garde", () => {
+  assert.deepEqual(validerEvenement({ type: "annuler" }), { evenement: { type: "annuler" } });
+  assert.ok(Object.isFrozen(validerEvenement({ type: "annuler" }).evenement));
+  for (const [champ, valeur] of [["qui", "pj1"], ["geste", 0], ["pas", 3], ["raison", "Minutie"], ["camp", "pj"]]) {
+    assert.deepEqual(validerEvenement({ type: "annuler", [champ]: valeur }), { erreur: "L'événement « annuler » porte un champ inconnu." }, champ);
+  }
+  assert.deepEqual(validerEvenement({ type: "Annuler" }), { erreur: "Le type de l'événement n'est pas connu." });
+  // Il entre au contenu comme les autres, et y compte.
+  const lu = validerContenu(contenuEssai((contenu) => contenu.evenements.push({ type: "annuler" }, { type: "annuler" })), OPTIONS);
+  assert.deepEqual(lu.contenu.evenements.slice(-2), [{ type: "annuler" }, { type: "annuler" }]);
+  assert.equal(contenuRefuse((contenu) => contenu.evenements.push({ type: "annuler", qui: "pj1" })), "L'événement n° 5 est refusé : L'événement « annuler » porte un champ inconnu.");
+});
+
+test("validerEvenement — « regler defense » : l'un des trois types, sans raison", () => {
+  for (const valeur of ["lourde", "agile", "precise"]) {
+    assert.deepEqual(validerEvenement({ type: "regler", champ: "defense", valeur }), { evenement: { type: "regler", champ: "defense", valeur } }, valeur);
+  }
+  for (const valeur of [null, undefined, "", "précise", "Agile", "Lourde", 0, 1, ["agile"], { type: "agile" }]) {
+    assert.deepEqual(
+      validerEvenement({ type: "regler", champ: "defense", valeur }),
+      { erreur: "L'événement « regler » « defense » : sa valeur n'est pas une valeur connue." },
+      JSON.stringify(valeur),
+    );
+  }
+  assert.deepEqual(validerEvenement({ type: "regler", champ: "defense", valeur: "agile", raison: "Minutie" }), { erreur: "L'événement « regler » « defense » ne prend pas de raison." });
+  assert.deepEqual(validerEvenement({ type: "regler", champ: "defense" }), { erreur: "L'événement « regler » n'a pas de champ « valeur »." });
+});
+
 test("validerEvenement — les caractéristiques réglées sont copiées : la donnée n'est ni gelée, ni partagée", () => {
   const donnee = { type: "regler", champ: "caracteristiques", valeur: ["sens", "parole"] };
   const { evenement } = validerEvenement(donnee);
@@ -625,7 +714,7 @@ test("photographies d'essai — les deux protagonistes ronds, tels que les dit l
   assert.deepEqual(pj.zones.map((zone) => [zone.nom, zone.debut, zone.fin, zone.armure, zone.resistance]), [
     ["Tête", 1, 1, 10, 5], ["Torse", 2, 11, 10, 5], ["Jambe gauche", 12, 13, 10, 5], ["Jambe droite", 14, 15, 10, 5], ["Bras gauche", 16, 17, 10, 5], ["Bras droit", 18, 19, 10, 5],
   ]);
-  assert.deepEqual(pj.deDefense, { faces: 8, type: "agile", caracteristiques: ["agilite", "creativite"], meles: false });
+  assert.deepEqual(pj.deDefense, { faces: 8, type: "agile", caracteristiques: ["agilite", "creativite"], meles: false, egalite: [] });
   assert.deepEqual(pj.armes.map((arme) => [arme.nom, arme.poids, arme.faces, arme.degats, arme.portee, arme.mainsNues]), [
     ["Couteau d'office", "precise", 8, [5, 10, 15], 1, false],
     ["Taloche", null, null, [2, 4, 8], 0, true],
@@ -645,8 +734,12 @@ test("photographies d'essai — les deux protagonistes ronds, tels que les dit l
     ["Pas de côté", "esquive", 0, "base", [0]],
   ]);
   const [frappe, emincer, flambage, fournaise, pas, , taloche, esquive] = pj.capacites;
-  assert.deepEqual([frappe.facons[0].attaque, frappe.facons[0].cout, frappe.facons[0].desavantage, frappe.facons[0].arme], [true, { souffle: 0, lien: 0 }, false, 0]);
+  assert.deepEqual([frappe.facons[0].attaque, frappe.facons[0].cout, frappe.facons[0].desavantage, frappe.facons[0].arme, frappe.facons[0].maitrise], [true, { souffle: 0, lien: 0 }, false, 0, null]);
   assert.deepEqual([emincer.facons[0].attaque, emincer.facons[0].cout, emincer.facons[0].desavantage], [true, { souffle: 4, lien: 0 }, true]);
+  // Hors maîtrise à cause du couteau, qui est précis.
+  assert.deepEqual(emincer.facons[0].maitrise, { origine: "Couteau d'office", poids: "precise" });
+  // Seule Émincer porte une maîtrise : une façon sans désavantage n'en a pas.
+  assert.deepEqual(pj.capacites.filter((c) => c.facons.some((f) => f.maitrise !== null)).map((c) => c.nom), ["Émincer"]);
   assert.deepEqual(flambage.facons.map((f) => [f.attaque, f.cout.souffle]), [[false, 5], [false, 10]]);
   assert.deepEqual([fournaise.lien, fournaise.facons[0].cout], [0, { souffle: 1, lien: 1 }]);
   assert.deepEqual(pas.facons.map((f) => f.cout.souffle), [0, 1]);
@@ -660,11 +753,12 @@ test("photographies d'essai — les deux protagonistes ronds, tels que les dit l
     ["Torse", 2, 11, 10], ["Jambe gauche", 12, 13, 10], ["Jambe droite", 14, 15, 10], ["Bras gauche", 16, 17, 10], ["Bras droit", 18, 19, 10], ["Tête", 20, 20, 10],
   ]);
   assert.deepEqual(adv.armes, [{ nom: "Spatule souple", libelle: "Spatule souple", poids: "agile", faces: null, caracteristiques: null, degats: [5, 10, 15], portee: 0, locMultiple: 1, mainsNues: false }]);
-  assert.deepEqual(adv.capacites.map((c) => [c.nom, c.role, c.niveau, c.groupe.genre, c.facons[0].cout.souffle, c.facons[0].desavantage, c.facons[0].attaque]), [
-    ["Frappe", null, 0, "arme", 0, false, true],
-    ["Moulinet farineux", null, 1, "arme", 5, true, true],
-    ["Pas chassé", "deplacement", 1, "capacites", 0, false, false],
+  assert.deepEqual(adv.capacites.map((c) => [c.nom, c.role, c.niveau, c.groupe.genre, c.facons[0].cout.souffle, c.facons[0].desavantage, c.facons[0].attaque, c.facons[0].maitrise]), [
+    ["Frappe", null, 0, "arme", 0, false, true, null],
+    ["Moulinet farineux", null, 1, "arme", 5, true, true, { origine: "Spatule souple", poids: "agile" }],
+    ["Pas chassé", "deplacement", 1, "capacites", 0, false, false, null],
   ]);
+  assert.deepEqual(adv.capacites.map((c) => c.facons.length), [1, 1, 1]);
   assert.deepEqual([adv.identifiant, adv.caracteristiques, adv.deDefense, adv.armePretee, adv.passifs, adv.liens], [null, null, null, null, [], []]);
 });
 
@@ -674,7 +768,8 @@ test("photographies d'essai — les trois de la démonstration", () => {
   assert.equal(aubepine.identifiant, "demo-aubepine-0000000001");
   assert.deepEqual(aubepine.caracteristiques, personnageEssai().caracteristiques);
   assert.deepEqual(aubepine.zones.map((zone) => zone.armure), [6, 30, 10, 10, 10, 10]);
-  assert.deepEqual(aubepine.deDefense, { faces: 8, type: "agile", caracteristiques: ["agilite", "creativite"], meles: true });
+  // Ses pièces agiles et précises font toutes deux un d8 : l'égalité, le type retenu restant l'agile.
+  assert.deepEqual(aubepine.deDefense, { faces: 8, type: "agile", caracteristiques: ["agilite", "creativite"], meles: true, egalite: ["agile", "precise"] });
   assert.deepEqual(aubepine.armes[0], { nom: "Couteau d'office", libelle: "Couteau d'office", poids: "precise", faces: 10, caracteristiques: ["precision", "agilite"], degats: [3, 8, 20], portee: 1, locMultiple: 1, mainsNues: false });
   assert.deepEqual(aubepine.bouclier, { nom: "Couvercle de marmite", defense: 8 });
   assert.deepEqual(aubepine.liens, [{ nom: "Grand Four", points: 1 }]);
@@ -693,24 +788,36 @@ test("photographies d'essai — les trois de la démonstration", () => {
     ["Réduction", "degrossir"], ["Vif", "bonus_agilite"], ["Solo du chef", "seul_sur_sa_case"], ["Pas chassé", "deplacement"], ["Goûter", "jet_de_caracteristique"],
     ["Taloche", "mains_nues"], ["Pas de côté", "esquive"], ["Guetter", "attendre"],
   ]);
-  // Son couteau est précis, et elle n'a que la maîtrise de l'agile.
+  // Son couteau est précis, et elle n'a que la maîtrise de l'agile : la cause de ses deux désavantages est le couteau.
   assert.deepEqual(aubepine.capacites.slice(0, 2).map((c) => [c.facons[0].desavantage, c.facons[0].cout.souffle, c.facons[0].degats]), [[true, 0, [3, 8, 20]], [true, 4, [3, 8, 20]]]);
+  for (const capacite of aubepine.capacites.slice(0, 2)) assert.deepEqual(capacite.facons[0].maitrise, { origine: "Couteau d'office", poids: "precise" }, capacite.nom);
+  assert.ok(aubepine.capacites.slice(2).every((c) => c.facons.every((f) => f.maitrise === null)));
 
+  // Le Chef joue Pas chassé à ses deux puissances : [1] gratuit, [2] 1 souffle (vue 4).
   const chef = chefDePartieEssai().valeurs;
   assert.deepEqual([chef.nom, chef.sousTitre, chef.actions, chef.souffle, chef.corps, chef.attaque, chef.defense], ["Chef de partie", "Commis, Rôtisseur ×1,4", 1, 7, 10, 5, 7]);
   assert.deepEqual(chef.zones.map((zone) => [zone.nom, zone.ecrit, zone.armure]), [
     ["Torse", "Torse", 38], ["Jambe gauche", "Jambe gauche", 0], ["Jambe droite", "Jambre droite", 0], ["Bras gauche", "Bras gauche", 19], ["Bras droit", "Bras droit", 19], ["Tête", "Tête", 6],
   ]);
   assert.deepEqual(chef.armes[0].degats, [6, 12, 19]);
-  assert.deepEqual(chef.capacites.map((c) => [c.nom, c.niveau, c.facons[0].puissance, c.facons[0].cout.souffle, c.facons[0].desavantage]), [
-    ["Frappe", 0, 0, 0, false], ["Moulinet farineux", 1, 1, 5, false], ["Pas chassé", 2, 2, 1, false],
+  assert.deepEqual(chef.capacites.map((c) => [c.nom, c.niveau, c.facons.map((f) => [f.puissance, f.cout.souffle, f.desavantage, f.maitrise])]), [
+    ["Frappe", 0, [[0, 0, false, null]]],
+    ["Moulinet farineux", 1, [[1, 5, false, null]]],
+    ["Pas chassé", 2, [[1, 0, false, null], [2, 1, false, null]]],
   ]);
+  assert.deepEqual(chef.capacites[2].facons.map((f) => f.description), ["Se déplace de 1 cases.", "Se déplace de 2 cases."]);
+  // Il passe la forme d'une photographie, par JSON comme il est.
+  assert.deepEqual(validerPhoto(parJson(chefDePartieEssai())), { photo: chefDePartieEssai() });
 
   const marmiton = marmitonDeCorveeEssai().valeurs;
   assert.deepEqual([marmiton.nom, marmiton.actions, marmiton.souffle, marmiton.attaque, marmiton.defense], ["Marmiton de corvée", 1, 5, 4, 5]);
   assert.deepEqual(marmiton.zones.map((zone) => zone.armure), [30, 0, 0, 15, 15, 5]);
   assert.deepEqual(marmiton.armes[0].degats, [5, 10, 15]);
-  assert.deepEqual(marmiton.capacites.map((c) => [c.nom, c.niveau, c.facons[0].cout.souffle, c.facons[0].desavantage]), [["Frappe", 0, 0, false], ["Moulinet farineux", 1, 5, true], ["Pas chassé", 1, 0, false]]);
+  assert.deepEqual(marmiton.capacites.map((c) => [c.nom, c.niveau, c.facons.length, c.facons[0].cout.souffle, c.facons[0].desavantage, c.facons[0].maitrise]), [
+    ["Frappe", 0, 1, 0, false, null],
+    ["Moulinet farineux", 1, 1, 5, true, { origine: "Spatule souple", poids: "agile" }],
+    ["Pas chassé", 1, 1, 0, false, null],
+  ]);
 });
 
 test("photographies d'essai — le retoucheur change les valeurs ; une retouche que le simulateur refuserait lève", () => {
@@ -740,8 +847,11 @@ test("photographies d'essai — le retoucheur change les valeurs ; une retouche 
 test("photographies d'essai — faconEssai et capaciteEssai : des valeurs neutres, et pas de champ inventé", () => {
   assert.deepEqual(faconEssai(), {
     puissance: 0, arme: null, libelle: null, cout: { souffle: 0, lien: 0 }, description: "", elements: [], passif: false, intervention: false,
-    attaque: false, degats: null, portee: 0, locMultiple: 1, desavantage: false,
+    attaque: false, degats: null, portee: 0, locMultiple: 1, desavantage: false, maitrise: null,
   });
+  // Une maîtrise donnée est copiée, comme le reste.
+  const maitrise = { origine: "Couteau d'office", poids: "precise" };
+  assert.notEqual(faconEssai({ desavantage: true, maitrise }).maitrise, maitrise);
   assert.deepEqual(faconEssai({ portee: 3, locMultiple: 2 }), { ...faconEssai(), portee: 3, locMultiple: 2 });
   assert.notEqual(faconEssai().cout, faconEssai().cout, "chaque façon a ses propres objets");
   const capacite = capaciteEssai({ nom: "Goûter", role: "jet_de_caracteristique" });
@@ -800,6 +910,93 @@ test("validerPhoto — les caractéristiques d'un dé sont copiées : la donnée
   assert.deepEqual(photo.valeurs.deDefense.caracteristiques, attendues.defense);
 });
 
+test("validerPhoto — la maîtrise d'une façon : nulle sans désavantage, exigée avec ; son origine et son poids, rien d'autre", () => {
+  const COUTEAU = { origine: "Couteau d'office", poids: "precise" };
+  const emincer = (v) => v.capacites[1].facons[0];
+  const frappe = (v) => v.capacites[0].facons[0];
+  // Les deux côtés du lien : la maîtrise suit le désavantage, exactement.
+  assert.deepEqual(passe(pjEssai(), () => {}).valeurs.capacites[1].facons[0].maitrise, COUTEAU);
+  assert.equal(refusDe(pjEssai(), (v) => (emincer(v).maitrise = null)), "la façon n° 1 de « Émincer » n'a pas la maîtrise que veut « desavantage ».");
+  assert.equal(refusDe(pjEssai(), (v) => (frappe(v).maitrise = { ...COUTEAU })), "la façon n° 1 de « Frappe » n'a pas la maîtrise que veut « desavantage ».");
+  assert.equal(refusDe(pjEssai(), (v) => (frappe(v).maitrise = {})), "la façon n° 1 de « Frappe » n'a pas la maîtrise que veut « desavantage ».");
+  assert.equal(refusDe(pjEssai(), (v) => (emincer(v).desavantage = false)), "la façon n° 1 de « Émincer » n'a pas la maîtrise que veut « desavantage ».");
+  // Ôter les deux ensemble, ou les poser ensemble, passe.
+  passe(pjEssai(), (v) => {
+    emincer(v).desavantage = false;
+    emincer(v).maitrise = null;
+  });
+  passe(pjEssai(), (v) => {
+    frappe(v).desavantage = true;
+    frappe(v).maitrise = { origine: "Saucier", poids: "lourde" };
+  });
+  // Son poids : l'un des trois types.
+  for (const poids of ["lourde", "agile", "precise"]) passe(pjEssai(), (v) => (emincer(v).maitrise.poids = poids));
+  for (const poids of ["précise", "Agile", "", null, 2]) {
+    assert.equal(refusDe(pjEssai(), (v) => (emincer(v).maitrise.poids = poids)), "le poids de la maîtrise de la façon n° 1 de « Émincer » n'est pas une valeur connue.", JSON.stringify(poids));
+  }
+  // Son origine : un texte d'une ligne, de 1 à 200 signes.
+  passe(pjEssai(), (v) => (emincer(v).maitrise.origine = "é".repeat(BORNES_PHOTO.ligne)));
+  assert.equal(refusDe(pjEssai(), (v) => (emincer(v).maitrise.origine = "é".repeat(BORNES_PHOTO.ligne + 1))), "l'origine de la maîtrise de la façon n° 1 de « Émincer » dépasse 200 signes.");
+  assert.equal(refusDe(pjEssai(), (v) => (emincer(v).maitrise.origine = "")), "l'origine de la maîtrise de la façon n° 1 de « Émincer » est vide.");
+  // Ses deux clés, elles seules ; un objet simple.
+  assert.equal(refusDe(pjEssai(), (v) => (emincer(v).maitrise.nom = "Couteau d'office")), "la maîtrise de la façon n° 1 de « Émincer » porte un champ inconnu.");
+  assert.equal(refusDe(pjEssai(), (v) => delete emincer(v).maitrise.origine), "la maîtrise de la façon n° 1 de « Émincer » n'a pas de champ « origine ».");
+  for (const faux of ["Couteau d'office", ["Couteau d'office", "precise"], true]) {
+    assert.equal(refusDe(pjEssai(), (v) => (emincer(v).maitrise = faux)), "la maîtrise de la façon n° 1 de « Émincer » n'est pas un objet simple.", JSON.stringify(faux));
+  }
+  // Un adversaire de même : la spatule du Marmiton, et aucune chez le Chef.
+  assert.equal(refusDe(adversaireEssai(), (v) => (v.capacites[1].facons[0].maitrise = null)), "la façon n° 1 de « Moulinet farineux » n'a pas la maîtrise que veut « desavantage ».");
+  assert.equal(refusDe(chefDePartieEssai(), (v) => (v.capacites[1].facons[0].maitrise = { origine: "Spatule souple", poids: "agile" })), "la façon n° 1 de « Moulinet farineux » n'a pas la maîtrise que veut « desavantage ».");
+  // La copie est gelée, et ne partage rien avec la donnée.
+  const donnee = structuredClone(pjEssai());
+  const { photo } = validerPhoto(donnee);
+  assert.notEqual(photo.valeurs.capacites[1].facons[0].maitrise, donnee.valeurs.capacites[1].facons[0].maitrise);
+  assert.ok(Object.isFrozen(photo.valeurs.capacites[1].facons[0].maitrise));
+  donnee.valeurs.capacites[1].facons[0].maitrise.origine = "Changé";
+  assert.equal(photo.valeurs.capacites[1].facons[0].maitrise.origine, "Couteau d'office");
+});
+
+test("validerPhoto — l'égalité du dé de défense : vide, ou deux à trois types distincts rangés lourde, agile, précise, dont le type retenu", () => {
+  const poser = (type, egalite) => (v) => {
+    v.deDefense.type = type;
+    v.deDefense.egalite = egalite;
+  };
+  // Ce qui passe : vide quel que soit le type ; deux ou trois types rangés, dont le retenu.
+  for (const type of ["lourde", "agile", "precise"]) passe(pjEssai(), poser(type, []));
+  for (const [type, egalite] of [
+    ["agile", ["agile", "precise"]], ["precise", ["agile", "precise"]], ["lourde", ["lourde", "agile"]], ["agile", ["lourde", "agile"]], ["lourde", ["lourde", "precise"]],
+    ["lourde", ["lourde", "agile", "precise"]], ["agile", ["lourde", "agile", "precise"]], ["precise", ["lourde", "agile", "precise"]],
+  ]) {
+    assert.deepEqual(passe(pjEssai(), poser(type, egalite)).valeurs.deDefense.egalite, egalite, `${type} : ${egalite.join(", ")}`);
+  }
+  // Un seul type n'est pas une égalité.
+  for (const type of ["lourde", "agile", "precise"]) {
+    assert.equal(refusDe(pjEssai(), poser(type, [type])), "l'égalité de la défense n'est ni vide, ni de deux types au moins.", type);
+  }
+  // Le rangement, la distinction, les codes connus.
+  for (const egalite of [["precise", "agile"], ["agile", "lourde"], ["precise", "lourde"], ["agile", "lourde", "precise"], ["lourde", "precise", "agile"], ["precise", "agile", "lourde"]]) {
+    assert.equal(refusDe(pjEssai(), poser("agile", egalite)), "l'égalité de la défense n'est pas faite de types distincts, rangés lourde, agile, précise.", egalite.join(", "));
+  }
+  for (const egalite of [["agile", "agile"], ["lourde", "agile", "agile"], ["agile", "Précise"], ["agile", null], ["inconnu", "agile"], ["agile", "precise", 3]]) {
+    assert.equal(refusDe(pjEssai(), poser("agile", egalite)), "l'égalité de la défense n'est pas faite de types distincts, rangés lourde, agile, précise.", JSON.stringify(egalite));
+  }
+  // Le type retenu en est.
+  assert.equal(refusDe(pjEssai(), poser("agile", ["lourde", "precise"])), "l'égalité de la défense ne compte pas le type retenu.");
+  assert.equal(refusDe(aubepineEssai(), (v) => (v.deDefense.type = "lourde")), "l'égalité de la défense ne compte pas le type retenu.");
+  // Une liste, de trois types au plus.
+  assert.equal(refusDe(pjEssai(), poser("agile", ["lourde", "agile", "precise", "precise"])), "l'égalité de la défense compte plus de 3 types.");
+  for (const faux of [null, "agile", { 0: "agile", 1: "precise" }, 2]) {
+    assert.equal(refusDe(pjEssai(), poser("agile", faux)), "l'égalité de la défense n'est pas une liste.", JSON.stringify(faux));
+  }
+  // La copie est gelée, et ne partage rien avec la donnée.
+  const donnee = structuredClone(aubepineEssai());
+  const { photo } = validerPhoto(donnee);
+  assert.notEqual(photo.valeurs.deDefense.egalite, donnee.valeurs.deDefense.egalite);
+  assert.ok(Object.isFrozen(photo.valeurs.deDefense.egalite));
+  donnee.valeurs.deDefense.egalite.pop();
+  assert.deepEqual(photo.valeurs.deDefense.egalite, ["agile", "precise"]);
+});
+
 test("validerPhoto — une description de deux lignes est acceptée, un nom à retour de ligne est refusé", () => {
   const deuxLignes = `Tourbillonne.${RETOUR}Puis salue.${CHARIOT}${RETOUR}${TABULATION}Et recommence.`;
   const photo = passe(pjEssai(), (valeurs, entiere) => {
@@ -836,6 +1033,7 @@ const LIGNES = [
   ["le nom de la jauge de lien n° 1", (v, t) => (v.liens[0].nom = t)],
   ["le nom du bouclier", (v, t) => (v.bouclier = { nom: t, defense: 8 })],
   ["un élément de « Taloche »", (v, t) => (v.capacites[6].facons[0].elements = ["Dégâts", t])],
+  ["l'origine de la maîtrise de la façon n° 1 de « Émincer »", (v, t) => (v.capacites[1].facons[0].maitrise.origine = t)],
 ];
 
 test("validerPhoto — chaque texte d'une ligne : 200 signes passent, 201 non ; ni vide, ni retour à la ligne", () => {
@@ -1092,7 +1290,11 @@ test("validerPhoto — les rôles, les genres, les poids et les codes sont des v
     assert.equal(refusDe(pjEssai(), (valeurs) => (valeurs.deDefense.caracteristiques = faux)), "les caractéristiques de la défense ne sont pas une ou deux caractéristiques connues.");
   }
   for (const [champ, cible] of [["passif", "« passif » de la façon n° 1 de « Frappe »"], ["intervention", "« intervention » de la façon n° 1 de « Frappe »"], ["attaque", "« attaque » de la façon n° 1 de « Frappe »"], ["desavantage", "« desavantage » de la façon n° 1 de « Frappe »"]]) {
-    passe(pjEssai(), (valeurs) => (valeurs.capacites[0].facons[0][champ] = true));
+    // Un désavantage vient avec sa maîtrise.
+    passe(pjEssai(), (valeurs) => {
+      valeurs.capacites[0].facons[0][champ] = true;
+      if (champ === "desavantage") valeurs.capacites[0].facons[0].maitrise = { origine: "Couteau d'office", poids: "precise" };
+    });
     assert.equal(refusDe(pjEssai(), (valeurs) => (valeurs.capacites[0].facons[0][champ] = 1)), `${cible} n'est ni vrai ni faux.`);
   }
   assert.equal(refusDe(pjEssai(), (valeurs) => (valeurs.capacites[0].evolue = "oui")), "« evolue » de « Frappe » n'est ni vrai ni faux.");
@@ -1184,6 +1386,10 @@ test("validerPhoto — un champ qui manque ou un champ en trop, à chaque étage
     ["la façon n° 1 de « Frappe »", (v) => v.capacites[0].facons[0], "desavantage"],
     ["le coût de la façon n° 1 de « Frappe »", (v) => v.capacites[0].facons[0].cout, "lien"],
     ["le dé de défense", (v) => v.deDefense, "meles"],
+    ["le dé de défense", (v) => v.deDefense, "egalite"],
+    ["la façon n° 1 de « Frappe »", (v) => v.capacites[0].facons[0], "maitrise"],
+    ["la maîtrise de la façon n° 1 de « Émincer »", (v) => v.capacites[1].facons[0].maitrise, "origine"],
+    ["la maîtrise de la façon n° 1 de « Émincer »", (v) => v.capacites[1].facons[0].maitrise, "poids"],
   ];
   for (const [quoi, etage, champ] of etages) {
     assert.equal(refusDe(pjEssai(), (valeurs, entiere) => delete etage(valeurs, entiere)[champ]), `${quoi} n'a pas de champ « ${champ} ».`);
@@ -1334,11 +1540,14 @@ test("validerContenu — un contenu bien formé est rendu en copie gelée, par J
 });
 
 test("validerContenu — une autre version des règles se dit, avant tout autre examen", () => {
-  // Un contenu du groupe 2, à cinq clés : ce n'est pas une donnée abîmée.
-  const cinqCles = { ...contenuEssai(), regles: 2, effets: [] };
-  assert.deepEqual(validerContenu(cinqCles, OPTIONS), { autreVersion: { regles: 2 } });
+  // Un contenu d'une autre version, à cinq clés : ce n'est pas une donnée abîmée.
+  const cinqCles = { ...contenuEssai(), regles: 1, effets: [] };
+  assert.deepEqual(validerContenu(cinqCles, OPTIONS), { autreVersion: { regles: 1 } });
   // Ni la révision, ni le mode, ni le reste n'en sont regardés.
-  assert.deepEqual(validerContenu({ regles: 2, revision: "?", miseEnPlace: null }, { mode: "reel", revision: 3 }), { autreVersion: { regles: 2 } });
+  assert.deepEqual(validerContenu({ regles: 1, revision: "?", miseEnPlace: null }, { mode: "reel", revision: 3 }), { autreVersion: { regles: 1 } });
+  // Un combat du groupe 1, tel quel : la version 1 ne se reprend pas.
+  assert.deepEqual(validerContenu(contenuEssai((contenu) => (contenu.regles = 1)), OPTIONS), { autreVersion: { regles: 1 } });
+  assert.deepEqual(validerContenu({ regles: 3 }, OPTIONS), { autreVersion: { regles: 3 } });
   assert.deepEqual(validerContenu({ regles: 0 }, OPTIONS), { autreVersion: { regles: 0 } });
   assert.ok(validerContenu({ regles: 0 }, OPTIONS).autreVersion, "ce qui est rendu se teste d'un simple « if »");
   // La même cinquième clé, à la version d'ici, est une donnée abîmée.
@@ -1467,7 +1676,7 @@ test("validerContenu — les plafonds : 12 personnages, 60 adversaires, 12 exemp
   assert.ok(validerContenu(contenuEssai(avec([autrePj(1), homonyme])), OPTIONS).contenu);
 });
 
-test("validerContenu — les événements : chacun par validerEvenement, 5 000 au plus", () => {
+test("validerContenu — les événements : chacun par validerEvenement, 15 000 au plus", () => {
   assert.equal(contenuRefuse((contenu) => (contenu.evenements = {})), "Le combat n'est pas une liste.");
   assert.equal(contenuRefuse((contenu) => contenu.evenements.push({ type: "de", faces: 8, valeurs: [9] })), "L'événement n° 5 est refusé : L'événement « de » : une valeur n'est pas un entier de 1 à 8.");
   assert.equal(contenuRefuse((contenu) => (contenu.evenements[1].inconnu = 1)), "L'événement n° 2 est refusé : L'événement « capacite » porte un champ inconnu.");
@@ -1477,7 +1686,7 @@ test("validerContenu — les événements : chacun par validerEvenement, 5 000 a
   const tant = (combien) => (contenu) => (contenu.evenements = Array.from({ length: combien }, () => ({ type: "fin_de_tour" })));
   const plein = validerContenu(contenuEssai(tant(EVENEMENTS_MAX)), OPTIONS);
   assert.equal(plein.contenu.evenements.length, EVENEMENTS_MAX);
-  assert.equal(contenuRefuse(tant(EVENEMENTS_MAX + 1)), "Le combat compte plus de 5 000 événements.");
+  assert.equal(contenuRefuse(tant(EVENEMENTS_MAX + 1)), "Le combat compte plus de 15 000 événements.");
 });
 
 test("le socle — aucune des trois fonctions ne lève, même sur une donnée piégée", () => {
@@ -1497,6 +1706,10 @@ test("le socle — aucune phrase rendue ne porte d'espace insécable", () => {
     validerPhoto(retouchee(pjEssai(), (valeurs) => (valeurs.souffle = -1))).erreur,
     validerPhoto(retouchee(pjEssai(), (valeurs) => (valeurs.capacites[0].facons[0].description = "é".repeat(4001)))).erreur,
     contenuRefuse((contenu) => (contenu.evenements = Array.from({ length: EVENEMENTS_MAX + 1 }, () => ({ type: "garder" })))),
+    validerPhoto(retouchee(pjEssai(), (valeurs) => (valeurs.capacites[1].facons[0].maitrise.origine = "é".repeat(BORNES_PHOTO.ligne + 1)))).erreur,
+    validerPhoto(retouchee(pjEssai(), (valeurs) => (valeurs.deDefense.egalite = ["lourde", "agile", "precise", "precise"]))).erreur,
+    ecrireEnMilliers(EVENEMENTS_MAX),
+    ecrireEnMilliers(EVENEMENTS_ALERTE),
     ...Object.values(DIFFICULTES),
   ];
   for (const phrase of phrases) {
@@ -1522,8 +1735,12 @@ test("etatEssai — l'état d'un combat lancé : chacun à ses valeurs de dépar
   const marmiton = adversaireEssai();
   const etat = etatEssai(miseEnPlaceEssai([{ photo: aubepine, case: "C3" }, { photo: marmiton, case: "D4" }]));
   assert.ok(geleEnProfondeur(etat));
-  assert.deepEqual(Object.keys(etat), ["regles", "mode", "quiCommence", "phase", "ordre", "photos", "noms", "lanceLe", "tour", "protagonistes", "effets", "pile", "journal", "annonce", "vainqueur", "pas"]);
-  assert.deepEqual([etat.regles, etat.mode, etat.quiCommence, etat.phase, etat.lanceLe, etat.vainqueur, etat.pas], [1, "demo", "pj", "combat", "2026-10-12T21:30", null, 1]);
+  assert.deepEqual(Object.keys(etat), [
+    "regles", "mode", "quiCommence", "phase", "ordre", "photos", "noms", "lanceLe", "tour", "protagonistes", "effets", "pile", "journal", "annonce", "vainqueur", "pas", "annulation",
+  ]);
+  assert.deepEqual([etat.regles, etat.mode, etat.quiCommence, etat.phase, etat.lanceLe, etat.vainqueur, etat.pas], [REGLES, "demo", "pj", "combat", "2026-10-12T21:30", null, 1]);
+  // Rien à annuler : SANS_ANNULATION, l'objet même.
+  assert.equal(etat.annulation, SANS_ANNULATION);
   assert.deepEqual(etat.ordre, ["pj1", "adv2"]);
   // Les valeurs de la photographie, par référence, jamais la photographie entière.
   assert.equal(etat.photos.pj1, aubepine.valeurs);
@@ -1550,8 +1767,10 @@ test("etatEssai — l'état d'un combat lancé : chacun à ses valeurs de dépar
   ]);
   assert.deepEqual(etat.annonce, { pas: 1, texte: `Combat lancé : 1 personnage contre 1 adversaire. Les PJ commencent. ${SIGNES.tiret} Tour 1 ${SIGNES.point} camp des PJ ${SIGNES.tiret}` });
   for (const { texte } of etat.journal) for (const signe of INSECABLES) assert.ok(!texte.includes(signe));
-  // Il passe par JSON à l'identique, comme tout état.
-  assert.deepEqual(parJson(etat), etat);
+  // Il passe par JSON à l'identique, comme tout état, la pile d'annulation
+  // mise à part : elle ne passe jamais par JSON (contrat du groupe 2, § 0.2).
+  const { annulation: _annulation, ...reste } = etat;
+  assert.deepEqual(parJson(reste), reste);
 });
 
 test("etatEssai — les pluriels, le camp qui commence, un tour plus loin, des noms donnés, une retouche", () => {

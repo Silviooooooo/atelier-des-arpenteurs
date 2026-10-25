@@ -5,9 +5,13 @@
 // banque : ses contrôles n'ont donc pas besoin d'un classeur. Ils prennent
 // ici des protagonistes aux valeurs connues d'avance, rôles câblés déjà
 // posés, et les retouchent pour atteindre les règles que la démonstration
-// n'a pas (bonus de Précision, petit, esprit de corps, plusieurs d20 de
-// localisation, un adversaire à passif câblé, un second PJ, deux jauges de
+// n'a pas (les rôles bonus_precision, petit, esprit_de_corps, plusieurs d20
+// de localisation, un adversaire à passif câblé, un second PJ, deux jauges de
 // lien, un adversaire sans arme ou sans action).
+//
+// Au groupe 2 (contrat du groupe, § 5.3, § 5.4, § 5.6) : chaque façon porte
+// « maitrise », la cause de son désavantage (nulle sans désavantage) ; le dé
+// de défense d'un PJ porte « egalite », les types à égalité de dés.
 //
 // Rien ici ne passe par js/combat/photographie.js ni par le moteur : ce qui
 // se fabrique dans la banque a ses propres contrôles. Tous les noms sont ceux
@@ -18,14 +22,15 @@
 // pjEssai() — « Aubépine » (un seul mot : son nom court est son nom).
 //   2 actions, souffle 10, corps 10 ; les neuf caractéristiques à 4 (toute
 //   paire fait donc un d8) ; six zones, armure 10 et résistance 5 chacune ;
-//   défense : d8, agile (Agilité et Créativité), types non mêlés ; pas de
-//   bouclier ; une jauge de lien, Grand Four, 2 points ; aucun passif câblé.
+//   défense : d8, agile (Agilité et Créativité), types non mêlés, sans
+//   égalité ; pas de bouclier ; une jauge de lien, Grand Four, 2 points ;
+//   aucun passif câblé.
 //   Armes : 0, Couteau d'office, précise, d8 (Précision et Agilité), 5/10/15,
 //   portée 1 ; 1, Taloche, les mains nues, dé au choix, 2/4/8, portée 0.
 //   L'arme qui prête son jet est le couteau.
 //   Capacités, dans cet ordre :
 //     Frappe         arme         attaque gratuite, dans sa maîtrise
-//     Émincer        arme         attaque, 4 souffle, hors maîtrise
+//     Émincer        arme         attaque, 4 souffle, hors maîtrise (le couteau, précise)
 //     Flambage       archétype    sans jet ; niveau 2 : [1] 5 souffle, [2] 10
 //     Fournaise      primordial   sans jet ; [1] 1 souffle et 1 lien, sur la jauge 0
 //     Pas chassé     base         rôle deplacement ; niveau 2 : [1] gratuit, [2] 1 souffle
@@ -40,7 +45,7 @@
 //   Arme : 0, Spatule souple, agile, 5/10/15, portée 0.
 //   Capacités, dans cet ordre :
 //     Frappe             arme        attaque gratuite, dans sa maîtrise
-//     Moulinet farineux  arme        attaque [1], 5 souffle, hors maîtrise
+//     Moulinet farineux  arme        attaque [1], 5 souffle, hors maîtrise (la spatule, agile)
 //     Pas chassé         capacités   rôle deplacement, rang 1, gratuit
 //
 // ── Les trois de la démonstration ───────────────────────────────────────────
@@ -52,6 +57,12 @@
 // démonstration. tests/combat_photographie.test.js tient, lui, ce que la
 // banque donne vraiment.
 //
+// Aubépine Crèmebrûlée porte des pièces agiles et précises, toutes deux à d8 :
+// son dé de défense est à égalité, le type retenu restant l'agile. Ses deux
+// capacités de couteau sont hors maîtrise, à cause du couteau (précise). Le
+// Chef de partie joue Pas chassé à chacune de ses puissances, comme le fait
+// la photographie d'un adversaire au groupe 2 : [1] gratuit, [2] 1 souffle.
+//
 // ── L'état ──────────────────────────────────────────────────────────────────
 //
 // etatEssai() écrit à la main l'état d'un combat lancé, sans le moteur. Les
@@ -59,9 +70,10 @@
 // jeton, et l'initiale est son premier signe. Il égale donc l'état du moteur
 // quand chaque protagoniste a un nom d'un seul mot que nul autre ne porte ;
 // au-delà (exemplaires numérotés, noms de plusieurs mots), donner « noms ».
+// Rien n'y est à annuler : son « annulation » est SANS_ANNULATION.
 
 import { validerPhoto } from "../../js/combat/forme.js";
-import { ACTIONS_PJ, FACE_CONTRE, GRILLE_PJ, REGLES, SIGNES, geler } from "../../js/combat/regles.js";
+import { ACTIONS_PJ, FACE_CONTRE, GRILLE_PJ, REGLES, SANS_ANNULATION, SIGNES, geler } from "../../js/combat/regles.js";
 import { CARACTERISTIQUES, ZONES } from "../../js/personnage/regles.js";
 
 const FACON_NEUTRE = {
@@ -78,6 +90,7 @@ const FACON_NEUTRE = {
   portee: 0,
   locMultiple: 1,
   desavantage: false,
+  maitrise: null,
 };
 
 const CAPACITE_NEUTRE = {
@@ -169,6 +182,11 @@ const GESTES = { genre: "base", titre: "Gestes de cuisine" };
 const SPATULE = { genre: "arme", titre: "Spatule souple" };
 const CAPACITES = { genre: "capacites", titre: "Capacités" };
 
+// La cause d'un désavantage de maîtrise : l'objet qui donne la capacité, et
+// son type (contrat du groupe 2, § 5.3).
+const HORS_MAITRISE_DU_COUTEAU = { origine: "Couteau d'office", poids: "precise" };
+const HORS_MAITRISE_DE_LA_SPATULE = { origine: "Spatule souple", poids: "agile" };
+
 /** Le personnage rond (voir l'en-tête). retoucher reçoit ses valeurs, et les change sur place. */
 export function pjEssai(retoucher = sansRetouche) {
   return photographier(
@@ -186,7 +204,7 @@ export function pjEssai(retoucher = sansRetouche) {
       caracteristiques: Object.fromEntries(CARACTERISTIQUES.map(({ code }) => [code, 4])),
       attaque: null,
       defense: null,
-      deDefense: { faces: 8, type: "agile", caracteristiques: ["agilite", "creativite"], meles: false },
+      deDefense: { faces: 8, type: "agile", caracteristiques: ["agilite", "creativite"], meles: false, egalite: [] },
       armes: [
         { nom: "Couteau d'office", libelle: "Couteau d'office", poids: "precise", faces: 8, caracteristiques: ["precision", "agilite"], degats: [5, 10, 15], portee: 1, locMultiple: 1, mainsNues: false },
         { nom: "Taloche", libelle: "Taloche", poids: null, faces: null, caracteristiques: null, degats: [2, 4, 8], portee: 0, locMultiple: 1, mainsNues: true },
@@ -205,7 +223,16 @@ export function pjEssai(retoucher = sansRetouche) {
           nom: "Émincer",
           groupe: COUTEAU,
           facons: [
-            faconEssai({ arme: 0, cout: { souffle: 4, lien: 0 }, description: "Une réussite de plus si vous en avez une.", attaque: true, degats: [5, 10, 15], portee: 1, desavantage: true }),
+            faconEssai({
+              arme: 0,
+              cout: { souffle: 4, lien: 0 },
+              description: "Une réussite de plus si vous en avez une.",
+              attaque: true,
+              degats: [5, 10, 15],
+              portee: 1,
+              desavantage: true,
+              maitrise: HORS_MAITRISE_DU_COUTEAU,
+            }),
           ],
         }),
         capaciteEssai({
@@ -259,7 +286,8 @@ export function pjEssai(retoucher = sansRetouche) {
 }
 
 // Les trois capacités que tout adversaire de la démonstration tient de ses
-// types : deux de sa spatule, une de son espèce.
+// types : deux de sa spatule, une de son espèce. Pas chassé a une façon par
+// puissance, de 1 à son rang ; elle coûte sa puissance moins 1 en souffle.
 const capacitesDeSpatule = ({ degats, moulinetHorsMaitrise, rangDuPas }) => [
   capaciteEssai({
     nom: "Frappe",
@@ -272,7 +300,17 @@ const capacitesDeSpatule = ({ degats, moulinetHorsMaitrise, rangDuPas }) => [
     evolue: true,
     groupe: SPATULE,
     facons: [
-      faconEssai({ puissance: 1, arme: 0, libelle: "Spatule souple", cout: { souffle: 5, lien: 0 }, description: "Tourbillonne 1 fois.", attaque: true, degats, desavantage: moulinetHorsMaitrise }),
+      faconEssai({
+        puissance: 1,
+        arme: 0,
+        libelle: "Spatule souple",
+        cout: { souffle: 5, lien: 0 },
+        description: "Tourbillonne 1 fois.",
+        attaque: true,
+        degats,
+        desavantage: moulinetHorsMaitrise,
+        maitrise: moulinetHorsMaitrise ? HORS_MAITRISE_DE_LA_SPATULE : null,
+      }),
     ],
   }),
   capaciteEssai({
@@ -281,7 +319,9 @@ const capacitesDeSpatule = ({ degats, moulinetHorsMaitrise, rangDuPas }) => [
     niveau: rangDuPas,
     evolue: true,
     groupe: CAPACITES,
-    facons: [faconEssai({ puissance: rangDuPas, cout: { souffle: rangDuPas - 1, lien: 0 }, description: `Se déplace de ${rangDuPas} cases.` })],
+    facons: Array.from({ length: rangDuPas }, (_rien, rang) =>
+      faconEssai({ puissance: rang + 1, cout: { souffle: rang, lien: 0 }, description: `Se déplace de ${rang + 1} cases.` }),
+    ),
   }),
 ];
 
@@ -340,7 +380,7 @@ export function aubepineEssai(retoucher = sansRetouche) {
       caracteristiques: { force: 4, agilite: 5, precision: 5, sens: 3, culture_neruvienne: 4, savoir_sauvage: 3, parole: 4, empathie: 4, creativite: 4 },
       attaque: null,
       defense: null,
-      deDefense: { faces: 8, type: "agile", caracteristiques: ["agilite", "creativite"], meles: true },
+      deDefense: { faces: 8, type: "agile", caracteristiques: ["agilite", "creativite"], meles: true, egalite: ["agile", "precise"] },
       armes: [
         { nom: "Couteau d'office", libelle: "Couteau d'office", poids: "precise", faces: 10, caracteristiques: ["precision", "agilite"], degats: [3, 8, 20], portee: 1, locMultiple: 1, mainsNues: false },
         { nom: "Taloche", libelle: "Taloche", poids: null, faces: null, caracteristiques: null, degats: [2, 4, 8], portee: 0, locMultiple: 1, mainsNues: true },
@@ -359,13 +399,24 @@ export function aubepineEssai(retoucher = sansRetouche) {
         capaciteEssai({
           nom: "Frappe",
           groupe: COUTEAU,
-          facons: [faconEssai({ arme: 0, description: "Une attaque qui inflige 3/8/20.", attaque: true, degats: [3, 8, 20], portee: 1, desavantage: true })],
+          facons: [
+            faconEssai({ arme: 0, description: "Une attaque qui inflige 3/8/20.", attaque: true, degats: [3, 8, 20], portee: 1, desavantage: true, maitrise: HORS_MAITRISE_DU_COUTEAU }),
+          ],
         }),
         capaciteEssai({
           nom: "Émincer",
           groupe: COUTEAU,
           facons: [
-            faconEssai({ arme: 0, cout: { souffle: 4, lien: 0 }, description: "Une réussite de plus si vous en avez une.", attaque: true, degats: [3, 8, 20], portee: 1, desavantage: true }),
+            faconEssai({
+              arme: 0,
+              cout: { souffle: 4, lien: 0 },
+              description: "Une réussite de plus si vous en avez une.",
+              attaque: true,
+              degats: [3, 8, 20],
+              portee: 1,
+              desavantage: true,
+              maitrise: HORS_MAITRISE_DU_COUTEAU,
+            }),
           ],
         }),
         capaciteEssai({ nom: "Réduction", role: "degrossir", niveau: 1, evolue: true, groupe: SAUCIER, facons: [passive({ puissance: 1, description: "Retire 1 points d'armure par réussite." })] }),
@@ -529,6 +580,9 @@ function initiale(nom) {
  * - lanceLe : l'heure du lancement.
  * - retoucher : reçoit l'état avant qu'il soit gelé, et le change sur place
  *   (une action de moins, du souffle dépensé, une zone entamée, un mort).
+ *
+ * « annulation » est SANS_ANNULATION, l'objet même (contrat du groupe 2,
+ * § 2.2) : aucun geste n'est encore fini.
  */
 export function etatEssai(miseEnPlace, { tour = null, noms = {}, lanceLe = "2026-10-12T21:30", retoucher = sansRetouche } = {}) {
   const { mode, quiCommence, protagonistes } = miseEnPlace;
@@ -606,6 +660,7 @@ export function etatEssai(miseEnPlace, { tour = null, noms = {}, lanceLe = "2026
     annonce: { pas, texte: dernieres.join(" ") },
     vainqueur: null,
     pas,
+    annulation: SANS_ANNULATION,
   };
   retoucher(etat);
   return geler(etat);

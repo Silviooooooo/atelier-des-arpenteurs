@@ -107,10 +107,10 @@ export function controler(banque) {
     return trouve;
   }
 
-  // E3 : même nom défini deux fois ; pour une capacité, même nom et même
-  // puissance (§ 5.1). Les noms se comparent exactement, une fois leurs
-  // signes invisibles retirés (nomCompare) : rien ne distinguerait les deux à
-  // l'écran. Le message cite le nom tel qu'il est écrit.
+  // E3 : même nom défini deux fois (les capacités, plus bas). Les noms se
+  // comparent exactement, une fois leurs signes invisibles retirés
+  // (nomCompare) : rien ne distinguerait les deux à l'écran. Le message cite
+  // le nom tel qu'il est écrit.
   function doublons(objets, genre, feuille) {
     const vus = new Map();
     for (const objet of objets) {
@@ -122,22 +122,37 @@ export function controler(banque) {
   }
   doublons(banque.blocs, "Le bloc", "Blocs");
   doublons(banque.elements, "L'élément", "Eléments");
+  // E3 des capacités (§ 5.1 ; complément du groupe 2 du lot 4, § 5.4).
   // L'import range les lignes de Capacites en variantes par nom tel
   // qu'écrit : deux capacités dont les noms ne diffèrent que d'un signe
-  // invisible y restent deux capacités. Leurs variantes se confrontent donc
-  // ici, toutes ensemble, dans l'ordre des lignes de la feuille.
-  const variantesParNom = new Map();
+  // invisible y restent deux capacités. D'une part, deux variantes d'un même
+  // nom écrit et de même puissance : la plus basse est le doublon, et cite
+  // la plus haute. Deux variantes d'un même nom écrit, de puissances
+  // différentes, ne sont jamais un doublon.
   for (const capacite of banque.capacites) {
-    for (const variante of capacite.variantes) ajouter(variantesParNom, nomCompare(capacite.nom), { capacite, variante });
-  }
-  for (const homonymes of variantesParNom.values()) {
     const vues = new Map();
-    for (const { capacite, variante } of homonymes.sort((a, b) => a.variante.brut.ligne - b.variante.brut.ligne)) {
+    for (const variante of [...capacite.variantes].sort((a, b) => a.brut.ligne - b.brut.ligne)) {
       const premiere = vues.get(variante.puissance);
       const lieu = { feuille: "Capacites", ligne: variante.brut.ligne };
       if (premiere) {
         signaler("E3", lieu, `La capacité « ${capacite.nom} » a déjà une variante de puissance « ${variante.puissance} », ligne ${premiere.brut.ligne}.`);
       } else vues.set(variante.puissance, variante);
+    }
+  }
+  // D'autre part, deux capacités dont les noms, différents tels qu'écrits,
+  // deviennent égaux une fois les signes invisibles retirés (nomCompare),
+  // quelles que soient leurs puissances : rien ne les distingue à l'écran.
+  // Dans un tel groupe, la première est celle dont la première ligne est la
+  // plus haute ; chaque autre reçoit un E3 à sa propre première ligne, qui
+  // cite celle de la première. Deux noms écrits différents n'ont que ce
+  // message.
+  const premiereLigne = (capacite) => Math.min(...capacite.variantes.map((variante) => variante.brut.ligne));
+  const capacitesParNomCompare = new Map();
+  for (const capacite of banque.capacites) ajouter(capacitesParNomCompare, nomCompare(capacite.nom), capacite);
+  for (const groupe of capacitesParNomCompare.values()) {
+    const [premiere, ...autres] = [...groupe].sort((a, b) => premiereLigne(a) - premiereLigne(b));
+    for (const autre of autres) {
+      signaler("E3", { feuille: "Capacites", ligne: premiereLigne(autre) }, `La capacité « ${autre.nom} » ne diffère de celle de la ligne ${premiereLigne(premiere)} que par un signe invisible.`);
     }
   }
 

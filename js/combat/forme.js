@@ -16,6 +16,12 @@
 // Aucune ne lève : elles rendent une copie gelée, aux seuls champs connus, ou
 // une phrase. Celle de validerPhoto commence sans majuscule et nomme le
 // champ : elle suit « Ne s'ajoute pas : » à la préparation.
+//
+// Au groupe 2 du lot 4 (le contrat du groupe, § 2.1, § 5.3, § 5.4, § 5.6) :
+// l'événement « annuler », sans champ ; le réglage « defense », un type
+// d'armure ; la cause d'un désavantage de maîtrise (« maitrise », présente
+// exactement quand « desavantage » est vrai) ; les types du dé de défense à
+// égalité (« egalite »).
 
 import { CARACTERISTIQUES } from "../personnage/regles.js";
 import {
@@ -34,6 +40,7 @@ import {
   ROLES,
   ROLES_PASSIFS,
   TIRAGES_MAX,
+  ecrireEnMilliers,
   geler,
   raisonValide,
 } from "./regles.js";
@@ -58,8 +65,9 @@ const estObjet = (valeur) => {
 
 const a = (objet, nom) => Object.prototype.hasOwnProperty.call(objet, nom);
 
-/** Un entier écrit à la française, par tranches de trois chiffres, sans rien demander à l'appareil. */
-const ecrireNombre = (nombre) => String(nombre).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+// Un entier s'écrit par ecrireEnMilliers (js/combat/regles.js) : « 9 999 »,
+// une espace ordinaire entre les tranches, comme toute phrase du noyau.
+const ecrireNombre = ecrireEnMilliers;
 
 /** Vérifie qu'un objet simple porte les champs attendus, et eux seuls (les facultatifs peuvent manquer). */
 function champs(donnee, quoi, attendus, facultatifs = []) {
@@ -139,6 +147,11 @@ const CODES_CARACTERISTIQUES = CARACTERISTIQUES.map((caracteristique) => caracte
 const BASES = ["lettre", "arme", "aucun"];
 const NATURES = ["normaux", "resistance", "corps"];
 
+// Les trois types d'objet, dans l'ordre de TYPES_OBJET
+// (js/personnage/regles.js) : celui des pièces d'armure, des armes, des
+// maîtrises, et des types du dé de défense à égalité, qui s'y rangent.
+const POIDS = ["lourde", "agile", "precise"];
+
 function identifiant(valeur, quoi) {
   if (typeof valeur !== "string" || !MOTIF_IDENTIFIANT.test(valeur)) refuser(`${quoi} n'est pas l'identifiant d'un protagoniste.`);
   return valeur;
@@ -169,7 +182,10 @@ function codesDistincts(valeur, quoi) {
 
 // Ce que vaut « valeur » pour chaque champ de « regler ». Les deux derniers
 // se règlent à la main : ils demandent une raison dès que la valeur n'est pas
-// nulle (0 efface le réglage).
+// nulle (0 efface le réglage). « defense » choisit le type du jet de défense
+// quand deux types d'armure sont à égalité de dés (contrat du groupe 2,
+// § 5.4) : un type, sans raison ; le retour au défaut ne se règle pas, il
+// suit le changement de cible.
 const VALEURS_DE_REGLER = {
   facon: indice,
   jet_prete: booleen,
@@ -180,6 +196,7 @@ const VALEURS_DE_REGLER = {
   difficulte: entierSur,
   x: entierSur,
   jauge: indice,
+  defense: (valeur, quoi) => parmi(valeur, quoi, POIDS),
   modificateur: entierSur,
   avantages: entierSur,
 };
@@ -276,6 +293,9 @@ const EVENEMENTS = {
     lire: (donnee, quoi) => ({ qui: identifiant(donnee.qui, `${quoi} : « qui »`) }),
   },
   fin_de_tour: SANS_CHAMP,
+  // Défait le dernier geste fini depuis le lancement (contrat du groupe 2,
+  // § 2.1) : il entre au contenu et compte pour la borne comme les autres.
+  annuler: SANS_CHAMP,
 };
 
 function lireEvenement(donnee) {
@@ -302,7 +322,6 @@ export function validerEvenement(donnee) {
 // ─── Les photographies ──────────────────────────────────────────────────────
 
 const CAMPS = ["pj", "adv"];
-const POIDS = ["lourde", "agile", "precise"];
 const CODES_ZONES = GRILLE_PJ.map((zone) => zone.code);
 const GENRES_DE_GROUPE = ["arme", "archetype", "espece", "style", "constellation", "primordial", "objet", "base", "capacites"];
 const ABSENTE = "absente de la banque";
@@ -317,7 +336,9 @@ const CHAMPS_ARME = ["nom", "libelle", "poids", "faces", "caracteristiques", "de
 const CHAMPS_CAPACITE = ["nom", "role", "niveau", "evolue", "groupe", "lien", "inactive", "facons"];
 const CHAMPS_FACON = [
   "puissance", "arme", "libelle", "cout", "description", "elements", "passif", "intervention", "attaque", "degats", "portee", "locMultiple", "desavantage",
+  "maitrise",
 ];
+const CHAMPS_DE_DEFENSE = ["faces", "type", "caracteristiques", "meles", "egalite"];
 
 // La source ne sert qu'à « Fiche complète » : le noyau n'en lit rien. Elle
 // n'est donc pas examinée champ par champ, mais elle doit passer par JSON à
@@ -380,6 +401,23 @@ function lireMobilisees(valeur, quoi) {
   if (!Array.isArray(valeur) || valeur.length < 1 || valeur.length > 2 || valeur.some((code) => !CODES_CARACTERISTIQUES.includes(code))) {
     refuser(`${quoi} ne sont pas une ou deux caractéristiques connues.`);
   }
+  return [...valeur];
+}
+
+/**
+ * Les types d'armure dont le dé de défense est à égalité avec celui du type
+ * retenu (contrat du groupe 2, § 5.4) : vide, ou deux à trois types
+ * distincts, rangés lourde, agile, précise, dont le type retenu.
+ */
+function lireEgalite(valeur, type) {
+  const quoi = "l'égalité de la défense";
+  liste(valeur, quoi, POIDS.length, "types");
+  if (valeur.length === 0) return [];
+  const rangs = valeur.map((code) => POIDS.indexOf(code));
+  const ranges = rangs.every((rang, k) => rang >= 0 && (k === 0 || rang > rangs[k - 1]));
+  if (valeur.length < 2) refuser(`${quoi} n'est ni vide, ni de deux types au moins.`);
+  if (!ranges) refuser(`${quoi} n'est pas faite de types distincts, rangés lourde, agile, précise.`);
+  if (!valeur.includes(type)) refuser(`${quoi} ne compte pas le type retenu.`);
   return [...valeur];
 }
 
@@ -448,9 +486,23 @@ function lireCout(donnee, quoi) {
   return { souffle: part(donnee.souffle, "souffle"), lien: part(donnee.lien, "lien") };
 }
 
+/**
+ * La cause d'un désavantage de maîtrise (contrat du groupe 2, § 5.3) : l'objet
+ * qui donne la capacité, sinon son bloc, et son type. Elle ne sert qu'à la
+ * phrase de cause : présente exactement quand la façon porte un désavantage,
+ * nulle sinon.
+ */
+function lireMaitrise(valeur, quoi, desavantage) {
+  if ((valeur !== null) !== desavantage) refuser(`${quoi} n'a pas la maîtrise que veut « desavantage ».`);
+  if (valeur === null) return null;
+  const deLaMaitrise = `de la maîtrise de ${quoi}`;
+  champs(valeur, `la maîtrise de ${quoi}`, ["origine", "poids"]);
+  return { origine: ligne(valeur.origine, `l'origine ${deLaMaitrise}`), poids: parmi(valeur.poids, `le poids ${deLaMaitrise}`, POIDS) };
+}
+
 function lireFacon(donnee, quoi, deLaCapacite, armes) {
   champs(donnee, quoi, CHAMPS_FACON);
-  return {
+  const lue = {
     puissance: nombre(donnee.puissance, `la puissance de ${quoi}`),
     arme: donnee.arme === null ? null : indiceDans(donnee.arme, `l'arme de ${quoi}`, armes),
     libelle: donnee.libelle === null ? null : ligne(donnee.libelle, `le libellé de ${quoi}`),
@@ -465,6 +517,9 @@ function lireFacon(donnee, quoi, deLaCapacite, armes) {
     locMultiple: lireLocMultiple(donnee.locMultiple, `le nombre de d20 de ${quoi}`),
     desavantage: booleen(donnee.desavantage, `« desavantage » de ${quoi}`),
   };
+  // Après les autres champs, pour que les refus gardent leur ordre.
+  lue.maitrise = lireMaitrise(donnee.maitrise, quoi, lue.desavantage);
+  return lue;
 }
 
 function lireCapacite(donnee, rang, armes, liens) {
@@ -511,13 +566,14 @@ function lireValeurs(donnee, camp) {
 
   let deDefense = null;
   if (pj) {
-    champs(donnee.deDefense, "le dé de défense", ["faces", "type", "caracteristiques", "meles"]);
+    champs(donnee.deDefense, "le dé de défense", CHAMPS_DE_DEFENSE);
     deDefense = {
       faces: lireFaces(donnee.deDefense.faces, "le dé de défense"),
       type: parmi(donnee.deDefense.type, "le type de la défense", POIDS),
       caracteristiques: lireMobilisees(donnee.deDefense.caracteristiques, "les caractéristiques de la défense"),
       meles: booleen(donnee.deDefense.meles, "« meles » de la défense"),
     };
+    deDefense.egalite = lireEgalite(donnee.deDefense.egalite, deDefense.type);
   } else nul(donnee.deDefense, "le dé de défense");
 
   const armes = lireArmes(donnee.armes);

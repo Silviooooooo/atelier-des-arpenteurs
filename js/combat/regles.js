@@ -15,8 +15,11 @@
 // La version des règles du rejeu. Un combat gardé se recalcule en rejouant
 // ses événements : toute correction qui change un nombre, un mot du journal
 // ou un moment la fait monter, et un combat d'une autre version ne se reprend
-// pas.
-export const REGLES = 1;
+// pas. Décision de l'auteur (25/10/2026) : 2 au groupe 2 du lot 4 (l'événement
+// « annuler », la puissance au choix des adversaires, la défense à égalité) ;
+// un combat gardé au groupe 1 se dit « commencé avec une autre version du
+// simulateur ». Le groupe 3 la passera à 3.
+export const REGLES = 2;
 
 // Décision de l'auteur : la carte fait 10 × 10 cases, colonnes A à J, lignes
 // 1 à 10. Une case s'écrit « D4 ».
@@ -33,17 +36,38 @@ export const PLAFOND_EXEMPLAIRES = 12;
 
 // La borne des événements est celle de l'enregistrement : au-delà, un combat
 // gardé ne se relirait plus, donc le jeu la tient aussi. Elle borne surtout
-// l'ouverture de l'écran, qui rejoue tout le combat d'une traite : le nombre
-// est fixé d'après la mesure, pour que le pire contenu que la validation
-// accepte se rejoue en quelques secondes. Mesuré le 12/10/2026 sous Node 24,
-// poste chargé par deux navigateurs : 5 000 événements du genre le plus cher
-// (une capacité jouée par un protagoniste aux bornes de sa photographie) en
-// 4,7 s ; 5 000 du genre qui écrit le plus au journal en 0,3 s ; 5 000 du
-// moins cher en 0,02 s. Un combat ordinaire en compterait de 100 à 3 000
-// (estimé, non mesuré). La
-// borne était de 20 000 : le journal seul demandait alors 31 s, et une
-// photographie forgée, que rien ne bornait en tout, 30 ms par événement.
-export const EVENEMENTS_MAX = 5000;
+// l'ouverture de l'écran, qui rejoue tout le combat.
+//
+// Décision de l'auteur (25/10/2026) : 15 000, quelle que soit la mesure. Au
+// groupe 1, elle était de 5 000, fixée d'après la mesure (12/10/2026, Node
+// 24 : 5 000 événements du genre le plus cher en 4,7 s, parce que l'offre
+// jugeait alors chaque façon de qui jouait). Trois changements la portent
+// au groupe 2 : l'offre ne juge plus que la façon demandée (compl. § 5.3) ;
+// le journal n'est recopié qu'une fois par événement, et non deux (le rejeu
+// de 15 000 passes demandait 13,4 s, coût quadratique) ; le rejeu rend la
+// main au navigateur toutes les REJEU_TRANCHE. À EVENEMENTS_ALERTE (90 %),
+// l'écran avertit une fois ; le 15 001e événement est refusé.
+export const EVENEMENTS_MAX = 15000;
+export const EVENEMENTS_ALERTE = 13500;
+export const REJEU_TRANCHE = 1000;
+
+/**
+ * Un entier écrit à la française, par tranches de trois chiffres séparées
+ * d'une espace ordinaire (U+0020) : « 15 000 ». Aucun texte du noyau ne porte
+ * d'espace insécable, et rien n'est demandé à l'appareil, dont la langue
+ * changerait le séparateur. Les phrases des bornes s'écrivent par lui :
+ * « Ce combat a atteint 15 000 événements : commencez-en un nouveau. »
+ */
+export function ecrireEnMilliers(nombre) {
+  return String(nombre).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+
+// L'annulation d'un combat qui n'a rien à défaire (contrat du groupe 2,
+// § 2.2) : ni geste payé en attente, ni maillon. L'ouverture du combat la
+// pose, et une lecture qui ne trouve pas de champ « annulation » la lit ainsi.
+// La pile qui s'y empile ne passe jamais par JSON. Gelée en fin de fichier,
+// comme les autres constantes : tous les états la partagent.
+export const SANS_ANNULATION = { attente: null, pile: null };
 
 // Un identifiant de protagoniste est « pj » ou « adv », puis cinq chiffres au
 // plus (le motif de js/combat/forme.js). Le compteur qui les numérote ne
@@ -187,12 +211,15 @@ export const LONGUEUR_RAISON = 80;
 // localisation, « faces » pour un dé ; les autres bornent une liste, hors
 // les trois dernières.
 //
-// « faconsEnTout » et « deplacements » bornent ce que coûte un événement
-// « capacite » : l'offre juge alors chaque façon de chaque capacité de celui
-// qui joue, et calcule pour chaque façon de déplacement les cases où elle
-// mène. Aux seules bornes des listes (200 capacités de 20 façons), une
-// photographie forgée coûtait de 4 à 30 millisecondes par événement à
-// rejouer (mesuré), quel que soit le nombre d'événements permis.
+// « faconsEnTout » et « deplacements » bornent ce que la bulle calcule à
+// chaque clic : elle montre chaque façon de chaque capacité de celui qui
+// joue, avec son verdict, et calcule pour chaque façon de déplacement les
+// cases où elle mène. Depuis le groupe 2, l'offre ne juge plus, à chaque
+// événement « capacite », que la façon demandée (compl. § 5.3) : le rejeu
+// n'en dépend plus. Au groupe 1, qui jugeait tout à chaque événement, une
+// photographie forgée aux seules bornes des listes (200 capacités de 20
+// façons) coûtait de 4 à 30 millisecondes par événement (mesuré). Les bornes
+// restent inchangées (compl. § 5.3).
 // - « faconsEnTout » : les façons d'un protagoniste, toutes capacités
 //   confondues. Une capacité de personnage en a trois au plus (son niveau,
 //   NIVEAU_MAX de js/personnage/regles.js), et une photographie deux cents
@@ -266,6 +293,6 @@ export function geler(valeur) {
   return valeur;
 }
 
-for (const constante of [FACE_CONTRE, GRILLE_PJ, LETTRES, DIFFICULTES, ELEMENTS_COMBAT, ROLES, ROLES_PASSIFS, ROLES_SANS_BOUTON, SIGNES, BORNES_PHOTO]) {
+for (const constante of [FACE_CONTRE, GRILLE_PJ, LETTRES, DIFFICULTES, ELEMENTS_COMBAT, ROLES, ROLES_PASSIFS, ROLES_SANS_BOUTON, SIGNES, BORNES_PHOTO, SANS_ANNULATION]) {
   geler(constante);
 }
