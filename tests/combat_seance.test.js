@@ -7,6 +7,14 @@
 // Chaque cas d'ouverture se joue deux fois : sur le magasin en mémoire, et
 // sur le vrai magasin posé sur une IndexedDB simulée. Les clés se fabriquent
 // à l'exécution, d'un mot de passe tiré au hasard.
+//
+// Au groupe 2 (contrat du groupe, § 2.8, § 4.3, § 4.5, § 6.3) : le rejeu
+// d'un combat gardé rend la main entre deux tranches, et une ouverture
+// remplacée (par une autre, ou par « Nouveau combat ») n'installe rien ;
+// personne n'est choisi après une annulation ; { evenements } joue tous ses
+// événements ou aucun ; la version des règles est 2. Un état entier se
+// compare sans sa pile d'annulation, qui ne se compare jamais en profondeur
+// (contrat, § 0.2, règle 6) : la pile, elle, se compare par sa forme.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -14,9 +22,9 @@ import { readFileSync } from "node:fs";
 import { nouveauSecret } from "../js/securite/chiffrement.js";
 import { PHRASES_DE_GARDE, REVISION_MAX, chiffrerCombat, creerGardien, dechiffrerCombat, magasinCombatIndexedDB, magasinCombatMemoire } from "../js/combat/enregistrement.js";
 import { validerEvenement } from "../js/combat/forme.js";
-import { IDENTIFIANTS_MAX } from "../js/combat/regles.js";
-import { gesteEnCours } from "../js/combat/moteur.js";
-import { offre } from "../js/combat/offre.js";
+import { IDENTIFIANTS_MAX, REGLES, REJEU_TRANCHE } from "../js/combat/regles.js";
+import { appliquer, gesteEnCours, ouvrirCombat, rejouer } from "../js/combat/moteur.js";
+import { candidats, offre } from "../js/combat/offre.js";
 import { creerSeance, heureMurale } from "../js/combat/seance.js";
 import { journalAttendu, scenario } from "./outils/combat_reference.js";
 import { desImposes } from "./outils/des_imposes.js";
@@ -86,11 +94,16 @@ function desNotes(valeurs = []) {
   };
 }
 
-/** Une séance et son gardien, sur un onglet du lieu. */
-async function monter(lieu, { secret = SECRET, des = desNotes(), mode = "demo", magasin = null, maintenant = SOIR } = {}) {
+/**
+ * Une séance et son gardien, sur un onglet du lieu. « rendreLaMain », s'il
+ * est donné, remplace l'attente du rejeu ; « ecritures » reçoit chaque
+ * demande d'écriture de la séance au gardien.
+ */
+async function monter(lieu, { secret = SECRET, des = desNotes(), mode = "demo", magasin = null, maintenant = SOIR, rendreLaMain, ecritures = null } = {}) {
   const pose = magasin ?? (await lieu.onglet());
-  const gardien = creerGardien({ magasin: pose, mode, secret: () => secret });
-  const seance = creerSeance({ gardien, des, maintenant, mode, accepter: () => {} });
+  const vrai = creerGardien({ magasin: pose, mode, secret: () => secret });
+  const gardien = ecritures === null ? vrai : { ...vrai, garder: (assembler) => (ecritures.push(assembler), vrai.garder(assembler)) };
+  const seance = creerSeance({ gardien, des, maintenant, mode, accepter: () => {}, ...(rendreLaMain === undefined ? {} : { rendreLaMain }) });
   return { seance, gardien, des, magasin: pose };
 }
 
@@ -117,6 +130,27 @@ const refuse = (issue, code, message) => {
   assert.equal(issue.refus.code, code);
   if (message !== undefined) assert.equal(issue.refus.message, message);
 };
+
+// ─── Deux combats, comparés sans leur pile d'annulation ────────────────────
+
+// L'état sans sa pile : c'est lui qui se compare en profondeur.
+const sansAnnulation = ({ annulation, ...reste }) => reste;
+
+// La forme de la pile : chaque maillon par ce qu'il défait et sa plage, du
+// plus récent au plus ancien, et l'attente d'un geste payé. Elle se lit sans
+// descendre dans les instantanés.
+function formeDeLaPile(etat) {
+  const { attente, pile } = etat.annulation;
+  const maillons = [];
+  for (let maillon = pile; maillon !== null; maillon = maillon.precedent) maillons.push([maillon.quoi.genre, ...maillon.plage]);
+  return { attente: attente !== null, maillons };
+}
+
+/** Deux combats égaux : l'état entier hors de la pile, puis la forme de la pile. */
+function memeCombat(obtenu, attendu) {
+  assert.deepEqual(sansAnnulation(obtenu), sansAnnulation(attendu));
+  assert.deepEqual(formeDeLaPile(obtenu), formeDeLaPile(attendu));
+}
 
 // ─── Les combats d'essai ────────────────────────────────────────────────────
 
@@ -179,7 +213,7 @@ test("le module n'a aucun état : ni variable de module, ni combat partagé entr
   assert.equal(premiere.etat().phase, "combat");
   assert.equal(seconde.etat().phase, "preparation");
   assert.deepEqual(seconde.miseEnPlace().protagonistes, []);
-  assert.equal(seconde.texte(1), '{"regles":1,"revision":1,"miseEnPlace":{"mode":"demo","quiCommence":"pj","compteur":0,"protagonistes":[]},"evenements":[]}');
+  assert.equal(seconde.texte(1), `{"regles":${REGLES},"revision":1,"miseEnPlace":{"mode":"demo","quiCommence":"pj","compteur":0,"protagonistes":[]},"evenements":[]}`);
 });
 
 test("le module n'importe que le moteur, l'offre, la préparation, la forme et les règles du combat", () => {
@@ -380,7 +414,7 @@ test("le texte gardé porte chaque événement dans l'ordre de ses champs, quel 
 test("texte(revision) égale JSON.stringify du contenu, du combat vide au combat de référence joué en entier", async () => {
   const valeurs = REFERENCE.contenu.evenements.filter((evenement) => evenement.type === "de").flatMap((evenement) => evenement.valeurs);
   const { seance, des } = await monter(memoire(), { des: desNotes(valeurs) });
-  const contenu = (revision, evenements) => JSON.stringify({ regles: 1, revision, miseEnPlace: seance.miseEnPlace(), evenements });
+  const contenu = (revision, evenements) => JSON.stringify({ regles: REGLES, revision, miseEnPlace: seance.miseEnPlace(), evenements });
   assert.equal(seance.texte(1), contenu(1, []));
 
   preparerLaReference(seance);
@@ -402,7 +436,7 @@ test("texte(revision) égale JSON.stringify du contenu, du combat vide au combat
     REFERENCE.contenu.evenements.filter((evenement) => evenement.type === "de").map((evenement) => [evenement.faces, evenement.valeurs.length]),
   );
   assert.deepEqual(lignes(seance), journalAttendu);
-  assert.deepEqual(seance.etat(), REFERENCE.etat);
+  memeCombat(seance.etat(), REFERENCE.etat);
 
   const texte = seance.texte(17);
   assert.equal(texte, contenu(17, joues.map((joue) => validerEvenement(joue).evenement)));
@@ -487,7 +521,7 @@ test("choisir : un candidat ou personne ; un autre que l'acteur d'un geste non p
   assert.deepEqual(des.reste(), []);
 });
 
-test("executer aiguille les trois commandes des vues, et refuse le reste", async () => {
+test("executer aiguille les quatre commandes des vues, et refuse le reste", async () => {
   const { seance } = await monter(memoire());
   accepte(seance.executer({ preparer: { type: "ajouter_personnage", photo: AUBEPINE } }));
   accepte(seance.executer({ preparer: { type: "ajouter_adversaires", photos: [MARMITON] } }));
@@ -496,12 +530,234 @@ test("executer aiguille les trois commandes des vues, et refuse le reste", async
   assert.equal(seance.etat().phase, "combat");
   accepte(seance.executer({ choisir: "pj1" }));
   assert.equal(seance.choisi(), "pj1");
+  accepte(seance.executer({ evenements: [capacite("pj1", FRAPPE).evenement] }));
+  assert.equal(gesteEnCours(seance.etat()).acteur, "pj1");
   const avant = seance.etat();
   for (const inconnue of [{}, { lancer: true }, null, undefined, "revenir", 3]) {
     refuse(seance.executer(inconnue), "forme", "Cette commande n'est pas de celles de la séance.");
   }
   assert.equal(seance.etat(), avant);
   assert.equal(seance.choisi(), "pj1");
+});
+
+// ─── L'annulation et { evenements } (contrat du groupe 2, § 2.8, § 6.3) ────
+
+const ANNULER = { evenement: { type: "annuler" } };
+
+test("annuler : accepté, personne n'est plus choisi (la bulle se ferme) ; refusé, le choix reste ; l'annulation se garde et se rejoue", async () => {
+  const { seance } = await monter(memoire(), { des: desNotes([1]) });
+  lancerLeTrio(seance);
+  accepte(seance.choisir("pj1"));
+  refuse(seance.executer(ANNULER), "interdit", "Rien à annuler depuis le lancement.");
+  assert.equal(seance.choisi(), "pj1");
+
+  // Frappe manquée : le geste est fini, et Aubépine reste choisie tant qu'elle peut jouer.
+  accepte(seance.executer(capacite("pj1", FRAPPE)));
+  accepte(seance.executer(regler("cible", "adv3")));
+  accepte(seance.lancerLeDe());
+  assert.equal(gesteEnCours(seance.etat()), null);
+  assert.equal(seance.etat().protagonistes.pj1.actions, 1);
+  assert.equal(seance.choisi(), "pj1");
+  // Un geste ouvert, non payé : l'annulation attend qu'on en revienne, et le choix reste.
+  accepte(seance.executer(capacite("pj1", FRAPPE)));
+  refuse(seance.executer(ANNULER), "interdit", "Revenez d'abord sur le geste en cours.");
+  assert.equal(seance.choisi(), "pj1");
+  accepte(seance.choisir(null));
+  accepte(seance.choisir("pj1"));
+
+  const lignesAvant = seance.etat().journal.length;
+  accepte(seance.executer(ANNULER));
+  assert.equal(seance.choisi(), null, "la zone redit « Qui joue ? »");
+  assert.equal(seance.etat().protagonistes.pj1.actions, 2, "le geste est défait");
+  assert.equal(seance.etat().journal.length, lignesAvant + 1, "le journal ne recule pas : une ligne de plus");
+  assert.equal(seance.etat().journal.at(-1).texte, "Annulé : Aubépine — Frappe.");
+  assert.deepEqual(JSON.parse(seance.texte(1)).evenements.at(-1), { type: "annuler" });
+  // Aubépine se choisit de nouveau : c'est bien l'annulation qui a retiré le choix.
+  accepte(seance.choisir("pj1"));
+  assert.equal(seance.choisi(), "pj1");
+
+  // Par jouer() comme par executer() ; et la pile se refait au rejeu du texte gardé.
+  accepte(seance.jouer({ type: "passer", qui: "pj1" }));
+  accepte(seance.choisir("pj2"));
+  accepte(seance.jouer({ type: "annuler" }));
+  assert.equal(seance.choisi(), null);
+  const relu = rejouer(JSON.parse(seance.texte(1)));
+  assert.equal(relu.erreur, undefined, relu.erreur?.message);
+  memeCombat(relu.etat, seance.etat());
+});
+
+test("{ evenements } : de 1 à 4 événements, joués à la suite, tous ou aucun ; acceptés, chacun entre au contenu, et le gardien n'écrit qu'une fois", async () => {
+  const ecritures = [];
+  const { seance } = await monter(memoire(), { ecritures });
+  lancerLeTrio(seance);
+  accepte(seance.choisir("pj1"));
+  const evenements = () => JSON.parse(seance.texte(1)).evenements;
+
+  // Deux événements : la capacité, puis la cible. Chacun est un événement du contenu, et compte au plafond.
+  let avant = { etat: seance.etat(), ecritures: ecritures.length, joues: evenements().length };
+  const deux = [capacite("pj1", FRAPPE).evenement, regler("cible", "adv3").evenement];
+  accepte(seance.executer({ evenements: deux }));
+  assert.equal(seance.etat().pas, avant.etat.pas + 2);
+  assert.deepEqual(evenements().slice(avant.joues), deux);
+  assert.equal(ecritures.length, avant.ecritures + 1, "une seule demande d'écriture");
+  assert.equal(gesteEnCours(seance.etat()).cible, "adv3");
+  assert.equal(seance.choisi(), "pj1");
+  // L'état est celui des deux événements joués l'un après l'autre.
+  memeCombat(seance.etat(), appliquer(appliquer(avant.etat, deux[0]).etat, deux[1]).etat);
+
+  // Quatre, la borne : acceptés.
+  avant = { etat: seance.etat(), ecritures: ecritures.length, joues: evenements().length };
+  const quatre = [
+    regler("modificateur", 1).evenement,
+    { type: "regler", champ: "modificateur", valeur: 2, raison: "Coup de main" },
+    regler("modificateur", 0).evenement,
+    regler("cible", "adv3").evenement,
+  ];
+  quatre[0].raison = "Minutie";
+  accepte(seance.executer({ evenements: quatre }));
+  assert.equal(seance.etat().pas, avant.etat.pas + 4);
+  assert.deepEqual(evenements().slice(avant.joues), quatre);
+  assert.equal(ecritures.length, avant.ecritures + 1);
+
+  // Le second refusé : rien ne change, pas même le premier, et c'est son refus qui est rendu.
+  avant = { etat: seance.etat(), ecritures: ecritures.length, texte: seance.texte(1), choisi: seance.choisi() };
+  const premierBon = { type: "passer", qui: "pj2" };
+  const secondRefuse = { type: "regler", champ: "cible", valeur: "adv3" };
+  const attendu = appliquer(appliquer(avant.etat, premierBon).etat, secondRefuse).refus;
+  assert.notEqual(attendu, undefined, "le second est bien refusé après le premier");
+  assert.equal(appliquer(avant.etat, premierBon).refus, undefined, "le premier, seul, serait accepté");
+  assert.deepEqual(seance.executer({ evenements: [premierBon, secondRefuse] }), { refus: attendu });
+  // Le premier refusé : de même.
+  const refusDuPremier = appliquer(avant.etat, { type: "appliquer" }).refus;
+  assert.deepEqual(seance.executer({ evenements: [{ type: "appliquer" }, premierBon] }), { refus: refusDuPremier });
+  // Vide, plus de quatre, ou autre chose qu'une liste : refusé pour sa forme.
+  for (const mauvaise of [[], [premierBon, premierBon, premierBon, premierBon, premierBon], premierBon, "passer", null, undefined, 2]) {
+    refuse(seance.executer({ evenements: mauvaise }), "forme", "Cette commande n'est pas de celles de la séance.");
+  }
+  assert.equal(seance.etat(), avant.etat);
+  assert.equal(seance.texte(1), avant.texte);
+  assert.equal(seance.choisi(), avant.choisi);
+  assert.equal(ecritures.length, avant.ecritures, "un refus ne demande aucune écriture");
+
+  // Une annulation parmi eux ferme la bulle, comme seule.
+  accepte(seance.executer({ evenements: [{ type: "revenir" }, { type: "passer", qui: "pj1" }, { type: "annuler" }] }));
+  assert.equal(seance.choisi(), null);
+  assert.equal(seance.etat().protagonistes.pj1.passe, false, "la passe est défaite");
+});
+
+// ─── Le rejeu qui rend la main (contrat du groupe 2, § 4.3) ────────────────
+
+const LANCER_DU_SOIR = { type: "lancer", le: scenario.lanceLe };
+
+// Un combat de n événements sur la mise en place de référence : le lancement,
+// puis des passes, chacune du premier qui peut jouer.
+function contenuDePasses(n) {
+  const { miseEnPlace } = REFERENCE.contenu;
+  const evenements = [LANCER_DU_SOIR];
+  let etat = appliquer(ouvrirCombat(miseEnPlace), LANCER_DU_SOIR).etat;
+  while (evenements.length < n) {
+    const evenement = { type: "passer", qui: candidats(etat)[0] };
+    etat = appliquer(etat, evenement).etat;
+    evenements.push(evenement);
+  }
+  assert.equal(etat.pas, n);
+  return { contenu: { regles: REGLES, revision: 3, miseEnPlace, evenements }, etat };
+}
+
+for (const [nom, fabriquer] of LIEUX) {
+  test(`ouvrir : un long combat se rejoue par tranches de ${REJEU_TRANCHE}, la main rendue ⌊n / ${REJEU_TRANCHE}⌋ fois ; rien ne s'installe avant la fin, et l'état est celui de rejouer() (${nom})`, async () => {
+    for (const n of [REJEU_TRANCHE - 1, REJEU_TRANCHE, 2 * REJEU_TRANCHE + 1]) {
+      const lieu = fabriquer();
+      const { contenu } = contenuDePasses(n);
+      await poserEnBase(lieu, JSON.stringify(contenu));
+      const vus = [];
+      let seance;
+      ({ seance } = await monter(lieu, { rendreLaMain: async () => void vus.push({ etat: seance.etat(), miseEnPlace: seance.miseEnPlace() }) }));
+      const avant = { etat: seance.etat(), miseEnPlace: seance.miseEnPlace() };
+      assert.deepEqual(await seance.ouvrir(), { issue: "repris" });
+      assert.equal(vus.length, Math.floor(n / REJEU_TRANCHE), `${n} événements`);
+      for (const vu of vus) {
+        assert.equal(vu.etat, avant.etat, `${n} événements : pendant le rejeu, le combat en mémoire ne change pas`);
+        assert.equal(vu.miseEnPlace, avant.miseEnPlace);
+      }
+      memeCombat(seance.etat(), rejouer(contenu).etat);
+      assert.equal(seance.texte(3), JSON.stringify(contenu), "le texte gardé est celui qui a été lu");
+    }
+
+    // Sans rendreLaMain, l'attente est la tâche suivante du navigateur.
+    const lieu = fabriquer();
+    const { contenu } = contenuDePasses(REJEU_TRANCHE + 1);
+    await poserEnBase(lieu, JSON.stringify(contenu));
+    const { seance } = await monter(lieu);
+    assert.deepEqual(await seance.ouvrir(), { issue: "repris" });
+    assert.equal(seance.etat().pas, REJEU_TRANCHE + 1);
+  });
+}
+
+partout("ouvrir : « Nouveau combat » pendant le rejeu l'emporte : l'ouverture rend « abandonne », n'installe rien, et le rejeu s'arrête là", async (lieu) => {
+  const { contenu } = contenuDePasses(2 * REJEU_TRANCHE + 345);
+  await poserEnBase(lieu, JSON.stringify(contenu));
+  let attentes = 0;
+  let seance;
+  let gardien;
+  ({ seance, gardien } = await monter(lieu, {
+    rendreLaMain: async () => {
+      attentes += 1;
+      if (attentes === 1) accepte(seance.nouveau());
+    },
+  }));
+  assert.deepEqual(await seance.ouvrir(), { issue: "abandonne" });
+  assert.equal(attentes, 1, "le rejeu s'arrête à la tranche où il se voit remplacé");
+  assert.deepEqual(seance.miseEnPlace().protagonistes, [], "le combat neuf reste");
+  assert.equal(seance.etat().phase, "preparation");
+  assert.equal(seance.bloque(), null);
+
+  // C'est le combat neuf qui se garde, à la révision suivante, et qui se reprend.
+  await gardien.repos();
+  const lu = await lireLaBase(lieu);
+  assert.equal(lu.revision, 4);
+  assert.equal(lu.texte, seance.texte(4));
+  const suivante = await monter(lieu);
+  assert.deepEqual(await suivante.seance.ouvrir(), { issue: "repris" });
+  assert.deepEqual(suivante.seance.etat().ordre, []);
+});
+
+test("ouvrir, reprendre : une ouverture que remplace une autre rend « abandonne » et n'installe rien ; la dernière reprend le combat", async () => {
+  const lieu = simulee();
+  const { contenu, etat } = contenuDePasses(30);
+  await poserEnBase(lieu, JSON.stringify(contenu));
+  const { seance, gardien } = await monter(lieu);
+  const premiere = seance.ouvrir();
+  const seconde = seance.reprendre();
+  assert.deepEqual(await premiere, { issue: "abandonne" });
+  assert.deepEqual(await seconde, { issue: "repris" });
+  memeCombat(seance.etat(), etat);
+  assert.equal(gardien.etat(), "garde");
+
+  // Dans l'autre ordre, de même ; et une ouverture seule n'est jamais abandonnée.
+  const autre = await monter(lieu);
+  const reprise = autre.seance.reprendre();
+  const ouverture = autre.seance.ouvrir();
+  assert.deepEqual(await reprise, { issue: "abandonne" });
+  assert.deepEqual(await ouverture, { issue: "repris" });
+  assert.deepEqual(await autre.seance.ouvrir(), { issue: "repris" });
+});
+
+partout("la version des règles est 2 : un combat de la version 1 se dit « commencé avec une autre version du simulateur », et ne se reprend pas", async (lieu) => {
+  assert.equal(REGLES, 2);
+  assert.equal(PHRASES_DE_GARDE.autre_version, "Ce combat a été commencé avec une autre version du simulateur : il ne se reprend pas.");
+  const { contenu } = contenuDePasses(5);
+  await poserEnBase(lieu, JSON.stringify({ ...contenu, regles: 1 }));
+  const { seance, gardien } = await monter(lieu);
+  assert.deepEqual(await seance.ouvrir(), { issue: "autre_version" });
+  assert.equal(seance.bloque(), "autre_version");
+  assert.equal(gardien.phrase(), PHRASES_DE_GARDE.autre_version);
+  assert.deepEqual(seance.miseEnPlace().protagonistes, []);
+  // Le même contenu, à la version courante, se reprend.
+  const [, fabriquer] = LIEUX.find(([, autre]) => autre().durable === lieu.durable);
+  const courant = fabriquer();
+  await poserEnBase(courant, JSON.stringify(contenu));
+  assert.deepEqual(await (await monter(courant)).seance.ouvrir(), { issue: "repris" });
 });
 
 // ─── Le dé ──────────────────────────────────────────────────────────────────
@@ -584,7 +840,7 @@ partout("ouvrir : un combat gardé se reprend, état et journal au signe près, 
   const second = await monter(lieu);
   assert.deepEqual(await second.seance.ouvrir(), { issue: "repris" });
   assert.equal(second.seance.bloque(), null);
-  assert.deepEqual(second.seance.etat(), premier.seance.etat());
+  memeCombat(second.seance.etat(), premier.seance.etat());
   assert.deepEqual(second.seance.miseEnPlace(), premier.seance.miseEnPlace());
   assert.equal(second.seance.texte(12), premier.seance.texte(12));
   assert.ok(Object.isFrozen(second.seance.miseEnPlace()) && Object.isFrozen(second.seance.etat()));
@@ -625,7 +881,7 @@ partout("un rechargement en plein geste retrouve le moment, et n'attend pas un d
   const des = desNotes(suite[0].valeurs);
   const { seance, gardien } = await monter(lieu, { des });
   assert.deepEqual(await seance.ouvrir(), { issue: "repris" });
-  assert.deepEqual(seance.etat(), coupe.etat);
+  memeCombat(seance.etat(), coupe.etat);
   const geste = gesteEnCours(seance.etat());
   assert.equal(geste.moment, "jet");
   assert.equal(geste.paye, true);
@@ -643,7 +899,7 @@ partout("un rechargement en plein geste retrouve le moment, et n'attend pas un d
   // La suite du scénario mène au même journal que le combat joué d'une traite.
   for (const evenement of suite.slice(1)) accepte(seance.jouer(evenement));
   assert.deepEqual(lignes(seance), journalAttendu);
-  assert.deepEqual(seance.etat(), REFERENCE.etat);
+  memeCombat(seance.etat(), REFERENCE.etat);
   await gardien.repos();
   assert.equal((await lireLaBase(lieu)).revision, 4, "le dé et toute la suite, joués dans le même tour, ne font qu'une écriture");
   assert.equal((await lireLaBase(lieu)).texte, seance.texte(4));
@@ -665,7 +921,7 @@ partout("un combat dont une photographie porte une description de deux lignes se
   assert.deepEqual(await second.seance.ouvrir(), { issue: "repris" });
   assert.equal(second.seance.miseEnPlace().protagonistes[0].photo.valeurs.capacites[FRAPPE].facons[0].description, DEUX_LIGNES);
   assert.equal(second.seance.etat().photos.pj1.capacites[FRAPPE].facons[0].description, DEUX_LIGNES);
-  assert.deepEqual(second.seance.etat(), premier.seance.etat());
+  memeCombat(second.seance.etat(), premier.seance.etat());
   assert.equal(second.seance.etat().phase, "combat");
 });
 
@@ -678,7 +934,7 @@ const abime = (retoucher) => {
 };
 
 const ILLISIBLES = [
-  ["un texte qui n'est pas du JSON", {}, () => '{"regles":1,"revision":3,"miseEnPlace":'],
+  ["un texte qui n'est pas du JSON", {}, () => `{"regles":${REGLES},"revision":3,"miseEnPlace":`],
   ["un contenu refusé : une clé de trop", {}, () => abime((contenu) => ({ ...contenu, enTrop: [] }))],
   ["un contenu refusé : une clé qui manque", {}, () => abime((contenu) => void delete contenu.evenements)],
   ["un contenu refusé : le combat d'un autre mode", {}, () => abime((contenu) => void (contenu.miseEnPlace.mode = "reel"))],
@@ -707,6 +963,8 @@ const COMMANDES = [
   ["jouer", (seance) => seance.jouer({ type: "fin_de_tour" })],
   ["lancerLeDe", (seance) => seance.lancerLeDe()],
   ["executer (événement)", (seance) => seance.executer({ evenement: { type: "revenir" } })],
+  ["executer (événements)", (seance) => seance.executer({ evenements: [{ type: "revenir" }, { type: "fin_de_tour" }] })],
+  ["executer (annuler)", (seance) => seance.executer({ evenement: { type: "annuler" } })],
   ["executer (choisir)", (seance) => seance.executer({ choisir: null })],
   ["executer (préparer)", (seance) => seance.executer({ preparer: { type: "retirer", id: "pj1" } })],
 ];
@@ -883,7 +1141,7 @@ partout("ouvrir : le même contenu, sain, se reprend (les cas abîmés ne tienne
 
 partout("ouvrir : un contenu d'une autre version des règles se dit, ne se rejoue pas, et se remplace", async (lieu) => {
   // Cinq clés : une autre version peut en avoir ajouté une, ce n'est pas une donnée abîmée.
-  const enveloppe = await poserEnBase(lieu, abime((contenu) => ({ ...contenu, regles: 2, effets: [] })));
+  const enveloppe = await poserEnBase(lieu, abime((contenu) => ({ ...contenu, regles: 1, effets: [] })));
   const montee = await monter(lieu);
   const { seance, gardien } = montee;
   assert.deepEqual(await seance.ouvrir(), { issue: "autre_version" });
@@ -899,7 +1157,7 @@ partout("ouvrir : un contenu d'une autre version des règles se dit, ne se rejou
   await gardien.repos();
   const lu = await lireLaBase(lieu);
   assert.equal(lu.revision, 4);
-  assert.deepEqual(JSON.parse(lu.texte), { regles: 1, revision: 4, miseEnPlace: { mode: "demo", quiCommence: "pj", compteur: 0, protagonistes: [] }, evenements: [] });
+  assert.deepEqual(JSON.parse(lu.texte), { regles: REGLES, revision: 4, miseEnPlace: { mode: "demo", quiCommence: "pj", compteur: 0, protagonistes: [] }, evenements: [] });
 });
 
 partout("ouvrir : une enveloppe d'un format plus récent bloque tout, « Nouveau combat » compris", async (lieu) => {
@@ -1003,7 +1261,7 @@ partout("un combat ouvert ailleurs bloque la séance ; « Reprendre le combat le
   // Reprendre : la séance rejoue le combat de l'autre onglet, et repart de sa révision.
   assert.deepEqual(await ici.seance.reprendre(), { issue: "repris" });
   assert.equal(ici.seance.bloque(), null);
-  assert.deepEqual(ici.seance.etat(), ailleurs.seance.etat());
+  memeCombat(ici.seance.etat(), ailleurs.seance.etat());
   assert.equal(ici.seance.etat().protagonistes.pj1.case, "A1", "le déplacement refusé n'a pas survécu");
   const revision = (await lireLaBase(lieu)).revision;
   accepte(ici.seance.jouer({ type: "passer", qui: "pj2" }));
@@ -1039,7 +1297,7 @@ partout("« Nouveau combat » : un combat vide, gardé à la révision suivante,
   await gardien.repos();
   const apres = await lireLaBase(lieu);
   assert.equal(apres.revision, avant.revision + 1, "il n'efface rien : il écrit au-dessus");
-  assert.deepEqual(JSON.parse(apres.texte), { regles: 1, revision: apres.revision, miseEnPlace: seance.miseEnPlace(), evenements: [] });
+  assert.deepEqual(JSON.parse(apres.texte), { regles: REGLES, revision: apres.revision, miseEnPlace: seance.miseEnPlace(), evenements: [] });
 
   // Le compteur repart : le combat neuf ne doit rien à l'ancien.
   accepte(seance.preparer({ type: "ajouter_adversaires", photos: [MARMITON] }));
@@ -1102,7 +1360,7 @@ partout("reprendre : comme à l'ouverture, hors d'un geste, personne n'est chois
   await ailleurs.gardien.repos();
 
   assert.deepEqual(await ici.seance.reprendre(), { issue: "repris" });
-  assert.deepEqual(ici.seance.etat(), ailleurs.seance.etat());
+  memeCombat(ici.seance.etat(), ailleurs.seance.etat());
   assert.equal(ici.seance.choisi(), null, "« choisi » n'est jamais gardé : la relecture ne le retrouve pas");
   // Elle reste choisissable : c'est bien la relecture qui l'a retiré.
   accepte(ici.seance.choisir("pj2"));

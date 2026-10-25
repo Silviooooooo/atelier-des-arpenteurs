@@ -21,6 +21,15 @@
 // 9. l'offre et le réducteur concordent : ce que portent les vues est accepté,
 //    tout autre type d'événement est refusé.
 //
+// Au groupe 2 (contrat du groupe, § 0.2, règle 6, § 4.3, § 6.3) : chaque état
+// porte sa pile d'annulation, une liste chaînée de maillons gelés qui ne
+// passe jamais par JSON et ne se compare jamais en profondeur. Les états se
+// comparent donc sans elle, et la pile par sa forme (ce que chaque maillon
+// défait, et sa plage) ; « annuler » est un événement comme un autre, tiré au
+// hasard, porté par la barre ; une case d'arrivée peut porter deux
+// événements, { evenements } ; le rejeu se fait par tranches, d'un
+// générateur.
+//
 // Le hasard de ce fichier est un générateur à graine écrite : un échec se
 // retrouve à l'identique.
 
@@ -33,7 +42,7 @@ import { sourceAleatoire } from "../js/combat/des.js";
 import { validerContenu, validerEvenement } from "../js/combat/forme.js";
 import { texteDuJournal } from "../js/combat/journal.js";
 import { vueBarre, vueFiche, vuePanneau, vuePlateau } from "../js/combat/lecture.js";
-import { appliquer, gesteEnCours, ouvrirCombat, rejouer } from "../js/combat/moteur.js";
+import { appliquer, gesteEnCours, ouvrirCombat, rejeu, rejouer } from "../js/combat/moteur.js";
 import { boutons, candidats, offre } from "../js/combat/offre.js";
 import { photographierAdversaire, photographierPersonnage } from "../js/combat/photographie.js";
 import { tableDesRoles } from "../js/combat/roles.js";
@@ -78,7 +87,22 @@ const FINAL = TENUS.at(-1);
 const lignesDe = (etat) => etat.journal.map((ligne) => ligne.texte);
 
 const CODES_DE_REFUS = ["forme", "hors_moment", "hors_bornes", "interdit"];
-const TYPES = ["lancer", "capacite", "regler", "revenir", "confirmer", "de", "relancer", "garder", "exploser", "degats", "decaler", "esquive", "appliquer", "passer", "fin_de_tour"];
+const TYPES = ["lancer", "capacite", "regler", "revenir", "confirmer", "de", "relancer", "garder", "exploser", "degats", "decaler", "esquive", "appliquer", "passer", "fin_de_tour", "annuler"];
+
+// L'état sans sa pile d'annulation : c'est lui qui se compare en profondeur,
+// et lui qui passe par JSON.
+const sansAnnulation = ({ annulation, ...reste }) => reste;
+
+// La forme de la pile, lue sans descendre dans les instantanés : chaque
+// maillon par ce qu'il défait et sa plage, du plus récent au plus ancien, et
+// l'attente d'un geste payé. null pour ce qui n'a pas de pile.
+function formeDeLaPile(etat) {
+  if (etat?.annulation === undefined) return null;
+  const { attente, pile } = etat.annulation;
+  const maillons = [];
+  for (let maillon = pile; maillon !== null; maillon = maillon.precedent) maillons.push([maillon.quoi.genre, ...maillon.plage]);
+  return { attente: attente !== null, maillons };
+}
 
 // Où deux valeurs se séparent : le chemin du premier écart, pour qu'un échec
 // dise autre chose que deux états entiers.
@@ -96,10 +120,14 @@ function premierEcart(a, b, chemin = "etat") {
   return null;
 }
 
+// Deux états égaux : tout ce qui n'est pas la pile, en profondeur ; puis la
+// forme de la pile.
 function memeEtat(obtenu, attendu, quoi) {
-  const ecart = premierEcart(obtenu, attendu);
+  const [a, b] = [sansAnnulation(obtenu), sansAnnulation(attendu)];
+  const ecart = premierEcart(a, b);
   assert.equal(ecart, null, `${quoi} : ${ecart}`);
-  assert.deepStrictEqual(obtenu, attendu, quoi);
+  assert.deepStrictEqual(a, b, quoi);
+  assert.deepStrictEqual(formeDeLaPile(obtenu), formeDeLaPile(attendu), `${quoi} : la pile d'annulation`);
 }
 
 // ─── 1. Les préfixes ────────────────────────────────────────────────────────
@@ -112,7 +140,13 @@ test("la sonde des écarts dit où deux états se séparent, et se tait sur deux
   assert.equal(premierEcart({ a: null }, { a: {} }), "etat.a : null contre {}");
   assert.throws(() => memeEtat({ pas: 1 }, { pas: 2 }, "deux états"), /deux états : etat[.]pas : 1 contre 2/);
   // Un événement de plus fait toujours un autre état : la comparaison des préfixes ne passe pas à vide.
-  for (let n = 0; n < NOMBRE; n += 1) assert.notEqual(premierEcart(TENUS[n], TENUS[n + 1]), null, `l'événement n° ${n + 1} change l'état`);
+  for (let n = 0; n < NOMBRE; n += 1) assert.notEqual(premierEcart(sansAnnulation(TENUS[n]), sansAnnulation(TENUS[n + 1])), null, `l'événement n° ${n + 1} change l'état`);
+  // La pile ne se compare que par sa forme : deux maillons de même forme, aux instantanés différents, sont égaux ;
+  // un maillon de plus, ou une autre plage, ne l'est pas.
+  const geste = (lanceLe, plage, precedent = null) => ({ annulation: { attente: null, pile: { avant: { lanceLe }, quoi: { genre: "passer", qui: "pj1" }, plage, precedent } } });
+  memeEtat(geste("2026-10-12T21:30", [3, 5]), geste("2031-01-02T03:04", [3, 5]), "deux piles de même forme");
+  assert.throws(() => memeEtat(geste("2026-10-12T21:30", [3, 5]), geste("2026-10-12T21:30", [3, 6]), "deux plages"), /deux plages : la pile/);
+  assert.throws(() => memeEtat(geste("x", [5, 6], geste("x", [3, 5]).annulation.pile), geste("x", [5, 6]), "un maillon de plus"), /un maillon de plus : la pile/);
 });
 
 test("le combat de référence, rejoué, rend son journal attendu : c'est bien lui que ces contrôles éprouvent", () => {
@@ -133,6 +167,29 @@ test("préfixes : pour tout n, rejouer les n premiers événements rend l'état 
     const avant = lignesDe(TENUS[n - 1]);
     assert.deepEqual(lignesDe(TENUS[n]).slice(0, avant.length), avant, `l'événement n° ${n} ne touche pas aux lignes déjà écrites`);
   }
+  // La pile se refait au rejeu : un maillon par geste du scénario.
+  assert.equal(formeDeLaPile(FINAL).maillons.length, scenario.gestes.length);
+});
+
+test("préfixes : le rejeu par tranches rend, à chaque taille de tranche, l'état de rejouer(), et cède après chaque tranche le nombre d'événements déjà joués", () => {
+  for (const tranche of [1, 7, 50, 105, 1000]) {
+    const suite = rejeu(CONTENU, tranche);
+    const cedes = [];
+    let etape = suite.next();
+    while (!etape.done) {
+      cedes.push(etape.value.pas);
+      etape = suite.next();
+    }
+    assert.deepEqual(cedes, Array.from({ length: Math.floor(NOMBRE / tranche) }, (_, rang) => (rang + 1) * tranche), `tranches de ${tranche}`);
+    memeEtat(etape.value.etat, FINAL, `tranches de ${tranche}`);
+  }
+  // Un refus s'y dit de même, au rang de l'événement refusé.
+  const abime = { ...CONTENU, evenements: [...CONTENU.evenements.slice(0, 60), { type: "danser" }] };
+  const suite = rejeu(abime, 7);
+  let etape = suite.next();
+  while (!etape.done) etape = suite.next();
+  assert.deepEqual(etape.value, rejouer(abime));
+  assert.equal(etape.value.erreur.pas, 61);
 });
 
 test("préfixes : le rejeu s'arrête au premier refus et dit lequel, sans tronquer la suite en silence", () => {
@@ -159,12 +216,16 @@ test("JSON : le contenu passé par JSON se rejoue au même état, à la fin comm
     const rejoue = rejouer(JSON.parse(JSON.stringify(prefixe(n))));
     assert.equal(rejoue.erreur, undefined, `après ${n} événement(s) : ${rejoue.erreur?.message}`);
     memeEtat(rejoue.etat, TENUS[n], `après ${n} événement(s), par JSON`);
-    assert.equal(JSON.stringify(rejoue.etat), JSON.stringify(TENUS[n]), "jusqu'à l'ordre des clés");
+    assert.equal(JSON.stringify(sansAnnulation(rejoue.etat)), JSON.stringify(sansAnnulation(TENUS[n])), "jusqu'à l'ordre des clés");
   }
 });
 
-test("JSON : l'état lui-même n'est fait que de données simples, il passe par JSON à l'identique", () => {
-  for (let n = 0; n <= NOMBRE; n += 1) memeEtat(JSON.parse(JSON.stringify(TENUS[n])), TENUS[n], `l'état après ${n} événement(s)`);
+test("JSON : l'état lui-même, hors de sa pile d'annulation, n'est fait que de données simples, il passe par JSON à l'identique", () => {
+  for (let n = 0; n <= NOMBRE; n += 1) memeEtat(JSON.parse(JSON.stringify(sansAnnulation(TENUS[n]))), sansAnnulation(TENUS[n]), `l'état après ${n} événement(s)`);
+  // La pile ne passe jamais par JSON : le contenu gardé n'en porte rien, et c'est le rejeu qui la refait.
+  const garde = JSON.stringify(CONTENU);
+  assert.equal(garde.includes('"annulation"') || garde.includes('"precedent"') || garde.includes('"plage"'), false);
+  assert.equal(formeDeLaPile(rejouer(JSON.parse(garde)).etat).maillons.length, scenario.gestes.length);
 });
 
 test("JSON : le combat gardé repasse par la validation de la forme, puis se rejoue au même état", () => {
@@ -384,8 +445,8 @@ test("ni banque : le noyau ne lit jamais la source ni les avertissements d'une p
   for (const [rang, { id, photo }] of CONTENU.miseEnPlace.protagonistes.entries()) {
     assert.equal(FINAL.photos[id], photo.valeurs, `protagoniste n° ${rang + 1}`);
   }
-  assert.equal(JSON.stringify(FINAL).includes('"source"'), false);
-  assert.equal(JSON.stringify(FINAL).includes('"miseEnPlace"'), false);
+  assert.equal(JSON.stringify(sansAnnulation(FINAL)).includes('"source"'), false);
+  assert.equal(JSON.stringify(sansAnnulation(FINAL)).includes('"miseEnPlace"'), false);
 });
 
 // ─── 6. Le graphe des imports ───────────────────────────────────────────────
@@ -407,7 +468,8 @@ const NOYAU = {
   "offre.js": ["valeurs.js", "circonstances.js", "degats.js", "jet.js", "plateau.js", "forme.js", "regles.js", "../personnage/regles.js"],
   "journal.js": ["regles.js", "valeurs.js", "jet.js", "degats.js", "../personnage/regles.js"],
   "moteur.js": ["regles.js", "forme.js", "plateau.js", "noms.js", "preparation.js", "jet.js", "valeurs.js", "circonstances.js", "degats.js", "offre.js", "journal.js", "../personnage/regles.js"],
-  "lecture.js": ["offre.js", "circonstances.js", "valeurs.js", "degats.js", "jet.js", "journal.js", "preparation.js", "noms.js", "regles.js", "../personnage/regles.js"],
+  // Au groupe 2, les cases hachurées d'une portée (casesEntre) : contrat du groupe, § 1.
+  "lecture.js": ["offre.js", "circonstances.js", "valeurs.js", "degats.js", "jet.js", "journal.js", "preparation.js", "plateau.js", "noms.js", "regles.js", "../personnage/regles.js"],
 };
 // Le bord : ce qui touche la banque, le hasard, la clé ou l'appareil.
 const BORD = ["des.js", "enregistrement.js", "photographie.js", "roles.js", "seance.js"];
@@ -539,8 +601,9 @@ const LANCER = { type: "lancer", le: "2026-10-12T21:30" };
 // Un événement que l'offre annonce : il doit être accepté.
 function evenementOffert(etat, { suivant, entier, parmi }) {
   const offert = offre(etat);
-  // Ce qui abandonne le geste en cours se tire rarement, pour que les suites aillent au bout de leurs gestes.
-  const rare = { fin_de_tour: 0.08, revenir: 0.1, passer: 0.1, ...(gesteEnCours(etat) === null ? {} : { capacite: 0.1, regler: 0.6 }) };
+  // Ce qui abandonne le geste en cours se tire rarement, pour que les suites aillent au bout de leurs gestes ;
+  // l'annulation de même, pour qu'elles avancent.
+  const rare = { fin_de_tour: 0.08, revenir: 0.1, passer: 0.1, annuler: 0.25, ...(gesteEnCours(etat) === null ? {} : { capacite: 0.1, regler: 0.6 }) };
   const types = offert.types.filter((type) => !Object.hasOwn(rare, type) || suivant() < rare[type]);
   if (types.length === 0) return null;
   const type = parmi(types);
@@ -666,7 +729,7 @@ test("événements au hasard : 5 000 événements bien et mal faits ; le moteur 
   const hasard = hasardDe(20261012);
   const TOTAL = 5000;
   const PAR_SUITE = 25;
-  const compte = { envoyes: 0, acceptes: 0, offerts: 0, refus: Object.fromEntries(CODES_DE_REFUS.map((code) => [code, 0])), types: {}, termines: 0, departs: new Set() };
+  const compte = { envoyes: 0, acceptes: 0, offerts: 0, refus: Object.fromEntries(CODES_DE_REFUS.map((code) => [code, 0])), types: {}, termines: 0, departs: new Set(), annulations: new Map() };
 
   while (compte.envoyes < TOTAL) {
     const depart = hasard.entier(0, NOMBRE);
@@ -678,13 +741,15 @@ test("événements au hasard : 5 000 événements bien et mal faits ; le moteur 
       const offert = hasard.suivant() < 0.6 ? evenementOffert(etat, hasard) : null;
       const evenement = offert ?? evenementQuelconque(etat, hasard);
       const ou = `suite partie de l'événement n° ${depart}, coup n° ${coup + 1}, ${ecrire(evenement)}`;
-      const avant = JSON.stringify(etat);
+      const avant = JSON.stringify(sansAnnulation(etat));
+      const pileAvant = etat.annulation;
       let rendu;
       assert.doesNotThrow(() => {
         rendu = appliquer(etat, evenement);
       }, `le moteur lève : ${ou}`);
       compte.envoyes += 1;
-      assert.equal(JSON.stringify(etat), avant, `l'état reçu est modifié : ${ou}`);
+      assert.equal(JSON.stringify(sansAnnulation(etat)), avant, `l'état reçu est modifié : ${ou}`);
+      assert.equal(etat.annulation, pileAvant, `la pile de l'état reçu est remplacée : ${ou}`);
 
       if (rendu.refus) {
         assert.equal(offert, null, `offert, mais refusé (${rendu.refus.message}) : ${ou}`);
@@ -692,6 +757,7 @@ test("événements au hasard : 5 000 événements bien et mal faits ; le moteur 
         assert.ok(CODES_DE_REFUS.includes(rendu.refus.code), `le code du refus : ${ou}`);
         assert.ok(typeof rendu.refus.message === "string" && rendu.refus.message !== "", `le message du refus : ${ou}`);
         compte.refus[rendu.refus.code] += 1;
+        if (rendu.refus.code === "interdit" && validerEvenement(evenement).evenement?.type === "annuler") compte.annulations.set(rendu.refus.message, (compte.annulations.get(rendu.refus.message) ?? 0) + 1);
         continue;
       }
 
@@ -701,7 +767,7 @@ test("événements au hasard : 5 000 événements bien et mal faits ; le moteur 
       // Ce qui se garde est la copie aux seuls champs connus, comme le fait la séance.
       suite.push(validerEvenement(evenement).evenement);
       assert.equal(rendu.etat.pas, etat.pas + 1, ou);
-      assert.ok(Object.isFrozen(rendu.etat) && Object.isFrozen(rendu.etat.protagonistes) && Object.isFrozen(rendu.etat.pile), `l'état rendu est gelé : ${ou}`);
+      assert.ok(Object.isFrozen(rendu.etat) && Object.isFrozen(rendu.etat.protagonistes) && Object.isFrozen(rendu.etat.pile) && Object.isFrozen(rendu.etat.annulation), `l'état rendu est gelé : ${ou}`);
       etat = rendu.etat;
       compte.termines += etat.phase === "termine" ? 1 : 0;
       if (etat.phase === "combat") assert.ok(offre(etat).types.length > 0, `le combat ne s'offre plus rien : ${ou}`);
@@ -723,6 +789,9 @@ test("événements au hasard : 5 000 événements bien et mal faits ; le moteur 
   assert.ok(compte.acceptes > 1500, `${compte.acceptes} événements acceptés`);
   assert.ok(compte.acceptes - compte.offerts > 20, `${compte.acceptes - compte.offerts} événements quelconques acceptés`);
   for (const code of CODES_DE_REFUS) assert.ok(compte.refus[code] > 30, `${compte.refus[code]} refus « ${code} »`);
+  // L'annulation refusée pour chacune de ses trois raisons.
+  t.diagnostic(`annulations refusées : ${JSON.stringify(Object.fromEntries(compte.annulations))}`);
+  assert.deepEqual([...compte.annulations.keys()].sort(), ["Revenez d'abord sur le geste en cours.", "Rien à annuler depuis le lancement.", "Terminez d'abord le geste en cours."]);
   const sansLancement = (types) => types.filter((type) => type !== "lancer").sort();
   assert.deepEqual(sansLancement(Object.keys(compte.types)), sansLancement(TYPES), "chaque type d'événement a été accepté une fois au moins (le lancement ne s'offre qu'à une suite partie d'avant lui)");
   assert.ok(compte.departs.size > 60, `${compte.departs.size} moments de départ différents`);
@@ -862,6 +931,7 @@ function unDeChaqueType(etat) {
     appliquer: { type: "appliquer" },
     passer: { type: "passer", qui },
     fin_de_tour: { type: "fin_de_tour" },
+    annuler: { type: "annuler" },
   };
 }
 
@@ -879,8 +949,26 @@ test("concordance : les événements d'épreuve sont bien faits, un de chaque ty
   }
 });
 
+// Les événements d'une commande, joués à la suite comme le fait la séance
+// (contrat du groupe 2, § 6.3) : { refus, rang, etat } au premier refus
+// (« etat », celui qu'a reçu l'événement refusé), sinon { refus: null,
+// types }, avec le type de chacun, et pour chacun si l'offre l'annonçait à
+// son moment.
+function jouerLaCommande(etat, evenements) {
+  let courant = etat;
+  const types = [];
+  for (const [rang, evenement] of evenements.entries()) {
+    const offert = offre(courant).types.includes(evenement.type);
+    const rendu = appliquer(courant, evenement);
+    if (rendu.refus) return { refus: rendu.refus, rang, recu: courant, rendu: rendu.etat };
+    types.push({ type: evenement.type, offert });
+    courant = rendu.etat;
+  }
+  return { refus: null, types };
+}
+
 test("concordance : à chaque pas du combat de référence, tout ce que porte une vue est accepté, et un événement de tout autre type est refusé, l'état rendu étant l'objet reçu", (t) => {
-  const compte = { acceptes: 0, saisies: 0, refuses: 0, inactifs: 0 };
+  const compte = { acceptes: 0, saisies: 0, refuses: 0, inactifs: 0, multiples: 0 };
   const typesPortes = new Set();
   const typesRefuses = new Set();
 
@@ -895,16 +983,24 @@ test("concordance : à chaque pas du combat de référence, tout ce que porte un
     for (const lu of new Set([choisi, null])) {
       const { commandes, saisies } = relever(vuesDe(etat, lu));
       for (const { commande, actif } of commandes) {
-        if (commande.evenement === undefined) continue;
-        const rendu = appliquer(etat, commande.evenement);
+        // { evenement } ou { evenements } : les autres commandes (choisir, préparer) ne sont pas des événements.
+        const evenements = commande.evenements ?? (commande.evenement === undefined ? null : [commande.evenement]);
+        if (evenements === null) continue;
+        if (commande.evenements !== undefined) {
+          assert.ok(Array.isArray(evenements) && evenements.length >= 1 && evenements.length <= 4, `${ou} : une commande porte ${JSON.stringify(commande)}, qui n'a pas de 1 à 4 événements`);
+          compte.multiples += 1;
+        }
+        const joue = jouerLaCommande(etat, evenements);
         if (actif) {
-          assert.equal(rendu.refus, undefined, `${ou} : une vue porte ${JSON.stringify(commande.evenement)}, que le moteur refuse (${rendu.refus?.message})`);
-          assert.ok(offert.types.includes(commande.evenement.type), `${ou} : une vue porte un « ${commande.evenement.type} » que l'offre n'annonce pas`);
-          portes.add(commande.evenement.type);
+          assert.equal(joue.refus, null, `${ou} : une vue porte ${JSON.stringify(commande)}, que le moteur refuse (${joue.refus?.message})`);
+          for (const { type, offert: annonce } of joue.types) {
+            assert.ok(annonce, `${ou} : une vue porte un « ${type} » que l'offre n'annonce pas à son moment`);
+            portes.add(type);
+          }
           compte.acceptes += 1;
         } else {
-          assert.notEqual(rendu.refus, undefined, `${ou} : un bouton inactif porte ${JSON.stringify(commande.evenement)}, que le moteur accepte`);
-          assert.equal(rendu.etat, etat, `${ou} : un refus rend l'état reçu`);
+          assert.notEqual(joue.refus, null, `${ou} : un bouton inactif porte ${JSON.stringify(commande)}, que le moteur accepte`);
+          assert.equal(joue.rendu, joue.recu, `${ou} : un refus rend l'état reçu`);
           compte.inactifs += 1;
         }
       }
@@ -948,8 +1044,10 @@ test("concordance : à chaque pas du combat de référence, tout ce que porte un
   });
 
   // Le contrôle ne passe pas à vide.
-  t.diagnostic(`${compte.acceptes} commandes acceptées, ${compte.saisies} saisies complétées, ${compte.inactifs} boutons inactifs refusés, ${compte.refuses} événements d'un autre type refusés`);
+  t.diagnostic(`${compte.acceptes} commandes acceptées, dont ${compte.multiples} à plusieurs événements, ${compte.saisies} saisies complétées, ${compte.inactifs} boutons inactifs refusés, ${compte.refuses} événements d'un autre type refusés`);
   assert.ok(compte.acceptes > 1000, `${compte.acceptes} commandes acceptées`);
+  // Le Chef qui avance d'une case depuis Pas chassé [2] la paie de [1] : la case porte deux événements.
+  assert.ok(compte.multiples > 0, "des cases d'arrivée portent deux événements");
   assert.ok(compte.saisies > 100, `${compte.saisies} saisies complétées`);
   assert.ok(compte.inactifs > 50, `${compte.inactifs} boutons inactifs refusés`);
   assert.ok(compte.refuses > 1000, `${compte.refuses} événements d'un autre type refusés`);

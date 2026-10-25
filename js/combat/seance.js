@@ -11,8 +11,20 @@
 // Aucun état de module : tout vit dans la séance que rend creerSeance(), et
 // l'écran seul la garde en mémoire. Rien ici ne touche au DOM, à la banque ni
 // à la clé de table.
+//
+// Au groupe 2 (contrat du groupe, § 2.8, § 4.3, § 6.3 ; § 17.8 et § 17.3) :
+// - un combat gardé peut compter 15 000 événements. Son rejeu rend la main
+//   au navigateur entre deux tranches (le générateur rejeu() du moteur) ;
+//   pendant ce temps, l'écran garde son attente, et rien n'est installé. Une
+//   génération, montée par ouvrir(), reprendre() et « Nouveau combat »,
+//   départage les demandes : un rejeu dont la génération a changé
+//   n'installe rien, et rend { issue: "abandonne" }, que l'écran ignore ;
+// - « Annuler le dernier geste » ferme la bulle : personne n'est plus
+//   choisi ;
+// - la case d'arrivée d'un déplacement peut porter deux événements (la
+//   façon, puis l'arrivée) : { evenements } les joue tous, ou aucun.
 
-import { appliquer, gesteEnCours, ouvrirCombat, rejouer } from "./moteur.js";
+import { appliquer, gesteEnCours, ouvrirCombat, rejeu } from "./moteur.js";
 import { acteurCourant, candidats, offre } from "./offre.js";
 import { ajouterAdversaires, ajouterPersonnage, miseEnPlaceVide, poser, reglerQuiCommence, retirer } from "./preparation.js";
 import { validerContenu, validerEvenement, validerPhoto } from "./forme.js";
@@ -44,6 +56,16 @@ const BLOQUE = "Le combat ne se joue pas à cet instant.";
 // Les issues de l'ouverture qui ne viennent pas d'un texte lu.
 const ISSUE_DU_CODE = { sans_cle: "sans_cle", cle: "illisible", illisible: "illisible", format_recent: "recent" };
 
+// Une commande { evenements } en porte de 1 à 4 (contrat du groupe 2, § 6.3) :
+// la case d'un déplacement en porte deux.
+const EVENEMENTS_PAR_COMMANDE = 4;
+
+// Ce que rend une ouverture qu'une demande plus récente a remplacée.
+const ABANDONNE = Object.freeze({ issue: "abandonne" });
+
+// Rendre la main au navigateur : la tâche suivante, après ce qu'il a à faire.
+const tacheSuivante = () => new Promise((reprendre) => setTimeout(reprendre, 0));
+
 /**
  * Une séance, pour un mode (« demo » ou « reel »).
  *
@@ -51,15 +73,20 @@ const ISSUE_DU_CODE = { sans_cle: "sans_cle", cle: "illisible", illisible: "illi
  * - des : la source de dés, { lancer(faces, combien) } ;
  * - maintenant : rend la date du moment (elle ne sert qu'au lancement) ;
  * - accepter : la fonction de js/personnage/format.js, que la validation
- *   d'une photographie de personnage demande.
+ *   d'une photographie de personnage demande ;
+ * - rendreLaMain : rend une promesse, attendue entre deux tranches du rejeu
+ *   d'un combat gardé (par défaut, la tâche suivante du navigateur).
  *
  * Les commandes sont synchrones et rendent {} ou { refus: { code, message } }.
  * Un refus ne change rien, et rien ne part au gardien.
  */
-export function creerSeance({ gardien, des, maintenant = () => new Date(), mode, accepter }) {
+export function creerSeance({ gardien, des, maintenant = () => new Date(), mode, accepter, rendreLaMain = tacheSuivante }) {
   let miseEnPlace = miseEnPlaceVide(mode);
   let etat = ouvrirCombat(miseEnPlace);
   let choisi = null;
+  // La génération de la demande en cours : ouvrir(), reprendre() et
+  // nouveau() la montent ; une ouverture qui la retrouve changée s'efface.
+  let generation = 0;
   // Le texte gardé s'assemble de morceaux déjà écrits : la mise en place est
   // sérialisée une fois par changement (donc une fois pour toutes au
   // lancement), chaque événement une fois à son arrivée. Un clic ne
@@ -96,17 +123,42 @@ export function creerSeance({ gardien, des, maintenant = () => new Date(), mode,
     choisi = acteurCourant(etat, null);
   }
 
-  function jouer(evenement) {
+  /**
+   * Joue des événements à la suite, tous ou aucun : chacun est jugé sur
+   * l'état que laisse le précédent, et le premier refus est rendu sans que
+   * rien ne change. Acceptés, chacun entre au contenu (et compte au plafond
+   * du combat), et le gardien n'écrit qu'une fois.
+   */
+  function jouerLaSuite(evenements) {
     if (bloque() !== null) return refusDuBlocage();
-    const { etat: suivant, refus } = appliquer(etat, evenement);
-    if (refus) return { refus };
-    // La copie aux seuls champs connus, dans leur ordre : c'est elle que la
-    // validation rendra à la relecture, et le texte gardé reste le même.
-    textesDesEvenements.push(JSON.stringify(validerEvenement(evenement).evenement));
+    let suivant = etat;
+    let annule = false;
+    const textes = [];
+    for (const evenement of evenements) {
+      const rendu = appliquer(suivant, evenement);
+      if (rendu.refus) return { refus: rendu.refus };
+      // La copie aux seuls champs connus, dans leur ordre : c'est elle que la
+      // validation rendra à la relecture, et le texte gardé reste le même.
+      const lu = validerEvenement(evenement).evenement;
+      textes.push(JSON.stringify(lu));
+      annule ||= lu.type === "annuler";
+      suivant = rendu.etat;
+    }
+    textesDesEvenements.push(...textes);
     etat = suivant;
-    choisi = acteurCourant(etat, choisi);
+    // Une annulation ferme la bulle : la zone redit « Qui joue ? ».
+    choisi = annule ? null : acteurCourant(etat, choisi);
     garder();
     return {};
+  }
+
+  function jouer(evenement) {
+    return jouerLaSuite([evenement]);
+  }
+
+  function jouerTout(evenements) {
+    if (!Array.isArray(evenements) || evenements.length === 0 || evenements.length > EVENEMENTS_PAR_COMMANDE) return refuser("forme", COMMANDE_INCONNUE);
+    return jouerLaSuite(evenements);
   }
 
   function photoRelue(photo) {
@@ -189,6 +241,7 @@ export function creerSeance({ gardien, des, maintenant = () => new Date(), mode,
   function executer(commande) {
     if (commande !== null && typeof commande === "object") {
       if (Object.hasOwn(commande, "evenement")) return jouer(commande.evenement);
+      if (Object.hasOwn(commande, "evenements")) return jouerTout(commande.evenements);
       if (Object.hasOwn(commande, "choisir")) return choisir(commande.choisir);
       if (Object.hasOwn(commande, "preparer")) return preparer(commande.preparer);
     }
@@ -201,6 +254,8 @@ export function creerSeance({ gardien, des, maintenant = () => new Date(), mode,
     // vivrait que jusqu'au rechargement.
     const garde = gardien.etat();
     if (garde === "ailleurs" || garde === "recent") return refusDuBlocage();
+    // Une ouverture en cours ne viendra pas l'écraser.
+    generation += 1;
     verrou = null;
     const vide = miseEnPlaceVide(mode);
     installer(vide, [], ouvrirCombat(vide));
@@ -208,8 +263,23 @@ export function creerSeance({ gardien, des, maintenant = () => new Date(), mode,
     return {};
   }
 
-  // Ce que le gardien a lu, jusqu'au combat rejoué.
-  function reprendreLeTexte(lu) {
+  // Le rejeu d'un contenu validé, par tranches : entre deux, la main revient
+  // au navigateur. Rend ce que rend rejeu(), ou null quand la génération a
+  // changé pendant une attente : rien n'est alors à installer.
+  async function rejouerParTranches(contenu, mienne) {
+    const suite = rejeu(contenu);
+    let etape = suite.next();
+    while (!etape.done) {
+      await rendreLaMain();
+      if (mienne !== generation) return null;
+      etape = suite.next();
+    }
+    return etape.value;
+  }
+
+  // Ce que le gardien a lu, jusqu'au combat rejoué : l'issue, ou null pour
+  // une ouverture abandonnée.
+  async function reprendreLeTexte(lu, mienne) {
     let donnee;
     try {
       donnee = JSON.parse(lu.texte);
@@ -219,14 +289,20 @@ export function creerSeance({ gardien, des, maintenant = () => new Date(), mode,
     const valide = validerContenu(donnee, { mode, revision: lu.revision, accepter });
     if (valide.autreVersion) return "autre_version";
     if (!valide.contenu) return "illisible";
-    const rejoue = rejouer(valide.contenu);
+    const rejoue = await rejouerParTranches(valide.contenu, mienne);
+    if (rejoue === null) return null;
     if (!rejoue.etat) return "illisible";
     installer(valide.contenu.miseEnPlace, valide.contenu.evenements, rejoue.etat);
     return "repris";
   }
 
   async function relire(charger) {
+    // Cette lecture devient la demande en cours.
+    const mienne = ++generation;
     const lu = await charger();
+    // Une demande plus récente (une autre ouverture, « Nouveau combat ») a
+    // pris la place de celle-ci : rien de ce qui a été lu ne s'installe.
+    if (mienne !== generation) return ABANDONNE;
     // Chaque lecture rejuge : un verrou d'avant ne survit pas à une base
     // qu'on retrouve vide, ou à un combat qui se reprend.
     verrou = null;
@@ -236,7 +312,8 @@ export function creerSeance({ gardien, des, maintenant = () => new Date(), mode,
       if (issue === "illisible") verrou = "illisible";
       return { issue };
     }
-    const issue = reprendreLeTexte(lu);
+    const issue = await reprendreLeTexte(lu, mienne);
+    if (issue === null) return ABANDONNE;
     if (issue !== "repris") {
       verrou = issue;
       gardien.declarer(issue);
@@ -255,9 +332,11 @@ export function creerSeance({ gardien, des, maintenant = () => new Date(), mode,
     bloque,
     /**
      * À l'ouverture de l'écran sans combat en mémoire : relit le combat
-     * gardé, le fait valider, le rejoue. Rend { issue } : « vide »,
-     * « repris », « sans_cle », « illisible », « recent » ou
-     * « autre_version ». Sauf « repris », le combat en mémoire ne change pas.
+     * gardé, le fait valider, le rejoue en rendant la main entre deux
+     * tranches. Rend { issue } : « vide », « repris », « sans_cle »,
+     * « illisible », « recent » ou « autre_version » ; ou « abandonne »,
+     * quand une autre ouverture ou « Nouveau combat » l'a remplacée
+     * entre-temps. Sauf « repris », le combat en mémoire ne change pas.
      */
     ouvrir: () => relire(() => gardien.charger()),
     /** « Reprendre le combat le plus récent » : comme ouvrir(). */
@@ -272,9 +351,12 @@ export function creerSeance({ gardien, des, maintenant = () => new Date(), mode,
     jouer,
     /** Lance le dé que le moteur attend, par la source de dés. */
     lancerLeDe,
-    /** Aiguille la commande d'une vue : { evenement }, { choisir } ou { preparer }. */
+    /**
+     * Aiguille la commande d'une vue : { evenement }, { evenements } (de 1 à
+     * 4, joués tous ou aucun), { choisir } ou { preparer }.
+     */
     executer,
-    /** « Nouveau combat » : un combat vide, gardé à la révision suivante. */
+    /** « Nouveau combat » : un combat vide, gardé à la révision suivante ; il l'emporte sur une ouverture en cours. */
     nouveau,
     /** Le contenu du combat en JSON, à cette révision : ce que le gardien chiffre. */
     texte,

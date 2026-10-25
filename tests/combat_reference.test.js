@@ -21,23 +21,32 @@
 // (tests/banc_combat_reel.js). Elles sont vues ici dans les deux sens : dire
 // un écart, en citant la ligne ou le protagoniste, puis se taire. Ce que le
 // banc compare hors de node --test est ainsi tenu.
+//
+// Au groupe 2 (contrat du groupe, § 2, § 3, § 4.5) : les trente-six lignes ne
+// changent pas, et chacune est la concaténation de ses segments ; à chaque
+// événement, la ligne en cours est le début exact de la ligne que le geste
+// écrira ; à la fin de chaque geste, « annuler » rend l'état d'avant lui ;
+// et le même combat, écrit en version 1 des règles, se dit d'une autre
+// version.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { indexerAdversaires } from "../js/adversaire/resolution.js";
 import { MOT_DE_PASSE_DEMO } from "../js/banque/chargement.js";
-import { validerPhoto } from "../js/combat/forme.js";
+import { validerContenu, validerPhoto } from "../js/combat/forme.js";
 import { evaluerEssai } from "../js/combat/jet.js";
-import { ouvrirCombat } from "../js/combat/moteur.js";
+import { ligneEnCours, nommerLeGeste, phrasesDuGeste, segmentsDuGeste } from "../js/combat/journal.js";
+import { appliquer, ouvrirCombat, rejouer } from "../js/combat/moteur.js";
 import { offre } from "../js/combat/offre.js";
+import { REGLES } from "../js/combat/regles.js";
 import { photographierAdversaire, photographierPersonnage } from "../js/combat/photographie.js";
 import { ecrireAbsents, tableDesRoles } from "../js/combat/roles.js";
 import { blessuresDe, gesteEnCours } from "../js/combat/valeurs.js";
 import { indexerCreation } from "../js/personnage/calcul.js";
 import { accepter, lirePersonnage } from "../js/personnage/format.js";
 import { ouvrirAvecMotDePasse } from "../js/securite/chiffrement.js";
-import { ecartsDeLArret, ecartsDeLEtat, ecartsDuJournal, ecrireDepart } from "./banc_combat_reel.js";
+import { bornesDesFacons, ecartsDeCapacitesA, ecartsDeLArret, ecartsDeLEtat, ecartsDeLOffreAllegee, ecartsDeLaLigneEnCours, ecartsDesSegments, ecartsDuJournal, ecrireDepart } from "./banc_combat_reel.js";
 import { casesDOffice, etatAttendu, journalAttendu, scenario } from "./outils/combat_reference.js";
 import { versContenu } from "./outils/scenario.js";
 
@@ -67,6 +76,21 @@ const lignesDe = (etat) => etat.journal.map((ligne) => ligne.texte);
 const [PJ, CHEF, MARMITON_1, MARMITON_2] = JOUE.etat.ordre;
 const zoneDe = (etat, id, code) => etat.protagonistes[id].zones[etat.photos[id].zones.findIndex((zone) => zone.code === code)];
 const signe = (code) => String.fromCodePoint(code);
+
+// Le même combat, tenu un événement à la fois : TENUS[n] est l'état après n
+// événements, comme le tient l'écran.
+const TENUS = [ouvrirCombat(JOUE.contenu.miseEnPlace)];
+for (const evenement of JOUE.contenu.evenements) TENUS.push(appliquer(TENUS.at(-1), evenement).etat);
+
+// Les gestes finis, chacun à l'événement qui l'a fini : un maillon neuf sur la
+// pile d'annulation (la pile se compare par identité de maillons).
+const FINS_DE_GESTE = [];
+for (let n = 1; n < TENUS.length; n += 1) {
+  const maillon = TENUS[n].annulation.pile;
+  if (maillon !== TENUS[n - 1].annulation.pile && maillon?.precedent === TENUS[n - 1].annulation.pile) FINS_DE_GESTE.push({ n, maillon });
+}
+
+const texteDes = (segments) => segments.map((segment) => segment.texte).join("");
 
 // ─── Les photographies ──────────────────────────────────────────────────────
 
@@ -334,6 +358,172 @@ test("le combat de référence couvre chaque point que la mission lui demande, e
   assert.deepEqual([fins, demandees], [8, 1]);
 });
 
+// ─── Les segments, la ligne en cours, l'annulation (groupe 2) ──────────────
+
+test("les trente-six lignes, inchangées, sont chacune la concaténation de leurs segments, numérotés par leurs phrases", () => {
+  const journal = JOUE.etat.journal;
+  assert.equal(journal.length, 36);
+  journal.forEach((ligne, rang) => {
+    const ou = `ligne ${rang + 1}`;
+    assert.equal(ligne.texte, journalAttendu[rang], `${ou} : inchangée`);
+    assert.equal(texteDes(ligne.segments), ligne.texte, `${ou} : la concaténation de ses segments`);
+    assert.ok(ligne.phrases.length >= 1, ou);
+    for (const segment of ligne.segments) {
+      assert.notEqual(segment.texte, "", `${ou} : un segment vide`);
+      assert.ok(segment.phrase === null || (Number.isInteger(segment.phrase) && segment.phrase >= 0 && segment.phrase < ligne.phrases.length), `${ou} : le segment « ${segment.texte} » n'est d'aucune phrase de la ligne`);
+    }
+    // Chaque phrase a ses segments, dans l'ordre ; ce qui les joint n'est d'aucune.
+    const numeros = ligne.segments.map((segment) => segment.phrase).filter((phrase) => phrase !== null);
+    assert.deepEqual([...new Set(numeros)], ligne.phrases.map((_, numero) => numero), `${ou} : les phrases, dans l'ordre`);
+    assert.ok(ligne.segments.filter((segment) => segment.phrase === null).every((segment) => segment.texte === " "), `${ou} : entre deux phrases, une espace`);
+  });
+  // La ligne « Annulé » est la seule neuve du groupe : le combat de référence n'en a pas.
+  assert.equal(journal.some((ligne) => ligne.genre === "annule" || ligne.texte.startsWith("Annulé")), false);
+});
+
+test("les phrases de chaque ligne de geste sont celles de segmentsDuGeste et de phrasesDuGeste, une à une", () => {
+  const gestes = FINS_DE_GESTE.filter(({ maillon }) => maillon.quoi.genre === "capacite");
+  assert.equal(gestes.length, 16, "seize capacités jouées");
+  for (const { n, maillon } of gestes) {
+    const { geste } = maillon.quoi;
+    const ligne = TENUS[n].journal[maillon.plage[0]];
+    const ou = `la ligne ${maillon.plage[0] + 1} (${ligne.texte.slice(0, 40)}…)`;
+    assert.equal(ligne.genre, "geste", ou);
+    const parPhrase = ligne.phrases.map((_, numero) => texteDes(ligne.segments.filter((segment) => segment.phrase === numero)));
+    assert.deepEqual(parPhrase, segmentsDuGeste(JOUE.etat, geste), ou);
+    assert.deepEqual(ligne.phrases, phrasesDuGeste(JOUE.etat, geste).map((phrase) => phrase.genre), ou);
+    assert.equal(segmentsDuGeste(JOUE.etat, geste).join(" "), ligne.texte, ou);
+  }
+});
+
+// Ce que la ligne en cours dit à un moment : le moment du geste, et ce qu'il attend.
+function casDeLaLigneEnCours(geste) {
+  if (geste.moment === "jet") return `jet, ${geste.jet.attente}`;
+  if (geste.moment === "suites") return (geste.interventions ?? []).length > 0 ? "suites, esquive jouée" : "suites, sans esquive";
+  return geste.moment;
+}
+
+test("la ligne en cours : à chaque événement du combat, le début exact de la ligne que le geste écrira, suivi de « … » sans espace ; nulle hors d'un geste payé", () => {
+  const SUITE = { type: "suite", texte: signe(0x2026), phrase: null };
+  const vus = new Map();
+  let enCours = 0;
+  let nulles = 0;
+  TENUS.forEach((etat, n) => {
+    const ou = `après ${n} événement(s)`;
+    const geste = etat.pile.at(-1) ?? null;
+    const ligne = ligneEnCours(etat);
+    if (geste === null || geste.paye !== true) {
+      assert.equal(ligne, null, `${ou} : ${geste === null ? "sans geste" : "avant le paiement"}`);
+      nulles += 1;
+      return;
+    }
+    // La ligne que ce geste écrira : celle du premier maillon posé après cet état.
+    const fin = FINS_DE_GESTE.find((une) => une.n > n);
+    assert.equal(fin.maillon.quoi.geste.acteur, geste.acteur, ou);
+    const finale = TENUS[fin.n].journal[fin.maillon.plage[0]];
+    assert.notEqual(ligne, null, `${ou} : un geste payé, avec un jet`);
+    enCours += 1;
+    const cas = casDeLaLigneEnCours(geste);
+    vus.set(cas, (vus.get(cas) ?? 0) + 1);
+
+    assert.equal(ligne.genre, "geste", ou);
+    assert.equal(ligne.enCours, true, ou);
+    assert.deepEqual(ligne.segments.at(-1), SUITE, `${ou} : « … » ferme la ligne, hors de toute phrase`);
+    assert.equal(texteDes(ligne.segments), ligne.texte, `${ou} : la concaténation de ses segments`);
+    const debut = ligne.texte.slice(0, -1);
+    assert.ok(finale.texte.startsWith(debut), `${ou} (${cas}) : « ${debut} » ne débute pas « ${finale.texte} »`);
+    assert.ok(debut.length < finale.texte.length, `${ou} : la ligne en cours n'est pas la ligne entière`);
+    // Les segments sont ceux de la ligne finale ; le dernier peut n'en être qu'un début.
+    const ecrits = ligne.segments.slice(0, -1);
+    ecrits.slice(0, -1).forEach((segment, rang) => assert.deepEqual(segment, finale.segments[rang], `${ou} : le segment n° ${rang + 1}`));
+    const { texte, ...champs } = ecrits.at(-1);
+    const { texte: entier, ...attendus } = finale.segments[ecrits.length - 1];
+    assert.deepEqual(champs, attendus, `${ou} : le dernier segment écrit, de la même sorte`);
+    assert.ok(entier.startsWith(texte), `${ou} : le dernier segment écrit débute le sien`);
+    assert.deepEqual(ligne.phrases, finale.phrases.slice(0, ligne.phrases.length), `${ou} : les phrases, dans l'ordre`);
+  });
+
+  // Plus de quarante états, et chaque cas du contrat (§ 3.4) : la chaîne, un dé qui attend d'exploser ou une
+  // relance, le bilan, les suites avant et après l'esquive. Le moment « localisation » (plusieurs d20 à lancer)
+  // n'arrive pas dans ce combat, dont chaque coup n'en lance qu'un : il partage sa règle avec « suites, sans
+  // esquive », et les contrôles du journal l'éprouvent à la main (tests/combat_segments.test.js).
+  assert.ok(enCours > 40, `${enCours} états avec une ligne en cours`);
+  assert.ok(nulles > 20, `${nulles} états sans ligne en cours`);
+  assert.deepEqual([...vus.keys()].sort(), ["bilan", "jet, choix_explosion", "jet, choix_relance", "jet, de", "jet, de_explosion", "jet, de_relance", "suites, esquive jouée", "suites, sans esquive"], JSON.stringify(Object.fromEntries(vus)));
+});
+
+// Ce qui ne recule pas à l'annulation : le journal, le pas, l'annonce, et la pile elle-même.
+const sansCeQuiAvance = ({ journal, pas, annonce, annulation, ...reste }) => reste;
+
+test("à la fin de chaque geste, « annuler » rend l'état d'avant lui, écrit une ligne « Annulé » qui couvre ses lignes, et le geste se rejoue à l'identique", () => {
+  assert.equal(FINS_DE_GESTE.length, scenario.gestes.length, "un maillon par geste du scénario");
+  const genres = new Map();
+  for (const { n, maillon } of FINS_DE_GESTE) {
+    const ou = `le geste fini à l'événement n° ${n} (${maillon.quoi.genre})`;
+    genres.set(maillon.quoi.genre, (genres.get(maillon.quoi.genre) ?? 0) + 1);
+    // L'état d'avant le geste : celui qui précède son ouverture.
+    let debut = n - 1;
+    if (maillon.quoi.genre === "capacite") while (TENUS[debut].pile.length > 0) debut -= 1;
+    const avant = TENUS[debut];
+    assert.equal(avant.pile.length, 0, ou);
+
+    const { etat: annule, refus } = appliquer(TENUS[n], { type: "annuler" });
+    assert.equal(refus, undefined, `${ou} : ${refus?.message}`);
+    assert.deepEqual(sansCeQuiAvance(annule), sansCeQuiAvance(avant), `${ou} : l'état d'avant le geste`);
+    // La pile : le maillon d'avant, l'objet même.
+    assert.equal(annule.annulation.pile, maillon.precedent, ou);
+    assert.equal(annule.annulation.pile, avant.annulation.pile, ou);
+    assert.equal(annule.annulation.attente, null, ou);
+    // Le journal ne recule pas : les mêmes lignes, puis « Annulé », qui couvre la plage du geste.
+    assert.equal(annule.pas, TENUS[n].pas + 1, ou);
+    assert.equal(annule.journal.length, TENUS[n].journal.length + 1, ou);
+    TENUS[n].journal.forEach((ligne, rang) => assert.equal(annule.journal[rang], ligne, `${ou} : la ligne ${rang + 1} n'est pas réécrite`));
+    const derniere = annule.journal.at(-1);
+    assert.equal(derniere.genre, "annule", ou);
+    assert.equal(derniere.texte, `Annulé : ${nommerLeGeste(TENUS[n], maillon.quoi)}.`, ou);
+    assert.deepEqual(derniere.barre, [...maillon.plage], ou);
+    assert.equal(maillon.plage[1], TENUS[n].journal.length, `${ou} : la plage va jusqu'à la dernière ligne du geste`);
+    assert.ok(maillon.plage[0] >= avant.journal.length && maillon.plage[0] < maillon.plage[1], `${ou} : la plage couvre les lignes du geste, et elles seules`);
+
+    // Rejoué sur l'état annulé, le geste refait le même état, et réécrit les mêmes lignes à la suite.
+    let rejoue = annule;
+    for (const evenement of JOUE.contenu.evenements.slice(debut, n)) {
+      const rendu = appliquer(rejoue, evenement);
+      assert.equal(rendu.refus, undefined, `${ou}, rejoué : ${rendu.refus?.message}`);
+      rejoue = rendu.etat;
+    }
+    assert.deepEqual(sansCeQuiAvance(rejoue), sansCeQuiAvance(TENUS[n]), `${ou}, rejoué`);
+    assert.deepEqual(
+      rejoue.journal.slice(annule.journal.length).map((ligne) => ligne.texte),
+      TENUS[n].journal.slice(...maillon.plage).map((ligne) => ligne.texte),
+      `${ou}, rejoué : les mêmes lignes`,
+    );
+    assert.equal(rejoue.annulation.pile.quoi.genre, maillon.quoi.genre, ou);
+  }
+  assert.deepEqual(Object.fromEntries(genres), { capacite: 16, passer: 1, fin_de_tour: 1 });
+
+  // Et jusqu'au lancement, geste après geste, puis plus rien à annuler.
+  let etat = JOUE.etat;
+  for (let fois = 0; fois < scenario.gestes.length; fois += 1) etat = appliquer(etat, { type: "annuler" }).etat;
+  assert.deepEqual(sansCeQuiAvance(etat), sansCeQuiAvance(TENUS[1]), "défait jusqu'au lancement");
+  assert.equal(etat.annulation.pile, null);
+  assert.deepEqual(appliquer(etat, { type: "annuler" }).refus, { code: "interdit", message: "Rien à annuler depuis le lancement." });
+});
+
+test("le combat de référence écrit en version 1 des règles se dit d'une autre version, et ne se rejoue pas ; en version courante, il se relit et se rejoue", () => {
+  assert.equal(REGLES, 2);
+  const texte = JSON.stringify(JOUE.contenu);
+  const enVersion1 = { ...JSON.parse(texte), regles: 1 };
+  assert.deepEqual(validerContenu(enVersion1, { mode: "demo", revision: JOUE.contenu.revision, accepter }), { autreVersion: { regles: 1 } });
+  assert.equal(rejouer(enVersion1).erreur.pas, 0);
+  assert.equal(rejouer(enVersion1).etat, undefined);
+  // Désarmé : la version courante.
+  const lu = validerContenu(JSON.parse(texte), { mode: "demo", revision: JOUE.contenu.revision, accepter });
+  assert.equal(lu.erreur, undefined, lu.erreur);
+  assert.equal(lu.autreVersion, undefined);
+  assert.deepEqual(rejouer(lu.contenu).etat.journal.map((ligne) => ligne.texte), journalAttendu);
+});
+
 // ─── Les comparaisons, dans les deux sens ───────────────────────────────────
 
 test("la comparaison du journal cite la ligne qui s'écarte, et l'endroit ; elle se tait sur deux journaux égaux", () => {
@@ -487,4 +677,65 @@ test("la comparaison d'un combat arrêté en cours de route : le moment de la ma
   const avantLePremierDe = arrete({ geste: 1, des: 0 });
   assert.deepEqual(ecartsDeLArret(avantLePremierDe, { cible: "Marmiton n° 1", chaine: [], de: { faces: 10, combien: 2, motif: "chaine", place: 1 }, lignes: 2 }, journalAttendu), []);
   assert.deepEqual(ecartsDeLArret(avantLePremierDe, { de: { faces: 10, combien: 1, motif: "chaine", place: 1 } }, journalAttendu), ["Le dé à lancer : d10, 2 valeurs, chaine, place 1, attendu d10, chaine, place 1."]);
+});
+
+// Les comparaisons du banc ajoutées au groupe 2 : sur la démonstration, elles
+// se taisent ; chacune dit l'écart qu'on lui forge.
+test("les comparaisons neuves du banc : les segments, la ligne en cours, l'offre allégée, les puissances et les bornes ; elles se taisent sur la démonstration, et disent l'écart qu'on leur forge", () => {
+  // Les segments.
+  assert.deepEqual(ecartsDesSegments(JOUE.etat.journal), []);
+  const troisieme = JOUE.etat.journal[2];
+  const amputee = { ...troisieme, segments: troisieme.segments.slice(1) };
+  assert.match(ecartsDesSegments([JOUE.etat.journal[0], amputee])[0], /^ligne 2, ses segments ne redonnent pas son texte :\n {4}texte {4}: /);
+  assert.deepEqual(ecartsDesSegments([{ genre: "cadre", texte: "x", segments: [{ type: "texte", texte: "x", phrase: 0 }, { type: "texte", texte: "", phrase: 0 }] }]), ["ligne 1 : un segment vide."]);
+
+  // La ligne en cours.
+  const { ecarts, enCours } = ecartsDeLaLigneEnCours(TENUS);
+  assert.deepEqual(ecarts, []);
+  assert.ok(enCours > 40, `${enCours} états`);
+  const retouchee = (retoucher) => (etat) => {
+    const ligne = ligneEnCours(etat);
+    return ligne === null ? null : retoucher(ligne);
+  };
+  const espacee = ecartsDeLaLigneEnCours(TENUS, { lire: retouchee((ligne) => ({ ...ligne, texte: `${ligne.texte.slice(0, -1)} ${signe(0x2026)}`, segments: [...ligne.segments.slice(0, -1), { type: "suite", texte: ` ${signe(0x2026)}`, phrase: null }] })) });
+  assert.equal(espacee.ecarts.length, enCours);
+  assert.match(espacee.ecarts[0], /ne finit pas par « … », hors phrase/);
+  const decalee = ecartsDeLaLigneEnCours(TENUS, { lire: retouchee((ligne) => ({ ...ligne, texte: `X${ligne.texte}` })) });
+  assert.equal(decalee.ecarts.length, enCours);
+  assert.match(decalee.ecarts[0], /ne débute pas la ligne du geste :\n {4}en cours : X/);
+
+  // L'offre allégée.
+  for (const n of [0, 1, 20, 52, TENUS.length - 1]) {
+    const { ecarts: ici, verdicts } = ecartsDeLOffreAllegee(TENUS[n]);
+    assert.deepEqual(ici, [], `après ${n} événement(s)`);
+    assert.ok(verdicts > 50);
+  }
+  const toujoursOui = ecartsDeLOffreAllegee(TENUS[1], { juger: () => ({ ok: true }), quoi: "le tour 1" });
+  assert.ok(toujoursOui.ecarts.length > 0 && toujoursOui.ecarts.length < toujoursOui.verdicts, "un juge qui dit toujours oui s'écarte, sauf là où l'ancien disait oui");
+  assert.match(toujoursOui.ecarts[0], /^le tour 1, \{"type":"capacite",/);
+
+  // Les puissances : chaque adversaire complet de la démonstration, à son rang comme resoudre.
+  let comparees = 0;
+  for (const [nom, ligne] of ADVERSAIRES.adversaires) {
+    if (!ADVERSAIRES.resoudre(ligne).complet) continue;
+    const vu = ecartsDeCapacitesA(ADVERSAIRES, ligne, nom);
+    assert.deepEqual(vu.ecarts, [], nom);
+    comparees += vu.comparees;
+  }
+  assert.ok(comparees > 10, `${comparees} capacités comparées`);
+  const chef = ADVERSAIRES.adversaires.get("Chef de partie");
+  const sansPuissance = { ...ADVERSAIRES, capacitesA: (ligne, puissance) => ADVERSAIRES.capacitesA(ligne, puissance).map(() => null) };
+  assert.ok(ecartsDeCapacitesA(sansPuissance, chef, "Chef de partie").ecarts.every((ecart) => /^Chef de partie, .+ : à son rang \(\d+\), capacitesA ne rend pas la capacité de resoudre\.$/.test(ecart)));
+  assert.ok(ecartsDeCapacitesA(sansPuissance, chef, "Chef de partie").ecarts.length > 0);
+  const auDela = { ...ADVERSAIRES, capacitesA: (ligne, puissance) => ADVERSAIRES.capacitesA(ligne, Math.min(puissance, 1)) };
+  assert.ok(ecartsDeCapacitesA(auDela, chef, "Chef de partie").ecarts.some((ecart) => /résolue au-delà de son rang/.test(ecart)));
+
+  // Les bornes des façons : le Chef joue Pas chassé à deux puissances.
+  const bornes = bornesDesFacons(PHOTOS["Chef de partie"]);
+  const chefValeurs = PHOTOS["Chef de partie"].valeurs;
+  assert.equal(bornes.enTout, chefValeurs.capacites.reduce((total, capacite) => total + capacite.facons.length, 0));
+  assert.equal(bornes.parCapacite, Math.max(...chefValeurs.capacites.map((capacite) => capacite.facons.length)));
+  assert.equal(chefValeurs.capacites.find((capacite) => capacite.nom === bornes.capacite).facons.length, bornes.parCapacite);
+  assert.equal(bornes.deplacements, chefValeurs.capacites.filter((capacite) => capacite.role === "deplacement").reduce((total, capacite) => total + capacite.facons.length, 0));
+  assert.ok(bornes.deplacements >= 2, "Pas chassé [1] et [2]");
 });
