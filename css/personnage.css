@@ -201,3 +201,427 @@
   margin: 0;
   padding-left: var(--espace-5);
 }
+
+/* ─── Le créateur, étape 8 : les capacités en vignettes (lot 5) ──────────── */
+
+/* En tête, les points : le compteur (une région status), sa jauge, d'une
+   case par point du plafond, cachée aux lecteurs d'écran que le texte
+   renseigne déjà, puis l'aide. */
+.points-capacites {
+  margin: 0 0 var(--espace-3);
+  padding: var(--espace-2) var(--espace-3);
+  border: var(--trait) solid var(--separateur);
+  border-left: var(--trait-epais) solid var(--accent);
+  border-radius: var(--rayon);
+  background: var(--fond-2);
+}
+
+.points-capacites p {
+  margin: 0;
+}
+
+.points-capacites .compteur-points {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espace-1) var(--espace-3);
+  margin-bottom: var(--espace-1);
+}
+
+.jauge-points {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--espace-1);
+}
+
+.jauge-case {
+  width: var(--espace-4);
+  height: var(--espace-2);
+  border: var(--trait) solid var(--accent);
+  border-radius: calc(var(--rayon) / 3);
+  background: var(--accent);
+}
+
+.jauge-case.vide {
+  border-color: var(--bordure);
+  background: transparent;
+}
+
+/* Une vignette par capacité : une colonne sur un téléphone, trois à partir
+   de 56rem (plus bas). Elle reprend l'habit des vignettes du créateur
+   (.vignette, ecran.css) ; elle est le repère de son infobulle. */
+.vignettes-capacites {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--espace-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vignette-capacite {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--espace-2);
+}
+
+/* Améliorée : un bord d'accent, et la mention « amélioré » en toutes
+   lettres. */
+.vignette-capacite.amelioree {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 var(--trait) var(--accent);
+}
+
+.vignette-capacite-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--espace-2);
+  margin: 0;
+}
+
+.vignette-capacite-tete .detail {
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+.mention-amelioree {
+  margin-left: auto;
+  color: var(--accent);
+  font-size: var(--taille-petite);
+  font-weight: var(--graisse-forte);
+}
+
+.vignette-capacite .capacite-niveau .cout-capacite {
+  margin-left: auto;
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+/* L'effet au niveau actuel, dans son cadre ; il prend la hauteur que la
+   rangée laisse, et la raison reste en pied. */
+.vignette-capacite-effet {
+  flex: 1 1 auto;
+  padding: var(--espace-2) var(--espace-3);
+  border: var(--trait) solid var(--separateur);
+  border-radius: var(--rayon);
+  background: var(--fond);
+}
+
+.vignette-capacite-effet p {
+  margin: 0;
+}
+
+.vignette-capacite-effet p + p {
+  margin-top: var(--espace-1);
+}
+
+.vignette-capacite-pied {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 var(--espace-2);
+}
+
+.vignette-capacite-pied p {
+  margin: 0;
+}
+
+/* « Niveau suivant ▸ » : un lien à l'œil, un bouton au clavier, une cible
+   tactile entière. */
+.bouton-suivant {
+  min-height: var(--cible-tactile);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--taille-petite);
+  text-decoration: underline;
+  text-underline-offset: var(--decalage-soulignement);
+  cursor: pointer;
+}
+
+/* L'infobulle du niveau suivant : sous sa vignette, de sa largeur, posée
+   par la feuille seule ; la vignette et elle ne font qu'une sous la souris. */
+.infobulle-niveau {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  padding: var(--espace-2) var(--espace-3);
+  border: var(--trait) solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--fond);
+  color: var(--texte);
+  font-size: var(--taille-petite);
+  line-height: var(--interligne);
+}
+
+.infobulle-niveau p,
+.volet-niveau p {
+  margin: var(--espace-1) 0 0;
+}
+
+.infobulle-niveau .comparaison-titre {
+  margin: 0;
+  font-weight: var(--graisse-forte);
+}
+
+/* L'attribut hidden l'emporte sur l'affichage des règles. */
+.infobulle-niveau[hidden],
+.volet-niveau[hidden] {
+  display: none;
+}
+
+/* Ce qui change : la couleur du thème et la graisse, jamais la couleur
+   seule ; ce qui disparaît est barré ; la légende le dit. */
+.difference {
+  color: var(--difference);
+  font-weight: var(--graisse-forte);
+}
+
+.comparaison-sous,
+.comparaison-avant,
+.comparaison-legende {
+  color: var(--texte-2);
+}
+
+.infobulle-niveau .comparaison-avant,
+.volet-niveau .comparaison-avant {
+  margin-top: var(--espace-2);
+  padding-top: var(--espace-2);
+  border-top: var(--trait) solid var(--separateur);
+}
+
+/* Le volet du téléphone : il monte du bas, sur 45 % de la fenêtre au plus,
+   et défile en lui-même. Tant qu'il est montré, la page garde en bas une
+   marge de défilement de sa hauteur. */
+.volet-niveau {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  max-height: var(--hauteur-volet);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--espace-1) var(--espace-4) var(--espace-4);
+  border-top: var(--trait) solid var(--bordure);
+  border-radius: calc(var(--rayon) * 2) calc(var(--rayon) * 2) 0 0;
+  background: var(--fond);
+  color: var(--texte);
+}
+
+html:has(.volet-niveau:not([hidden])) {
+  scroll-padding-bottom: var(--hauteur-volet);
+}
+
+.volet-poignee {
+  display: block;
+  width: calc(var(--espace-6) + var(--espace-2));
+  height: var(--espace-1);
+  margin: var(--espace-1) auto var(--espace-2);
+  border-radius: var(--espace-1);
+  background: var(--bordure);
+}
+
+.volet-niveau-titre {
+  margin: 0;
+  font-size: var(--taille-sous-titre);
+}
+
+.volet-niveau .boutons .bouton {
+  flex: 1 1 0;
+}
+
+@media (min-width: 56rem) {
+  .vignettes-capacites {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* ─── Le créateur, étape 7 : l'équipement en vignettes (lot 5) ──────────── */
+
+/* En tête de l'étape, la ligne des maîtrises du personnage. */
+.ligne-maitrises {
+  color: var(--texte-2);
+}
+
+/* Une vignette d'arme ou de pack : l'habit des vignettes du créateur
+   (.vignette, ecran.css), deux par ligne sur un téléphone, quatre à partir
+   de 56rem (plus bas). Le nom et ses poids, les paramètres, les capacités,
+   puis l'état de maîtrise, au pied. */
+.vignette-objet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espace-1);
+}
+
+.vignette-objet .vignette-nom {
+  font-weight: var(--graisse-forte);
+}
+
+/* « ✓ tenue », « ✓ porté » : plus long que ✓ seul, le nom lui laisse sa
+   place. */
+.vignette-objet .vignette-coche {
+  font-size: var(--taille-petite);
+}
+
+.vignette-objet.choisie .vignette-nom {
+  padding-right: calc(2 * var(--espace-6));
+}
+
+.etiquette-poids {
+  display: inline-block;
+  padding: 0 var(--espace-1);
+  border-radius: calc(var(--rayon) / 2);
+  background: var(--accent-doux);
+  color: var(--accent);
+  font-size: var(--taille-petite);
+  font-weight: var(--graisse-forte);
+  text-transform: uppercase;
+}
+
+.vignette-contenu {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--espace-1);
+  font-size: var(--taille-petite);
+}
+
+.vignette-contenu p {
+  margin: 0;
+}
+
+.vignette-parametres {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0 var(--espace-2);
+  margin: 0;
+}
+
+.vignette-parametres dt {
+  color: var(--texte-2);
+}
+
+.vignette-parametres dd {
+  margin: 0;
+}
+
+.vignette-capacites,
+.pieces-pack .detail,
+.raison-inactive {
+  color: var(--texte-2);
+}
+
+.capacite-objet {
+  color: var(--texte);
+  font-weight: var(--graisse-forte);
+}
+
+.desavantage {
+  color: var(--combat-alerte);
+  font-weight: var(--graisse-forte);
+}
+
+.pieces-pack {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* L'état, au pied : « Maîtrisé » et « Toujours permis » en vert,
+   « Maîtrise partielle » et « Non maîtrisé » en couleur d'alerte. Les mots
+   le disent : la couleur ne fait que le redoubler. */
+.mention-maitrise {
+  font-weight: var(--graisse-forte);
+}
+
+.vignette-contenu .mention-maitrise {
+  margin-top: auto;
+}
+
+.maitrise-maitrise,
+.maitrise-permis {
+  color: var(--combat-reussite);
+}
+
+.maitrise-partielle,
+.maitrise-non {
+  color: var(--combat-alerte);
+}
+
+.maitrise-sans {
+  color: var(--texte-2);
+}
+
+/* « Non maîtrisé » : un bord en tirets et un fond hachuré léger ; le nom,
+   la mention et « (désavantage) » sur une plaque pleine, où ils gardent
+   leur contraste (sur les bandes, la couleur d'alerte tomberait sous 4,5:1
+   dans six thèmes clairs). Choisie, la vignette garde ce bord et ajoute le
+   cadre d'accent en dedans. */
+.vignette.non-maitrise {
+  border: calc(2 * var(--trait)) dashed var(--combat-alerte);
+  background: repeating-linear-gradient(135deg, var(--hachure-alerte) 0 var(--hachure-large), var(--fond-2) 0 calc(2 * var(--hachure-large)));
+}
+
+.vignette.choisie.non-maitrise {
+  box-shadow: inset 0 0 0 calc(2 * var(--trait)) var(--accent);
+}
+
+.vignette.non-maitrise .vignette-nom,
+.vignette.non-maitrise .mention-maitrise,
+.vignette.non-maitrise .desavantage {
+  background: var(--fond-2);
+}
+
+.vignette.non-maitrise .vignette-nom,
+.vignette.non-maitrise .mention-maitrise {
+  align-self: flex-start;
+  padding: 0 var(--espace-1);
+  border-radius: calc(var(--rayon) / 2);
+}
+
+.vignette.non-maitrise .vignette-nom {
+  color: var(--texte-2);
+}
+
+/* Choisie, la plaque du nom court sous « ✓ tenue » ou « ✓ porté », qui
+   reste ainsi hors des bandes. */
+.vignette.choisie.non-maitrise .vignette-nom {
+  align-self: stretch;
+  padding-right: calc(2 * var(--espace-6));
+}
+
+/* Un pack que la banque ne propose pas (A10) : un bord pointillé, et la
+   raison en toutes lettres ; l'entrée native est inactive. */
+.vignette.inactive {
+  border-style: dotted;
+  background: var(--fond);
+}
+
+.vignette.inactive .vignette-entree {
+  cursor: not-allowed;
+}
+
+/* Le lien vers une anomalie passe au-dessus de l'entrée posée sur toute la
+   vignette : il se touche à part. */
+.vignette-anomalie a {
+  position: relative;
+  z-index: 2;
+}
+
+.bloc-choisi h4 {
+  margin-top: 0;
+}
+
+@media (min-width: 56rem) {
+  .creation .vignettes.vignettes-equipement {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

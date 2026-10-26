@@ -73,6 +73,13 @@ const optionsDe = (select) => [...select.querySelectorAll("option")].map((o) => 
 // Un bouton par son nom accessible (aria-label).
 const parLibelle = (noeud, libelle) => [...noeud.querySelectorAll("button")].find((b) => b.getAttribute("aria-label") === libelle);
 const alerte = (noeud) => [...noeud.querySelectorAll("[role]")].find((e) => e.getAttribute("role") === "alert") ?? null;
+// L'entrée de la vignette d'une arme, à l'étape 7, par son nom (son label
+// porte ensuite ses poids).
+const armeNommee = (noeud, nom) =>
+  [...noeud.querySelectorAll("input[name=arme]")].find((entree) => {
+    const texte = texteDe(entree.parentNode.querySelector("label"));
+    return texte === nom || texte.startsWith(`${nom} `);
+  }) ?? null;
 
 // Un fichier choisi dans le sélecteur du navigateur.
 const fichier = (texte) => ({ name: "personnage.arpenteur.json", size: Buffer.byteLength(texte), text: async () => texte });
@@ -620,7 +627,7 @@ test("vignettes — étape 3 : une vignette par bloc sur un bouton radio natif, 
   }
 });
 
-test("vignettes — étapes 3, 4 et 6 : le bloc choisi décrit au niveau 1, ses descriptions ouvertes, sur téléphone aussi ; celles de l'étape 8 repliées sur téléphone", async () => {
+test("vignettes — étapes 3, 4 et 6 : le bloc choisi décrit au niveau 1, ses descriptions ouvertes, sur téléphone aussi ; à l'étape 8, l'effet se lit dans sa vignette, sans rien à déplier", async () => {
   const retirer = installerDom();
   const avant = globalThis.matchMedia;
   try {
@@ -657,10 +664,10 @@ test("vignettes — étapes 3, 4 et 6 : le bloc choisi décrit au niveau 1, ses 
       const givre = ecran.querySelector(".bloc-choisi");
       assert.deepEqual([...givre.children].map(texteDe), ["Givre éternel", "Capacités à venir."]);
 
-      // L'étape 8 ne change pas : repliée sur téléphone, dépliée sur grand écran.
+      // L'étape 8 (lot 5) : l'effet au niveau actuel dans chaque vignette, sur téléphone comme sur grand écran.
       ecran = await etape(contexte, personnage.id, 8);
-      assert.ok(ouvertes(ecran).length > 0);
-      assert.ok(ouvertes(ecran).every((o) => o === grand), grand ? "grand écran : dépliées" : "téléphone : repliées");
+      assert.equal(ouvertes(ecran).length, 0, grand ? "grand écran" : "téléphone");
+      assert.ok([...ecran.querySelectorAll(".vignette-capacite-effet")].some((e) => texteDe(e) === "Se déplace de 1 case."));
     }
   } finally {
     globalThis.matchMedia = avant;
@@ -744,14 +751,18 @@ test("parcours — étape 7 : l'arme tenue d'office, le pack d'armure, tous les 
     const personnage = await garde(contexte, nouveauPersonnage("demo"));
     let ecran = await etape(contexte, personnage.id, 7);
     const relire = () => contexte.etat.etagere.lire(personnage.id);
-    // L'arme : une liste, « mains nues » d'abord ; la choisir l'équipe.
-    assert.equal(texteDe(ecran.querySelector("#arme").querySelector("option")), "Aucune : mains nues");
-    saisir(ecran.querySelector("#arme"), "Couteau d'office", "change");
+    // L'arme : des vignettes radio, « Mains nues » d'abord, choisie au
+    // départ ; en choisir une l'équipe.
+    const mains = ecran.querySelector("input[name=arme]");
+    assert.equal(mains.id, "arme-aucune");
+    assert.equal(texteDe(mains.parentNode.querySelector("label")), "Mains nues");
+    assert.equal(mains.checked, true);
+    cocher(armeNommee(ecran, "Couteau d'office"));
     await laisserFiler(10);
     assert.deepEqual((await relire()).equipement, [{ nom: "Couteau d'office", choix: [], qualite: "2", place: "arme" }]);
     assert.ok([...ecran.querySelectorAll("details")].some((d) => texteDe(d).startsWith("Émincer")), "les capacités de l'arme, décrites");
     // Changer d'arme la remplace.
-    saisir(ecran.querySelector("#arme"), "Spatule souple", "change");
+    cocher(armeNommee(ecran, "Spatule souple"));
     await laisserFiler(10);
     assert.deepEqual((await relire()).equipement.map((o) => [o.nom, o.place]), [["Spatule souple", "arme"]]);
 
@@ -803,7 +814,11 @@ test("parcours — étape 7 : l'arme tenue d'office, le pack d'armure, tous les 
       ["Couvercle de marmite", "equipe"],
       ["Rouleau de fonte", "arme"],
     ]);
-    assert.equal(texteDe([...ecran.querySelector("#arme").querySelectorAll("option")].find((o) => o.getAttribute("selected") !== null)), "Rouleau de fonte", "la liste « Arme » montre l'arme tenue");
+    // La vignette de l'arme prise en main est choisie, et garde le focus.
+    const rouleau = armeNommee(ecran, "Rouleau de fonte");
+    assert.equal(rouleau.checked, true);
+    assert.ok(rouleau.parentNode.className.split(" ").includes("choisie"), "la vignette de l'arme tenue");
+    assert.ok(document.activeElement === rouleau, "le focus sur la vignette de l'arme tenue");
     assert.match(zoneManques(ecran), /Rien ne manque/);
     // Aucun champ de qualité à la création.
     assert.equal([...ecran.querySelectorAll("input")].filter((i) => /qualite/.test(i.id)).length, 0);
@@ -840,41 +855,48 @@ test("parcours — étape 7 : un type d'armure à deux pièces sur une zone n'a 
   }
 });
 
-test("parcours — étape 8 : seules les capacités qui peuvent évoluer, avec + et − et leur description avant et après ; + inactif sans assez de points", async () => {
+test("parcours — étape 8 : une vignette par capacité, + et − pour celles qui évoluent, l'effet au niveau actuel ; + inactif sans assez de points, avec sa raison", async () => {
   const retirer = installerDom();
   try {
     const contexte = contexteDe();
     const personnage = await garde(contexte, personnageEssai((p) => (p.niveaux = [])));
     let ecran = await etape(contexte, personnage.id, 8);
     const fiche = calculerFiche(BANQUE, personnage, { index: INDEX });
-    assert.match(texteDe(ecran), new RegExp(`Points dépensés : ${fiche.points.depenses} / 10 · reliquat : ${fiche.points.reliquat}`));
-    const evolutives = fiche.capacites.filter((c) => !c.aVenir && c.peutEvoluer && c.niveauCreation >= 1);
-    const lignes = [...ecran.querySelectorAll(".capacite-ligne")];
-    assert.deepEqual(lignes.map((l) => texteDe(l.querySelector("strong"))), evolutives.map((c) => c.nom));
-    assert.ok(!lignes.some((l) => /niveau 0/.test(texteDe(l.querySelector(".valeur-pas")))), "aucune capacité de niveau 0");
-    assert.ok(fiche.capacites.some((c) => c.niveau === 0), "le personnage en a pourtant");
-    evolutives.forEach((capacite, i) => {
-      const permis = niveauxPermis(fiche, capacite);
-      assert.equal(lignes[i].querySelector(`#niveau-${i}-plus`).disabled, !permis.includes(capacite.niveau + 1), capacite.nom);
-      assert.equal(lignes[i].querySelector(`#niveau-${i}-moins`).disabled, true, "au niveau de départ");
-      // Avant et après l'évolution, décrites.
-      const resumes = [...lignes[i].querySelectorAll("summary")].map(texteDe);
-      assert.match(resumes[0], /^Avant l'évolution niveau 1 · /);
-      assert.match(resumes[1], /^Après l'évolution niveau 2 · /);
+    const compteur = () => texteDe(ecran.querySelector(".compteur-points"));
+    assert.equal(compteur(), `Points dépensés : ${fiche.points.depenses} / 10 reliquat : ${fiche.points.reliquat}`);
+    // Toutes les capacités, celles de niveau 0 comprises ; + et − pour celles qui évoluent seulement.
+    const montrees = fiche.capacites.filter((c) => !c.aVenir);
+    const vignettes = [...ecran.querySelectorAll(".vignette-capacite")];
+    assert.deepEqual(vignettes.map((v) => texteDe(v.querySelector(".capacite-nom"))), montrees.map((c) => c.nom));
+    assert.ok(montrees.some((c) => c.niveau === 0) && montrees.some((c) => c.peutEvoluer), "les deux sortes");
+    montrees.forEach((capacite, i) => {
+      const plus = vignettes[i].querySelector(`#niveau-${i}-plus`);
+      const evolue = capacite.peutEvoluer && capacite.niveauCreation >= 1;
+      assert.equal(plus !== null, evolue, capacite.nom);
+      assert.equal(vignettes[i].querySelector(`#niveau-${i}-moins`) !== null, evolue, capacite.nom);
+      if (!evolue) return;
+      assert.equal(plus.disabled, !niveauxPermis(fiche, capacite).includes(capacite.niveau + 1), capacite.nom);
+      assert.equal(vignettes[i].querySelector(`#niveau-${i}-moins`).disabled, true, "au niveau de départ");
+      assert.equal(plus.getAttribute("aria-describedby"), `niveau-${i}-raison`, "sans souris, la raison seule");
     });
 
-    const ligne = (nom) => [...ecran.querySelectorAll(".capacite-ligne")].find((l) => texteDe(l.querySelector("strong")) === nom);
-    const plus = (nom) => [...ligne(nom).querySelectorAll("button")].find((b) => b.id.endsWith("-plus"));
-    const moins = (nom) => [...ligne(nom).querySelectorAll("button")].find((b) => b.id.endsWith("-moins"));
-    plus("Flambage").click();
+    const capacite = (nom) => [...ecran.querySelectorAll(".vignette-capacite")].find((v) => texteDe(v.querySelector(".capacite-nom")) === nom);
+    const bouton = (nom, fin) => [...capacite(nom).querySelectorAll("button")].find((b) => b.id.endsWith(fin));
+    const raison = (nom) => texteDe(capacite(nom).querySelector(".vignette-capacite-pied p"));
+    assert.equal(texteDe(capacite("Flambage").querySelector(".vignette-capacite-effet")), "Multiplie les dégâts par 2.");
+    bouton("Flambage", "-plus").click();
     await laisserFiler(10);
     assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).niveaux, [{ capacite: "Flambage", niveau: 2 }]);
-    assert.match(texteDe(ecran), /Points dépensés : 10 \/ 10 · reliquat : 0/);
-    assert.match(texteDe(ligne("Flambage").querySelectorAll("summary")[1]), /^Après l'évolution \(choisie\) niveau 2 · /);
+    assert.equal(compteur(), "Points dépensés : 10 / 10 reliquat : 0");
+    assert.equal(texteDe(capacite("Flambage").querySelector(".valeur-pas")), "niveau 2");
+    assert.equal(texteDe(capacite("Flambage").querySelector(".vignette-capacite-effet")), "Multiplie les dégâts par 3.", "l'effet au niveau choisi");
     // Le reliquat épuisé : « + » inactif partout, avec la raison.
-    for (const l of ecran.querySelectorAll(".capacite-ligne")) assert.equal([...l.querySelectorAll("button")].find((b) => b.id.endsWith("-plus")).disabled, true, texteDe(l.querySelector("strong")));
-    assert.match(texteDe(ligne("Réduction")), /il manque 2 point\(s\)/);
-    moins("Flambage").click();
+    for (const v of ecran.querySelectorAll(".vignette-capacite")) {
+      const plus = [...v.querySelectorAll("button")].find((b) => b.id.endsWith("-plus"));
+      if (plus) assert.equal(plus.disabled, true, texteDe(v.querySelector(".capacite-nom")));
+    }
+    assert.equal(raison("Réduction"), "Niveau 2 : il manque 2 points.");
+    bouton("Flambage", "-moins").click();
     await laisserFiler(10);
     assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).niveaux, []);
 
@@ -888,7 +910,7 @@ test("parcours — étape 8 : seules les capacités qui peuvent évoluer, avec +
     assert.ok(ficheRiche.points.recus > 10, `reçues : ${ficheRiche.points.recus}`);
     ecran = await etape(riche, brouillon.id, 8);
     assert.match(texteDe(ecran), new RegExp(`Les capacités reçues valent déjà ${ficheRiche.points.recus} points : aucune montée n'est possible\\.`));
-    assert.ok(ecran.querySelectorAll(".capacite-ligne").length > 0, "montrées même sans assez de points");
+    assert.ok(ecran.querySelectorAll(".vignette-capacite").length > 0, "montrées même sans assez de points");
     assert.ok([...ecran.querySelectorAll("button")].filter((b) => b.id.endsWith("-plus")).every((b) => b.disabled));
   } finally {
     retirer();
@@ -1245,7 +1267,7 @@ test("parcours — enregistrer dépose en ligne : « creer » pour un nouveau, �
 
 // ─── La relecture finale du lot 2 bis ───────────────────────────────────────
 
-test("relecture — étape 8 : après « + », le focus reste sur « + » tant qu'il est actif ; les descriptions gardent leur état", async () => {
+test("relecture — étape 8 : après « + », le focus reste sur « + » tant qu'il est actif", async () => {
   const retirer = installerDom();
   const avant = globalThis.matchMedia;
   try {
@@ -1254,18 +1276,13 @@ test("relecture — étape 8 : après « + », le focus reste sur « + » tant q
     // Un personnage neuf : le seul bloc de base, 2 points dépensés, 8 de reliquat.
     const personnage = await garde(contexte, nouveauPersonnage("demo"));
     const ecran = await etape(contexte, personnage.id, 8);
-    const ligne = () => [...ecran.querySelectorAll(".capacite-ligne")].find((l) => texteDe(l.querySelector("strong")) === "Taloche");
-    const plus = () => [...ligne().querySelectorAll("button")].find((b) => b.id.endsWith("-plus"));
-    // Sur téléphone, repliées ; le joueur déplie « Après l'évolution ».
-    const apres = () => ligne().querySelectorAll("details")[1];
-    assert.equal(apres().getAttribute("open"), null);
-    apres().setAttribute("open", "");
+    const vignette = () => [...ecran.querySelectorAll(".vignette-capacite")].find((v) => texteDe(v.querySelector(".capacite-nom")) === "Taloche");
+    const plus = () => [...vignette().querySelectorAll("button")].find((b) => b.id.endsWith("-plus"));
     plus().click();
     await laisserFiler(10);
-    assert.match(texteDe(ligne().querySelector(".valeur-pas")), /niveau 2/);
+    assert.match(texteDe(vignette().querySelector(".valeur-pas")), /niveau 2/);
     assert.equal(plus().disabled, false, "le niveau 3 reste permis");
     assert.equal(document.activeElement?.id, plus().id, "le focus reste sur « + »");
-    assert.notEqual(apres().getAttribute("open"), null, "la description dépliée le reste");
   } finally {
     globalThis.matchMedia = avant;
     retirer();
@@ -1365,9 +1382,12 @@ test("relecture — étape 7 : les armes et l'objet choisi décrits avant d'êtr
     const contexte = contexteDe();
     const personnage = await garde(contexte, nouveauPersonnage("demo"));
     const ecran = await etape(contexte, personnage.id, 7);
-    const catalogue = ecran.querySelector(".catalogue");
-    assert.match(texteDe(catalogue.querySelector("summary")), /^Les \d+ armes et ce qu'elles donnent$/);
-    assert.ok([...catalogue.querySelectorAll(".capacite-texte")].some((p) => /inflige 3\/8\/20/.test(texteDe(p))), "le couteau d'office, décrit");
+    // Chaque vignette d'arme dit ce que l'arme donne ; le catalogue replié
+    // a disparu.
+    assert.equal(ecran.querySelector(".catalogue"), null);
+    const couteau = armeNommee(ecran, "Couteau d'office").parentNode;
+    assert.ok([...couteau.querySelectorAll("dd")].some((dd) => texteDe(dd) === "3/8/20"), "le couteau d'office, ses dégâts");
+    assert.match(texteDe(couteau.querySelector(".vignette-capacites")), /Frappe .*Émincer/);
     // L'objet choisi se décrit avant « Ajouter ».
     saisir(ecran.querySelector("#objet-a-ajouter"), "Bouillon revigorant", "change");
     assert.match(texteDe(ecran.querySelector(".apercu-objet")), /Boire le bouillon/);

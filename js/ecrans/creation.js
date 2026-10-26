@@ -20,16 +20,27 @@
 // ses groupes de choix, en vignettes eux aussi. Sous l'habit de vignette, un
 // bouton radio ou une case à cocher natifs.
 //
+// Le lot 5 (§ 15.3) : à l'étape 8, une vignette par capacité, qu'elle
+// puisse évoluer ou non, avec son effet au niveau actuel et la raison de son
+// « + » ; le niveau suivant se compare au niveau actuel, mot à mot
+// (difference.js), dans une infobulle sur un ordinateur, dans un volet du
+// bas sur un téléphone. À l'étape 7, l'arme tenue et le pack d'armure se
+// choisissent en vignettes, chacune avec ce que l'objet donne et son état
+// de maîtrise (maitrise.js) ; le choix reste permis dans tous les cas.
+//
 // Aucune règle du jeu n'est écrite ici : ce qui manque, les montées
 // permises, le tirage, l'intitulé d'un groupe et le résumé d'un bloc
-// viennent de parcours.js, la fiche de calcul.js, les packs de packs.js, les
-// nombres de regles.js.
+// viennent de parcours.js, la fiche de calcul.js, les packs de packs.js, la
+// maîtrise de maitrise.js, les nombres de regles.js.
 
+import { accorder } from "../banque/accord.js";
 import { cle } from "../banque/noms.js";
 import { TYPES, typeDe } from "../banque/types.js";
 import { coutEcrit, lecture } from "../fiche/lecture.js";
-import { calculerFiche, capacitesDuBloc, descriptionA, estBouclier, indexerCreation } from "../personnage/calcul.js";
+import { calculerFiche, capacitesDuBloc, contexte, degatsDecrits, descriptionA, estBouclier, indexerCreation, qualiteDe, valeursParametre } from "../personnage/calcul.js";
+import { difference } from "../personnage/difference.js";
 import { ErreurPersonnage, nouvelIdentifiant, verifier } from "../personnage/format.js";
+import { capacitesDeLObjet, ligneDesMaitrises, maitriseDeLObjet, maitriseDuPack, maitrisesDuPersonnage, poidsDe, rangsDuPersonnage } from "../personnage/maitrise.js";
 import { NOMS_PACK, packsDArmure, zonesCouvertes } from "../personnage/packs.js";
 import { ETAPES, banqueUtilisable, legendeDuGroupe, manques, niveauxPermis, resumeDuBloc, tirerConstellation } from "../personnage/parcours.js";
 import {
@@ -38,6 +49,7 @@ import {
   CARACTERISTIQUE_MIN,
   COUT_NIVEAU,
   DES,
+  PARAMETRES,
   POINTS_CREATION,
   SOMME_CARACTERISTIQUES,
   TYPES_OBJET,
@@ -46,7 +58,7 @@ import {
 } from "../personnage/regles.js";
 import { relever } from "../personnage/suivi.js";
 import { adressePersonnage } from "../routes.js";
-import { el, titre, titrer } from "./dom.js";
+import { el, titre, titrer, versAnomalie } from "./dom.js";
 
 const texteErreur = (erreur) => erreur?.message ?? String(erreur);
 const nomDe = (personnage) => personnage.identite.nom.trim() || "nouveau personnage";
@@ -143,18 +155,21 @@ const COCHE = "✓";
  * natifs, posés sur toute la vignette et transparents (ecran.css) ; le nom
  * dans son label ; dessous, le résumé d'un bloc, ou le niveau, le coût et la
  * description d'une option, que l'entrée désigne par aria-describedby ; ✓
- * quand elle est choisie.
+ * quand elle est choisie. L'étape 7 y ajoute ce qu'un objet donne
+ * (contenu), une classe (habit), le signe du choix (« ✓ tenue ») et
+ * l'entrée inactive d'un pack que la banque ne propose pas.
  */
-function vignette({ id, name, type = "radio", nom, absente = false, choisie, resume = null, decrite = null, onchange }) {
-  const description = resume !== null ? `${id}-resume` : decrite ? `${id}-texte` : null;
+function vignette({ id, name, type = "radio", nom, absente = false, choisie, resume = null, decrite = null, contenu = null, habit = null, coche = COCHE, inactive = false, onchange }) {
+  const description = resume !== null ? `${id}-resume` : decrite ? `${id}-texte` : contenu ? `${id}-contenu` : null;
   return el(
     "div",
-    { classe: choisie ? "vignette choisie" : "vignette" },
-    el("input", { type, id, name, classe: "vignette-entree", checked: choisie, "aria-describedby": description, onchange }),
+    { classe: ["vignette", habit, choisie ? "choisie" : null, inactive ? "inactive" : null].filter(Boolean).join(" ") },
+    el("input", { type, id, name, classe: "vignette-entree", checked: choisie, disabled: inactive, "aria-describedby": description, onchange }),
     el("label", { for: id, classe: "vignette-nom" }, nom, absente ? el("span", { classe: "detail" }, " — capacité à venir") : null),
     resume !== null ? el("span", { id: description, classe: "vignette-resume" }, resume) : null,
     decrite ? [el("span", { classe: "vignette-meta" }, decrite.meta), el("span", { id: description, classe: "vignette-texte" }, decrite.texte)] : null,
-    choisie ? el("span", { classe: "vignette-coche", "aria-hidden": "true" }, COCHE) : null,
+    contenu ? el("div", { id: description, classe: "vignette-contenu" }, contenu) : null,
+    choisie ? el("span", { classe: "vignette-coche", "aria-hidden": "true" }, coche) : null,
   );
 }
 
@@ -467,57 +482,188 @@ function objetDecrit(o, objet, rang) {
   ];
 }
 
+// ─── Étape 7 : la maîtrise en vignettes (lot 5, § 15.3) ─────────────────────
+
+// L'état de maîtrise d'un objet, en mots (maitrise.js le calcule) ; « permis »
+// est celui des mains nues, que l'écran seul dit.
+const MENTIONS_MAITRISE = {
+  maitrise: "Maîtrisé",
+  non: "Non maîtrisé",
+  sans: "Sans maîtrise requise",
+  permis: "Toujours permis",
+};
+
+// La mention d'un état, au pied de la vignette ; « ⚠ » devant « Non
+// maîtrisé », caché aux lecteurs d'écran que les mots renseignent.
+function mentionDeMaitrise({ etat, n = 0, k = 0 }) {
+  const texte = etat === "partielle" ? accorder(`Maîtrise partielle : ${k} capacité(s) sur ${n}`) : MENTIONS_MAITRISE[etat];
+  return el("p", { classe: `mention-maitrise maitrise-${etat}` }, etat === "non" ? el("span", { "aria-hidden": "true" }, "⚠ ") : null, texte);
+}
+
+// Le poids d'un objet en étiquettes, après son nom : une par poids, aucune
+// sans poids.
+const etiquettesDePoids = (poids) => poids.map((code) => [" ", el("span", { classe: "etiquette-poids" }, TYPES_OBJET[code].nom)]);
+
+// Le nom affiché d'un paramètre : l'élément qui le reçoit, sinon son nom
+// brut (§ 5.2, comme la consultation).
+function nomAffiche(o, nom) {
+  const recoit = (element) => (element.parametres_recus ?? []).some((recu) => typeof recu === "string" && cle(recu) === cle(nom));
+  return (o.banque.elements ?? []).find(recoit)?.nom ?? nom;
+}
+
+// Les premiers paramètres d'une vignette d'arme, dans cet ordre ; les
+// autres suivent, sous leur nom affiché.
+const PREMIERS_PARAMETRES = [
+  [PARAMETRES.degats, "Dégâts"],
+  [PARAMETRES.portee, "Portée"],
+  [PARAMETRES.qualite, "Qualité"],
+];
+
+/**
+ * Les paramètres qu'un objet transmet à tout son bloc (sans cible ; le
+ * premier de chaque nom, comme calcul.js), à la qualité de la création :
+ * des [nom affiché, valeur]. Les valeurs se calculent comme sur la fiche
+ * (valeursParametre, qualiteDe) ; une valeur illisible reste telle
+ * qu'écrite.
+ */
+function parametresDeLObjet(o, bloc) {
+  const qualite = qualiteDe(bloc, QUALITE_CREATION);
+  const parNom = new Map();
+  for (const p of bloc.parametres) if (p.nom && !p.cible && !parNom.has(cle(p.nom))) parNom.set(cle(p.nom), p);
+  const valeur = (p) => {
+    if (cle(p.nom) === PARAMETRES.qualite) return qualite.applicable ? qualite.texte : p.valeur.trim();
+    const lu = valeursParametre(p.nom, p.valeur, { caracteristiques: o.personnage.caracteristiques, qualite });
+    return lu.valeurs ? lu.valeurs.join("/") : p.valeur.trim();
+  };
+  const premiers = PREMIERS_PARAMETRES.filter(([k]) => parNom.has(k)).map(([k, nom]) => [nom, valeur(parNom.get(k))]);
+  const autres = [...parNom].filter(([k]) => !PREMIERS_PARAMETRES.some(([premier]) => premier === k)).map(([, p]) => [nomAffiche(o, p.nom), valeur(p)]);
+  return [...premiers, ...autres];
+}
+
+const listeDeParametres = (parametres) => (parametres.length ? el("dl", { classe: "vignette-parametres" }, parametres.map(([nom, valeur]) => [el("dt", {}, nom), el("dd", {}, valeur)])) : null);
+
+// Les capacités d'un objet, sur une ligne : « (désavantage) » après celles
+// que la maîtrise ne couvre pas.
+function capacitesDeLaVignette(o, capacites, hors = []) {
+  if (!capacites.length) return el("p", { classe: "vignette-capacites" }, "Aucune capacité.");
+  return el(
+    "p",
+    { classe: "vignette-capacites" },
+    capacites.map((c, i) => [
+      i ? " · " : "",
+      el("span", { classe: "capacite-objet" }, c.nom),
+      c.detail ? el("span", { classe: "detail" }, ` ${c.detail}`) : null,
+      o.index.capacite(c.nom) ? null : el("span", { classe: "detail" }, " — capacité à venir"),
+      hors[i] ? [" ", el("span", { classe: "desavantage" }, "(désavantage)")] : null,
+    ]),
+  );
+}
+
+// Les anomalies que la banque signale sur la ligne d'un bloc, hors les
+// informations (un bloc d'armure sans capacité, I3, n'a rien d'anormal) :
+// leur nombre, et le lien vers elles, comme sur la fiche du bloc.
+function anomaliesDeLObjet(o, bloc) {
+  const ligne = bloc?.brut?.ligne;
+  if (!Number.isInteger(ligne)) return null;
+  const anomalies = (o.banque.anomalies ?? []).filter((a) => a.feuille === "Blocs" && a.ligne === ligne && a.gravite !== "information");
+  if (!anomalies.length) return null;
+  return el("p", { classe: "vignette-anomalie" }, versAnomalie({ feuille: "Blocs", ligne }, accorder(`${bloc.nom} : ${anomalies.length} anomalie(s) sur sa ligne (Blocs, ligne ${ligne})`)));
+}
+
+// L'identifiant de la vignette d'une arme de la banque, « arme-aucune »
+// pour les mains nues : le focus y revient après un changement.
+function idDeLArme(o, nom) {
+  const i = nom ? o.index.blocsDeType("arme").findIndex((bloc) => cle(bloc.nom) === cle(nom)) : -1;
+  return i >= 0 ? `arme-${i}` : "arme-aucune";
+}
+
+// L'attaque à mains nues, telle que la fiche la calcule sans arme tenue
+// (calculerFiche) : celle de la fiche, ou celle d'une copie qui pose l'arme.
+function mainsNuesDe(o, fiche) {
+  if (fiche.attaque?.mainsNues) return fiche.attaque;
+  const sansArme = { ...o.personnage, equipement: o.personnage.equipement.filter((objet) => objet.place !== "arme") };
+  return calculerFiche(o.banque, sansArme, { index: o.index }).attaque;
+}
+
 // L'entrée « Arme » : une seule arme, tenue d'office (livret, « Objet »).
-// Changer d'arme remplace celle-ci ; une arme de rechange se range dans le
-// sac par « Tous les objets ».
-function entreeArme(o) {
+// Les mains nues, puis chaque arme de la banque, en vignettes : ce qu'elle
+// donne à la qualité de la création, et son état de maîtrise. Changer
+// d'arme remplace celle-ci ; une arme de rechange se range dans le sac par
+// « Tous les objets ». Sous les vignettes, l'arme tenue, décrite, avec ses
+// groupes de choix.
+function entreeArme(o, fiche, rangs) {
   const p = o.personnage;
   const rangTenue = p.equipement.findIndex((objet) => objet.place === "arme");
   const tenue = rangTenue >= 0 ? p.equipement[rangTenue] : null;
-  const armes = o.index.blocsDeType("arme");
-  const choix = el(
-    "select",
-    {
-      id: "arme",
-      classe: "champ",
-      onchange: (evenement) => {
-        const nom = evenement.target.value;
-        o.modifier(
-          (q) => {
-            const rang = q.equipement.findIndex((objet) => objet.place === "arme");
-            if (rang >= 0) q.equipement.splice(rang, 1);
-            if (nom) q.equipement.push({ nom, choix: [], qualite: QUALITE_CREATION, place: "arme" });
-          },
-          { refaire: true, focus: "arme" },
-        );
+  const prendre = (nom) =>
+    o.modifier(
+      (q) => {
+        const rang = q.equipement.findIndex((objet) => objet.place === "arme");
+        if (rang >= 0) q.equipement.splice(rang, 1);
+        if (nom) q.equipement.push({ nom, choix: [], qualite: QUALITE_CREATION, place: "arme" });
       },
-    },
-    el("option", { value: "", selected: !tenue }, "Aucune : mains nues"),
-    armes.map((bloc) => el("option", { value: bloc.nom, selected: tenue ? cle(tenue.nom) === cle(bloc.nom) : false }, bloc.nom)),
-  );
-  // Chaque arme de la banque, décrite, pour choisir en connaissance de cause.
-  const catalogue = armes.length
-    ? el(
-        "details",
-        { classe: "catalogue", "data-cle": "catalogue-armes" },
-        el("summary", {}, `Les ${armes.length} armes et ce qu'elles donnent`),
-        armes.map((bloc) => el("div", { classe: "choix-bloc" }, el("p", { classe: "choix-nom" }, bloc.nom), blocDecrit(o, bloc, { siVide: "Aucune capacité." }))),
-      )
-    : null;
+      { refaire: true, focus: idDeLArme(o, nom) },
+    );
+  const mains = mainsNuesDe(o, fiche);
+  const vignetteMains = vignette({
+    id: "arme-aucune",
+    name: "arme",
+    nom: "Mains nues",
+    choisie: !tenue,
+    habit: "vignette-objet",
+    contenu: [
+      listeDeParametres(mains?.degats ? [["Dégâts", mains.degats.join("/")]] : []),
+      mains && mains.nom !== "Mains nues" ? capacitesDeLaVignette(o, [{ nom: mains.nom, detail: "(bloc de base)" }]) : null,
+      mentionDeMaitrise({ etat: "permis" }),
+    ],
+    onchange: () => prendre(null),
+  });
+  const vignettesArmes = o.index.blocsDeType("arme").map((bloc, i) => {
+    const choisie = Boolean(tenue) && cle(tenue.nom) === cle(bloc.nom);
+    const capacites = capacitesDeLObjet(o.index, bloc, choisie ? tenue.choix : []);
+    const maitrise = maitriseDeLObjet(capacites, poidsDe(bloc), rangs);
+    return vignette({
+      id: `arme-${i}`,
+      name: "arme",
+      nom: [bloc.nom, etiquettesDePoids(poidsDe(bloc))],
+      choisie,
+      habit: maitrise.etat === "non" ? "vignette-objet non-maitrise" : "vignette-objet",
+      coche: `${COCHE} tenue`,
+      contenu: [listeDeParametres(parametresDeLObjet(o, bloc)), capacitesDeLaVignette(o, capacites, maitrise.horsMaitrise), anomaliesDeLObjet(o, bloc), mentionDeMaitrise(maitrise)],
+      onchange: () => prendre(bloc.nom),
+    });
+  });
   return [
     el("h3", {}, "Arme"),
     el("p", { classe: "secondaire-texte petit" }, "Une seule arme se tient, équipée d'office (livret, « Objet »). Changer d'arme remplace celle-ci ; une arme de rechange s'ajoute dans « Tous les objets », rangée dans le sac."),
-    el("label", { for: "arme" }, "Arme tenue"),
-    choix,
-    catalogue,
-    tenue ? objetDecrit(o, tenue, rangTenue) : null,
+    el("fieldset", { classe: "groupe-choix groupe-vignettes" }, el("legend", {}, "Arme tenue"), el("div", { classe: "vignettes vignettes-equipement" }, vignetteMains, vignettesArmes)),
+    tenue ? el("section", { classe: "bloc-choisi" }, el("h4", {}, tenue.nom), objetDecrit(o, tenue, rangTenue)) : null,
   ];
+}
+
+// Les pièces d'un pack : chacune avec les zones qu'elle couvre et son
+// armure à la qualité de la création (valeursParametre, qualiteDe) ; une
+// armure illisible, telle qu'écrite.
+function piecesDuPack(o, pack) {
+  return el(
+    "ul",
+    { classe: "pieces-pack" },
+    pack.pieces.map((bloc) => {
+      const parametre = bloc.parametres.find((p) => p.nom && !p.cible && cle(p.nom) === PARAMETRES.armure);
+      const lu = parametre ? valeursParametre(parametre.nom, parametre.valeur, { caracteristiques: o.personnage.caracteristiques, qualite: qualiteDe(bloc, QUALITE_CREATION) }) : {};
+      const zones = zonesCouvertes(bloc).map((code) => (lu.valeurs ? `${NOM_ZONE[code]} ${lu.valeurs[ZONES.findIndex((z) => z.code === code)]}` : NOM_ZONE[code]));
+      const armure = lu.valeurs || !parametre ? "" : ` (armure telle qu'écrite : ${parametre.valeur})`;
+      return el("li", {}, el("span", { classe: "capacite-objet" }, bloc.nom), " ", el("span", { classe: "detail" }, `${zones.join(", ") || "aucune zone"}${armure}`));
+    }),
+  );
 }
 
 // L'entrée « Pack d'armure » : un pack par type, formé de toutes les pièces
 // de ce type, équipées d'office ; un type dont deux pièces couvrent une
-// même zone n'a pas de pack (A10).
-function entreePack(o) {
+// même zone n'a pas de pack (A10) : sa vignette est inactive, avec la
+// raison. La maîtrise d'un pack se lit sur la Maîtrise de son poids, pour
+// l'affichage seulement (maitriseDuPack).
+function entreePack(o, rangs) {
   const p = o.personnage;
   const packs = packsDArmure(o.index.blocsDeType("armure"));
   const pieces = p.equipement.filter((objet) => objet.place === "pack");
@@ -537,46 +683,47 @@ function entreePack(o) {
       },
       { refaire: true, focus: pack ? `pack-${pack.type}` : "pack-aucun" },
     );
-  const option = (pack) => {
-    const id = pack ? `pack-${pack.type}` : "pack-aucun";
-    const couvertes = new Set(pack ? pack.pieces.flatMap((b) => zonesCouvertes(b)) : []);
-    const zones = ZONES.filter((z) => couvertes.has(z.code)).map((z) => NOM_ZONE[z.code]);
-    return el(
-      "div",
-      { classe: "option-decrite" },
-      el(
-        "label",
-        { classe: "choix-option" },
-        el("input", {
-          type: "radio",
-          id,
-          name: "pack",
-          disabled: pack ? !pack.propose : false,
-          checked: pack ? actuel === pack : !pieces.length,
-          onchange: () => choisir(pack),
-        }),
-        el(
-          "span",
-          {},
-          el("span", { classe: "choix-nom" }, pack ? `Pack ${pack.nom}` : "Aucun pack"),
-          pack
-            ? el(
-                "span",
-                { classe: "detail" },
-                pack.propose
-                  ? ` — ${pack.pieces.map((b) => b.nom).join(", ")} ; ${zones.join(", ") || "aucune zone"}`
-                  : ` — non proposé : ${pack.conflits.map((c) => `${c.nomZone.toLowerCase()} couvert par ${c.pieces.map((b) => b.nom).join(" et ")}`).join(" ; ")}`,
-              )
-            : null,
-        ),
-      ),
-    );
+  const vignetteDuPack = (pack) => {
+    if (!pack.propose) {
+      return vignette({
+        id: `pack-${pack.type}`,
+        name: "pack",
+        nom: `Pack ${pack.nom}`,
+        choisie: false,
+        inactive: true,
+        habit: "vignette-objet",
+        contenu: [
+          piecesDuPack(o, pack),
+          el("p", { classe: "raison-inactive" }, `non proposé : ${pack.conflits.map((c) => `${c.nomZone.toLowerCase()} couvert par ${c.pieces.map((b) => b.nom).join(" et ")}`).join(" ; ")}`),
+        ],
+      });
+    }
+    const etat = maitriseDuPack(pack.type, rangs);
+    return vignette({
+      id: `pack-${pack.type}`,
+      name: "pack",
+      nom: `Pack ${pack.nom}`,
+      choisie: actuel === pack,
+      habit: etat === "non" ? "vignette-objet non-maitrise" : "vignette-objet",
+      coche: `${COCHE} porté`,
+      contenu: [piecesDuPack(o, pack), pack.pieces.map((bloc) => anomaliesDeLObjet(o, bloc)), mentionDeMaitrise({ etat })],
+      onchange: () => choisir(pack),
+    });
   };
+  const aucun = vignette({
+    id: "pack-aucun",
+    name: "pack",
+    nom: "Aucun pack",
+    choisie: !pieces.length,
+    habit: "vignette-objet",
+    contenu: el("p", { classe: "vignette-capacites" }, "Les pièces se portent une à une, dans « Tous les objets »."),
+    onchange: () => choisir(null),
+  });
   return [
     el("h3", {}, "Pack d'armure"),
     el("p", { classe: "secondaire-texte petit" }, "Un pack par type : toutes les pièces de ce type, une par zone, portées d'office. Les pièces portées seules sur une zone du pack retournent au sac."),
     packs.length
-      ? el("fieldset", { classe: "groupe-choix" }, el("legend", {}, "Pack d'armure"), option(null), packs.map(option))
+      ? el("fieldset", { classe: "groupe-choix groupe-vignettes" }, el("legend", {}, "Pack d'armure"), el("div", { classe: "vignettes vignettes-equipement" }, aucun, packs.map(vignetteDuPack)))
       : el("p", { classe: "secondaire-texte" }, "La banque ne contient aucune pièce d'armure."),
     pieces.length ? el("ul", { classe: "objets" }, p.equipement.map((objet, rang) => (objet.place === "pack" ? carteObjet(o, objet, rang, { retirable: false }) : null))) : null,
   ];
@@ -612,7 +759,7 @@ function carteObjet(o, objet, rang, { retirable = true } = {}) {
                 });
                 p.equipement[rang].place = "arme";
               },
-              { refaire: true, focus: "arme" },
+              { refaire: true, focus: idDeLArme(o, objet.nom) },
             ),
         },
         "Prendre en main",
@@ -760,18 +907,140 @@ function entreeObjets(o) {
   ];
 }
 
+// En tête, la ligne des maîtrises du personnage ; puis l'arme tenue et le
+// pack d'armure en vignettes, chacune avec son état de maîtrise (les rangs
+// de sa fiche, maitrise.js) ; enfin tous les objets.
 function etapeEquipement(o) {
-  return [entreeArme(o), entreePack(o), entreeObjets(o)];
+  const fiche = calculerFiche(o.banque, o.personnage, { index: o.index });
+  const rangs = rangsDuPersonnage(fiche, o.index);
+  return [
+    el("p", { classe: "ligne-maitrises" }, ligneDesMaitrises(o.personnage.identite.nom, maitrisesDuPersonnage(fiche, o.index))),
+    entreeArme(o, fiche, rangs),
+    entreePack(o, rangs),
+    entreeObjets(o),
+  ];
 }
 
 // ─── Étape 8 : les capacités ────────────────────────────────────────────────
 
-// Seules les capacités qui peuvent évoluer se montrent (demande de
-// l'auteur, 30/09/2026), même quand les points manquent ; chacune avec sa
-// description avant et après l'évolution.
+// Une souris, qui survole : le pointeur d'un ordinateur. Le téléphone se lit
+// dans estEtroit() ; une fenêtre étroite à la souris a les deux.
+const aLaSouris = () => Boolean(globalThis.matchMedia?.("(pointer: fine)").matches);
+
+// L'origine d'une capacité : chaque bloc qui la donne, suivi de son type
+// (« Grand Four · primordial ») ; plusieurs, séparées par des virgules.
+const origineEcrite = (o, capacite) =>
+  capacite.origines
+    .map((nom) => {
+      const code = typeDe(o.index.bloc(nom));
+      return code ? `${nom} · ${TYPES[code].nom.toLowerCase()}` : nom;
+    })
+    .join(", ");
+
+// L'effet au niveau actuel, tel que la fiche le montre (lecture.js) : une
+// description par source qui en donne une différente, précédée de la source.
+const effetsEcrits = (capacite) =>
+  capacite.descriptions.length
+    ? capacite.descriptions.map((d) => el("p", {}, `${capacite.descriptions.length > 1 ? `${d.source} : ` : ""}${d.texte.trim() || "Sans description."}`))
+    : [el("p", {}, "Sans description.")];
+
+// Les morceaux de difference() en nœuds : les mots marqués dans l'habit
+// donné ; une espace seule entre deux mots marqués rejoint leur suite, pour
+// que le trait ou la couleur ne se coupe pas entre eux.
+function morceauxMarques(morceaux, marque, habiller) {
+  const noeuds = [];
+  let suite = null;
+  morceaux.forEach((m, i) => {
+    const lie = !m[marque] && suite !== null && m.texte.trim() === "" && morceaux[i + 1]?.[marque];
+    if (m[marque] || lie) {
+      suite = (suite ?? "") + m.texte;
+      return;
+    }
+    if (suite !== null) noeuds.push(habiller(suite));
+    suite = null;
+    noeuds.push(m.texte);
+  });
+  if (suite !== null) noeuds.push(habiller(suite));
+  return noeuds;
+}
+
+// Le coût et les paramètres d'une capacité à un niveau : le souffle, le lien
+// (« sans coût » sans l'un ni l'autre), la portée, les dégâts.
+function parametresEcrits(cout, portee, degats) {
+  const parties = [];
+  if (cout.souffle !== "0") parties.push({ nature: "souffle", valeur: cout.souffle, suite: " souffle" });
+  if (cout.lien !== "0") parties.push({ nature: "lien", valeur: cout.lien, suite: " lien" });
+  if (!parties.length) parties.push({ nature: "cout", valeur: "sans coût" });
+  if (portee !== null) parties.push({ nature: "portee", tete: "portée ", valeur: String(portee) });
+  if (degats) parties.push({ nature: "degats", tete: "dégâts ", valeur: degats.join("/") });
+  return parties;
+}
+
+/**
+ * Une capacité à un niveau, vue d'où la fiche la voit : sa description (la
+ * source et la qualité de l'étape 8 d'avant, descriptionA), son coût, sa
+ * portée (contexte) et ses dégâts, ceux que dit sa description à ce niveau
+ * (degatsDecrits), sinon ceux que son bloc lui transmet. Le calcul
+ * d'aujourd'hui, appliqué à un niveau candidat.
+ */
+function capaciteA(o, capacite, niveau) {
+  const source = capacite.origines[0] ?? null;
+  const objet = o.personnage.equipement.find((e) => cle(e.nom) === cle(source ?? ""));
+  const qualite = objet?.qualite ?? QUALITE_CREATION;
+  const d = descriptionA(o.index, o.personnage, capacite.nom, { bloc: source, niveau, qualite });
+  const bloc = source ? (o.index.bloc(source) ?? null) : null;
+  const deLaBanque = o.index.capacite(capacite.nom);
+  const variables = contexte(o.index, o.personnage, bloc, bloc ? qualiteDe(bloc, qualite) : null, deLaBanque, niveau);
+  const degats = degatsDecrits(o.index, o.personnage, bloc, deLaBanque, niveau) ?? variables.get(PARAMETRES.degats)?.valeurs ?? null;
+  const portee = variables.get(PARAMETRES.portee)?.valeurs?.[0] ?? null;
+  return { texte: d.texte.trim() || "Sans description.", parametres: parametresEcrits(d.cout, portee, degats) };
+}
+
+/**
+ * La comparaison d'une capacité avec son niveau suivant (§ 15.3) : le
+ * titre ; ce que la montée coûte, ou ce qui lui manque ; le coût et les
+ * paramètres au niveau suivant ; sa description, les mots ajoutés en
+ * --difference ; la description actuelle, les mots retirés barrés ; la
+ * légende. Jamais la couleur seule : la graisse, le trait et la légende.
+ */
+function comparaison(o, capacite, { reliquat, ecart, manque, permis }) {
+  const suivant = capacite.niveau + 1;
+  const actuel = capaciteA(o, capacite, capacite.niveau);
+  const apres = capaciteA(o, capacite, suivant);
+  const changee = (partie) => actuel.parametres.find((p) => p.nature === partie.nature)?.valeur !== partie.valeur;
+  const enDifference = (texte) => el("span", { classe: "difference" }, texte);
+  const mots = difference(actuel.texte, apres.texte);
+  return {
+    titre: `${capacite.nom} — niveau ${suivant}`,
+    corps: [
+      el(
+        "p",
+        { classe: "comparaison-sous" },
+        accorder(permis ? `après progression · ${ecart} point(s) de plus (reliquat ${reliquat} → ${reliquat - ecart})` : `après progression · il manque ${manque} point(s)`),
+      ),
+      el(
+        "p",
+        { classe: "comparaison-cout" },
+        "Coût : ",
+        apres.parametres.map((p, i) => [i ? " · " : "", p.tete ?? "", changee(p) ? enDifference(p.valeur) : p.valeur, p.suite ?? ""]),
+      ),
+      el("p", { classe: "comparaison-texte" }, morceauxMarques(mots.apres, "ajoute", enDifference)),
+      el("p", { classe: "comparaison-avant" }, `Niveau ${capacite.niveau} : `, morceauxMarques(mots.avant, "retire", (texte) => el("s", {}, texte))),
+      el("p", { classe: "comparaison-legende" }, "En ", enDifference("rouge"), " : ce qui change par rapport au niveau actuel."),
+    ],
+  };
+}
+
+// Une vignette par capacité, hors « à venir », qu'elle puisse évoluer ou
+// non (décision de l'auteur, 26/10/2026) : son nom, son origine, la ligne de
+// niveau quand elle évolue, son effet au niveau actuel, la raison de son
+// « + ». Le niveau suivant se compare au niveau actuel : au survol ou au
+// focus de « + » sur un ordinateur, par « Niveau suivant ▸ » partout.
 function etapeCapacites(o) {
   const fiche = calculerFiche(o.banque, o.personnage, { index: o.index });
   const { points } = fiche;
+  const souris = aLaSouris();
+  const etroit = estEtroit();
   const changer = (capacite, niveau, focus) =>
     o.modifier(
       (q) => {
@@ -780,63 +1049,213 @@ function etapeCapacites(o) {
       },
       { refaire: true, focus },
     );
-  const evolutives = fiche.capacites.filter((c) => !c.aVenir && c.peutEvoluer && c.niveauCreation >= 1);
-  const lignes = evolutives.map((capacite, i) => {
-    const id = `niveau-${i}`;
-    const permis = niveauxPermis(fiche, capacite);
-    const suivant = capacite.niveau + 1;
-    const peutMonter = suivant <= capacite.niveauMax && permis.includes(suivant);
-    const manque = suivant <= capacite.niveauMax ? points.depenses - COUT_NIVEAU[capacite.niveau] + COUT_NIVEAU[suivant] - POINTS_CREATION : 0;
-    const raison =
-      suivant > capacite.niveauMax
-        ? `Niveau ${capacite.niveauMax} : le plus haut.`
-        : peutMonter
-          ? `Niveau ${suivant} : ${COUT_NIVEAU[suivant] - COUT_NIVEAU[capacite.niveau]} point(s) de plus.`
-          : `Niveau ${suivant} : il manque ${manque} point(s).`;
-    const moins = el(
-      "button",
-      { type: "button", id: `${id}-moins`, classe: "bouton secondaire bouton-pas", "aria-label": `Baisser ${capacite.nom}`, disabled: capacite.niveau <= capacite.niveauCreation, onclick: () => changer(capacite, capacite.niveau - 1, [`${id}-moins`, `${id}-plus`]) },
-      "−",
+
+  // L'infobulle montrée, une seule à la fois : par le survol de « + » (tant
+  // que la souris reste sur la vignette ou sur elle), par son focus, ou
+  // épinglée par « Niveau suivant ▸ ». Le volet du bas, sur un téléphone.
+  // Échap ferme l'une et l'autre, où que soit le focus : il s'écoute sur la
+  // page tant que l'une est ouverte.
+  let montree = null;
+  const volet = etroit ? el("div", { classe: "volet-niveau", role: "dialog", "aria-labelledby": "volet-niveau-titre", hidden: true }) : null;
+  let ouvreur = null;
+  const voletOuvert = () => volet !== null && !volet.hidden;
+  const racine = () => globalThis.document?.documentElement ?? null;
+  const ecouterEchap = () => {
+    if (montree !== null || voletOuvert()) racine()?.addEventListener("keydown", surEchap);
+    else racine()?.removeEventListener?.("keydown", surEchap);
+  };
+  const cacher = (entree) => {
+    Object.assign(entree, { survolee: false, focalisee: false, epinglee: false });
+    entree.noeud.hidden = true;
+    entree.bouton?.setAttribute("aria-expanded", "false");
+    if (montree === entree) montree = null;
+    ecouterEchap();
+  };
+  const revoir = (entree) => {
+    if (!entree.survolee && !entree.focalisee && !entree.epinglee) {
+      cacher(entree);
+      return;
+    }
+    if (montree !== null && montree !== entree) cacher(montree);
+    montree = entree;
+    entree.noeud.hidden = false;
+    entree.bouton?.setAttribute("aria-expanded", String(entree.epinglee));
+    ecouterEchap();
+  };
+  const fermerVolet = () => {
+    if (!voletOuvert()) return;
+    volet.hidden = true;
+    volet.replaceChildren();
+    const retour = ouvreur;
+    ouvreur = null;
+    ecouterEchap();
+    retour?.focus();
+  };
+  const ouvrirVolet = (bouton, { titre, corps }, passer) => {
+    const entete = el("h3", { id: "volet-niveau-titre", classe: "volet-niveau-titre", tabindex: "-1" }, titre);
+    volet.replaceChildren(
+      el("span", { classe: "volet-poignee", "aria-hidden": "true" }),
+      entete,
+      ...corps,
+      el("div", { classe: "boutons" }, el("button", { type: "button", classe: "bouton secondaire", onclick: fermerVolet }, "Fermer"), passer),
     );
-    const plus = el(
-      "button",
-      { type: "button", id: `${id}-plus`, classe: "bouton secondaire bouton-pas", "aria-label": `Monter ${capacite.nom}`, "aria-describedby": `${id}-raison`, disabled: !peutMonter, onclick: () => changer(capacite, suivant, [`${id}-plus`, `${id}-moins`]) },
-      "+",
-    );
-    // Avant : le niveau de départ ; après : le niveau choisi, sinon le suivant.
-    const apres = Math.min(Math.max(capacite.niveau, capacite.niveauCreation + 1), capacite.niveauMax);
-    const source = capacite.origines[0] ?? null;
-    const objet = o.personnage.equipement.find((e) => cle(e.nom) === cle(source ?? ""));
-    // La clé de l'état (ouvert, fermé) suit la place, avant ou après, pas le niveau.
-    const decrite = (niveau, intitule, place) => capaciteDecrite(o, capacite.nom, { bloc: source, niveau, qualite: objet?.qualite ?? QUALITE_CREATION, intitule, cle: `etape8|${capacite.nom}|${place}` });
-    return el(
-      "li",
-      { classe: "capacite-ligne" },
-      el("p", {}, el("strong", {}, capacite.nom), " ", el("span", { classe: "detail" }, capacite.origines.join(", "))),
-      el(
-        "div",
-        { classe: "capacite-niveau" },
-        el("div", { classe: "pas-a-pas" }, moins, el("span", { id, classe: "valeur-pas", "aria-live": "polite" }, `niveau ${capacite.niveau}`), plus),
-        el("span", { classe: "detail" }, `coût : ${coutLisible(capacite.cout)}`),
-      ),
-      el("p", { id: `${id}-raison`, classe: "secondaire-texte petit" }, raison),
-      el(
-        "ul",
-        { classe: "capacites-decrites avant-apres" },
-        decrite(capacite.niveauCreation, "Avant l'évolution", "avant"),
-        decrite(apres, apres === capacite.niveau ? "Après l'évolution (choisie)" : "Après l'évolution", "apres"),
-      ),
-    );
-  });
+    volet.hidden = false;
+    ouvreur = bouton;
+    ecouterEchap();
+    entete.focus();
+  };
+  // Une infobulle ou un volet d'un rendu que la page a quitté ne prend pas Échap.
+  function surEchap(evenement) {
+    if (evenement?.key !== "Escape") return;
+    const prise = (montree !== null && montree.noeud.isConnected !== false) || (voletOuvert() && volet.isConnected !== false);
+    if (montree !== null) cacher(montree);
+    fermerVolet();
+    if (prise) evenement.preventDefault?.();
+    else racine()?.removeEventListener?.("keydown", surEchap);
+  }
+
+  const vignettes = fiche.capacites
+    .filter((c) => !c.aVenir)
+    .map((capacite, i) => {
+      const id = `niveau-${i}`;
+      const evolue = capacite.peutEvoluer && capacite.niveauCreation >= 1;
+      const suivant = capacite.niveau + 1;
+      const auMaximum = suivant > capacite.niveauMax;
+      const permis = evolue && !auMaximum && niveauxPermis(fiche, capacite).includes(suivant);
+      const ecart = auMaximum ? 0 : COUT_NIVEAU[suivant] - COUT_NIVEAU[capacite.niveau];
+      const manque = auMaximum ? 0 : points.depenses + ecart - POINTS_CREATION;
+      const raison =
+        capacite.niveau === 0
+          ? "Niveau 0 : cette capacité n'évolue pas."
+          : !evolue || auMaximum
+            ? "Niveau maximal atteint."
+            : accorder(permis ? `Niveau ${suivant} : ${ecart} point(s) de plus.` : `Niveau ${suivant} : il manque ${manque} point(s).`);
+      const etat = { reliquat: points.reliquat, ecart, manque, permis };
+      const compare = evolue && !auMaximum;
+      // L'infobulle : sur un ordinateur, pour « + » ; ailleurs qu'au téléphone, pour « Niveau suivant ▸ ».
+      const bulle = compare && (souris || !etroit) ? { noeud: null, bouton: null, survolee: false, focalisee: false, epinglee: false } : null;
+      if (bulle) {
+        const { titre, corps } = comparaison(o, capacite, etat);
+        bulle.noeud = el("div", { id: `${id}-comparaison`, classe: "infobulle-niveau", role: "tooltip", hidden: true }, el("p", { classe: "comparaison-titre" }, titre), corps);
+      }
+      const plusAvecBulle = bulle !== null && souris;
+      const moins = evolue
+        ? el(
+            "button",
+            { type: "button", id: `${id}-moins`, classe: "bouton secondaire bouton-pas", "aria-label": `Baisser ${capacite.nom}`, disabled: capacite.niveau <= capacite.niveauCreation, onclick: () => changer(capacite, capacite.niveau - 1, [`${id}-moins`, `${id}-plus`]) },
+            "−",
+          )
+        : null;
+      const plus = evolue
+        ? el(
+            "button",
+            {
+              type: "button",
+              id: `${id}-plus`,
+              classe: "bouton secondaire bouton-pas",
+              "aria-label": `Monter ${capacite.nom}`,
+              "aria-describedby": plusAvecBulle ? `${id}-raison ${id}-comparaison` : `${id}-raison`,
+              disabled: !permis,
+              onclick: () => changer(capacite, suivant, [`${id}-plus`, `${id}-moins`]),
+            },
+            "+",
+          )
+        : null;
+      if (plusAvecBulle) {
+        plus.addEventListener("pointerenter", (evenement) => {
+          if (evenement?.pointerType === "touch") return;
+          bulle.survolee = true;
+          revoir(bulle);
+        });
+        plus.addEventListener("focus", () => {
+          bulle.focalisee = true;
+          revoir(bulle);
+        });
+        plus.addEventListener("blur", () => {
+          bulle.focalisee = false;
+          revoir(bulle);
+        });
+      }
+      // « Niveau suivant ▸ » : une divulgation de l'infobulle, ou le volet du téléphone.
+      let suite = null;
+      if (compare) {
+        suite = el("button", { type: "button", id: `${id}-suivant`, classe: "bouton-suivant" }, "Niveau suivant ▸");
+        if (etroit) {
+          suite.setAttribute("aria-haspopup", "dialog");
+          suite.addEventListener("click", () => {
+            const passer = el(
+              "button",
+              { type: "button", classe: "bouton", disabled: !permis, "aria-describedby": `${id}-raison`, onclick: () => changer(capacite, suivant, [`${id}-suivant`, `${id}-plus`, `${id}-moins`]) },
+              `Passer au niveau ${suivant}`,
+            );
+            ouvrirVolet(suite, comparaison(o, capacite, etat), passer);
+          });
+        } else {
+          bulle.bouton = suite;
+          suite.setAttribute("aria-expanded", "false");
+          suite.setAttribute("aria-controls", `${id}-comparaison`);
+          suite.addEventListener("click", () => {
+            const fermer = bulle.epinglee;
+            bulle.epinglee = !fermer;
+            if (fermer) cacher(bulle);
+            else revoir(bulle);
+          });
+        }
+      }
+      const ameliore = capacite.niveau > capacite.niveauCreation;
+      const vignetteDeLaCapacite = el(
+        "li",
+        { classe: ameliore ? "vignette vignette-capacite amelioree" : "vignette vignette-capacite" },
+        el(
+          "p",
+          { classe: "vignette-capacite-tete" },
+          el("span", { classe: "capacite-nom" }, capacite.nom),
+          " ",
+          el("span", { classe: "detail" }, origineEcrite(o, capacite)),
+          ameliore ? [" ", el("span", { classe: "mention-amelioree" }, "amélioré")] : null,
+        ),
+        evolue
+          ? el(
+              "div",
+              { classe: "capacite-niveau" },
+              el("div", { classe: "pas-a-pas" }, moins, el("span", { id, classe: "valeur-pas", "aria-live": "polite" }, `niveau ${capacite.niveau}`), plus),
+              el("span", { classe: "detail cout-capacite" }, `coût : ${coutLisible(capacite.cout)}`),
+            )
+          : null,
+        el("div", { classe: "vignette-capacite-effet" }, effetsEcrits(capacite)),
+        el("div", { classe: "vignette-capacite-pied" }, el("p", { id: `${id}-raison`, classe: "secondaire-texte petit" }, raison), suite),
+        bulle?.noeud ?? null,
+      );
+      // La souris qui quitte la vignette, et l'infobulle qui en fait partie.
+      if (plusAvecBulle) {
+        vignetteDeLaCapacite.addEventListener("pointerleave", () => {
+          bulle.survolee = false;
+          revoir(bulle);
+        });
+      }
+      return vignetteDeLaCapacite;
+    });
+
+  const jauge = el(
+    "span",
+    { classe: "jauge-points", "aria-hidden": "true" },
+    Array.from({ length: points.plafond }, (_, i) => el("span", { classe: i < points.depenses ? "jauge-case" : "jauge-case vide" })),
+  );
   return [
-    el("p", { classe: "compteur-points", role: "status" }, `Points dépensés : ${points.depenses} / ${points.plafond} · reliquat : ${points.reliquat}`),
-    points.recus > points.plafond ? el("p", { classe: "message" }, `Les capacités reçues valent déjà ${points.recus} points : aucune montée n'est possible.`) : null,
     el(
-      "p",
-      { classe: "secondaire-texte petit" },
-      `Points d'une capacité : ${COUT_NIVEAU.slice(1).map((cout, i) => `niveau ${i + 1} = ${cout}`).join(", ")} ; les capacités de niveau 0 ne comptent pas. Seules les capacités qui peuvent évoluer sont ici ; toutes figurent au récapitulatif.`,
+      "div",
+      { classe: "points-capacites" },
+      el("p", { classe: "compteur-points", role: "status" }, el("span", {}, `Points dépensés : ${points.depenses} / ${points.plafond}`), " ", jauge, " ", el("span", {}, `reliquat : ${points.reliquat}`)),
+      el(
+        "p",
+        { classe: "secondaire-texte petit" },
+        `Points d'une capacité : ${COUT_NIVEAU.slice(1).map((cout, i) => `niveau ${i + 1} = ${cout}`).join(", ")} ; les capacités de niveau 0 ne comptent pas.`,
+        souris ? " Survolez « + » pour voir le niveau suivant." : null,
+      ),
     ),
-    lignes.length ? el("ul", { classe: "capacites-creation" }, lignes) : el("p", { classe: "secondaire-texte" }, "Aucune capacité ne peut évoluer."),
+    points.recus > points.plafond ? el("p", { classe: "message" }, `Les capacités reçues valent déjà ${points.recus} points : aucune montée n'est possible.`) : null,
+    vignettes.length ? el("ul", { classe: "vignettes-capacites" }, vignettes) : el("p", { classe: "secondaire-texte" }, "Le personnage n'a encore aucune capacité."),
+    volet,
   ];
 }
 
