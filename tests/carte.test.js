@@ -554,31 +554,42 @@ test("index.html — la feuille de la carte est liée, après celle de la fiche"
 });
 
 // Les feuilles que lie une page, dans l'ordre, et ce qui manque à cet ordre
-// pour le simulateur de combat (§ 17).
+// pour le simulateur de combat (§ 17) et les ornements des thèmes (§ 10.1).
 function defautsDesFeuilles(page) {
   const liens = [...page.matchAll(/<link rel="stylesheet" href="([^"]+)">/g)].map(([, href]) => href);
   const defauts = [];
-  if (liens.filter((href) => href === "css/combat.css").length !== 1) defauts.push("css/combat.css n'est pas liée, une fois");
+  const uneFois = (feuille) => liens.filter((href) => href === feuille).length === 1;
+  // Les feuilles d'écran : toutes, hors les ornements, qui les suivent.
+  const ecrans = liens.filter((href) => href !== "css/ornements.css");
+  if (!uneFois("css/combat.css")) defauts.push("css/combat.css n'est pas liée, une fois");
   // Après l'interface, dont elle reprend les boutons et les champs ; après la fiche et la carte, que son panneau montre.
-  else if (liens.indexOf("css/combat.css") !== liens.length - 1) defauts.push("css/combat.css n'est pas la dernière");
+  else if (ecrans.indexOf("css/combat.css") !== ecrans.length - 1) defauts.push("css/combat.css n'est pas la dernière des feuilles d'écran");
+  // Après tout ce qu'ils ornent, les panneaux du combat compris.
+  if (!uneFois("css/ornements.css")) defauts.push("css/ornements.css n'est pas liée, une fois");
+  else if (liens.indexOf("css/ornements.css") !== liens.length - 1) defauts.push("css/ornements.css n'est pas la dernière");
   if (liens.indexOf("css/jetons.css") !== 0) defauts.push("les jetons ne viennent pas d'abord");
   if ((page.match(/<link\b[^>]*stylesheet/g) ?? []).length !== liens.length) defauts.push("une feuille est liée sous une autre forme");
   return { liens, defauts };
 }
 
-test("index.html — la feuille du combat est liée, la dernière ; l'ordre des autres ne change pas", () => {
+test("index.html — la feuille du combat est liée, la dernière des feuilles d'écran, et les ornements la suivent ; l'ordre des autres ne change pas", () => {
   const page = lire("index.html");
   const { liens, defauts } = defautsDesFeuilles(page);
   assert.deepEqual(defauts, []);
-  // La feuille des thèmes (lot 5) suit aussitôt les jetons qu'elle redéfinit.
-  assert.deepEqual(liens, ["css/jetons.css", "css/themes.css", "css/ecran.css", "css/personnage.css", "css/fiche.css", "css/adversaire.css", "css/combat.css"]);
+  // La feuille des thèmes (lot 5) suit aussitôt les jetons qu'elle redéfinit ; celle des ornements ferme la liste.
+  assert.deepEqual(liens, ["css/jetons.css", "css/themes.css", "css/ecran.css", "css/personnage.css", "css/fiche.css", "css/adversaire.css", "css/combat.css", "css/ornements.css"]);
   const lien = '<link rel="stylesheet" href="css/combat.css">';
+  const ornements = '<link rel="stylesheet" href="css/ornements.css">';
   const fautive = (texte, motif) => {
     assert.notEqual(texte, page);
     assert.match(defautsDesFeuilles(texte).defauts.join("\n"), motif);
   };
-  fautive(page.replace(/ *<link rel="stylesheet" href="css\/combat\.css">\r?\n/, ""), /n'est pas liée/);
-  fautive(page.replace(lien, `${lien}\n    ${lien}`), /n'est pas liée, une fois/);
-  fautive(page.replace(lien, "").replace('<link rel="stylesheet" href="css/jetons.css">', `${lien}\n    <link rel="stylesheet" href="css/jetons.css">`), /n'est pas la dernière\nles jetons ne viennent pas d'abord/);
-  fautive(page.replace(lien, '<link href="css/combat.css" rel="stylesheet">'), /n'est pas liée, une fois\nune feuille est liée sous une autre forme/);
+  fautive(page.replace(/ *<link rel="stylesheet" href="css\/combat\.css">\r?\n/, ""), /^css\/combat\.css n'est pas liée, une fois$/);
+  fautive(page.replace(lien, `${lien}\n    ${lien}`), /^css\/combat\.css n'est pas liée, une fois$/);
+  fautive(page.replace(lien, "").replace('<link rel="stylesheet" href="css/jetons.css">', `${lien}\n    <link rel="stylesheet" href="css/jetons.css">`), /^css\/combat\.css n'est pas la dernière des feuilles d'écran\nles jetons ne viennent pas d'abord$/);
+  fautive(page.replace(lien, '<link href="css/combat.css" rel="stylesheet">'), /^css\/combat\.css n'est pas liée, une fois\nune feuille est liée sous une autre forme$/);
+  // Les ornements absents, en double, ou avant le combat.
+  fautive(page.replace(/ *<link rel="stylesheet" href="css\/ornements\.css">\r?\n/, ""), /^css\/ornements\.css n'est pas liée, une fois$/);
+  fautive(page.replace(ornements, `${ornements}\n    ${ornements}`), /^css\/ornements\.css n'est pas liée, une fois$/);
+  fautive(page.replace(ornements, "").replace(lien, `${ornements}\n    ${lien}`), /^css\/ornements\.css n'est pas la dernière$/);
 });

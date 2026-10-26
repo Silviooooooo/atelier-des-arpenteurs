@@ -1,0 +1,253 @@
+/* Les ornements des thèmes (SPECIFICATION.md, § 10.1).
+
+   Un thème ne redéfinit que des jetons (css/themes.css). Vingt-sept y
+   ajoutent ici un ornement, en CSS seulement, sans image : une bande sous
+   l'en-tête, un filet aux panneaux, un fond de page, l'allure des titres,
+   la lueur des boutons principaux. Les autres n'en ont aucun.
+
+   La feuille est écrite à la main, et non engendrée comme celle des
+   thèmes : un ornement n'est pas une valeur de jeton que le catalogue
+   (js/apparence/themes.js) pourrait donner, mais une règle sur des
+   éléments choisis. Ses couleurs sont donc écrites en dur, celles de la
+   maquette validée.
+
+   Elle n'agit qu'à l'écran : tout est dans @media screen, et le papier ne
+   change jamais. Chaque règle part de :root[data-theme="<code>"] : les
+   vignettes de la page Apparence, qui portent elles aussi data-theme, ne
+   prennent aucun ornement. Un ornement de titre ne touche ni la fiche de
+   personnage ni la carte d'adversaire, et le filet des panneaux laisse sa
+   marque à un état (une vignette choisie, la fiche qui joue ou qui est
+   ciblée). La bande sous l'en-tête remplace son trait du bas, et une
+   seconde couleur est une ombre portée : rien d'autre ne bouge.
+
+   Liée la dernière, après css/combat.css, dont elle orne les panneaux. */
+
+@media screen {
+  /* Contraste élevé : des traits plus épais, un texte plus grand. */
+  :root[data-theme="contraste"] {
+    --trait: 2px;
+    --taille-texte: 1.0625rem;
+  }
+
+  /* Givre : sous l'en-tête, une bande irisée ; les titres et la marque en
+     capitales espacées. */
+  :root[data-theme="givre"] header.entete {
+    border-bottom: 3px solid transparent;
+    border-image: linear-gradient(90deg, #3fd9b0, #7aa7ff, #c77dff, #3fd9b0) 1;
+  }
+
+  :root[data-theme="givre"] :is(h1, h2):not(.feuille *, .carte-adversaire *),
+  :root[data-theme="givre"] .marque {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* Néon : les titres et la marque luisent, les boutons principaux aussi. */
+  :root[data-theme="neon"] :is(h1, h2):not(.feuille *, .carte-adversaire *),
+  :root[data-theme="neon"] .marque {
+    text-shadow: 0 0 10px color-mix(in srgb, var(--couleur-titre) 65%, transparent);
+  }
+
+  :root[data-theme="neon"] .bouton:not(.secondaire) {
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+
+  /* Enluminure : une lettrine aux titres, deux filets aux panneaux, un
+     double filet sous l'en-tête. */
+  :root[data-theme="enluminure"] :is(h1, h2):not(.feuille *, .carte-adversaire *)::first-letter {
+    font-family: "Cinzel Decorative", Georgia, serif;
+    font-weight: 700;
+    color: #b13a1d;
+    font-size: 1.5em;
+    line-height: 0.8;
+    text-shadow: 1px 1px 0 #c9a548;
+  }
+
+  :root[data-theme="enluminure"] :is(.message, .anomalie, .confirmation, .manques, .vignette,
+    .panneau-telephone, .combat-avis, .combat-plateau, .combat-action, .combat-preparation,
+    .combat-journal, .combat-panneau, .combat-fiche):not(.choisie, .joue, .ciblee) {
+    box-shadow: inset 0 0 0 2px var(--fond-2), inset 0 0 0 3px #c9a548;
+  }
+
+  :root[data-theme="enluminure"] header.entete {
+    border-bottom: 3px double #b8902f;
+  }
+
+  /* Constellations : un ciel étoilé, sept étoiles dont deux dorées, en
+     tuile de 260 px. */
+  :root[data-theme="constellations"] body {
+    background-image:
+      radial-gradient(1.2px 1.2px at 12% 18%, rgba(255, 255, 255, 0.85), transparent 60%),
+      radial-gradient(1px 1px at 67% 9%, rgba(255, 255, 255, 0.7), transparent 60%),
+      radial-gradient(1.4px 1.4px at 83% 41%, rgba(243, 213, 124, 0.9), transparent 60%),
+      radial-gradient(1px 1px at 31% 66%, rgba(255, 255, 255, 0.6), transparent 60%),
+      radial-gradient(1.2px 1.2px at 52% 88%, rgba(255, 255, 255, 0.75), transparent 60%),
+      radial-gradient(1px 1px at 91% 77%, rgba(255, 255, 255, 0.6), transparent 60%),
+      radial-gradient(1px 1px at 6% 92%, rgba(243, 213, 124, 0.8), transparent 60%);
+    background-size: 260px 260px;
+  }
+
+  /* Abrasia : un double filet sous les grands titres ; la marque et les
+     grands titres à peine espacés. */
+  :root[data-theme="abrasia"] h1:not(.feuille *, .carte-adversaire *) {
+    padding-bottom: 2px;
+    border-bottom: 3px double #cdbf9c;
+    letter-spacing: 0.02em;
+  }
+
+  :root[data-theme="abrasia"] .marque {
+    letter-spacing: 0.03em;
+  }
+
+  /* Ténèbres : les grands titres et la marque à peine espacés. */
+  :root[data-theme="tenebres"] h1:not(.feuille *, .carte-adversaire *),
+  :root[data-theme="tenebres"] .marque {
+    letter-spacing: 0.03em;
+  }
+
+  /* Taverne : le bord gauche du bandeau du combat à la couleur des titres,
+     sauf pendant un jet, qui garde l'alerte. */
+  :root[data-theme="taverne"] .combat-bandeau:not(.combat-bandeau-en-cours) {
+    border-left-color: var(--couleur-titre);
+  }
+
+  /* Sables : sous l'en-tête, des bandes de trois couleurs. */
+  :root[data-theme="sables"] header.entete {
+    border-bottom: 3px solid transparent;
+    border-image: repeating-linear-gradient(90deg, #0b6977 0 10px, #9b3b1c 10px 20px, #c9a24e 20px 30px) 1;
+  }
+
+  /* Héraldique : sous l'en-tête, l'azur puis l'or. */
+  :root[data-theme="heraldique"] header.entete {
+    border-bottom: 3px solid #1f3d8c;
+    box-shadow: 0 3px 0 #c9a24e;
+  }
+
+  /* Forge : sous l'en-tête, la braise. */
+  :root[data-theme="forge"] header.entete {
+    border-bottom: 3px solid #f28c3b;
+  }
+
+  /* Sylve : sous l'en-tête, un filet doré. */
+  :root[data-theme="sylve"] header.entete {
+    border-bottom: 2px solid #e3cd84;
+  }
+
+  /* Cathédrale : sous l'en-tête, un vitrail de quatre couleurs. */
+  :root[data-theme="cathedrale"] header.entete {
+    border-bottom: 4px solid transparent;
+    border-image: repeating-linear-gradient(90deg, #c0283c 0 18px, #2f5fd0 18px 36px, #e0a43a 36px 54px, #2f9e6a 54px 72px) 1;
+  }
+
+  /* Les quatre fonds de page en dégradé (Abysses, Clair-obscur, Ascension,
+     Nécropole) suivent la fenêtre, comme sur la maquette, où ils couvrent
+     l'écran : sans cela, le dégradé s'étirerait sur une longue page. Sans
+     répétition : là où un navigateur ne les fixe pas, la couleur du fond
+     prend la suite du dégradé. */
+
+  /* Abysses : le fond s'assombrit vers le bas. */
+  :root[data-theme="abysses"] body {
+    background-image: linear-gradient(180deg, #0b2c3b 0, #04161f 70%);
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+
+  /* Arcade : sous l'en-tête, un damier ; les grands titres et la marque en
+     italique. */
+  :root[data-theme="arcade"] header.entete {
+    border-bottom: 8px solid transparent;
+    border-image: repeating-linear-gradient(90deg, #111111 0 8px, #ffffff 8px 16px) 1;
+  }
+
+  :root[data-theme="arcade"] h1:not(.feuille *, .carte-adversaire *),
+  :root[data-theme="arcade"] .marque {
+    font-style: italic;
+    letter-spacing: 0.02em;
+  }
+
+  /* Clair-obscur : un halo en haut à gauche ; les grands titres en
+     italique. */
+  :root[data-theme="clair-obscur"] body {
+    background-image: radial-gradient(ellipse at 15% 0%, rgba(227, 184, 92, 0.16), transparent 55%);
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+
+  :root[data-theme="clair-obscur"] h1:not(.feuille *, .carte-adversaire *) {
+    font-style: italic;
+  }
+
+  /* Ascension : le fond s'assombrit vers le bas. */
+  :root[data-theme="ascension"] body {
+    background-image: linear-gradient(180deg, #33205f 0, #1b1033 60%);
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+
+  /* Bastion : sous l'en-tête, un double filet doré. */
+  :root[data-theme="bastion"] header.entete {
+    border-bottom: 3px double #e2b74c;
+  }
+
+  /* Journal de quête : un filet doré dans les panneaux. */
+  :root[data-theme="quete"] :is(.message, .anomalie, .confirmation, .manques, .vignette,
+    .panneau-telephone, .combat-avis, .combat-plateau, .combat-action, .combat-preparation,
+    .combat-journal, .combat-panneau, .combat-fiche):not(.choisie, .joue, .ciblee) {
+    box-shadow: inset 0 0 0 1px #b8913c;
+  }
+
+  /* Faille : sous l'en-tête, un filet de bronze ; les boutons principaux
+     bordés d'or pâle. */
+  :root[data-theme="faille"] header.entete {
+    border-bottom: 2px solid #785a28;
+  }
+
+  :root[data-theme="faille"] .bouton:not(.secondaire) {
+    border-color: #c8aa6e;
+  }
+
+  /* Laiton : sous l'en-tête, une bande de laiton poli. */
+  :root[data-theme="laiton"] header.entete {
+    border-bottom: 4px solid transparent;
+    border-image: linear-gradient(90deg, #8a5a1c, #e0b45c, #8a5a1c) 1;
+  }
+
+  /* Belle Époque : sous l'en-tête, un double filet doré ; les grands titres
+     en italique. */
+  :root[data-theme="belle-epoque"] header.entete {
+    border-bottom: 3px double #b8913c;
+  }
+
+  :root[data-theme="belle-epoque"] h1:not(.feuille *, .carte-adversaire *) {
+    font-style: italic;
+  }
+
+  /* Nécropole : une brume qui monte du bas. */
+  :root[data-theme="necropole"] body {
+    background-image: radial-gradient(ellipse at 50% 120%, rgba(167, 224, 138, 0.1), transparent 60%);
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+
+  /* Compagnie franche : sous l'en-tête, un filet rouge sombre. */
+  :root[data-theme="compagnie"] header.entete {
+    border-bottom: 3px solid #7a2a1c;
+  }
+
+  /* Carte d'aventure : sous l'en-tête, la terre puis l'or. */
+  :root[data-theme="carte-aventure"] header.entete {
+    border-bottom: 3px solid #8b4a2e;
+    box-shadow: 0 3px 0 #c9a24e;
+  }
+
+  /* Grand cru : sous l'en-tête, le vin puis l'or. */
+  :root[data-theme="grand-cru"] header.entete {
+    border-bottom: 3px solid #7b1e2e;
+    box-shadow: 0 3px 0 #c9a24e;
+  }
+
+  /* Velours : sous l'en-tête, un filet doré. */
+  :root[data-theme="velours"] header.entete {
+    border-bottom: 2px solid #d9a75b;
+  }
+}
