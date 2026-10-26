@@ -14,11 +14,13 @@
    Elle n'agit qu'à l'écran : tout est dans @media screen, et le papier ne
    change jamais. Chaque règle part de :root[data-theme="<code>"] : les
    vignettes de la page Apparence, qui portent elles aussi data-theme, ne
-   prennent aucun ornement. Un ornement de titre ne touche ni la fiche de
+   prennent aucun ornement ; et ce que la racine de Contraste élevé leur
+   transmet (--trait, qu'aucun thème ne redéfinit) leur est rendu à la
+   valeur d'Atelier. Un ornement de titre ne touche ni la fiche de
    personnage ni la carte d'adversaire, et le filet des panneaux laisse sa
-   marque à un état (une vignette choisie, la fiche qui joue ou qui est
-   ciblée). La bande sous l'en-tête remplace son trait du bas, et une
-   seconde couleur est une ombre portée : rien d'autre ne bouge.
+   marque à un état (une vignette choisie ou améliorée, la fiche qui joue
+   ou qui est ciblée). La bande sous l'en-tête remplace son trait du bas, et
+   une seconde couleur est une ombre portée : rien d'autre ne bouge.
 
    Liée la dernière, après css/combat.css, dont elle orne les panneaux. */
 
@@ -27,6 +29,12 @@
   :root[data-theme="contraste"] {
     --trait: 2px;
     --taille-texte: 1.0625rem;
+  }
+
+  /* Les vignettes de la page Apparence gardent le trait d'Atelier
+     (css/jetons.css) : sans cela, chacune hériterait celui de la racine. */
+  :root[data-theme="contraste"] .vignette-theme[data-theme] {
+    --trait: 1px;
   }
 
   /* Givre : sous l'en-tête, une bande irisée ; les titres et la marque en
@@ -65,7 +73,7 @@
 
   :root[data-theme="enluminure"] :is(.message, .anomalie, .confirmation, .manques, .vignette,
     .panneau-telephone, .combat-avis, .combat-plateau, .combat-action, .combat-preparation,
-    .combat-journal, .combat-panneau, .combat-fiche):not(.choisie, .joue, .ciblee) {
+    .combat-journal, .combat-panneau, .combat-fiche):not(.choisie, .amelioree, .joue, .ciblee) {
     box-shadow: inset 0 0 0 2px var(--fond-2), inset 0 0 0 3px #c9a548;
   }
 
@@ -192,7 +200,7 @@
   /* Journal de quête : un filet doré dans les panneaux. */
   :root[data-theme="quete"] :is(.message, .anomalie, .confirmation, .manques, .vignette,
     .panneau-telephone, .combat-avis, .combat-plateau, .combat-action, .combat-preparation,
-    .combat-journal, .combat-panneau, .combat-fiche):not(.choisie, .joue, .ciblee) {
+    .combat-journal, .combat-panneau, .combat-fiche):not(.choisie, .amelioree, .joue, .ciblee) {
     box-shadow: inset 0 0 0 1px #b8913c;
   }
 

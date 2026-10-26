@@ -149,3 +149,29 @@ test("les textes égaux : un seul morceau, sans marque", () => {
   const texte = "Brûle trois adversaires à 1 case.";
   assert.deepEqual(difference(texte, texte), { avant: [{ texte, retire: false }], apres: [{ texte, ajoute: false }] });
 });
+
+// La borne de difference.js (CASES_MAX, quatre millions de cases) : la table
+// de la sous-suite porte (n + 1) × (m + 1) cases, n et m comptant les mots
+// du milieu, hors le début et la fin communs. Les deux textes ont ici le même
+// début et la même fin, et, au milieu, les mêmes mots communs, encadrés de
+// mots qui diffèrent.
+const COMMUNS = Array.from({ length: 1997 }, (_, k) => `m${k}`);
+const milieu = (...mots) => `Début ${mots.join(" ")} fin.`;
+
+test("la borne : juste sous elle, 2000 × 2000 cases, la sous-suite exacte", () => {
+  // n = m = 1999 : (n + 1) × (m + 1) vaut la borne, sans la passer.
+  const { retires, ajoutes } = comparer(milieu("a", ...COMMUNS, "z"), milieu("b", ...COMMUNS, "y"));
+  assert.deepEqual(retires, ["a", "z"]);
+  assert.deepEqual(ajoutes, ["b", "y"]);
+});
+
+test("la borne : juste au-dessus, 2000 × 2001 cases, tout le milieu marqué ; le début et la fin communs demeurent", () => {
+  // Un mot de plus au texte suivant : n = 1999, m = 2000.
+  const avant = milieu("a", ...COMMUNS, "z");
+  const apres = milieu("b", ...COMMUNS, "y", "w");
+  const { d, retires, ajoutes } = comparer(avant, apres);
+  assert.deepEqual(retires, ["a", ...COMMUNS, "z"]);
+  assert.deepEqual(ajoutes, ["b", ...COMMUNS, "y", "w"]);
+  assert.deepEqual(d.avant[0], { texte: "Début ", retire: false });
+  assert.deepEqual(d.apres.at(-1), { texte: " fin.", ajoute: false });
+});

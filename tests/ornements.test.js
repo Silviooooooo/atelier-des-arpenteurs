@@ -2,8 +2,10 @@
 // css/ornements.css, écrite à la main, lue comme un texte. Son rendu n'est
 // pas mis à l'épreuve, seulement sa forme : tout à l'écran, chaque règle
 // sous la racine d'un thème du catalogue, rien de téléchargé, aucun
-// ornement de titre sur la fiche ni sur la carte, les thèmes ornés, et sa
-// place dans index.html.
+// ornement de titre sur la fiche ni sur la carte, le filet des panneaux
+// qui laisse leur cadre aux états, le trait d'Atelier rendu aux vignettes
+// de la page Apparence sous Contraste élevé, les thèmes ornés, et sa place
+// dans index.html.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -43,8 +45,9 @@ function diviser(prelude) {
 }
 
 // L'enveloppe de la feuille (ce qui précède sa première accolade), ce qui
-// suit l'accolade qui la ferme, ce qui reste entre les règles, et les
-// sélecteurs de chaque règle.
+// suit l'accolade qui la ferme, ce qui reste entre les règles, les règles
+// (leurs sélecteurs et leurs déclarations, blancs réduits) et tous leurs
+// sélecteurs.
 function lireFeuille(css) {
   const ouverture = css.indexOf("{");
   let profondeur = 0;
@@ -54,16 +57,26 @@ function lireFeuille(css) {
     else if (css[i] === "}" && --profondeur === 0) fin = i;
   }
   const interieur = css.slice(ouverture + 1, fin);
-  const regles = [...interieur.matchAll(/([^{}]+)\{[^{}]*\}/g)].map(([, prelude]) => diviser(prelude));
+  const regles = [...interieur.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, prelude, corps]) => ({
+    selecteurs: diviser(prelude),
+    corps: corps.trim().replace(/\s+/g, " "),
+  }));
   return {
     enveloppe: css.slice(0, ouverture).trim(),
     apres: css.slice(fin + 1).trim(),
     reste: interieur.replace(/[^{}]+\{[^{}]*\}/g, "").trim(),
-    selecteurs: regles.flat(),
+    regles,
+    selecteurs: regles.flatMap((regle) => regle.selecteurs),
   };
 }
 
-const { enveloppe, apres, reste, selecteurs } = lireFeuille(FEUILLE);
+const { enveloppe, apres, reste, regles, selecteurs } = lireFeuille(FEUILLE);
+const themeDe = (selecteur) => selecteur.match(/^:root\[data-theme="([^"]+)"\]/)?.[1];
+
+// Les états dont le cadre est à eux : une vignette choisie ou améliorée (le
+// créateur), la fiche qui joue ou qui est ciblée (le combat). Le filet des
+// panneaux ne les touche pas.
+const ETATS = ":not(.choisie, .amelioree, .joue, .ciblee)";
 
 test("ornements.css — la feuille est tout entière dans un seul @media screen, sans autre règle @ ; aucun @font-face, @import ni url()", () => {
   assert.equal(enveloppe, "@media screen");
@@ -88,8 +101,34 @@ test("ornements.css — un ornement de titre ne touche ni la fiche ni la carte d
   for (const selecteur of titres) assert.ok(selecteur.includes(":not(.feuille *, .carte-adversaire *)"), selecteur);
 });
 
+test("ornements.css — le filet des panneaux (Enluminure, Journal de quête) laisse leur cadre aux vignettes choisies ou améliorées, aux fiches qui jouent ou qui sont ciblées", () => {
+  const filets = regles.filter((regle) => regle.selecteurs.some((selecteur) => selecteur.includes(".vignette,")));
+  assert.deepEqual(filets.map((regle) => themeDe(regle.selecteurs[0])), ["enluminure", "quete"]);
+  for (const { selecteurs: liste, corps } of filets) {
+    assert.equal(liste.length, 1, `un seul sélecteur : ${liste.join(", ")}`);
+    assert.ok(liste[0].endsWith(`)${ETATS}`), liste[0]);
+    assert.match(corps, /^box-shadow: inset /);
+  }
+});
+
+test("ornements.css — sous Contraste élevé, les vignettes de la page Apparence gardent le trait d'Atelier : la seule règle qui les nomme rend --trait à sa valeur de css/jetons.css", () => {
+  const racine = regles.filter((regle) => regle.selecteurs.length === 1 && regle.selecteurs[0] === ':root[data-theme="contraste"]');
+  assert.equal(racine.length, 1);
+  assert.match(racine[0].corps, /--trait: 2px;/);
+  // Aucun thème ne redéfinit --trait : sans la remise, chaque vignette
+  // hériterait celui de la racine.
+  assert.doesNotMatch(lire("css/themes.css"), /--trait\s*:/);
+  const atelier = lire("css/jetons.css").match(/--trait:\s*([^;]+);/)[1];
+  assert.equal(atelier, "1px");
+  const vignettes = regles.filter((regle) => regle.selecteurs.some((selecteur) => selecteur.includes(".vignette-theme")));
+  assert.deepEqual(
+    vignettes.map(({ selecteurs: liste, corps }) => [liste, corps]),
+    [[[':root[data-theme="contraste"] .vignette-theme[data-theme]'], `--trait: ${atelier};`]],
+  );
+});
+
 test("ornements.css — les thèmes ornés sont exactement les vingt-sept prévus, et aucun autre", () => {
-  const ornes = new Set(selecteurs.map((selecteur) => selecteur.match(/^:root\[data-theme="([^"]+)"\]/)?.[1]));
+  const ornes = new Set(selecteurs.map(themeDe));
   assert.deepEqual([...ornes].sort(), [...ORNES].sort());
   assert.equal(ORNES.length, 27);
 });

@@ -38,7 +38,7 @@ import { ecrireTypes } from "../adversaire/carte.js";
 import { defautDe } from "../adversaire/lecture.js";
 import { horsMaitrise, positionDans, rangsDeMaitrise } from "../adversaire/resolution.js";
 import { cle } from "../banque/noms.js";
-import { calculerFiche, contexte, coutA, decrire, degatsDecrits, elementsDe, estBouclier, indexerCreation, typesDuBloc, varianteA } from "../personnage/calcul.js";
+import { calculerFiche, contexte, coutA, decrire, degatsDecrits, donneAuCombat, elementsDe, indexerCreation, typesDuBloc, varianteA } from "../personnage/calcul.js";
 import { accepter } from "../personnage/format.js";
 import { ELEMENTS, NIVEAU_MAX, PARAMETRES, TYPES_OBJET, ZONES } from "../personnage/regles.js";
 import { validerPhoto } from "./forme.js";
@@ -173,29 +173,22 @@ const CLE_LOC = cle(PARAMETRE_LOC);
 const estDeStyle = (capacite) => Boolean(capacite?.variantes.some((variante) => variante.elements.some((element) => element.nom && cle(element.nom) === cle(ELEMENTS.style))));
 
 /**
- * L'origine que vaut une source au combat, ou null si elle ne donne rien :
- * une arme ne donne ses capacités que tenue, une armure que portée, le
- * bouclier que s'il est celui qui compte ; tout autre objet les donne où
- * qu'il soit (convention du § 12).
+ * L'origine que vaut une source au combat, ou null si elle ne donne rien.
+ * Ce qui donne se lit par donneAuCombat (js/personnage/calcul.js), que le
+ * créateur lit aussi : une arme ne donne ses capacités que tenue, une
+ * armure que portée, le bouclier que s'il est celui qui compte ; tout autre
+ * objet les donne où qu'il soit (convention du § 12).
  */
 function origineDe(index, fiche, source, capacite) {
+  if (!donneAuCombat(index, fiche, source)) return null;
   if (source.role !== "equipement") {
     const bloc = index.bloc(source.nom);
-    if (!bloc) return null;
     const genre = source.role === "archetype" && estDeStyle(capacite) ? "style" : GENRE_DU_ROLE[source.role];
-    if (!genre) return null;
     return { genre, titre: genre === "style" ? ELEMENTS.style : bloc.nom, bloc, qualite: null, rang: null, choix: fiche.choix[source.role] ?? [] };
   }
   const objet = fiche.equipement[source.rang];
-  if (!objet || objet.absent || !objet.bloc) return null;
   const commun = { bloc: objet.bloc, qualite: objet.qualite, rang: objet.rang, choix: fiche.choix.equipement[objet.rang] ?? [] };
-  if (objet.type === "arme") {
-    if (fiche.attaque.mainsNues || fiche.attaque.rang !== objet.rang) return null;
-    return { ...commun, genre: "arme", titre: `${objet.nom} (${TYPES_OBJET[fiche.attaque.typeObjet].nom})` };
-  }
-  if (objet.type === "armure" && !objet.porte) return null;
-  // Un objet qui transmet une défense est un bouclier : un seul compte, équipé.
-  if (objet.type !== "armure" && estBouclier(objet.bloc) && fiche.bouclier?.rang !== objet.rang) return null;
+  if (objet.type === "arme") return { ...commun, genre: "arme", titre: `${objet.nom} (${TYPES_OBJET[fiche.attaque.typeObjet].nom})` };
   return { ...commun, genre: "objet", titre: objet.nom };
 }
 
@@ -251,7 +244,8 @@ export function photographierPersonnage(banque, personnage, { index = indexerCre
   const nomResolu = (nom) => index.capacite(nom)?.nom ?? nom;
   // Les maîtrises possédées sont celles qu'une origine valable donne au
   // combat, comme toute capacité : une maîtrise que seule une arme rangée au
-  // sac donnerait ne lève aucun désavantage.
+  // sac donnerait ne lève aucun désavantage. Le créateur les compte de même
+  // (rangsDuPersonnage, js/personnage/maitrise.js).
   const possedees = fiche.capacites
     .filter((c) => !c.aVenir)
     .map((c) => ({ capacite: index.capacite(c.nom), rang: c.niveau, sources: c.sources }))

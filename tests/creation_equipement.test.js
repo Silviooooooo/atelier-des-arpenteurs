@@ -10,20 +10,33 @@
 // dans maitrise.test.js : ici, ce que l'écran en montre. Les cas que la
 // démonstration n'a pas (deux poids, une Maîtrise plus haute, trois
 // capacités) se fabriquent en mémoire.
+//
+// Relecture de la vague 5 (V-1) : l'état de chaque arme se compare, arme
+// par arme, aux désavantages que la photographie du combat donne à ses
+// capacités, le personnage la tenant ; sur la démonstration publiée
+// (sa banque chiffrée, Aubépine en brouillon), puis sur deux copies
+// retouchées : une Maîtrise que porte un objet rangé, une arme candidate
+// qui donne la sienne.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { MOT_DE_PASSE_DEMO } from "../js/banque/chargement.js";
+import { cle } from "../js/banque/noms.js";
 import { importerFichier } from "../js/banque/importation.js";
+import { photographierPersonnage } from "../js/combat/photographie.js";
 import { calculerFiche, indexerCreation } from "../js/personnage/calcul.js";
 import { nouveauPersonnage } from "../js/personnage/format.js";
 import { creerEtagere, magasinPersonnagesMemoire } from "../js/personnage/stockage.js";
+import { ouvrirAvecMotDePasse } from "../js/securite/chiffrement.js";
 import { installerDom, laisserFiler, texteDe } from "./outils/dom_simule.js";
 import { personnageEssai } from "./outils/personnage_essai.js";
 
 const RACINE = new URL("../", import.meta.url);
 const { banque: IMPORTEE } = await importerFichier(readFileSync(new URL("essais/classeur_essai.xlsx", RACINE)), "classeur_essai.xlsx");
 const BANQUE = { ...IMPORTEE, publiee_le: "2026-09-29T10:00:00+02:00" };
+// La banque de la démonstration publiée, que lit le combat.
+const { banque: DEMO } = await ouvrirAvecMotDePasse(JSON.parse(readFileSync(new URL("essais/banque_demo.chiffree.json", RACINE), "utf8")), MOT_DE_PASSE_DEMO);
 const PERMIS = "Une arme ou un pack d'un autre type n'est pas maîtrisé : il reste permis.";
 
 const creation = await import("../js/ecrans/creation.js");
@@ -187,6 +200,90 @@ test("étape 7 — les capacités d'une arme, « (désavantage) » après celles
     ({ ecran } = await etape7(personnageEssai((p) => p.niveaux.push({ capacite: "Maîtrise de l'agile", niveau: 2 })), banque));
     assert.equal(mention(arme(ecran, "Spatule souple")), "Maîtrise partielle : 2 capacités sur 3");
     assert.match(capacites(arme(ecran, "Spatule souple")), /Goûter \(désavantage\)$/);
+  } finally {
+    retirer();
+  }
+});
+
+// Les capacités d'une vignette d'arme, lues à l'écran : nom → « (désavantage) »
+// ou non. Une capacité à venir n'est pas jouée au combat : elle n'entre pas.
+function desavantagesALEcran(vignette) {
+  const texte = capacites(vignette);
+  if (texte === "Aucune capacité.") return {};
+  const lues = texte.split(" · ").filter((c) => !c.includes(" — capacité à venir"));
+  return Object.fromEntries(lues.map((c) => [c.replace(/ \(désavantage\)$/, ""), c.endsWith(" (désavantage)")]));
+}
+
+// Les mêmes, au combat : la photographie du personnage qui tient cette arme
+// (l'arme tenue sort de l'équipement, celle-ci y entre, en main, comme au
+// clic sur sa vignette ; celle qu'il tient déjà, telle quelle). Chaque façon
+// d'une capacité porte le même désavantage. null s'il ne s'ajoute pas.
+function desavantagesAuCombat(banque, personnage, nom) {
+  const equipement = structuredClone(personnage.equipement);
+  const rang = equipement.findIndex((objet) => objet.place === "arme");
+  if (rang < 0 || cle(equipement[rang].nom) !== cle(nom)) {
+    if (rang >= 0) equipement.splice(rang, 1);
+    equipement.push({ nom, choix: [], qualite: "2", place: "arme" });
+  }
+  const { photo, refus } = photographierPersonnage(banque, { ...personnage, equipement });
+  if (refus) return null;
+  const tenues = photo.valeurs.capacites.filter((c) => c.groupe.genre === "arme" && c.facons.length);
+  for (const c of tenues) assert.ok(c.facons.every((f) => f.desavantage === c.facons[0].desavantage), c.nom);
+  return Object.fromEntries(tenues.map((c) => [c.nom, c.facons[0].desavantage]));
+}
+
+// Chaque arme de la banque : l'écran dit ce que dit le combat. Une arme que
+// le combat ne prend pas (sans poids, elle n'a pas de dé) n'a pas de
+// désavantage à l'écran non plus. Rend l'écran et les armes comparées.
+async function comparerAuCombat(banque, personnage) {
+  const { ecran } = await etape7(personnage, banque);
+  const comparees = [];
+  for (const bloc of indexerCreation(banque).blocsDeType("arme")) {
+    const vignette = arme(ecran, bloc.nom);
+    const auCombat = desavantagesAuCombat(banque, personnage, bloc.nom);
+    if (auCombat === null) {
+      assert.equal(mention(vignette), "Sans maîtrise requise", bloc.nom);
+      continue;
+    }
+    assert.deepEqual(desavantagesALEcran(vignette), auCombat, bloc.nom);
+    comparees.push(bloc.nom);
+  }
+  return { ecran, comparees };
+}
+
+// Une Maîtrise du lourd, que donne un objet d'une copie de la démonstration.
+function demoOu(objet) {
+  const banque = structuredClone(DEMO);
+  banque.blocs.find((b) => b.nom === objet).capacites.push({ forme: "simple", nom: "Maîtrise du lourd" });
+  return banque;
+}
+
+test("étape 7 — l'état de chaque arme est celui du combat : arme par arme, les désavantages de la photographie, l'arme en main", async () => {
+  const retirer = installerDom();
+  try {
+    const PESEES = ["Couteau d'office", "Rouleau de fonte", "Spatule souple"];
+    // La démonstration : Aubépine tient son couteau, précis, avec la Maîtrise de l'agile.
+    let { ecran, comparees } = await comparerAuCombat(DEMO, personnageEssai());
+    assert.deepEqual(comparees, PESEES);
+    assert.equal(mention(arme(ecran, "Spatule souple")), "Maîtrise partielle : 1 capacité sur 2");
+
+    // Une Maîtrise que seul porte un objet rangé (le plastron, au sac) : ni la
+    // ligne, ni le pack lourd, ni le rouleau ne la comptent.
+    ({ ecran, comparees } = await comparerAuCombat(demoOu("Plastron de fonte"), personnageEssai()));
+    assert.deepEqual(comparees, PESEES);
+    assert.equal(texteDe(ecran.querySelector(".ligne-maitrises")), `Maîtrises d'Aubépine Crèmebrûlée : Maîtrise de l'agile [1]. ${PERMIS}`);
+    assert.equal(mention(arme(ecran, "Rouleau de fonte")), "⚠ Non maîtrisé");
+    assert.equal(mention(ecran.querySelector("#pack-lourde").parentNode), "⚠ Non maîtrisé");
+
+    // Une arme candidate qui donne sa propre Maîtrise (le rouleau, que la
+    // copie n'a plus au sac) : sa vignette la compte, comme le combat quand
+    // elle est en main ; l'arme tenue, elle, ne la voit pas.
+    const sansRouleau = personnageEssai((p) => p.equipement.splice(1, 1));
+    ({ ecran, comparees } = await comparerAuCombat(demoOu("Rouleau de fonte"), sansRouleau));
+    assert.deepEqual(comparees, PESEES);
+    assert.equal(mention(arme(ecran, "Rouleau de fonte")), "Maîtrise partielle : 1 capacité sur 3");
+    assert.equal(capacites(arme(ecran, "Rouleau de fonte")), "Frappe · Choc sourd (désavantage) · Maîtrise du lourd (désavantage)");
+    assert.equal(texteDe(ecran.querySelector(".ligne-maitrises")), `Maîtrises d'Aubépine Crèmebrûlée : Maîtrise de l'agile [1]. ${PERMIS}`);
   } finally {
     retirer();
   }

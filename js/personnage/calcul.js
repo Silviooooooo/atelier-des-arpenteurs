@@ -20,6 +20,10 @@
 // retenu (egalite), parmi lesquels le joueur choisit au combat ; le type
 // retenu reste le défaut proposé. typesDuBloc dit les poids d'un bloc, dont
 // la photographie tire la cause d'un désavantage de maîtrise.
+//
+// Au lot 5 (§ 15.3) : donneAuCombat dit si une source donne ses capacités
+// au combat, pour la photographie comme pour la maîtrise que le créateur
+// montre à l'étape 7. La fiche, elle, ne change pas.
 
 import { accorder } from "../banque/accord.js";
 import { cle, repertoire } from "../banque/noms.js";
@@ -776,4 +780,28 @@ function bouclierDe(equipement, personnage, avertir) {
 /** Vrai si le bloc peut servir de bouclier : il transmet une défense. */
 export function estBouclier(bloc) {
   return Boolean(bloc?.parametres.some((p) => p.nom && !p.cible && cle(p.nom) === PARAMETRES.defense));
+}
+
+// Les rôles d'un bloc que le personnage est, ou que tout personnage a : ils
+// donnent leurs capacités dès que leur bloc existe.
+const ROLES_DE_BLOC = ["espece", "archetype", "constellation", "primordial", "base"];
+
+/**
+ * Vrai si cette source donne ses capacités au combat (§ 12, point 19) : un
+ * bloc d'espèce, d'archétype, de constellation, de primordial ou de base,
+ * s'il existe ; une arme seulement tenue, une armure seulement portée, le
+ * seul bouclier qui compte ; tout autre objet où qu'il soit. fiche : celle
+ * que rend calculerFiche ; source : l'une des sources d'une de ses
+ * capacités ({ role, nom, rang }). La photographie du combat en tire
+ * l'origine d'une capacité, le créateur les maîtrises du personnage
+ * (js/personnage/maitrise.js) : les deux comptent les mêmes.
+ */
+export function donneAuCombat(index, fiche, source) {
+  if (source?.role !== "equipement") return ROLES_DE_BLOC.includes(source?.role) && Boolean(index.bloc(source.nom));
+  const objet = fiche?.equipement?.[source.rang];
+  if (!objet || objet.absent || !objet.bloc) return false;
+  if (objet.type === "arme") return !fiche.attaque.mainsNues && fiche.attaque.rang === objet.rang;
+  if (objet.type === "armure") return objet.porte;
+  // Un objet qui transmet une défense est un bouclier : un seul compte, équipé.
+  return !estBouclier(objet.bloc) || fiche.bouclier?.rang === objet.rang;
 }

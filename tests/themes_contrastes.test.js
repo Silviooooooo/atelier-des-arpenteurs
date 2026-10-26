@@ -1,7 +1,7 @@
 // Contrôles des contrastes des thèmes (SPECIFICATION.md, § 9 et § 10.1) :
 // les trente-huit entrées du catalogue de js/apparence/themes.js, mesurées
-// paire par paire, puis l'accord des couleurs de css/jetons.css avec les
-// deux entrées « Atelier ».
+// paire par paire, la plaque de la vignette « Non maîtrisé », puis l'accord
+// des couleurs de css/jetons.css avec les deux entrées « Atelier ».
 //
 // Les paires, les seuils et la formule sont ceux du contrôle de référence
 // qui a validé le catalogue (26/10/2026 : 2 576 mesures, aucun échec),
@@ -158,6 +158,34 @@ test("contrastes — un échec fabriqué se voit, au plus près des seuils", () 
   assert.ok(echecsDe(themes).includes("atelier-clair : --couleur-titre sur --fond, une valeur n'est pas une couleur #rrggbb"));
   // Le catalogue lui-même n'a pas bougé.
   assert.deepEqual(echecsDe(THEMES), []);
+});
+
+// La vignette « Non maîtrisé » de l'étape 7 (css/personnage.css) : sur ses
+// bandes (--hachure-alerte), la couleur d'alerte tomberait sous 4,5:1 dans
+// six thèmes clairs, celle des liens (--accent) dans cinq. Ses textes et son
+// lien vers les anomalies sont donc sur une plaque --fond-2, où les paires
+// ci-dessus les mesurent ; mesurer sur les bandes n'aurait de sens que sans
+// plaque.
+test("contrastes — la vignette « Non maîtrisé » : le nom, la mention, « (désavantage) » et le lien vers les anomalies sur la plaque --fond-2, que mesurent les paires", () => {
+  const css = readFileSync(new URL("css/personnage.css", RACINE), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const regles = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map(([, prelude, corps]) => ({ selecteurs: prelude.split(",").map((s) => s.trim()), corps }));
+  const plaques = regles.filter(({ selecteurs, corps }) => selecteurs.every((s) => s.startsWith(".vignette.non-maitrise ")) && /background: var\(--fond-2\);/.test(corps));
+  assert.equal(plaques.length, 1);
+  assert.deepEqual(plaques[0].selecteurs, [
+    ".vignette.non-maitrise .vignette-anomalie",
+    ".vignette.non-maitrise .vignette-nom",
+    ".vignette.non-maitrise .mention-maitrise",
+    ".vignette.non-maitrise .desavantage",
+  ]);
+  // Les couleurs posées sur la plaque, toutes mesurées sur --fond-2 à 4,5:1 :
+  // le nom (--texte-2), la mention et « (désavantage) » (--combat-alerte), le
+  // lien (--accent).
+  for (const avant of ["texte-2", "combat-alerte", "accent"]) {
+    assert.ok(PAIRES.some(([a, fonds, seuil]) => a === avant && fonds.includes("fond-2") && seuil === 4.5), avant);
+  }
+  // Le lien est dans le paragraphe qui porte la plaque (js/ecrans/creation.js).
+  const source = readFileSync(new URL("js/ecrans/creation.js", RACINE), "utf8");
+  assert.match(source, /el\("p", \{ classe: "vignette-anomalie" \}, versAnomalie\(/);
 });
 
 // Les couleurs de l'écran que déclare une feuille de jetons : le bloc clair

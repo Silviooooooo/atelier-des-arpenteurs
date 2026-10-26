@@ -388,7 +388,7 @@ test("apparence — application.js l'importe et l'affiche avant d'attendre la ba
   assert.doesNotMatch(source, /JSON|lireMemoire|ecrireMemoire|innerHTML|\.style\b/);
 });
 
-test("apparence — la feuille : deux vignettes par ligne, six à partir de 56rem ; le nom dans la police et la couleur de titre du thème ; les quatre pastilles", () => {
+test("apparence — la feuille : deux vignettes par ligne, six à partir de 56rem ; le nom dans la police et la couleur de titre du thème ; les quatre pastilles ; l'ajustement de taille de son thème", () => {
   const css = lire("css/ecran.css").replace(/\/\*[\s\S]*?\*\//g, "");
   const regle = (selecteur, depuis = 0) => {
     const debut = css.indexOf(`${selecteur} {`, depuis);
@@ -405,4 +405,7 @@ test("apparence — la feuille : deux vignettes par ligne, six à partir de 56re
     assert.match(regle(`.pastille-${classe}`), new RegExp(`background: var\\(--${jeton}\\);`), classe);
   }
   assert.match(regle('.vignette-theme[aria-pressed="true"]'), /outline: var\(--trait-epais\) solid;/, "un contour épais");
+  // L'ajustement de taille de son thème, après font: inherit, qui
+  // reprendrait celui de la page, calculé sur html.
+  assert.match(regle(".vignette-theme"), /font: inherit;[^}]*font-size-adjust: var\(--ajustement\);/, "l'ajustement de son thème");
 });

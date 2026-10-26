@@ -7,7 +7,10 @@
 // du simulateur de combat (rangsDeMaitrise, positionDans et horsMaitrise de
 // js/adversaire/resolution.js), appliqués au personnage comme le fait
 // js/combat/photographie.js : les rangs viennent des capacités de Maîtrise
-// de sa fiche, à leur niveau ; une capacité se joue avec un désavantage
+// de sa fiche, à leur niveau, que le personnage tient d'une source qui les
+// donne au combat (donneAuCombat de calcul.js : une Maîtrise que seule une
+// arme rangée au sac, ou une armure non portée, donnerait ne compte pas) ;
+// une capacité se joue avec un désavantage
 // quand le rang de maîtrise d'un poids de l'objet n'atteint pas sa position
 // dans le bloc. Un objet à deux poids demande les deux maîtrises, comme au
 // combat. La maîtrise d'un pack, elle, n'est qu'une convention d'affichage,
@@ -19,7 +22,7 @@
 
 import { horsMaitrise, maitriseDe, positionDans, rangsDeMaitrise } from "../adversaire/resolution.js";
 import { cle } from "../banque/noms.js";
-import { capacitesDuBloc, typesDuBloc } from "./calcul.js";
+import { capacitesDuBloc, donneAuCombat, typesDuBloc } from "./calcul.js";
 import { TYPES_OBJET } from "./regles.js";
 
 // La phrase qui suit la liste des maîtrises, quelle qu'elle soit.
@@ -37,14 +40,24 @@ export function poidsDe(bloc) {
 }
 
 /**
+ * Les capacités de la fiche que le personnage tient au combat : celles dont
+ * une source au moins les donne (donneAuCombat), hors celles à venir, comme
+ * les maîtrises possédées de la photographie.
+ */
+function tenuesAuCombat(fiche, index) {
+  return (fiche?.capacites ?? []).filter((c) => !c.aVenir && (c.sources ?? []).some((source) => donneAuCombat(index, fiche, source)));
+}
+
+/**
  * Les capacités de Maîtrise du personnage, à leur niveau : des { nom,
- * niveau }, dans l'ordre de sa fiche (calculerFiche). index : celui de la
- * banque (indexerCreation), qui dit quelles capacités sont des maîtrises.
+ * niveau }, dans l'ordre de sa fiche (calculerFiche), celles qu'il tient
+ * au combat seulement. index : celui de la banque (indexerCreation), qui
+ * dit quelles capacités sont des maîtrises.
  */
 export function maitrisesDuPersonnage(fiche, index) {
-  return (fiche?.capacites ?? [])
+  return tenuesAuCombat(fiche, index)
     .filter((c) => {
-      const capacite = c.aVenir ? null : index.capacite(c.nom);
+      const capacite = index.capacite(c.nom);
       return Boolean(capacite) && maitriseDe(capacite) !== null;
     })
     .map((c) => ({ nom: c.nom, niveau: Number.isInteger(c.niveau) ? c.niveau : 0 }));
@@ -53,10 +66,11 @@ export function maitrisesDuPersonnage(fiche, index) {
 /**
  * Le rang de maîtrise de chaque poids : Map(lourde | agile | precise →
  * rang), la forme qu'attend horsMaitrise. Une maîtrise dont le nom ne dit
- * pas son poids ne compte pour aucun (rangsDeMaitrise).
+ * pas son poids ne compte pour aucun (rangsDeMaitrise) ; une maîtrise que
+ * le personnage ne tient pas au combat, pour aucun non plus.
  */
 export function rangsDuPersonnage(fiche, index) {
-  const possedees = (fiche?.capacites ?? []).filter((c) => !c.aVenir).map((c) => ({ capacite: index.capacite(c.nom), rang: c.niveau }));
+  const possedees = tenuesAuCombat(fiche, index).map((c) => ({ capacite: index.capacite(c.nom), rang: c.niveau }));
   return rangsDeMaitrise(possedees);
 }
 

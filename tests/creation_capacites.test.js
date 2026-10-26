@@ -57,9 +57,15 @@ async function avec(matchMedia, faire, options = {}) {
   }
 }
 
+// Le nom accessible d'un bouton sans aria-label : son texte, hors ce que
+// cache aria-hidden.
+const nomAccessible = (noeud) => {
+  const lireTexte = (n) => (n.childNodes === undefined ? n.textContent : n.getAttribute("aria-hidden") === "true" ? "" : n.childNodes.map(lireTexte).join(""));
+  return lireTexte(noeud).replace(/\s+/g, " ").trim();
+};
 const vignetteDe = (ecran, nom) => [...ecran.querySelectorAll(".vignette-capacite")].find((v) => texteDe(v.querySelector(".capacite-nom")) === nom) ?? null;
 const boutonDe = (vignette, fin) => [...vignette.querySelectorAll("button")].find((b) => b.id.endsWith(fin)) ?? null;
-const suivantDe = (vignette) => [...vignette.querySelectorAll("button")].find((b) => texteDe(b) === "Niveau suivant ▸") ?? null;
+const suivantDe = (vignette) => [...vignette.querySelectorAll("button")].find((b) => nomAccessible(b) === "Niveau suivant") ?? null;
 const raisonDe = (vignette) => vignette.querySelector(".vignette-capacite-pied p");
 const bulleDe = (vignette) => vignette.querySelector(".infobulle-niveau");
 // La ligne de niveau, morceau par morceau : « − », « niveau N », « + », le coût.
@@ -221,7 +227,7 @@ test("étape 8 — sur un ordinateur, l'infobulle du niveau suivant : au survol 
   );
 });
 
-test("étape 8 — « Niveau suivant ▸ » : une divulgation (aria-expanded) de la même infobulle, même quand « + » est inactif ; absente au niveau maximal et pour une capacité qui n'évolue pas", async () => {
+test("étape 8 — « Niveau suivant ▸ » : une divulgation (aria-expanded) de la même infobulle, même quand « + » est inactif, nommée « Niveau suivant », sans sa flèche ; absente au niveau maximal et pour une capacité qui n'évolue pas", async () => {
   await avec(undefined, async () => {
     // Le reliquat épuisé : « + » inactif, la comparaison s'ouvre par le bouton.
     const ecran = await etape8(contexteDe(), personnageEssai());
@@ -231,6 +237,11 @@ test("étape 8 — « Niveau suivant ▸ » : une divulgation (aria-expanded) de
     assert.equal(plus.disabled, true);
     assert.equal(plus.getAttribute("aria-describedby"), raisonDe(fournaise).id, "sans souris, « + » ne désigne que sa raison");
     const bouton = suivantDe(fournaise);
+    // « ▸ » se voit mais ne se lit pas : il est seul dans un span aria-hidden.
+    assert.equal(texteDe(bouton), "Niveau suivant ▸");
+    assert.equal(nomAccessible(bouton), "Niveau suivant");
+    assert.equal(bouton.getAttribute("aria-label"), null);
+    assert.deepEqual([...bouton.querySelectorAll("span")].map((s) => [s.getAttribute("aria-hidden"), texteDe(s)]), [["true", "▸"]]);
     const bulle = bulleDe(fournaise);
     assert.equal(bouton.getAttribute("aria-controls"), bulle.id);
     assert.equal(bouton.getAttribute("aria-expanded"), "false");
@@ -270,6 +281,7 @@ test("étape 8 — au téléphone, le volet du bas : role dialog, titré ; le fo
       assert.equal(texteDe(titre), "Fournaise — niveau 2");
       assert.ok(document.activeElement === titre, "le focus va au titre");
       assert.equal(texteDe(volet.querySelector(".comparaison-sous")), "après progression · 2 points de plus (reliquat 2 → 0)");
+      assert.equal(texteDe(volet.querySelector(".comparaison-sous .comparaison-reliquat")), "2 → 0", "le reliquat d'un seul tenant (la feuille)");
       assert.equal(texteDe(volet.querySelector(".comparaison-legende")), "En rouge : ce qui change par rapport au niveau actuel.");
       assert.deepEqual([...volet.querySelectorAll("button")].map(texteDe), ["Fermer", "Passer au niveau 2"]);
       [...volet.querySelectorAll("button")][0].click();
@@ -298,6 +310,48 @@ test("étape 8 — au téléphone, le volet du bas : role dialog, titré ; le fo
       assert.deepEqual([texteDe(passer), passer.disabled], ["Passer au niveau 3", true]);
       assert.equal(passer.getAttribute("aria-describedby"), raisonDe(fournaise).id);
       assert.equal(texteDe(raisonDe(fournaise)), "Niveau 3 : il manque 3 points.");
+    },
+    { focusFidele: true },
+  );
+});
+
+test("étape 8 — au téléphone, le volet ne retient pas le focus : parti vers un élément hors de lui, il se ferme et le laisse où il est allé ; resté dedans ou parti vers rien, il reste ouvert", async () => {
+  await avec(
+    TELEPHONE,
+    async () => {
+      const ecran = await etape8(contexteDe(), personnageEssai((p) => (p.niveaux = [])));
+      const bouton = suivantDe(vignetteDe(ecran, "Fournaise"));
+      const ailleurs = suivantDe(vignetteDe(ecran, "Pas chassé"));
+      const volet = ecran.querySelector(".volet-niveau");
+      // Le document simulé ne propage rien : focusout se déclenche sur le
+      // volet, avec l'élément qui reçoit le focus (relatedTarget).
+      const quitter = (vers) => volet.declencher("focusout", { relatedTarget: vers });
+
+      bouton.click();
+      const [fermer, passer] = [...volet.querySelectorAll("button")];
+      // Du titre à « Fermer », puis à « Passer au niveau 2 » : il reste ouvert.
+      fermer.focus();
+      quitter(fermer);
+      passer.focus();
+      quitter(passer);
+      assert.equal(volet.hidden, false, "le focus est resté dans le volet");
+      // Vers rien (une autre fenêtre) : il reste ouvert.
+      quitter(null);
+      assert.equal(volet.hidden, false, "le focus n'est allé nulle part");
+
+      // Tab après « Passer au niveau 2 » : le focus sort ; le volet se ferme sans le reprendre.
+      ailleurs.focus();
+      quitter(ailleurs);
+      assert.equal(volet.hidden, true, "le focus a quitté le volet");
+      assert.equal(volet.children.length, 0);
+      assert.ok(document.activeElement === ailleurs, "le focus reste où il est allé");
+      assert.equal(echap(), false, "Échap n'est plus pris");
+
+      // Rouvert, Échap le rend toujours au bouton.
+      bouton.click();
+      assert.equal(volet.hidden, false);
+      assert.equal(echap(), true);
+      assert.ok(document.activeElement === bouton, "Échap rend le focus au bouton");
     },
     { focusFidele: true },
   );
@@ -355,6 +409,7 @@ test("étape 8 — la feuille : une colonne, trois à partir de 56rem ; l'infobu
   assert.match(css, /\n\.infobulle-niveau\[hidden\],\s*\.volet-niveau\[hidden\] \{\s*display: none;/);
   assert.match(corps(css, ".volet-niveau"), /position: fixed;[\s\S]*bottom: 0;[\s\S]*max-height: var\(--hauteur-volet\);/);
   assert.match(corps(css, ".vignette-capacite.amelioree"), /border-color: var\(--accent\);/);
+  assert.match(corps(css, ".comparaison-reliquat"), /white-space: nowrap;/, "« 2 → 0 » d'un seul tenant");
   // L'étape 8 n'écrit aucun style : la place de l'infobulle est à la feuille.
   const source = lire("js/ecrans/creation.js");
   const etape = source.slice(source.indexOf("// ─── Étape 8 : les capacités"), source.indexOf("// ─── Étape 9"));

@@ -585,25 +585,37 @@ function mainsNuesDe(o, fiche) {
   return calculerFiche(o.banque, sansArme, { index: o.index }).attaque;
 }
 
+// Prendre une arme en main, dans cet équipement : l'arme tenue en sort, la
+// nouvelle y entre, tenue, à la qualité de la création ; sans nom, les mains
+// nues.
+function tenir(equipement, nom) {
+  const rang = equipement.findIndex((objet) => objet.place === "arme");
+  if (rang >= 0) equipement.splice(rang, 1);
+  if (nom) equipement.push({ nom, choix: [], qualite: QUALITE_CREATION, place: "arme" });
+}
+
+// Les rangs de maîtrise du personnage s'il prenait cette arme en main : une
+// arme ne donne ses capacités, une Maîtrise comprise, que tenue (§ 12,
+// point 19). Ils se lisent sur une copie qui la tient à la place de l'arme
+// tenue, comme mainsNuesDe ; le personnage ne change pas.
+function rangsAvecLArme(o, nom) {
+  const equipement = [...o.personnage.equipement];
+  tenir(equipement, nom);
+  return rangsDuPersonnage(calculerFiche(o.banque, { ...o.personnage, equipement }, { index: o.index }), o.index);
+}
+
 // L'entrée « Arme » : une seule arme, tenue d'office (livret, « Objet »).
 // Les mains nues, puis chaque arme de la banque, en vignettes : ce qu'elle
-// donne à la qualité de la création, et son état de maîtrise. Changer
-// d'arme remplace celle-ci ; une arme de rechange se range dans le sac par
-// « Tous les objets ». Sous les vignettes, l'arme tenue, décrite, avec ses
-// groupes de choix.
+// donne à la qualité de la création, et son état de maîtrise, celui qu'elle
+// aurait en main (les rangs de la fiche pour l'arme tenue, ceux d'une copie
+// qui la tient pour une autre). Changer d'arme remplace celle-ci ; une arme
+// de rechange se range dans le sac par « Tous les objets ». Sous les
+// vignettes, l'arme tenue, décrite, avec ses groupes de choix.
 function entreeArme(o, fiche, rangs) {
   const p = o.personnage;
   const rangTenue = p.equipement.findIndex((objet) => objet.place === "arme");
   const tenue = rangTenue >= 0 ? p.equipement[rangTenue] : null;
-  const prendre = (nom) =>
-    o.modifier(
-      (q) => {
-        const rang = q.equipement.findIndex((objet) => objet.place === "arme");
-        if (rang >= 0) q.equipement.splice(rang, 1);
-        if (nom) q.equipement.push({ nom, choix: [], qualite: QUALITE_CREATION, place: "arme" });
-      },
-      { refaire: true, focus: idDeLArme(o, nom) },
-    );
+  const prendre = (nom) => o.modifier((q) => tenir(q.equipement, nom), { refaire: true, focus: idDeLArme(o, nom) });
   const mains = mainsNuesDe(o, fiche);
   const vignetteMains = vignette({
     id: "arme-aucune",
@@ -621,7 +633,7 @@ function entreeArme(o, fiche, rangs) {
   const vignettesArmes = o.index.blocsDeType("arme").map((bloc, i) => {
     const choisie = Boolean(tenue) && cle(tenue.nom) === cle(bloc.nom);
     const capacites = capacitesDeLObjet(o.index, bloc, choisie ? tenue.choix : []);
-    const maitrise = maitriseDeLObjet(capacites, poidsDe(bloc), rangs);
+    const maitrise = maitriseDeLObjet(capacites, poidsDe(bloc), choisie ? rangs : rangsAvecLArme(o, bloc.nom));
     return vignette({
       id: `arme-${i}`,
       name: "arme",
@@ -909,7 +921,8 @@ function entreeObjets(o) {
 
 // En tête, la ligne des maîtrises du personnage ; puis l'arme tenue et le
 // pack d'armure en vignettes, chacune avec son état de maîtrise (les rangs
-// de sa fiche, maitrise.js) ; enfin tous les objets.
+// de sa fiche, ceux qu'il tient au combat, maitrise.js ; pour une arme
+// candidate, ceux qu'il aurait en la tenant) ; enfin tous les objets.
 function etapeEquipement(o) {
   const fiche = calculerFiche(o.banque, o.personnage, { index: o.index });
   const rangs = rangsDuPersonnage(fiche, o.index);
@@ -1013,10 +1026,14 @@ function comparaison(o, capacite, { reliquat, ecart, manque, permis }) {
   return {
     titre: `${capacite.nom} — niveau ${suivant}`,
     corps: [
+      // « 4 → 2 » d'un seul tenant (la feuille) : au téléphone, la flèche et
+      // le second nombre se séparaient.
       el(
         "p",
         { classe: "comparaison-sous" },
-        accorder(permis ? `après progression · ${ecart} point(s) de plus (reliquat ${reliquat} → ${reliquat - ecart})` : `après progression · il manque ${manque} point(s)`),
+        permis
+          ? [accorder(`après progression · ${ecart} point(s) de plus (reliquat `), el("span", { classe: "comparaison-reliquat" }, `${reliquat} → ${reliquat - ecart}`), ")"]
+          : accorder(`après progression · il manque ${manque} point(s)`),
       ),
       el(
         "p",
@@ -1082,22 +1099,33 @@ function etapeCapacites(o) {
     entree.bouton?.setAttribute("aria-expanded", String(entree.epinglee));
     ecouterEchap();
   };
-  const fermerVolet = () => {
+  // « Fermer » et Échap rendent le focus au bouton qui a ouvert le volet ;
+  // le focus parti ailleurs (rendre: false) reste où il est allé.
+  const fermerVolet = ({ rendre = true } = {}) => {
     if (!voletOuvert()) return;
     volet.hidden = true;
     volet.replaceChildren();
     const retour = ouvreur;
     ouvreur = null;
     ecouterEchap();
-    retour?.focus();
+    if (rendre) retour?.focus();
   };
+  // Le volet ne retient pas le focus : quand il le quitte pour un élément
+  // hors de lui (Tab après « Passer au niveau N+1 », Maj+Tab depuis son
+  // titre), il se ferme, sans quoi cet élément resterait caché dessous
+  // (WCAG 2.4.11). Vers rien (une autre fenêtre, un clic sur un fond), il
+  // reste ouvert.
+  volet?.addEventListener("focusout", (evenement) => {
+    const vers = evenement?.relatedTarget ?? null;
+    if (vers !== null && !volet.contains(vers)) fermerVolet({ rendre: false });
+  });
   const ouvrirVolet = (bouton, { titre, corps }, passer) => {
     const entete = el("h3", { id: "volet-niveau-titre", classe: "volet-niveau-titre", tabindex: "-1" }, titre);
     volet.replaceChildren(
       el("span", { classe: "volet-poignee", "aria-hidden": "true" }),
       entete,
       ...corps,
-      el("div", { classe: "boutons" }, el("button", { type: "button", classe: "bouton secondaire", onclick: fermerVolet }, "Fermer"), passer),
+      el("div", { classe: "boutons" }, el("button", { type: "button", classe: "bouton secondaire", onclick: () => fermerVolet() }, "Fermer"), passer),
     );
     volet.hidden = false;
     ouvreur = bouton;
@@ -1179,7 +1207,8 @@ function etapeCapacites(o) {
       // « Niveau suivant ▸ » : une divulgation de l'infobulle, ou le volet du téléphone.
       let suite = null;
       if (compare) {
-        suite = el("button", { type: "button", id: `${id}-suivant`, classe: "bouton-suivant" }, "Niveau suivant ▸");
+        // Le nom accessible est « Niveau suivant » : la flèche ne se lit pas.
+        suite = el("button", { type: "button", id: `${id}-suivant`, classe: "bouton-suivant" }, "Niveau suivant ", el("span", { "aria-hidden": "true" }, "▸"));
         if (etroit) {
           suite.setAttribute("aria-haspopup", "dialog");
           suite.addEventListener("click", () => {
