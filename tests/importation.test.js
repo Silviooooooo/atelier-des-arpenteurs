@@ -7,9 +7,11 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { importerFichier } from "../js/banque/importation.js";
+import { ENTETES, avecAdversaires } from "./outils/adversaires_essai.js";
 import { CLASSEUR_ESSAI } from "./outils/classeur_essai.js";
 import { fabriquerClasseur } from "./outils/fabrique_classeur.js";
 
+const _ = null;
 const ESSAI = readFileSync(new URL("../essais/classeur_essai.xlsx", import.meta.url));
 
 async function banque() {
@@ -35,7 +37,7 @@ test("import — un type d'adversaire et un adversaire : cellules telles qu'écr
   const b = await banque();
   assert.deepEqual(b.types_adversaires.map((t) => t.nom), ["Commis", "Rôtisseur"]);
   assert.deepEqual(b.adversaires.map((a) => a.nom), ["Marmiton de corvée", "Chef de partie", "Plongeur", "Homard furieux", "Mouette chapardeuse"]);
-  // Une ligne de type porte « Type » dans la colonne Nom, et son nom dans la colonne Type.
+  // Une ligne de classe porte « Classe » dans la colonne Nom, et son nom dans la colonne Classe.
   assert.deepEqual(b.types_adversaires[1], {
     nom: "Rôtisseur",
     localisation: "",
@@ -49,16 +51,16 @@ test("import — un type d'adversaire et un adversaire : cellules telles qu'écr
       feuille: "Adversaires",
       ligne: 3,
       cellules: {
-        Nom: "Type",
-        TYPE: "Rôtisseur",
-        Localisation: "",
+        Nom: "Classe",
+        CLASSE: "Rôtisseur",
+        Localisations: "",
         "Nombre  d'actions": "",
         souffle: "5",
         Attaque: "4",
         Defense: "5",
         Équipement: "Spatule souple, Armure agile",
         Capacites: "//, Maitrise de l'agile[1]",
-        Infos: "Type ; « // » reprend la liste héritée ; un pack d'armure ; A1 : Maitrise",
+        Infos: "Classe ; « // » reprend la liste héritée ; un pack d'armure ; A1 : Maitrise",
       },
     },
   });
@@ -71,6 +73,81 @@ test("import — un type d'adversaire et un adversaire : cellules telles qu'écr
   assert.equal("types" in b.types_adversaires[0], false);
   // Les en-têtes se retrouvent sans casse, accents ni espaces : « Nombre  d'actions », « Defense ».
   assert.deepEqual([b.types_adversaires[0].actions, b.types_adversaires[0].defense], ["1", "4"]);
+});
+
+// Les noms neufs du lot 5 (§ 4.1, § 16.1) : « Classe » et « Localisations ».
+// Les anciens, « Type » et « Localisation », restent admis : un en-tête se
+// cherche sous le nom neuf, puis sous l'ancien.
+async function importerVariante(description) {
+  const resultat = await importerFichier(fabriquerClasseur(description), "variante.xlsx");
+  assert.equal(resultat.erreur, undefined, resultat.erreur);
+  return resultat;
+}
+const e1 = (anomalies) => anomalies.map((a) => [a.code, a.feuille, a.ligne, a.message]);
+
+test("import — la feuille Adversaires aux anciens noms s'importe à l'identique, hors brut.cellules et sources", async () => {
+  const ancienne = structuredClone(CLASSEUR_ESSAI);
+  const lignes = ancienne.feuilles.find((feuille) => feuille.nom === "Adversaires").lignes;
+  assert.deepEqual(lignes[0].slice(0, 3), ["Nom", "CLASSE", "Localisations"]);
+  lignes[0].splice(1, 2, "Type", "Localisation");
+  for (const ligne of lignes.filter((l) => l?.[0] === "Classe")) ligne[0] = "Type";
+  const neuve = await banque();
+  const { banque: lue, anomalies } = await importerVariante(ancienne);
+  const sansCellules = (b) => {
+    const copie = structuredClone(b);
+    delete copie.sources;
+    for (const entree of [...copie.types_adversaires, ...copie.adversaires]) delete entree.brut.cellules;
+    return copie;
+  };
+  assert.deepEqual(sansCellules(lue), sansCellules(neuve));
+  assert.deepEqual(anomalies, neuve.anomalies);
+  // Le brut garde l'en-tête tel qu'il est écrit.
+  const rotisseur = lue.types_adversaires.find((t) => t.nom === "Rôtisseur").brut.cellules;
+  assert.deepEqual([rotisseur.Nom, rotisseur.Type, rotisseur.Localisation], ["Type", "Rôtisseur", ""]);
+});
+
+test("import — une ligne de classe porte « Classe » ou « Type » dans la colonne Nom, sans casse, sous l'un ou l'autre en-tête", async () => {
+  for (const entete of ["Classe", "Type"]) {
+    const entetes = ENTETES.map((e) => (e === "Type" ? entete : e));
+    const { banque: b } = await importerVariante(avecAdversaires([["CLASSE", "Mitron", "Corps(2)", 1, 1, 1, 1], ["classe", "Gâte-pâte", _, 2], ["A", "Mitron/Gâte-pâte"]], { entetes }));
+    assert.deepEqual(b.types_adversaires.map((t) => t.nom), ["Commis", "Rôtisseur", "Mitron", "Gâte-pâte"], entete);
+    assert.deepEqual(b.adversaires.map((a) => [a.nom, a.types]), [["Marmiton", "Commis/Rôtisseur"], ["A", "Mitron/Gâte-pâte"]], entete);
+  }
+});
+
+test("import — E1 : sans « Classe » ni « Type », sans « Localisations » ni « Localisation », l'import s'arrête et dit l'ancien nom", async () => {
+  const sans = (...retires) => ENTETES.map((e) => (retires.includes(e) ? "Notes" : e));
+  const classe = "L'en-tête « Classe » est introuvable dans la feuille Adversaires (l'ancien nom « Type » est aussi admis) : l'import s'arrête.";
+  const zones = "L'en-tête « Localisations » est introuvable dans la feuille Adversaires (l'ancien nom « Localisation » est aussi admis) : l'import s'arrête.";
+  for (const [retires, attendues] of [
+    [["Type"], [classe]],
+    [["Localisation"], [zones]],
+    [["Type", "Localisation"], [classe, zones]],
+  ]) {
+    const { banque: b, anomalies } = await importerVariante(avecAdversaires([], { entetes: sans(...retires) }));
+    assert.equal(b, null);
+    assert.deepEqual(e1(anomalies), attendues.map((message) => ["E1", "Adversaires", 1, message]), retires.join(", "));
+  }
+});
+
+test("import — le nom neuf l'emporte sur l'ancien quand la feuille porte les deux", async () => {
+  // « Type » et « Localisation » sont ici des colonnes de notes, avant les colonnes neuves.
+  const entetes = ["Nom", "Type", "Localisation", "Nombre d'actions", "Souffle", "Attaque", "Défense", "Equipement", "Capacités", "Classe", "Localisations"];
+  const ligne = (nom, notes, classe, zones) => [nom, notes, notes, 1, 1, 1, 1, _, _, classe, zones];
+  const { banque: b } = await importerVariante(avecAdversaires([ligne("Classe", "note", "Mitron", "Corps(2)"), ligne("A", "note", "Mitron", _)], { entetes, socle: false }));
+  assert.deepEqual(b.types_adversaires.map((t) => [t.nom, t.localisation]), [["Mitron", "Corps(2)"]]);
+  assert.deepEqual(b.adversaires.map((a) => [a.nom, a.types, a.localisation]), [["A", "Mitron", ""]]);
+});
+
+test("import — E2 : une classe sans nom cite l'en-tête tel qu'il est écrit dans le classeur", async () => {
+  for (const entete of ["CLASSE", "Type"]) {
+    const entetes = ENTETES.map((e) => (e === "Type" ? entete : e));
+    const { anomalies } = await importerVariante(avecAdversaires([["Classe", _, "Corps(2)"]], { entetes }));
+    assert.deepEqual(
+      anomalies.filter((a) => a.code === "E2" && a.feuille === "Adversaires").map((a) => [a.feuille, a.ligne, a.message]),
+      [["Adversaires", 5, `La ligne 5 définit une classe sans nom (colonne ${entete} vide) : elle n'entre pas dans la banque.`]],
+    );
+  }
 });
 
 test("import — un bloc : éléments, capacités, paramètres, notes et brut", async () => {

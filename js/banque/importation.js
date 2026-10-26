@@ -48,8 +48,8 @@ export const COLONNES = {
   },
   Adversaires: {
     nom: "Nom",
-    types: "Type",
-    localisation: "Localisation",
+    types: "Classe",
+    localisation: "Localisations",
     actions: "Nombre d'actions",
     souffle: "Souffle",
     attaque: "Attaque",
@@ -58,11 +58,23 @@ export const COLONNES = {
     capacites: "Capacités",
   },
 };
+// Les anciens noms d'en-tête, encore admis (lot 5, § 4.1) : un en-tête se
+// cherche sous son nom neuf, puis sous l'ancien.
+export const ANCIENS_NOMS = {
+  Adversaires: { types: "Type", localisation: "Localisation" },
+};
 const FEUILLES = ["lisez_moi", "Blocs", "Eléments", "Capacites"];
-// Une ligne de la feuille Adversaires qui porte ce mot dans la colonne Nom
-// définit un type, dont le nom est dans la colonne Type (§ 16.1).
-const LIGNE_DE_TYPE = "type";
+// Une ligne de la feuille Adversaires qui porte l'un de ces mots dans la
+// colonne Nom définit une classe, dont le nom est dans la colonne Classe
+// (§ 16.1) ; « Type » est son ancien nom.
+const LIGNE_DE_TYPE = new Set(["classe", "type"]);
 const CHAMPS_ADVERSAIRE = ["localisation", "actions", "souffle", "attaque", "defense", "equipement", "capacites"];
+
+/** Les noms sous lesquels se cherche l'en-tête d'un champ : le neuf, puis l'ancien. */
+export function nomsDEntete(feuille, champ) {
+  const ancien = ANCIENS_NOMS[feuille]?.[champ];
+  return ancien ? [COLONNES[feuille][champ], ancien] : [COLONNES[feuille][champ]];
+}
 
 function lettres(indice) {
   let resultat = "";
@@ -138,9 +150,12 @@ export function importerClasseur(classeur, source = null) {
     entetes[nom] = feuilles[nom].lignes.find((ligne) => ligne.numero === 1)?.cellules ?? [];
     colonnes[nom] = {};
     for (const [champ, entete] of Object.entries(attendus)) {
-      colonnes[nom][champ] = entetes[nom].findIndex((cellule) => cle(cellule) === cle(entete));
+      const indices = nomsDEntete(nom, champ).map((nomEntete) => entetes[nom].findIndex((cellule) => cle(cellule) === cle(nomEntete)));
+      colonnes[nom][champ] = indices.find((indice) => indice !== -1) ?? -1;
       if (colonnes[nom][champ] === -1) {
-        anomalies.push(anomalie("E1", nom, 1, `L'en-tête « ${entete} » est introuvable dans la feuille ${nom} : l'import s'arrête.`));
+        const ancien = ANCIENS_NOMS[nom]?.[champ];
+        const admis = ancien ? ` (l'ancien nom « ${ancien} » est aussi admis)` : "";
+        anomalies.push(anomalie("E1", nom, 1, `L'en-tête « ${entete} » est introuvable dans la feuille ${nom}${admis} : l'import s'arrête.`));
       }
     }
   }
@@ -199,14 +214,15 @@ export function importerClasseur(classeur, source = null) {
   } else {
     for (const { nom, valeur, ligne, brut } of lignes(FEUILLE_ADVERSAIRES)) {
       const cellules = Object.fromEntries(CHAMPS_ADVERSAIRE.map((champ) => [champ, valeur(champ).trim()]));
-      if (cle(nom) !== LIGNE_DE_TYPE) {
+      if (!LIGNE_DE_TYPE.has(cle(nom))) {
         adversaires.push({ nom, types: valeur("types").trim(), ...cellules, brut });
         continue;
       }
       const ecrit = valeur("types");
       const nomType = ecrit.trim();
       if (nomType === "") {
-        anomalies.push(anomalie("E2", FEUILLE_ADVERSAIRES, ligne, `La ligne ${ligne} définit un type sans nom (colonne Type vide) : elle n'entre pas dans la banque.`));
+        const colonne = entetes[FEUILLE_ADVERSAIRES][colonnes[FEUILLE_ADVERSAIRES].types];
+        anomalies.push(anomalie("E2", FEUILLE_ADVERSAIRES, ligne, `La ligne ${ligne} définit une classe sans nom (colonne ${colonne} vide) : elle n'entre pas dans la banque.`));
         continue;
       }
       if (nomType !== ecrit) {

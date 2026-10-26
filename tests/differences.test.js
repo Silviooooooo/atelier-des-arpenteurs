@@ -191,7 +191,7 @@ test("différences — adversaires et types : ajout, modification cellule par ce
   });
   assert.deepEqual(d.adversaires, {
     ajoutes: ["Commis"],
-    modifies: [{ nom: "Apprenti", champs: [{ champ: "types", colonne: "Type", variante: null, avant: "Marmiton[1,5]", apres: "Marmiton[2]" }] }],
+    modifies: [{ nom: "Apprenti", champs: [{ champ: "types", colonne: "Classe", variante: null, avant: "Marmiton[1,5]", apres: "Marmiton[2]" }] }],
     retires: [],
   });
   assert.deepEqual(d.totaux, { blocs: 2, capacites: 7, elements: 4, types_adversaires: 2, adversaires: 2 });
@@ -214,13 +214,56 @@ test("différences — une cellule d'adversaire fautive avant comme après : sa 
     {
       nom: "A",
       champs: [
-        { champ: "types", colonne: "Type", variante: null, avant: "Marmiton[2", apres: "Marmite[2" },
-        { champ: "localisation", colonne: "Localisation", variante: null, avant: "Torse(3), Tête(18)", apres: "Corps(3), Queue(10)" },
+        { champ: "types", colonne: "Classe", variante: null, avant: "Marmiton[2", apres: "Marmite[2" },
+        { champ: "localisation", colonne: "Localisations", variante: null, avant: "Torse(3), Tête(18)", apres: "Corps(3), Queue(10)" },
       ],
     },
   ]);
   // La même cellule fautive, écrite avec d'autres blancs, n'a pas changé.
   assert.deepEqual(comparer(avant, await avec(" Marmiton[2 ", "Torse(3),\n  Tête(18)")).adversaires.modifies, []);
+});
+
+// Une banque publiée aux anciens noms (« Type », « Localisation ») se compare
+// à une banque importée aux noms neufs (lot 5, § 4.1) : sa cellule se trouve
+// sous l'ancien nom, et la différence s'affiche sous le nom neuf.
+test("différences — une banque publiée aux anciens noms : rien ne change, et une modification se dit sous le nom neuf", async () => {
+  const anciens = (feuille) => {
+    const adversaires = feuille("Adversaires");
+    adversaires[0].splice(1, 2, "Type", "Localisation");
+    adversaires[1][0] = "Type";
+    // Une espace de bord, que le brut garde : la cellule s'affiche telle qu'écrite.
+    adversaires[1][2] = "Corps(2), Tête(18) ";
+    adversaires[2][1] = "Marmiton[1,5] ";
+  };
+  const publiee = await importer(variante(anciens));
+  assert.deepEqual([publiee.types_adversaires[0].localisation, publiee.types_adversaires[0].brut.cellules.Localisation], ["Corps(2), Tête(18)", "Corps(2), Tête(18) "]);
+  const propre = await importer(CLASSEUR_PROPRE);
+  const rien = comparer(publiee, propre);
+  assert.deepEqual([rien.types_adversaires, rien.adversaires], [{ ajoutes: [], modifies: [], retires: [] }, { ajoutes: [], modifies: [], retires: [] }]);
+  const modifiee = await importer(
+    variante((feuille) => {
+      feuille("Adversaires")[1][2] = "Corps(3), Tête(18)";
+      feuille("Adversaires")[2][1] = "Marmiton[2]";
+    }),
+  );
+  const d = comparer(publiee, modifiee);
+  assert.deepEqual(d.types_adversaires.modifies, [
+    { nom: "Marmiton", champs: [{ champ: "localisation", colonne: "Localisations", variante: null, avant: "Corps(2), Tête(18) ", apres: "Corps(3), Tête(18)" }] },
+  ]);
+  assert.deepEqual(d.adversaires.modifies, [
+    { nom: "Apprenti", champs: [{ champ: "types", colonne: "Classe", variante: null, avant: "Marmiton[1,5] ", apres: "Marmiton[2]" }] },
+  ]);
+  // Une feuille qui porte les deux noms, « Type » pour des notes : la cellule se lit sous le nom neuf.
+  const deuxNoms = (classe) =>
+    variante((feuille) => {
+      const adversaires = feuille("Adversaires");
+      adversaires[0].push("Type");
+      adversaires[1].push("note");
+      adversaires[2][1] = classe;
+      adversaires[2].push("note");
+    });
+  const deux = comparer(await importer(deuxNoms("Marmiton[1,5]")), await importer(deuxNoms("Marmiton[2]")));
+  assert.deepEqual(deux.adversaires.modifies, [{ nom: "Apprenti", champs: [{ champ: "types", colonne: "Classe", variante: null, avant: "Marmiton[1,5]", apres: "Marmiton[2]" }] }]);
 });
 
 test("différences — une banque publiée avant la feuille Adversaires : tout y est ajouté, sans exception", async () => {

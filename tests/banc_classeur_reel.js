@@ -51,10 +51,11 @@ const RELEVE = [
     lignes: 71,
     noms: 69,
   },
-  // La feuille Adversaires, facultative, relevée le 11/10/2026 (§ 16.1).
+  // La feuille Adversaires, facultative, relevée le 11/10/2026 (§ 16.1) ; ses
+  // en-têtes « Classe » et « Localisations » relevés le 26/10/2026 (§ 4.1).
   {
     feuille: "Adversaires",
-    entetes: ["Nom", "Type", "Localisation", "Nombre  d'actions", "Souffle", "Attaque", "Défense", "Equipement", "Capacités"],
+    entetes: ["Nom", "Classe", "Localisations", "Nombre  d'actions", "Souffle", "Attaque", "Défense", "Equipement", "Capacités"],
     lignes: 5,
     facultative: true,
   },

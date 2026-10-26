@@ -320,7 +320,9 @@ SPECIFICATION.md            ce document
 ### 4.1 Le classeur des règles — état relevé le 28/09/2026
 
 Quatre feuilles, et une cinquième, facultative, depuis le lot 3 :
-`Adversaires` (§ 16.1 ; relevée le 11/10/2026 : neuf en-têtes, 5 lignes).
+`Adversaires` (§ 16.1 ; relevée le 11/10/2026 : neuf en-têtes, 5 lignes ;
+le 26/10/2026, deux en-têtes renommés, « Classe » et « Localisations », et
+9 lignes : trois classes, six adversaires).
 **Les colonnes se retrouvent par leur en-tête, jamais par leur position** :
 l'auteur réordonne ses feuilles.
 
@@ -340,6 +342,18 @@ la ligne.
 La correspondance des en-têtes ignore casse, accents et espaces
 (« capacites » = « Capacités »). Un en-tête attendu introuvable est une erreur
 d'import (§ 6.3, E1).
+
+**Les anciens noms** (lot 5). Le 26/10/2026, l'auteur a renommé deux
+en-têtes de la feuille `Adversaires` : « Type » devient « Classe »,
+« Localisation » devient « Localisations ». Un en-tête renommé se cherche
+sous son nom neuf, puis sous l'ancien (`ANCIENS_NOMS` de
+`js/banque/importation.js`), comparés comme les autres ; si la feuille porte
+les deux, le nom neuf l'emporte. Les différences (§ 6.4) cherchent la
+cellule de même, et affichent le nom neuf. Absent sous ses deux noms,
+l'en-tête arrête l'import : « L'en-tête « Classe » est introuvable dans la
+feuille Adversaires (l'ancien nom « Type » est aussi admis) : l'import
+s'arrête. » Une banque publiée aux anciens noms se lit et se compare sans
+fausse différence : son format ne change pas.
 
 Les colonnes `origine` (Capacites) et `Infos` (Blocs) n'ont, selon
 `lisez_moi`, « aucune valeur légale ». Elles sont conservées et affichées
@@ -3727,14 +3741,20 @@ Elle vit dans le classeur des règles, au même titre que `Blocs` (le « second
 classeur » des versions précédentes n'existe pas). Elle est **facultative** :
 absente, la banque n'a pas d'adversaires, et l'import le dit (I4). Présente,
 ses en-têtes se retrouvent par leur nom, comme ailleurs (§ 4.1), et un
-en-tête absent arrête l'import (E1) : Nom, Type, Localisation, Nombre
-d'actions, Souffle, Attaque, Défense, Equipement, Capacités. Une autre
-colonne (des notes) se garde dans `brut`, sans être lue.
+en-tête absent arrête l'import (E1) : Nom, Classe, Localisations, Nombre
+d'actions, Souffle, Attaque, Défense, Equipement, Capacités. Depuis le lot 5,
+« Classe » et « Localisations » se cherchent aussi sous leurs anciens noms,
+« Type » et « Localisation » (§ 4.1). Une autre colonne (des notes) se garde
+dans `brut`, sans être lue.
 
-**Une ligne par type ou par adversaire.** Une ligne qui porte « Type » dans
-la colonne Nom (sans casse ni accents) définit un **type**, dont le nom est
-dans la colonne Type ; un type n'hérite de rien. **Toute autre ligne est un
-adversaire**, et sa colonne Type cite les types dont il hérite.
+**Une ligne par type ou par adversaire.** Une ligne qui porte « Classe » ou,
+comme avant le lot 5, « Type » dans la colonne Nom (sans casse ni accents)
+définit un **type**, dont le nom est dans la colonne Classe ; un type
+n'hérite de rien. Sans nom, elle n'entre pas dans la banque (E2 : « La
+ligne 6 définit une classe sans nom (colonne Classe vide) : elle n'entre pas
+dans la banque. », l'en-tête cité tel qu'il est écrit dans le classeur).
+**Toute autre ligne est un adversaire**, et sa colonne Classe cite les types
+dont il hérite.
 
 **Les cellules** se gardent dans la banque telles qu'écrites, espaces de
 bord retirés (§ 5.1) ; rien n'y est lu à l'import. C'est la résolution
@@ -3744,8 +3764,8 @@ bord retirés (§ 5.1) ; rien n'y est lu à l'import. C'est la résolution
 |---|---|---|---|
 | toute | vide | | **hérite** : la valeur vient des types |
 | toute | `aucune`, `aucun`, seul dans la cellule | `aucun` | rien pour une liste, 0 pour un nombre |
-| Type | types séparés par `/`, multiplicateur entre crochets après le dernier | `Humain/Brigand[2]`, `Humain[1,4]` | les types, dans l'ordre, et le multiplicateur |
-| Localisation | `Nom(face)`, séparés par des virgules, sur une ou plusieurs lignes | `Torse(2), Jambe gauche(12)` | la **première face** de chaque zone |
+| Classe | types séparés par `/`, multiplicateur entre crochets après le dernier | `Humain/Brigand[2]`, `Humain[1,4]` | les types, dans l'ordre, et le multiplicateur |
+| Localisations | `Nom(face)`, séparés par des virgules, sur une ou plusieurs lignes | `Torse(2), Jambe gauche(12)` | la **première face** de chaque zone |
 | Nombre d'actions, Souffle, Attaque, Défense | un nombre, à virgule décimale | `1,5` | une fraction exacte |
 | Equipement | noms de blocs ou de packs, qualité entre crochets | `Spatule souple, Armure agile[3]` | les objets ; qualité 2 sans crochets |
 | Capacités | noms de capacités, rang entre crochets | `Déplacement[2]` | les capacités ; rang 1, ou 0 pour celle qui n'évolue pas |

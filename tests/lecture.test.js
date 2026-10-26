@@ -78,7 +78,7 @@ test("classeur — feuilles dans leur ordre, en-têtes tels qu'écrits, y compri
   assert.deepEqual(entetes("Blocs"), ["Nom", "Eléments transmis aux capacités", "Capacités", "Paramètres transmis aux capacités", "Infos", "TYPE"]);
   assert.deepEqual(entetes("Eléments"), ["Nom", "Paramètres reçus", "Description"]);
   assert.deepEqual(entetes("Capacites"), ["Nom", "puissance", "Coût en souffle", "Coût en lien", "Éléments propres", "description", "origine"]);
-  assert.deepEqual(entetes("Adversaires"), ["Nom", "TYPE", "Localisation", "Nombre  d'actions", "souffle", "Attaque", "Defense", "Équipement", "Capacites", "Infos"]);
+  assert.deepEqual(entetes("Adversaires"), ["Nom", "CLASSE", "Localisations", "Nombre  d'actions", "souffle", "Attaque", "Defense", "Équipement", "Capacites", "Infos"]);
   // Une localisation s'écrit sur plusieurs lignes dans sa cellule, comme dans le classeur de l'auteur.
   assert.equal(cellule(classeur, "Adversaires", 2, 2), "Torse(2),\nJambe gauche(12),\nJambre droite(14),\nBras gauche(16),\nBras droit(18),\nTête(20)");
 });

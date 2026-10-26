@@ -16,7 +16,7 @@
 import { lireListe, lireLocalisation, lireNombreCellule, lireTypes, texteDe } from "../adversaire/notation.js";
 import { entreesLisibles } from "../adversaire/resolution.js";
 import { dateLisible } from "./dates.js";
-import { COLONNES } from "./importation.js";
+import { COLONNES, nomsDEntete } from "./importation.js";
 import { cle } from "./noms.js";
 
 const CHAMPS_ADVERSAIRE = ["localisation", "actions", "souffle", "attaque", "defense", "equipement", "capacites"];
@@ -54,12 +54,16 @@ function canonique(valeur) {
   return JSON.stringify(valeur ?? null);
 }
 
-// Le texte de la cellule telle qu'écrite ; à défaut, la valeur lue. Une
-// banque publiée avant une colonne (le type, § 4.1) n'a rien à montrer.
+// Le texte de la cellule telle qu'écrite, sous le nom neuf de sa colonne,
+// puis sous l'ancien (« Type » pour « Classe », § 4.1) ; à défaut, la valeur
+// lue. Une banque publiée avant une colonne (le type, § 4.1) n'a rien à
+// montrer.
 function texteEcrit(ligne, feuille, champ) {
   const cellules = ligne?.brut?.cellules ?? {};
-  const entete = Object.keys(cellules).find((k) => cle(k) === cle(COLONNES[feuille][champ]));
-  if (entete !== undefined) return cellules[entete];
+  for (const nom of nomsDEntete(feuille, champ)) {
+    const entete = Object.keys(cellules).find((k) => cle(k) === cle(nom));
+    if (entete !== undefined) return cellules[entete];
+  }
   const valeur = ligne?.[champ];
   if (valeur === undefined) return "";
   return typeof valeur === "string" ? valeur : canonique(valeur);

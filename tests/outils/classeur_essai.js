@@ -21,6 +21,10 @@
 // zone mal orthographiée. Elle ne porte que trois anomalies, qu'elle
 // annonce ; les autres codes de la feuille se déclenchent sur des variantes
 // fabriquées au moment de l'essai, pour que la démonstration reste jouable.
+// Ses en-têtes ont les noms neufs du lot 5, « CLASSE » et « Localisations »,
+// et ses lignes de classe portent « Classe » dans la colonne Nom ; une
+// variante aux anciens noms (« Type », « Localisation ») se fabrique au
+// moment de l'essai.
 //
 // Le simulateur de combat (lot 4) y trouve ce qui lui manquait, toujours
 // fictif : les éléments Intervention et Passif, en fin d'Eléments ; Passif
@@ -235,9 +239,9 @@ export const CLASSEUR_ESSAI = {
     {
       nom: "Adversaires",
       lignes: [
-        ["Nom", "TYPE", "Localisation", "Nombre  d'actions", "souffle", "Attaque", "Defense", "Équipement", "Capacites", "Infos"],
-        ["Type", "Commis", "Torse(2),\nJambe gauche(12),\nJambre droite(14),\nBras gauche(16),\nBras droit(18),\nTête(20)", 1, 2, 3, 4, _, "Pas chassé", "Type ; A11 : « Jambre droite » se lit « jambe droite »"],
-        ["Type", "Rôtisseur", _, _, 5, 4, 5, "Spatule souple, Armure agile", "//, Maitrise de l'agile[1]", "Type ; « // » reprend la liste héritée ; un pack d'armure ; A1 : Maitrise"],
+        ["Nom", "CLASSE", "Localisations", "Nombre  d'actions", "souffle", "Attaque", "Defense", "Équipement", "Capacites", "Infos"],
+        ["Classe", "Commis", "Torse(2),\nJambe gauche(12),\nJambre droite(14),\nBras gauche(16),\nBras droit(18),\nTête(20)", 1, 2, 3, 4, _, "Pas chassé", "Classe ; A11 : « Jambre droite » se lit « jambe droite »"],
+        ["Classe", "Rôtisseur", _, _, 5, 4, 5, "Spatule souple, Armure agile", "//, Maitrise de l'agile[1]", "Classe ; « // » reprend la liste héritée ; un pack d'armure ; A1 : Maitrise"],
         ["Marmiton de corvée", "Commis/Rôtisseur", _, _, _, _, _, _, _, "Deux types, rien en propre"],
         ["Chef de partie", "Commis/Rôtisseur[1,4]", _, _, _, _, _, _, "//, Maîtrise de l'agile[3], Pas chassé[2]", "Multiplicateur décimal ; deux rangs en remplacent d'autres"],
         ["Plongeur", "Commis / Rôtisseur", _, _, "aucun", _, _, "aucun", _, "« aucun » : ni souffle, ni équipement"],
@@ -301,8 +305,8 @@ export const CLASSEUR_PROPRE = {
     {
       nom: "Adversaires",
       lignes: [
-        ["Nom", "Type", "Localisation", "Nombre d'actions", "Souffle", "Attaque", "Défense", "Equipement", "Capacités"],
-        ["Type", "Marmiton", "Corps(2), Tête(18)", 1, 2, 3, 4, "Louche", "Coup"],
+        ["Nom", "Classe", "Localisations", "Nombre d'actions", "Souffle", "Attaque", "Défense", "Equipement", "Capacités"],
+        ["Classe", "Marmiton", "Corps(2), Tête(18)", 1, 2, 3, 4, "Louche", "Coup"],
         ["Apprenti", "Marmiton[1,5]", _, _, _, _, _, _, "//, Jet[2]"],
       ],
     },

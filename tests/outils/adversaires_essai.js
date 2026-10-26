@@ -348,7 +348,7 @@ export const FAUTES = [
     description: avecAdversaires([[_, "Commis"], ["Type", _, "Corps(2)"]]),
     attendues: [
       ["E2", 5, "La ligne 5 n'est pas vide mais n'a pas de nom : elle n'entre pas dans la banque."],
-      ["E2", 6, "La ligne 6 définit un type sans nom (colonne Type vide) : elle n'entre pas dans la banque."],
+      ["E2", 6, "La ligne 6 définit une classe sans nom (colonne Type vide) : elle n'entre pas dans la banque."],
     ],
   },
   {
