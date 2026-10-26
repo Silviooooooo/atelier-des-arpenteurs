@@ -113,7 +113,7 @@ test("site — chaque fichier que la page appelle existe", () => {
   for (const appel of appels) assert.ok(existe(appel), appel);
 });
 
-test("site — le graphe des modules de la page se résout, et atteint les seize écrans (§ 3.2)", () => {
+test("site — le graphe des modules de la page se résout, et atteint les dix-sept écrans (§ 3.2)", () => {
   const vus = new Set();
   const aVoir = ["js/application.js"];
   while (aVoir.length) {
@@ -131,8 +131,10 @@ test("site — le graphe des modules de la page se résout, et atteint les seize
     "personnages", "creation", "reception", "fiche_personnage",
     "fiche_adversaire", "fiche_type", "rencontre",
     "combat",
+    // La page Apparence (lot 5) : le choix du thème.
+    "apparence",
   ];
-  assert.equal(new Set(ecrans).size, 16);
+  assert.equal(new Set(ecrans).size, 17);
   for (const ecran of ecrans) assert.ok(vus.has(`js/ecrans/${ecran}.js`), ecran);
   const modules = [
     "js/banque/chargement.js", "js/securite/coffre.js", "js/publication/github.js", "js/lecture/zip.js", "js/personnage/calcul.js", "js/personnage/stockage.js", "js/fiche/feuilles.js",
@@ -150,14 +152,13 @@ test("site — le graphe des modules de la page se résout, et atteint les seize
   // L'écran du combat n'entre dans la page que par application.js, d'un import que ce parcours sait lire.
   assert.match(lire("js/application.js"), /^import \* as combat from "\.\/ecrans\/combat\.js";\r?$/m);
   // Tout module de js/ est dans le graphe : aucun fichier que la page n'appelle. Hors du graphe, les deux scripts
-  // classiques que la page charge (le thème du premier affichage, la veille), et, jusqu'à l'écran Apparence
-  // (lot 5, vague 2), qui l'importera, le catalogue des thèmes, que seuls lisent pour l'heure le générateur de
-  // css/themes.css et les contrôles. L'ordre du parcours dépend du disque : la liste est triée.
+  // classiques que la page charge (le thème du premier affichage, la veille) ; le catalogue des thèmes y entre par
+  // l'écran Apparence. L'ordre du parcours dépend du disque : la liste est triée.
   const tous = readdirSync(new URL("js/", RACINE), { recursive: true }).map((chemin) => `js/${chemin.replaceAll("\\", "/")}`).filter((chemin) => chemin.endsWith(".js"));
   assert.deepEqual(
     tous.filter((chemin) => !vus.has(chemin)).sort(),
-    ["js/apparence/theme_initial.js", "js/apparence/themes.js", "js/veille.js"],
-    "seuls le thème du premier affichage, le catalogue des thèmes et la veille vivent hors du graphe (§ 9)",
+    ["js/apparence/theme_initial.js", "js/veille.js"],
+    "seuls le thème du premier affichage et la veille vivent hors du graphe (§ 9)",
   );
   // Les deux scripts classiques sont bien appelés par la page, sans type="module".
   const classiques = balises(INDEX, "script").filter((s) => s.type !== "module").map((s) => s.src);

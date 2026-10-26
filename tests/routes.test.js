@@ -48,7 +48,7 @@ test("routes — aller-retour des noms difficiles", () => {
   assert.deepEqual(lireRoute(adresseFiche("adversaires", "Dragon 🐉")), { ecran: "fiche", categorie: "adversaires", nom: "Dragon 🐉" });
 });
 
-test("routes — accueil, listes, anomalies, auteur, rencontre, combat, et les adresses abîmées", () => {
+test("routes — accueil, listes, anomalies, auteur, rencontre, combat, apparence, et les adresses abîmées", () => {
   for (const adresse of ["", "#", "#/", null]) assert.deepEqual(lireRoute(adresse), { ecran: "accueil" });
   for (const categorie of Object.keys(CATEGORIES)) assert.deepEqual(lireRoute(adresseListe(categorie)), { ecran: "liste", categorie });
   assert.deepEqual([lireRoute("#/adversaires"), lireRoute("#/types")], [{ ecran: "liste", categorie: "adversaires" }, { ecran: "liste", categorie: "types" }]);
@@ -64,11 +64,14 @@ test("routes — accueil, listes, anomalies, auteur, rencontre, combat, et les a
   // Le simulateur de combat (§ 17) : une seule adresse, qui ne porte rien du combat en cours.
   assert.deepEqual(lireRoute("#/combat"), { ecran: "combat" });
   assert.deepEqual(lireRoute("#combat"), { ecran: "combat" }, "sans la barre, comme les autres écrans");
+  // La page Apparence (lot 5) : une seule adresse ; le thème ne s'y lit pas.
+  assert.deepEqual(lireRoute("#/apparence"), { ecran: "apparence" });
+  const apparences = ["#/apparence/", "#/apparence/taverne", "#/apparences", "#/Apparence", "#/apparence%20", "#/theme", "#/auteur/apparence"];
   const combats = ["#/combat/", "#/combat/2", "#/combat/demo", "#/combat/Chef%20de%20partie", "#/combats", "#/Combat", "#/combat%20", "#/ combat", "#/rencontre/combat", "#/combat?demo=1"];
   // Les noms d'Object.prototype ne sont ni des listes ni des fiches.
   const prototype = ["#/constructor", "#/__proto__", "#/__proto__/x", "#/toString", "#/hasOwnProperty", "#/valueOf/abc", "#/anomalies/constructor/3"];
   const adversaires = ["#/adversaire", "#/adversaire/", "#/adversaire/%E0%A4%A", "#/adversaires/Chef", "#/type/", "#/types/Commis", "#/rencontre/2", "#/rencontres", "#/anomalies/adversaires/3", "#/anomalies/Adversaires/-1"];
-  for (const abimee of ["#/bloc/%E0%A4%A", "#/bloc/", "#/sorts", "#/anomalies/Blocs/x", "#/anomalies/Inconnue/3", "#/auteur/cle", ...prototype, ...adversaires, ...combats]) {
+  for (const abimee of ["#/bloc/%E0%A4%A", "#/bloc/", "#/sorts", "#/anomalies/Blocs/x", "#/anomalies/Inconnue/3", "#/auteur/cle", ...prototype, ...adversaires, ...combats, ...apparences]) {
     assert.equal(lireRoute(abimee).ecran, "introuvable", abimee);
   }
 });
@@ -84,6 +87,8 @@ test("routes — chaque écran marque son lien de la navigation ; les types marq
   // Le combat a sa rubrique à lui (§ 17) : ni celle de la rencontre, ni celle des adversaires.
   assert.equal(marque("#/combat"), "combat");
   assert.equal(marque("#/combat/2"), "introuvable", "une adresse abîmée ne marque aucun lien");
+  // La page Apparence marque son lien, le dernier du menu (lot 5).
+  assert.equal(marque("#/apparence"), "apparence");
   const id = "demo-aubepine-0000000001";
   assert.deepEqual(["#/personnages", `#/personnage/${id}`, `#/personnage/${id}/etape/3`, "#/recevoir/abc"].map(marque), Array(4).fill("personnages"));
   // La navigation de la page porte un lien par rubrique, et rien que des routes.
@@ -99,6 +104,7 @@ test("routes — chaque écran marque son lien de la navigation ; les types marq
     ["#/personnages", "personnages", "Personnages"],
     ["#/anomalies", "anomalies", "Anomalies"],
     ["#/auteur", "auteur", "Auteur"],
+    ["#/apparence", "apparence", "Apparence"],
   ]);
   for (const [href, route] of liens) assert.equal(marque(href), route, href);
   // Le motif ne lit qu'une forme : un lien écrit autrement manquerait à la liste, et se verrait.

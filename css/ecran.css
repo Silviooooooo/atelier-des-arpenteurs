@@ -1145,3 +1145,106 @@ dl {
     visibility: visible !important;
   }
 }
+
+/* La page Apparence (lot 5 ; SPECIFICATION.md, § 9 et § 10.1) : un
+   bouton-vignette par thème, qui porte lui-même data-theme et se dessine
+   donc dans ses couleurs et sa police de titre (css/themes.css) ; celle
+   d'« Atelier » se dessine dans le thème de la page. Deux vignettes par
+   ligne sur un téléphone, six à partir de 56rem. Leur classe n'est pas
+   .vignette : les ornements d'un thème habillent les vignettes du créateur,
+   pas celles-ci.
+
+   Le thème actuel porte un contour épais (aria-pressed="true"), et le focus
+   le sien. Leur couleur est l'accent de la page, pas celui de la vignette,
+   qui pourrait se perdre sur le fond de la page : la grille la fixe, sans
+   rien dessiner, et la vignette en hérite (inherit), ce que ses propres
+   jetons ne changent pas. */
+
+.vignettes-themes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espace-2);
+  outline-color: var(--accent);
+}
+
+.vignette-theme {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espace-1) var(--espace-2);
+  min-height: var(--cible-tactile);
+  padding: var(--espace-2) var(--espace-3);
+  border: var(--trait) solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--fond-2);
+  color: var(--texte);
+  font: inherit;
+  font-family: var(--police);
+  text-align: start;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.vignette-theme[aria-pressed="true"] {
+  outline: var(--trait-epais) solid;
+  outline-color: inherit;
+  outline-offset: var(--trait);
+}
+
+/* Le focus, plus loin du bord que le contour du thème actuel : sur la
+   vignette actuelle, les deux se distinguent. */
+.vignette-theme:focus-visible {
+  outline-color: inherit;
+  outline-offset: var(--trait-epais);
+}
+
+.vignette-theme-nom {
+  flex-basis: 100%;
+  font-family: var(--police-titre);
+  color: var(--couleur-titre);
+  font-weight: var(--graisse-titre);
+  font-synthesis-weight: none;
+  font-size-adjust: none;
+  font-size: var(--taille-sous-titre);
+  line-height: var(--interligne-titre);
+}
+
+.pastilles {
+  display: inline-flex;
+  gap: var(--espace-1);
+}
+
+.pastille {
+  width: var(--espace-3);
+  height: var(--espace-3);
+  border: var(--trait) solid var(--bordure);
+  border-radius: var(--espace-1);
+}
+
+.pastille-fond {
+  background: var(--fond);
+}
+
+.pastille-accent {
+  background: var(--accent);
+}
+
+.pastille-pj {
+  background: var(--combat-pj);
+}
+
+.pastille-adv {
+  background: var(--combat-adv);
+}
+
+.vignette-theme-mode {
+  margin-left: auto;
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+@media (min-width: 56rem) {
+  .vignettes-themes {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}

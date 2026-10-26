@@ -16,6 +16,9 @@
 // Le simulateur de combat (lot 4) : #/combat, et rien après. Le combat en
 // cours ne se lit pas dans l'adresse : il vit dans son écran et sur
 // l'appareil (§ 17), si bien qu'un lien envoyé n'en montre rien.
+//
+// La page Apparence (lot 5) : #/apparence, et rien après ; le thème choisi
+// se garde sur l'appareil, pas dans l'adresse.
 
 // Une catégorie de la consultation : une liste, et une fiche par nom. Sa clé
 // est son adresse ; la liste de la banque qu'elle montre se lit dans
@@ -68,6 +71,7 @@ export function lireRoute(adresse) {
   if (tete === "recevoir" && reste.length === 1 && CODE.test(reste[0])) return { ecran: "recevoir", code: reste[0] };
   if (tete === "rencontre" && reste.length === 0) return { ecran: "rencontre" };
   if (tete === "combat" && reste.length === 0) return { ecran: "combat" };
+  if (tete === "apparence" && reste.length === 0) return { ecran: "apparence" };
   return { ecran: "introuvable", adresse: chemin };
 }
 

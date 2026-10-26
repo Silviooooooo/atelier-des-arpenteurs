@@ -5,7 +5,8 @@
 // banque et l'ouvre avec la clé gardée, sinon demande le mot de passe ; puis
 // affiche l'écran que désigne l'adresse après le « # ». L'espace auteur
 // s'ouvre sans la banque : la première publication se fait avant qu'elle
-// existe. Les écrans des personnages ont besoin de la banque : un lien reçu
+// existe. La page Apparence aussi (lot 5) : le thème se choisit avant le mot
+// de passe, et ne lit que le catalogue des thèmes. Les écrans des personnages ont besoin de la banque : un lien reçu
 // (#/recevoir/…) attend donc le mot de passe, puis s'ouvre. Les adversaires
 // et la rencontre se lisent avec ce même mot de passe de table : il n'y a
 // pas de mot de passe du meneur (§ 16). Le simulateur de combat (§ 17)
@@ -20,6 +21,7 @@ import { indexer } from "./banque/consultation.js";
 import { dateLisible } from "./banque/dates.js";
 import * as accueil from "./ecrans/accueil.js";
 import * as anomalies from "./ecrans/anomalies.js";
+import * as apparence from "./ecrans/apparence.js";
 import * as combat from "./ecrans/combat.js";
 import * as creation from "./ecrans/creation.js";
 import { el, titre } from "./ecrans/dom.js";
@@ -172,6 +174,7 @@ function marquerNavigation(route) {
 
 function ecran(route) {
   if (route.ecran === "auteur") return espaceAuteur.afficher(contexte);
+  if (route.ecran === "apparence") return apparence.afficher();
   if (!etat.chargement) return el("p", { classe: "attente", role: "status", "data-chargement": true }, "Chargement de la banque…");
   if (etat.chargement.absente) return accueil.afficherSansBanque(contexte);
   if (etat.chargement.erreur) return accueil.afficherErreur(contexte, etat.chargement.erreur);
