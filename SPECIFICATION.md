@@ -2910,7 +2910,8 @@ compte rendu laisse à trancher.
   des réussites encore brute au créateur et au combat ; la photographie
   du combat, qui choisit encore une description par le nom de l'objet.
 - **Les mesures** (§ 15.4), dans Edge 156 et Firefox 143, hors suite : les
-  repères 714 et 375 pixels, la fidélité à la maquette sur un personnage
+  repères 714 et 375 pixels (715,1 et 374 dans Firefox), un personnage
+  fictif qui déborde, la fidélité à la maquette sur un personnage
   du classeur réel, les thèmes sans un écart, deux pages A4 imprimées dans
   chaque navigateur.
 - **La spécification 1.7** : l'en-tête, § 0, § 2, § 3.2, § 4.1, § 10.1,
@@ -4185,6 +4186,15 @@ lots précédents, Playwright n'étant pas sur le poste ; scripts hors dépôt).
   264 sous le premier lien ; le personnage du classeur réel, 2, 4,1, 4,
   55 et 138, les mêmes que dans la maquette. Aucun ne se resserre ; le
   verso garde sept vignettes « Évènement ».
+- **Un personnage qui déborde** (fictif : la démonstration, une
+  description de quatorze phrases, dix objets de plus équipés, trente au
+  sac, une longue histoire) : le recto se resserre, ses capacités tiennent
+  alors (1,6 ligne libre), l'équipement déborde encore et la barre le dit ;
+  au verso, le contexte et le sac débordent, la barre le dit, et cinq
+  vignettes « Évènement » restent. Les repères tiennent : 714 et 375
+  pixels dans Edge ; 715,1 et 374 dans Firefox 143, qui arrondit autrement
+  la hauteur des lignes (la démonstration aussi), dans les deux pixels
+  admis.
 - **La fidélité à la maquette** : le même personnage, rendu par le code
   sur le classeur réel, a les boîtes et les styles calculés de la maquette,
   élément par élément, au déplacement près de deux pixels de la colonne de
