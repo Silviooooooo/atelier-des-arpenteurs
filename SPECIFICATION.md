@@ -209,7 +209,7 @@ css/
   themes.css                les trente-six autres thèmes, sous [data-theme], à l'écran seulement, et les @font-face de leurs polices de titre ; engendrée par outils/themes_css.js et commitée (§ 10.1)
   ecran.css                 l'interface, pensée pour le téléphone d'abord ; les deux vues d'un adversaire et la rencontre (§ 16.6) ; les vignettes du créateur (§ 15.3), et celles des thèmes de la page Apparence (§ 9)
   personnage.css            l'écran d'un personnage : vue lecture, vue fiche
-  fiche.css                 la fiche imprimable, reproduction du modèle (§ 15.4)
+  fiche.css                 la fiche imprimable, la maquette de la spécification 1.7 (§ 15.4)
   adversaire.css            la carte d'un adversaire, reproduction de la maquette, et son impression (§ 16.5)
   combat.css                l'écran du simulateur de combat, ses trois dispositions, ses deux couleurs de camp, la bulle et le volet, le journal en couleurs (§ 17.7)
   ornements.css             les ornements de vingt-sept thèmes, écrits à la main, à l'écran seulement ; liée la dernière (§ 10.1)
@@ -1508,7 +1508,8 @@ se chargent pas depuis un fichier ouvert directement.
   mesurée : un thème en change le jeton `--taille-texte`), et ses titres
   `h2` et `h3` héritent leur interligne (celui des titres d'écran ne vaut
   pas pour le papier). **Les jetons de la fiche sont en noir et blanc**
-  (vingt-deux `--fiche-…`, ceux de la maquette du 26/10/2026, dont
+  (vingt et un `--fiche-…`, ceux de la maquette du 26/10/2026 que la fiche
+  lit, dont
   `--fiche-sur-silhouette`, le texte posé sur la silhouette) : aucun thème
   ne les lit ni ne les redéclare, et la fiche se rend à l'identique dans
   tous (§ 15.4, mesuré). **Aucune classe de la fiche n'est prise par une
@@ -1916,9 +1917,12 @@ livret, et laisse vide ce qu'aucune source ne dit) :
   dans la colonne « origine »** de la feuille Capacites (la colonne A du
   classeur), qui dit « Style de combat », et l'élément ne dit plus rien
   (§ 4.1, § 15.2) ; la maîtrise garde son élément. Une capacité d'origine
-  « Style de combat » n'est un style que donnée par l'archétype, comme
-  avant (au calcul, au créateur et au combat) ; un personnage qui en
-  recevrait plusieurs a la première sur sa fiche, et un avertissement.
+  « Style de combat » est un style d'où qu'elle vienne, comme la mission
+  le dit (« la capacité du personnage ») : au calcul et au combat, hors
+  les capacités d'un objet au combat ; au créateur, un groupe de choix
+  dont toutes les options le sont s'intitule « Style de combat ». Un
+  personnage qui en recevrait plusieurs a la première sur sa fiche, et un
+  avertissement, que la vue lecture montre (« À vérifier »).
   Tant qu'une option n'est ni style ni maîtrise, les options choisies d'un
   archétype s'affichent sous « Archétype », et la case « Style de combat »
   reste vide. À écrire dans le Word, section « Style de combat » : laquelle
@@ -2010,8 +2014,8 @@ livret, et laisse vide ce qu'aucune source ne dit) :
   objet, sur l'écran du personnage. À écrire dans le livret, section
   « Objet » (ou « Création »).
 - **Le tirage de la constellation** : il **peut être refait** à volonté ; la
-  fiche indique le nombre de tirages (« tirée 3 fois »), ou « saisie à la
-  main ». Le livret (« Constellation de naissance », « Création ») dit
+  vue lecture indique le nombre de tirages (« tirée 3 fois »), ou « saisie
+  à la main » (la fiche imprimée l'indiquait jusqu'à la spécification 1.6). Le livret (« Constellation de naissance », « Création ») dit
   seulement « tiré au hasard lors de la création ». À écrire dans le livret,
   section « Constellation de naissance ».
 - **Le pack d'armure** : un par type (lourd, agile, précis), formé de
@@ -2878,7 +2882,8 @@ compte rendu laisse à trancher.
   maquette (sa version serrée devenue la seule), les zones en lignes de
   référence constantes, `definitions-serrees` ; les jetons noir et blanc
   dans `jetons.css`, dont `--fiche-sur-silhouette` (`--fiche-silhouette-trait`
-  retiré) ; des classes renommées, prises par d'autres feuilles (§ 10.1).
+  et `--fiche-case-grisee`, que plus rien ne lit, retirés) ; des classes
+  renommées, prises par d'autres feuilles (§ 10.1).
 - **L'écran** (`js/ecrans/fiche_personnage.js`) : `mesurerFiche` remplace
   `ajuster` ; la table des rôles attendue une fois, qui nomme le
   déplacement ; les avis dans la barre (§ 15.4). `svg()` admet `text`, et
@@ -2891,6 +2896,19 @@ compte rendu laisse à trancher.
   (deux d'abord vues par aucun contrôle de la fiche : l'une l'était par la
   correspondance du classeur d'essai à sa description, l'autre a donné un
   contrôle de plus) ; la suite complète passe.
+- **La relecture**, par un seul agent indépendant (option économique) :
+  seize constats, un majeur, cinq mineurs, dix remarques. Corrigés : deux
+  objets de même nom et de qualités différentes ont chacun leur
+  description (le calcul garde le `rang` de l'objet dans ses
+  descriptions) ; une capacité de deux pièces portées ne s'écrit qu'une
+  fois ; la mesure demande les cinq polices du papier ; une fiche quittée
+  pendant l'attente des rôles ne s'affiche pas ; le style se lit parmi
+  toutes les capacités du personnage ; `svg()` ôte les signes de sens de
+  tout texte ; le jeton mort retiré ; des contrôles de plus ; la
+  spécification au § 3.2, § 12, § 15.2, § 15.3 et § 15.5. Laissés, au
+  compte rendu : une pièce à deux types comptée « sans type » ; la syntaxe
+  des réussites encore brute au créateur et au combat ; la photographie
+  du combat, qui choisit encore une description par le nom de l'objet.
 - **Les mesures** (§ 15.4), dans Edge 156 et Firefox 143, hors suite : les
   repères 714 et 375 pixels, la fidélité à la maquette sur un personnage
   du classeur réel, les thèmes sans un écart, deux pages A4 imprimées dans
@@ -3690,14 +3708,14 @@ la section du livret ou l'élément du classeur qui la fonde, en commentaire
 | Descriptions : les `[expression]` et les `{nom}` remplacés par leur valeur ; un paramètre à rangs donne un résultat par rang (`[N*{degats}]` → 2/4/8). Les paramètres d'une capacité : ceux de son bloc sans cible, puis ceux qui la visent, puis ceux de ses éléments propres (`Portée[1]`), qui priment | livret, « Paramètre » ; lisez_moi |
 | Ressources : souffle 10 à la création (+1 par point d'historique, aucun à la création), corps 10, endurance 5 par zone (« résistance » jusqu'au lot 5), armure selon l'équipement | livret, « Ressources » |
 | Points de lien d'un primordial lié : la puissance investie dans ses capacités (la somme de leurs niveaux) | livret, « Ressources » et « Lien » |
-| Création : un archétype (ses capacités et ses groupes, dont style et maîtrise), une espèce, toutes les capacités du bloc de base, une constellation tirée au hasard parmi les blocs de type Constellation (le tirage **se refait à volonté** et se compte : la fiche dit « tirée N fois », ou « saisie à la main »), un primordial choisi et ses capacités, l'équipement à volonté | livret, « Création » ; tirage refait : décision de l'auteur, lot 2 bis (§ 12) |
+| Création : un archétype (ses capacités et ses groupes, dont style et maîtrise), une espèce, toutes les capacités du bloc de base, une constellation tirée au hasard parmi les blocs de type Constellation (le tirage **se refait à volonté** et se compte : la vue lecture dit « tirée N fois », ou « saisie à la main »), un primordial choisi et ses capacités, l'équipement à volonté | livret, « Création » ; tirage refait : décision de l'auteur, lot 2 bis (§ 12) |
 | Niveau d'une capacité : 1 à la création, sauf si elle ne peut évoluer (puissance « 0 ») : niveau 0. Une puissance N va de 1 à 3 ; une capacité à variantes (1, 2, 3) monte jusqu'à la plus haute | livret, « Création » et « Capacités » ; lisez_moi |
 | 10 points de capacité, hors capacités de niveau 0, au coût de la progression : niveau 1 = 1 point, 2 = 3, 3 = 6. Le joueur monte des capacités (jusqu'au niveau 3) tant que le total ne dépasse pas 10 ; le reliquat (10 − dépensés, jamais négatif) s'inscrit sur la fiche à l'écran (la vue lecture ; la fiche imprimée ne l'écrit plus depuis la spécification 1.7, § 12). Des capacités reçues au-delà de 10 : aucune montée, et le total réel | livret, « Création » et « Progression » |
 | Une capacité reçue deux fois (deux armes qui donnent « Frappe ») : une seule capacité, comptée une fois, avec ses deux origines | lecture du livret, § 12 |
 | Une capacité absente de `Capacites` : « capacité à venir », hors du décompte | instruction du lot 2 |
 | Groupes : `( a \| b )` exactement une option ; `[ a \| b ]` zéro, une ou plusieurs | lisez_moi, « Syntaxe » |
 | Coût affiché : souffle et lien à la puissance de la capacité (N remplacé), la variante de sa puissance ; un coût vide vaut 0, X reste X | lisez_moi |
-| Style de combat : une capacité de l'archétype est un style si la colonne « origine » de l'une de ses lignes dit « Style de combat », comparée par `cle()` (`estStyleDeCombat`, le même au calcul, au créateur et au combat ; spécification 1.7, l'élément propre du même nom ne dit plus rien) ; un personnage n'en a qu'un : s'il en reçoit plusieurs, la fiche écrit le premier et l'avertit. Une maîtrise : ses éléments propres contiennent « Maîtrise ». Sinon les options d'un archétype s'affichent sous « Archétype » | décision de l'auteur, 26/10/2026 (§ 4.1) ; maîtrise : convention, § 12 |
+| Style de combat : une capacité du personnage, d'où qu'elle vienne, est un style si la colonne « origine » de l'une de ses lignes dit « Style de combat », comparée par `cle()` (`estStyleDeCombat`, le même au calcul, au créateur et au combat ; spécification 1.7, l'élément propre du même nom ne dit plus rien) ; un personnage n'en a qu'un : s'il en reçoit plusieurs, la fiche écrit le premier et l'avertit. Une maîtrise : ses éléments propres contiennent « Maîtrise ». Sinon les options d'un archétype s'affichent sous « Archétype » | décision de l'auteur, 26/10/2026 (§ 4.1) ; maîtrise : convention, § 12 |
 | Attaque à mains nues : la capacité que vise le paramètre `degats` du bloc de base ; ses dégâts sont ceux que dit sa description à sa puissance (`[N*{degats}]` : 2/4/8 au niveau 1 avec une Force de 4, le double au niveau 2), sinon le paramètre lui-même, si bien que le recto et le verso concordent ; **dé vide**, faute de règle | classeur ; § 12 |
 | Bouclier : un objet équipé (place `equipe`) qui transmet un paramètre `defense` ; un seul compte ; la fiche en montre la défense après qualité | convention, § 12 |
 | Domaine d'un primordial lié : la colonne Infos de son bloc, sans ses espaces de bord (`domaine` de chaque lien) ; la fiche l'imprime sous son nom | décision de l'auteur, 26/10/2026 (§ 4.1) |
@@ -3991,8 +4009,9 @@ distingués par leur rang, « (objet 2) » ; « Enregistrer les qualités »
 garde le personnage et, en ligne, le redépose ; le panneau reste ouvert, et
 le focus va à la confirmation). Un personnage absent de l'appareil s'ouvre
 depuis le site (« · en ligne ») ; une lecture en ligne qui échoue le dit,
-avec « Réessayer », sans le déclarer introuvable. Le pied de la
-fiche dit « constellation tirée N fois » ou « saisie à la main ».
+avec « Réessayer », sans le déclarer introuvable. Le pied de la vue
+lecture dit « constellation tirée N fois » ou « saisie à la main » ; le
+pied de la fiche imprimée ne dit plus que la banque (spécification 1.7).
 
 **La réception** (`#/recevoir/<code>`, `js/ecrans/reception.js`) : § 15.1.
 
@@ -4195,9 +4214,10 @@ fiche imprimée : la syntaxe du lisez_moi, « //effet 1/effet 2/effet 3// »,
 s'écrit « 1 → effet 1 · 2 → effet 2 · 3 → effet 3 » (`reussitesLisibles`,
 une seule fonction, § 12). La vue lecture servant aussi la fiche d'un
 protagoniste au combat, le créateur et le personnage reçu, ces écrans
-montrent eux aussi la forme lisible : c'est voulu. Elle garde « Banque du
-JJ/MM/AAAA » et la façon dont la constellation a été obtenue, que la fiche
-imprimée ne dit plus. En vue fiche, sa zone « À vérifier » est cachée :
+montrent eux aussi la forme lisible : c'est voulu. La vue lecture
+garde aussi, en pied, « Banque du JJ/MM/AAAA » (que la fiche imprimée dit
+encore, au coin du recto) et la façon dont la constellation a été obtenue
+(que la fiche imprimée ne dit plus). En vue fiche, sa zone « À vérifier » est cachée :
 ce qui déborde de la fiche se dit dans la barre de l'écran (§ 15.4). **La vue fiche** : le recto
 et le verso réduits à la largeur de l'écran (`zoom`, l'échelle posée par
 `js/ecrans/echelle.js` en propriété CSS, un nombre, partagée avec la carte
@@ -5341,8 +5361,9 @@ personnage ne change pas un combat commencé.** Une photographie porte :
 - **par capacité** : son nom, tel que la banque le donne ; son rôle câblé,
   reconnu ici et nulle part ailleurs (§ 17.6) ; son niveau (son rang, chez
   un adversaire) ; le groupe sous lequel ses lignes se rangent (une
-  capacité de l'archétype se range sous « Style de combat » quand c'est un
-  style : depuis la spécification 1.7, sa colonne « origine » le dit, par
+  capacité qui ne vient pas d'un objet se range sous « Style de combat »
+  quand c'est un style : depuis la spécification 1.7, sa colonne
+  « origine » le dit, par
   `estStyleDeCombat`, la règle du calcul et du créateur, § 15.2 ; l'élément
   propre du même nom ne dit plus rien) ; et **ses
   façons**, une par manière de la jouer : pour un personnage, une par

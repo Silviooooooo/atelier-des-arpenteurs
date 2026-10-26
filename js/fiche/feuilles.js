@@ -108,13 +108,23 @@ function rubrique(classe, titre, ...contenu) {
 }
 
 /**
+ * La description d'une capacité pour un objet ({ nom, rang }) : celle de son
+ * rang (deux objets de même nom, de qualités différentes, ont chacun la
+ * leur), sinon celle de son nom, sinon la première ; sans objet, la première.
+ */
+function descriptionDe(capacite, objet = null) {
+  if (!objet) return capacite.descriptions[0];
+  return capacite.descriptions.find((d) => d.rang === objet.rang) ?? capacite.descriptions.find((d) => d.source === objet.nom) ?? capacite.descriptions[0];
+}
+
+/**
  * Une capacité définie : ses cases de puissance à gauche (aucune à la
  * puissance 0 ni pour une capacité à venir), son nom, son coût, ses
- * éléments notables, puis sa définition. source : le nom du bloc dont la
- * description compte (un objet), ou rien pour la première.
+ * éléments notables, puis sa définition. objet : l'objet ({ nom, rang })
+ * dont la description compte, ou rien pour la première.
  */
-export function capaciteDefinie(capacite, source = null) {
-  const description = (source ? capacite.descriptions.find((d) => d.source === source) : null) ?? capacite.descriptions[0];
+export function capaciteDefinie(capacite, objet = null) {
+  const description = descriptionDe(capacite, objet);
   const nombre = capacite.aVenir ? 0 : (capacite.niveauMax ?? 0);
   const cout = capacite.aVenir ? "" : coutEntreParentheses(capacite.cout);
   const notables = elementsNotables(capacite.elements ?? []);
@@ -176,10 +186,17 @@ function ligneEquipee(classe, titre, resume) {
 
 function attaqueDefense(fiche) {
   const { attaque, bouclier } = fiche;
-  const deLArme = attaque.mainsNues ? [] : capacitesDeLObjet(fiche, attaque.rang).map((c) => capaciteDefinie(c, attaque.nom));
-  const deLArmure = fiche.equipement.filter((o) => o.porte).flatMap((o) => capacitesDeLObjet(fiche, o.rang).map((c) => capaciteDefinie(c, o.nom)));
+  const deLArme = attaque.mainsNues ? [] : capacitesDeLObjet(fiche, attaque.rang).map((c) => capaciteDefinie(c, attaque));
+  // Une capacité que donnent deux pièces portées, de même description, ne
+  // s'écrit qu'une fois : la zone n'a que quatre lignes.
+  const vues = new Set();
+  const deLArmure = fiche.equipement
+    .filter((o) => o.porte)
+    .flatMap((o) => capacitesDeLObjet(fiche, o.rang).map((c) => ({ c, o, cle: `${c.nom}\n${descriptionDe(c, o)?.texte ?? ""}` })))
+    .filter(({ cle }) => !vues.has(cle) && vues.add(cle))
+    .map(({ c, o }) => capaciteDefinie(c, o));
   const duBouclier = bouclier
-    ? [ligneEquipee("ligne-bouclier", "Bouclier", resumeBouclier(bouclier)), capacitesDeLObjet(fiche, bouclier.rang).map((c) => capaciteDefinie(c, bouclier.nom))]
+    ? [ligneEquipee("ligne-bouclier", "Bouclier", resumeBouclier(bouclier)), capacitesDeLObjet(fiche, bouclier.rang).map((c) => capaciteDefinie(c, bouclier))]
     : [];
   return rubrique(
     "rubrique-attaque",
@@ -241,7 +258,7 @@ export function ceinture(fiche) {
       continue;
     }
     const ailleurs = (!attaque.mainsNues && o.rang === attaque.rang) || o.rang === bouclier?.rang;
-    objets.push({ nom: o.nom, capacites: ailleurs ? [] : capacitesDeLObjet(fiche, o.rang).map((c) => ({ capacite: c, source: o.nom })) });
+    objets.push({ nom: o.nom, capacites: ailleurs ? [] : capacitesDeLObjet(fiche, o.rang).map((c) => ({ capacite: c, objet: { nom: o.nom, rang: o.rang } })) });
   }
   return objets;
 }
@@ -250,7 +267,7 @@ function equipement(fiche) {
   return rubrique(
     "rubrique-equipement",
     "Équipement et ceinture",
-    ceinture(fiche).map((o) => el("div", { classe: "objet-ceinture" }, el("span", { classe: "objet-nom" }, o.nom), o.capacites.map(({ capacite, source }) => capaciteDefinie(capacite, source)))),
+    ceinture(fiche).map((o) => el("div", { classe: "objet-ceinture" }, el("span", { classe: "objet-nom" }, o.nom), o.capacites.map(({ capacite, objet }) => capaciteDefinie(capacite, objet)))),
   );
 }
 

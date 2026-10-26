@@ -510,7 +510,8 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
     const role = premiere.role;
     let groupe = null;
     if (entree.capacite) {
-      if (role === "archetype" && estStyleDeCombat(entree.capacite)) groupe = "style";
+      // Le style : une capacité du personnage, d'où qu'elle vienne (§ 15.2).
+      if (estStyleDeCombat(entree.capacite)) groupe = "style";
       else if (role === "espece" || role === "archetype" || role === "constellation" || role === "primordial") groupe = role;
     } else if (role === "espece" || role === "archetype" || role === "constellation" || role === "primordial") groupe = role;
     const cout = entree.capacite ? coutA(entree.capacite, entree.niveau) : null;
@@ -523,7 +524,9 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
         const variables = contexte(index, personnage, source.bloc, qualite, entree.capacite, entree.niveau, avertir);
         const decrite = decrire(variante.description, variables, caracteristiques, entree.niveau);
         decrite.avertissements.forEach((a) => avertir("expression", `${entree.nom} : ${a}`));
-        if (!descriptions.some((d) => d.texte === decrite.texte)) descriptions.push({ source: source.nom, texte: decrite.texte });
+        // Le rang d'un objet distingue deux objets de même nom, de qualités
+        // différentes : chacun a sa description (la fiche, § 15.4).
+        if (!descriptions.some((d) => d.texte === decrite.texte)) descriptions.push({ source: source.nom, ...(source.rang === undefined ? {} : { rang: source.rang }), texte: decrite.texte });
       }
     }
     return {

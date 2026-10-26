@@ -78,6 +78,9 @@ test("dom — svg() : des formes, leurs textes et leur géométrie, des attribut
     // Aucun élément ne s'y glisse ; les signes qui commandent le sens de l'écriture ne s'affichent pas.
     assert.throws(() => svg("text", {}, "a", svg("rect", {})), /ne reçoit que du texte/);
     assert.equal(svg("text", {}, "13\u202E/26").textContent, "13/26");
+    // Ni dans un titre : aucun texte de svg() ne garde ces signes, comme el().
+    const renverse = String.fromCodePoint(0x202e);
+    assert.equal(svg("title", {}, `x${renverse}y`).textContent, "xy");
     // Hors de la liste admise, aucun attribut : ni couleur, ni gestionnaire, ni style, ni adresse.
     for (const nom of ["fill", "onload", "style", "href", "xlink:href", "font-family", "textLength", "lengthAdjust", "src"]) {
       assert.throws(() => svg("text", { [nom]: "x" }, "a"), /pas permis/, nom);
@@ -171,7 +174,7 @@ test("écran de la fiche — introuvable sur l'appareil ; banque sans types : le
   }
 });
 
-test("écran de la fiche — le déplacement par la table des rôles, attendue une fois ; la barre dit, hors impression, ce que la fiche n'a pas pu écrire", async () => {
+test("écran de la fiche — le déplacement par la table des rôles, attendue à l'ouverture et gardée quand les qualités changent ; la barre dit, hors impression, ce que la fiche n'a pas pu écrire", async () => {
   const retirer = installerDom();
   const avant = { raf: globalThis.requestAnimationFrame, fonts: document.fonts };
   try {
@@ -191,6 +194,16 @@ test("écran de la fiche — le déplacement par la table des rôles, attendue u
     assert.ok(avis, "la zone des avis, dans la barre");
     assert.equal(avis.getAttribute("role"), "status");
     assert.equal(texteDe(avis), "");
+    // Les qualités enregistrées réaffichent la fiche avec les mêmes rôles : le déplacement reste.
+    await Promise.all([...ecran.querySelectorAll("button")].find((b) => texteDe(b) === "Enregistrer les qualités").click());
+    await laisserFiler(20);
+    assert.match(texteDe(ecran.querySelector(".impression .recto .liste-capacites")), /Pas chassé \(0\) — Se déplace de 1 case\.$/);
+    assert.match(texteDe(ecran.querySelector(".qualites-resultat")), /Les qualités sont gardées\./);
+    // Une fiche quittée avant la fin de l'attente ne s'affiche pas.
+    const quittee = fichePersonnage.afficher(contexteDe(etagere), { ecran: "personnage", id: "demo-aubepine-0000000001" });
+    await laisserFiler(20);
+    assert.equal(quittee.querySelector(".ecran-personnage"), null);
+    assert.match(texteDe(quittee), /Lecture du personnage/);
     // Le nom changé dans la banque : la fiche s'écrit sans, et la barre le dit.
     const renommee = structuredClone(BANQUE);
     renommee.capacites.find((c) => c.nom === "Pas chassé").nom = "Pas glissé";

@@ -189,6 +189,28 @@ test("ARMURE — « types (six valeurs), dé » : types mêlés joints par « et
     // Sans bouclier, ni sa ligne ni ses capacités.
     const sans = feuilles(fiche((p) => (p.equipement[7].place = "sac"))).querySelector(".zone-armure");
     assert.equal(compte(sans, ".ligne-bouclier", ".capacite-definie"), 0);
+    // Une capacité que donnent deux pièces portées, de même description : une seule fois.
+    const deuxPieces = retouchee((b) => {
+      for (const nom of ["Tablier de cuir", "Toque renforcée"]) b.blocs.find((x) => x.nom === nom).capacites.push({ forme: "simple", nom: "Doigt pincé" });
+    });
+    const partagee = feuilles(calculerFiche(deuxPieces, personnageEssai())).querySelector(".zone-armure");
+    assert.deepEqual(textes(partagee, ".capacite-definie").filter((t) => t.startsWith("Doigt pincé")), ["Doigt pincé (0) — Aïe."]);
+  });
+});
+
+test("objets de même nom — chacun sa description, celle de sa qualité : l'arme tenue, et non l'homonyme du sac", () => {
+  // Le même couteau deux fois : de qualité 2 au sac (rang 0), de qualité 3 en main (rang 1).
+  const f = fiche((p) => {
+    p.equipement[0].qualite = "3";
+    p.equipement.unshift({ nom: "Couteau d'office", choix: [], qualite: "2", place: "sac" });
+  });
+  assert.equal(f.attaque.rang, 1);
+  const frappe = f.capacites.find((c) => c.nom === "Frappe");
+  assert.deepEqual(frappe.descriptions.filter((d) => d.source === "Couteau d'office").map((d) => [d.rang, d.texte]), [[0, "Une attaque qui inflige 3/8/20."], [1, `Une attaque qui inflige ${f.attaque.degats.join("/")}.`]]);
+  assert.notEqual(f.attaque.degats.join("/"), "3/8/20");
+  avecDom(() => {
+    const arme = feuilles(f).querySelector(".zone-arme");
+    assert.equal(textes(arme, ".capacite-definie")[0], `Frappe (0) — Une attaque qui inflige ${f.attaque.degats.join("/")}.`);
   });
 });
 
@@ -259,10 +281,13 @@ test("capacité définie — ses cases (puissance maximale, cochées jusqu'au ni
     assert.equal(texteDe(aVenir), "Omelette fantôme — à venir");
     assert.equal(aVenir.querySelectorAll(".case").length, 0);
     assert.ok(aVenir.querySelector(".capacite-definie-a-venir"));
-    // La description propre à la source demandée, ou la première.
-    const double = { nom: "Frappe", aVenir: false, niveau: 0, niveauMax: 0, cout: { souffle: "0", lien: "0" }, elements: [], descriptions: [{ source: "Louche", texte: "Un." }, { source: "Rouleau", texte: "Deux." }] };
-    assert.equal(texteDe(capaciteDefinie(double, "Rouleau")), "Frappe (0) — Deux.");
-    assert.equal(texteDe(capaciteDefinie(double, "Écumoire")), "Frappe (0) — Un.");
+    // La description propre à l'objet : par son rang, sinon par son nom, sinon la première.
+    const double = { nom: "Frappe", aVenir: false, niveau: 0, niveauMax: 0, cout: { souffle: "0", lien: "0" }, elements: [], descriptions: [{ source: "Louche", rang: 0, texte: "Un." }, { source: "Rouleau", rang: 1, texte: "Deux." }, { source: "Louche", rang: 4, texte: "Trois." }] };
+    assert.equal(texteDe(capaciteDefinie(double, { nom: "Rouleau", rang: 1 })), "Frappe (0) — Deux.");
+    assert.equal(texteDe(capaciteDefinie(double, { nom: "Louche", rang: 4 })), "Frappe (0) — Trois.", "deux objets de même nom : le rang les sépare");
+    assert.equal(texteDe(capaciteDefinie(double, { nom: "Rouleau", rang: 9 })), "Frappe (0) — Deux.");
+    assert.equal(texteDe(capaciteDefinie(double, { nom: "Écumoire", rang: 9 })), "Frappe (0) — Un.");
+    assert.equal(texteDe(capaciteDefinie(double)), "Frappe (0) — Un.");
   });
   // Le coût : le souffle (vide : 0), et le lien s'il n'est pas nul.
   assert.equal(coutEntreParentheses({ souffle: "1", lien: "0" }), "1");
@@ -317,6 +342,12 @@ test("style — la colonne « origine » dit le style de combat, au calcul, au c
   assert.equal(deux.style, "Réduction");
   assert.ok(deux.avertissements.some((a) => a.texte === "Plusieurs styles de combat (« Réduction », « Solo du chef ») : la fiche écrit le premier."));
   avecDom(() => assert.equal(texteDe(feuilles(deux).querySelector(".champ-style .valeur-entete")), "Réduction"));
+  // Une capacité du personnage, d'où qu'elle vienne : celle de l'espèce aussi (mission, § 2.2).
+  const parEspece = retouchee((b) => (capaciteDe(b, "Vif").variantes[0].notes = "Style de combat"));
+  const vif = calculerFiche(parEspece, personnageEssai());
+  assert.equal(vif.style, "Vif");
+  assert.deepEqual(vif.groupes.style.map((c) => c.nom), ["Vif", "Solo du chef"]);
+  assert.ok(!vif.groupes.espece.some((c) => c.nom === "Vif"));
   // Le créateur : l'intitulé du groupe de choix.
   const groupeDesStyles = (banque) => {
     const index = indexerCreation(banque);
@@ -327,16 +358,18 @@ test("style — la colonne « origine » dit le style de combat, au calcul, au c
   assert.equal(groupeDesStyles(parOrigine), "Style de combat");
   assert.notEqual(groupeDesStyles(parElement), "Style de combat");
   // Le combat : le groupe de la capacité dans le panneau d'action.
-  const groupe = async (banque) => {
+  const groupe = async (banque, nom = "Solo du chef") => {
     const index = indexerCreation(banque);
     const { photo, refus } = photographierPersonnage(banque, personnageEssai(), { index, roles: await tableDesRoles(banque, "demo") });
     assert.equal(refus, undefined, refus);
-    const { genre, titre } = photo.valeurs.capacites.find((c) => c.nom === "Solo du chef").groupe;
+    const { genre, titre } = photo.valeurs.capacites.find((c) => c.nom === nom).groupe;
     return `${genre} : ${titre}`;
   };
   assert.equal(await groupe(BANQUE), "style : Style de combat");
   assert.equal(await groupe(parOrigine), "style : Style de combat");
   assert.equal(await groupe(parElement), "archetype : Saucier");
+  assert.equal(await groupe(BANQUE, "Vif"), "espece : Marmiton");
+  assert.equal(await groupe(parEspece, "Vif"), "style : Style de combat");
 });
 
 // ─── La colonne de droite ───────────────────────────────────────────────────
@@ -406,7 +439,7 @@ test("ceinture — ce que le personnage porte et a sous la main : les pièces re
   // Un objet équipé qui n'est ni arme, ni armure, ni bouclier : ses capacités sous lui.
   const bouillon = fiche((p) => (p.equipement[8].place = "equipe"));
   const objet = ceinture(bouillon).find((o) => o.nom === "Bouillon revigorant");
-  assert.deepEqual(objet.capacites.map(({ capacite, source }) => [capacite.nom, source]), [["Boire le bouillon", "Bouillon revigorant"]]);
+  assert.deepEqual(objet.capacites.map(({ capacite, objet: source }) => [capacite.nom, source.nom, source.rang]), [["Boire le bouillon", "Bouillon revigorant", 8]]);
   avecDom(() => {
     const noeud = feuilles(bouillon);
     const objets = noeud.querySelectorAll(".rubrique-equipement .objet-ceinture");
@@ -622,8 +655,10 @@ test("couleurs — le noir et blanc de la maquette dans jetons.css, dont la coul
   assert.equal(valeur("--fiche-bandeau"), "#e9e9e9");
   assert.equal(valeur("--fiche-silhouette"), "#d4d4d4");
   assert.equal(valeur("--fiche-sur-silhouette"), "#111111");
-  assert.equal([...jetons.matchAll(/--fiche-[a-z0-9-]+:/g)].length, 22, "une seule déclaration de chaque jeton");
-  assert.doesNotMatch(jetons, /--fiche-silhouette-trait/);
+  assert.equal([...jetons.matchAll(/--fiche-[a-z0-9-]+:/g)].length, 21, "une seule déclaration de chaque jeton");
+  assert.doesNotMatch(jetons, /--fiche-silhouette-trait|--fiche-case-grisee/, "plus de jeton qu'aucune règle ne lit");
+  // Chaque jeton déclaré est lu par la feuille de la fiche.
+  for (const [, jeton] of jetons.matchAll(/(--fiche-[a-z0-9-]+):/g)) assert.ok(lire("css/fiche.css").includes(`var(${jeton})`), jeton);
   for (const feuille of readdirSync(new URL("css/", racine)).filter((f) => f.endsWith(".css") && !["fiche.css", "jetons.css"].includes(f))) {
     assert.doesNotMatch(lire(`css/${feuille}`), /--fiche-/, feuille);
   }
@@ -725,7 +760,12 @@ test("relecture — aucune classe de la fiche n'est prise par une autre feuille 
   const classes = new Set();
   for (const [, a, b] of source.matchAll(/classe: (?:`([^`]*)`|"([^"]*)")/g)) for (const c of (a ?? b).replace(/\$\{[^}]*\}/g, " ").split(/\s+/)) if (c) classes.add(c);
   for (const c of ["case-petite", "case-corps", "case-lien", "cochee", "teintee", "definitions-serrees", "ligne-arme", "ligne-armure", "ligne-bouclier", "sur-silhouette"]) classes.add(c);
-  assert.ok(classes.size > 80, `${classes.size} classes`);
+  // Et toutes celles que vise la feuille de la fiche, hors l'impression, qui vise la page.
+  const feuille = lire("css/fiche.css").replace(/\/\*[\s\S]*?\*\//g, "").replace(/url\([^)]*\)/g, "").replace(/@media print\s*\{[\s\S]*$/, "");
+  const deLaFeuille = new Set([...feuille.matchAll(/\.([a-z][a-z0-9-]*)/g)].map(([, c]) => c));
+  for (const c of deLaFeuille) classes.add(c);
+  assert.ok(deLaFeuille.has("trait-libre") && deLaFeuille.has("petite") && deLaFeuille.has("vignette-verso-sac"), "les classes de la feuille sont lues");
+  assert.ok(classes.size > 100, `${classes.size} classes`);
   // Les classes du papier d'avant le lot 5, déjà mesurées (§ 15.4), qu'une
   // autre feuille ne vise que dans son propre cadre (.formulaire .case, .case input).
   const communes = new Set(["case", "feuille", "feuilles"]);

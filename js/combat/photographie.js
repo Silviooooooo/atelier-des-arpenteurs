@@ -181,7 +181,7 @@ function origineDe(index, fiche, source, capacite) {
   if (!donneAuCombat(index, fiche, source)) return null;
   if (source.role !== "equipement") {
     const bloc = index.bloc(source.nom);
-    const genre = source.role === "archetype" && estStyleDeCombat(capacite) ? "style" : GENRE_DU_ROLE[source.role];
+    const genre = estStyleDeCombat(capacite) ? "style" : GENRE_DU_ROLE[source.role];
     return { genre, titre: genre === "style" ? ORIGINE_STYLE : bloc.nom, bloc, qualite: null, rang: null, choix: fiche.choix[source.role] ?? [] };
   }
   const objet = fiche.equipement[source.rang];

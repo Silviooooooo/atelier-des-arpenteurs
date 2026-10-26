@@ -55,8 +55,8 @@ const SVG_ATTRIBUTS = new Set(["classe", "viewBox", "role", "aria-label", "aria-
  * Un élément SVG dessiné par le code (la silhouette de la fiche, § 15.4) :
  * quelques formes et leurs textes, des attributs de la liste admise, jamais
  * d'adresse, de gestionnaire ni de style. Un texte (text) ne reçoit que du
- * texte, par textContent, sans les signes qui commandent le sens de
- * l'écriture : aucun élément ne s'y glisse.
+ * texte, par textContent : aucun élément ne s'y glisse. Aucun texte ne
+ * garde les signes qui commandent le sens de l'écriture.
  */
 export function svg(balise, attributs = {}, ...enfants) {
   if (!SVG_PERMIS.has(balise)) throw new TypeError(`Élément SVG non permis : ${balise}`);
@@ -73,7 +73,7 @@ export function svg(balise, attributs = {}, ...enfants) {
     noeud.textContent = sansSensForce(presents.join(""));
     return noeud;
   }
-  for (const enfant of presents) noeud.append(enfant instanceof Node ? enfant : String(enfant));
+  for (const enfant of presents) noeud.append(enfant instanceof Node ? enfant : sansSensForce(enfant));
   return noeud;
 }
 

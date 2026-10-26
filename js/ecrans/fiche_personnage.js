@@ -154,12 +154,19 @@ function retirerEcouteurs() {
   ecouteurs = [];
 }
 
+// Les cinq polices du papier, demandées : document.fonts.ready seul peut se
+// tenir avant que la page n'en ait réclamé aucune (relecture de la fiche).
+const POLICES_FICHE = ["11px Marcellus", "11px 'Alegreya Sans'", "italic 11px 'Alegreya Sans'", "500 11px 'Alegreya Sans'", "700 11px 'Alegreya Sans'"];
+async function chargerPolices() {
+  await Promise.all(POLICES_FICHE.map((police) => document.fonts.load(police)));
+  await document.fonts.ready;
+}
+
 async function imprimer(mesurer) {
   // Les polices de la fiche avant l'impression : sinon le PDF prend celles
   // du système. Puis une dernière mesure, avec elles.
   try {
-    await Promise.all(["11px Marcellus", "11px 'Alegreya Sans'", "italic 11px 'Alegreya Sans'", "500 11px 'Alegreya Sans'", "700 11px 'Alegreya Sans'"].map((police) => document.fonts.load(police)));
-    await document.fonts.ready;
+    await chargerPolices();
   } catch {
     // polices indisponibles : l'impression se fait avec celles de secours
   }
@@ -349,7 +356,7 @@ function afficherPersonnage(contexte, personnage, zone, { enLigne = false, roles
   retirerEcouteurs();
   if (globalThis.requestAnimationFrame && document.fonts?.ready) {
     requestAnimationFrame(mesurer);
-    document.fonts.ready.then(mesurer).catch(() => {});
+    chargerPolices().then(mesurer).catch(() => {});
     ecouter("resize", mesurer);
     ecouter("beforeprint", mesurer);
   }
@@ -383,6 +390,9 @@ export function afficher(contexte, route) {
       // La table des rôles, attendue une fois : elle nomme la capacité de
       // déplacement que la fiche écrit.
       const roles = await lireLesRoles(contexte.etat.banque, contexte.etat.mode);
+      // Une autre fiche a pu s'ouvrir pendant l'attente : celle-ci, quittée,
+      // ne touche pas à ses écouteurs.
+      if (!zone.isConnected) return;
       afficherPersonnage(contexte, personnage, zone, { enLigne: Boolean(enLigne), roles });
     })
     .catch((erreur) => {
