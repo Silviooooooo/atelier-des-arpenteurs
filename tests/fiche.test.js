@@ -7,6 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { POLICES } from "../js/apparence/themes.js";
 import { MOT_DE_PASSE_DEMO } from "../js/banque/chargement.js";
 import { importerFichier } from "../js/banque/importation.js";
 import { coutRecto, feuilles } from "../js/fiche/feuilles.js";
@@ -215,14 +216,26 @@ test("impression — A4 sans marge, couleurs gardées, le recto seul sur la prem
   }
 });
 
-test("polices — Marcellus, Alegreya Sans et EB Garamond hébergées dans le dépôt, avec leur licence OFL ; rien d'autre", () => {
+test("polices — les trois du papier et les dix-neuf des thèmes hébergées dans le dépôt, avec leur licence OFL ; rien d'autre", () => {
   // Chaque papier appelle ses polices depuis sa feuille : la fiche de
-  // personnage (§ 15.4), la carte d'adversaire (§ 16.5).
+  // personnage (§ 15.4), la carte d'adversaire (§ 16.5). Les polices de
+  // titre des thèmes, celles du catalogue dont le fichier n'est pas null,
+  // depuis la feuille engendrée (§ 10.2).
+  const deTheme = Object.values(POLICES).filter((police) => police.fichier !== null).map((police) => police.fichier);
+  assert.equal(deTheme.length, 19);
   const attendues = {
     "css/fiche.css": ["AlegreyaSans-Bold.woff2", "AlegreyaSans-Italic.woff2", "AlegreyaSans-Medium.woff2", "AlegreyaSans-Regular.woff2", "Marcellus-Regular.woff2"],
     "css/adversaire.css": ["EBGaramond-Italic.woff2", "EBGaramond-Variable.woff2"],
+    "css/themes.css": [...deTheme].sort(),
   };
-  const licences = ["OFL-AlegreyaSans.txt", "OFL-EBGaramond.txt", "OFL-Marcellus.txt"];
+  // Une licence par famille : « Cinzel-Bold.woff2 » a « OFL-Cinzel.txt ».
+  const licences = ["OFL-AlegreyaSans.txt", "OFL-EBGaramond.txt", "OFL-Marcellus.txt", ...deTheme.map((fichier) => `OFL-${fichier.replace(/-(?:Regular|Bold)\.woff2$/, "")}.txt`)];
+  assert.equal(new Set(licences).size, 22);
+  // Trois feuilles seulement déclarent des polices.
+  const declarent = readdirSync(new URL("css/", racine), { recursive: true })
+    .map((fichier) => `css/${String(fichier).replaceAll("\\", "/")}`)
+    .filter((feuille) => feuille.endsWith(".css") && /@font-face/.test(lire(feuille)));
+  assert.deepEqual(declarent.sort(), Object.keys(attendues).sort());
   for (const [feuille, polices] of Object.entries(attendues)) {
     const css = lire(feuille);
     const appels = [...css.matchAll(/url\("\.\.\/polices\/([^"]+)"\)/g)].map(([, f]) => f);
@@ -230,13 +243,15 @@ test("polices — Marcellus, Alegreya Sans et EB Garamond hébergées dans le d�
     assert.equal([...css.matchAll(/url\(/g)].length, appels.length, `${feuille} : aucune autre adresse`);
   }
   const appels = Object.values(attendues).flat();
+  assert.equal(appels.length, 26);
   const fichiers = readdirSync(new URL("polices/", racine)).sort();
   assert.deepEqual(fichiers, [...appels, ...licences].sort());
   for (const police of appels) assert.equal(readFileSync(new URL(`polices/${police}`, racine)).subarray(0, 4).toString("latin1"), "wOF2", police);
   for (const licence of licences) assert.match(lire(`polices/${licence}`), /SIL Open Font License, Version 1\.1/);
-  // La page les permet par sa politique de sécurité, et lie les deux feuilles qui les appellent.
+  // La page les permet par sa politique de sécurité, et lie les deux feuilles
+  // du papier ; le lien de css/themes.css se vérifie avec l'ordre des feuilles.
   assert.match(lire("index.html"), /font-src 'self';/);
-  for (const feuille of Object.keys(attendues)) assert.ok(lire("index.html").includes(`<link rel="stylesheet" href="${feuille}">`), feuille);
+  for (const feuille of ["css/fiche.css", "css/adversaire.css"]) assert.ok(lire("index.html").includes(`<link rel="stylesheet" href="${feuille}">`), feuille);
 });
 
 test("démonstration — le personnage fourni vient de l'outil, est complet, et sans changement contre la banque de démonstration", async () => {

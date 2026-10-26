@@ -1610,8 +1610,10 @@ test("ecran.css — le cadre des cartes n'est masqué qu'à l'écran, l'impressi
   assert.match(css, /\.lecture-section:has\(> \.lecture-zones\) \{\s*overflow-x: auto;\s*\}/);
   assert.match(css, /\.lecture-zones \.lecture-faces \{\s*white-space: nowrap;\s*\}/);
   assert.match(css, /\.barre-rencontre,\s*\.barre-publication \{\s*position: sticky;\s*bottom: 0;/);
-  // Aucune classe de la carte n'est nommée ici : la carte est du papier, dans sa feuille.
-  assert.doesNotMatch(css, /\.cartes?-adversaires?\b|\.carte-(?!personnage\b)[a-z]/);
+  // Aucune classe de la carte n'est nommée ici : la carte est du papier, dans sa feuille. Seul le :not() de la règle
+  // des titres (lot 5) la nomme, pour l'épargner.
+  assert.doesNotMatch(css.replace(/:not\([^()]*\)/g, ""), /\.cartes?-adversaires?\b|\.carte-(?!personnage\b)[a-z]/);
+  assert.match(css, /:not\(\.feuille \*, \.carte-adversaire \*\)/);
   // La provenance ne se lit qu'à l'écran : la carte, qui s'imprime, n'en a ni la classe ni la fonction.
   assert.match(css, /\.provenance \{/);
   assert.doesNotMatch(lire("js/adversaire/carte.js").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, ""), /provenance|ecrireOrigine/);

@@ -8,7 +8,9 @@
    et les bordures des champs d'au moins 3:1 ; tests/site.test.js le mesure.
    Le simulateur de combat (§ 17) est l'exception à la couleur unique : le
    vert de ses personnages et le rouge de ses adversaires, plus bas, et les
-   quatre couleurs de sa hachure et du cadre d'un jet.
+   quatre couleurs de sa hachure et du cadre d'un jet. Ces valeurs sont
+   celles du thème par défaut, « Atelier » : les autres thèmes (lot 5,
+   css/themes.css) redéfinissent ces jetons, à l'écran seulement.
 
    Seule exception, que CSS impose : une condition @media ne lit pas les
    variables. La largeur où la liste et la fiche se placent côte à côte
@@ -88,6 +90,22 @@
   --accent: #1d5c8f;
   --texte-sur-accent: #ffffff;
   --accent-doux: #e3edf6;
+
+  /* Ce qu'un thème redéfinit aussi (lot 5) : la couleur, la police et la
+     graisse des titres des écrans (h1, h2, h3, la marque, le nom en tête de
+     la bulle du combat), la police du journal et du bandeau du combat,
+     l'ajustement de taille du texte courant (font-size-adjust, que le papier
+     ne suit pas). Puis le créateur : ce qui change au niveau suivant, la
+     hachure « Non maîtrisé » et la largeur d'une de ses bandes. Ici, les
+     valeurs d'Atelier, celles d'avant. */
+  --couleur-titre: #1a1c20;
+  --police-titre: var(--police);
+  --police-journal: var(--police-chasse-fixe);
+  --graisse-titre: 700;
+  --ajustement: none;
+  --difference: var(--combat-echec);
+  --hachure-alerte: color-mix(in srgb, var(--combat-alerte) 9%, var(--fond-2));
+  --hachure-large: 10px;
 
   /* Le simulateur de combat (§ 17) : vert pour les personnages, rouge pour
      les adversaires, à la demande de l'auteur. Aucune de ces couleurs ne
@@ -176,6 +194,7 @@
     --accent: #7db4e3;
     --texte-sur-accent: #0b1722;
     --accent-doux: #1c2f40;
+    --couleur-titre: #e6e8eb;
 
     --combat-pj: #3fae62;
     --combat-pj-doux: #163222;

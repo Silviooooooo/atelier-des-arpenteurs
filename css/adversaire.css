@@ -51,7 +51,8 @@
 
 /* Ce que body transmet à l'interface ne vaut pas pour le papier : la carte
    pose sa couleur, sa police, sa taille et son interligne, et ne coupe pas
-   les mots. */
+   les mots. Elle n'hérite pas non plus l'ajustement de taille d'un thème
+   (lot 5) : il la grossirait. */
 .carte-adversaire {
   position: relative;
   box-sizing: border-box;
@@ -66,6 +67,7 @@
   color: var(--carte-encre);
   font-family: var(--police-carte);
   font-size: 16px;
+  font-size-adjust: none;
   font-style: normal;
   font-weight: 400;
   letter-spacing: normal;

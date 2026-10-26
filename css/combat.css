@@ -272,7 +272,7 @@
   min-width: 0;
   max-height: calc(var(--taille-petite) * var(--interligne) * 3);
   overflow: hidden;
-  font-family: var(--police-chasse-fixe);
+  font-family: var(--police-journal);
   font-size: var(--taille-petite);
   line-height: var(--interligne);
   overflow-wrap: anywhere;
@@ -658,9 +658,16 @@ html:has(.combat-bulle:not([hidden])) {
   border-bottom: var(--trait) solid var(--separateur);
 }
 
+/* Le nom en tête de la bulle, et du volet qu'elle devient sur un
+   téléphone : un titre du thème (lot 5), comme ceux des écrans. */
 .combat-bulle-titre {
   margin: 0;
+  font-family: var(--police-titre);
+  color: var(--couleur-titre);
   font-size: var(--taille-texte);
+  font-weight: var(--graisse-titre);
+  font-synthesis-weight: none;
+  font-size-adjust: none;
   line-height: var(--interligne-titre);
   overflow-wrap: anywhere;
 }
@@ -1805,7 +1812,7 @@ html:has(.combat-bulle:not([hidden])) {
   margin-left: auto;
   padding-left: var(--espace-1);
   color: var(--texte-2);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 /* Une case de jauge : pleine, ou vide. Le nombre l'accompagne toujours. */
@@ -1836,7 +1843,7 @@ html:has(.combat-bulle:not([hidden])) {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--taille-petite);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
 .combat-zones th,
@@ -1971,7 +1978,7 @@ html:has(.combat-bulle:not([hidden])) {
   padding: 0 var(--espace-3) 0 0;
   overflow: auto;
   list-style: none;
-  font-family: var(--police-chasse-fixe);
+  font-family: var(--police-journal);
   font-size: var(--taille-petite);
 }
 

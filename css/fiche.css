@@ -78,6 +78,10 @@
   /* Alegreya Sans écrit ses chiffres en bas de casse : sur une fiche, des
      chiffres alignés se lisent mieux. */
   font-variant-numeric: lining-nums;
+  /* L'ajustement de taille d'un thème (lot 5) ne vaut pas pour le papier :
+     hérité, il grossirait le texte, et le recto, de hauteur fixe, couperait
+     le sien. */
+  font-size-adjust: none;
   print-color-adjust: exact;
   -webkit-print-color-adjust: exact;
 }

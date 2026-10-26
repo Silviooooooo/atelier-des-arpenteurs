@@ -437,17 +437,21 @@ test("adversaire.css — chaque règle commence par la carte ou par son conteneu
   // La seule règle qui sort de la carte : le fond de la page, à l'impression.
   assert.deepEqual(hors, [["@media print", "html:has(.cartes-adversaires)"], ["@media print", "body:has(.cartes-adversaires)"]]);
   const feuille = classesDe(lire("css/adversaire.css"));
+  // Une classe nommée dans :not() n'habille rien : les titres des écrans (css/ecran.css, lot 5) épargnent ainsi la carte.
+  const prisesPar = (css) => classesDe(css.replace(/:not\([^()]*\)/g, ""));
+  assert.ok(classesDe(lire("css/ecran.css")).has("carte-adversaire"), "l'exemption sert : ecran.css nomme la carte pour l'épargner");
   for (const autre of AUTRES_FEUILLES) {
-    const prises = classesDe(lire(autre));
+    const prises = prisesPar(lire(autre));
     assert.ok(prises.size > 0, `${autre} : aucune classe lue`);
     assert.deepEqual([...feuille].filter((classe) => prises.has(classe)), [], autre);
   }
   // Le simulateur de combat (§ 17) montre des cartes dans son panneau « Fiche complète » : sa feuille ne les
   // habille pas pour autant. Il appelle « plateau » sa propre carte, et aucune de ses classes ne porte « carte ».
   assert.deepEqual([...classesDe(lire("css/combat.css"))].filter((classe) => /carte/.test(classe)), []);
-  // Le contrôle refuse : une feuille qui reprendrait une classe de la carte, sous un autre conteneur.
-  const intruse = classesDe(".combat-panneau .carte-nom { margin: 0; }\n.combat .rangee-armure,\n.combat-fiche { margin: 0; }");
-  assert.deepEqual([...feuille].filter((classe) => intruse.has(classe)).sort(), ["carte-nom", "rangee-armure"]);
+  // Le contrôle refuse : une feuille qui reprendrait une classe de la carte, sous un autre conteneur, ou devant un
+  // :not() ; il n'admet que la classe qu'un :not() nomme.
+  const intruse = prisesPar(".combat-panneau .carte-nom { margin: 0; }\n.combat .rangee-armure,\n.combat-fiche { margin: 0; }\n.carte-bas:not(.combat-fiche) { margin: 0; }\n:where(h2):where(:not(.carte-corps *)) { margin: 0; }");
+  assert.deepEqual([...feuille].filter((classe) => intruse.has(classe)).sort(), ["carte-bas", "carte-nom", "rangee-armure"]);
   // Chaque classe que le code pose a sa règle, et chaque règle sert : les
   // adversaires de la démonstration, et un adversaire où tout figure.
   const complet = resoluEssai((r) => {
@@ -566,7 +570,8 @@ test("index.html — la feuille du combat est liée, la dernière ; l'ordre des 
   const page = lire("index.html");
   const { liens, defauts } = defautsDesFeuilles(page);
   assert.deepEqual(defauts, []);
-  assert.deepEqual(liens, ["css/jetons.css", "css/ecran.css", "css/personnage.css", "css/fiche.css", "css/adversaire.css", "css/combat.css"]);
+  // La feuille des thèmes (lot 5) suit aussitôt les jetons qu'elle redéfinit.
+  assert.deepEqual(liens, ["css/jetons.css", "css/themes.css", "css/ecran.css", "css/personnage.css", "css/fiche.css", "css/adversaire.css", "css/combat.css"]);
   const lien = '<link rel="stylesheet" href="css/combat.css">';
   const fautive = (texte, motif) => {
     assert.notEqual(texte, page);

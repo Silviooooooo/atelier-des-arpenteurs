@@ -1,0 +1,1436 @@
+/* Les thèmes (SPECIFICATION.md, § 9 et § 10.1).
+
+   Feuille engendrée par outils/themes_css.js depuis js/apparence/themes.js :
+   ne pas la modifier à la main, mais relancer node outils/themes_css.js.
+
+   Les @font-face des polices de titre sont au niveau supérieur ; un
+   navigateur ne télécharge une police que si un texte visible l'emploie.
+   Tout le reste est à l'écran seulement : l'impression ne change jamais. */
+
+@font-face {
+  font-family: "MedievalSharp";
+  src: url("../polices/MedievalSharp-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Uncial Antiqua";
+  src: url("../polices/UncialAntiqua-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Germania One";
+  src: url("../polices/GermaniaOne-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Grenze Gotisch";
+  src: url("../polices/GrenzeGotisch-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Cinzel";
+  src: url("../polices/Cinzel-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "El Messiri";
+  src: url("../polices/ElMessiri-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Orbitron";
+  src: url("../polices/Orbitron-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Cinzel Decorative";
+  src: url("../polices/CinzelDecorative-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Cormorant Garamond";
+  src: url("../polices/CormorantGaramond-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Playfair Display";
+  src: url("../polices/PlayfairDisplay-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "UnifrakturMaguntia";
+  src: url("../polices/UnifrakturMaguntia-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "IM Fell English";
+  src: url("../polices/IMFellEnglish-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Exo 2";
+  src: url("../polices/Exo2-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Racing Sans One";
+  src: url("../polices/RacingSansOne-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Pixelify Sans";
+  src: url("../polices/PixelifySans-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Libre Baskerville";
+  src: url("../polices/LibreBaskerville-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Almendra";
+  src: url("../polices/Almendra-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Pirata One";
+  src: url("../polices/PirataOne-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Rye";
+  src: url("../polices/Rye-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@media screen {
+  [data-theme="taverne"] {
+    --fond: #1d1611;
+    --fond-2: #282018;
+    --texte: #f2e8d5;
+    --texte-2: #cbb796;
+    --bordure: #8f7a5c;
+    --separateur: #3a2e23;
+    --accent: #f0b35e;
+    --texte-sur-accent: #1d1611;
+    --accent-doux: #3d2d1a;
+    --couleur-titre: #f6c477;
+    --combat-pj: #63b96e;
+    --combat-pj-doux: #1e2f1d;
+    --combat-pj-texte: #a6dda5;
+    --combat-adv: #e9775f;
+    --combat-adv-doux: #3b1f17;
+    --combat-adv-texte: #f5b4a4;
+    --combat-sur-jeton: #1d1611;
+    --combat-mort: #8b7f70;
+    --combat-reussite: #7fcf86;
+    --combat-echec: #f08a76;
+    --combat-alerte: #e6c15a;
+    --combat-portee: #e9775f;
+    --combat-portee-bord: #f2a08e;
+    --combat-cadre-jet: #8f7a5c;
+    --combat-cadre-jet-fond: #2f251c;
+    --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "MedievalSharp", Georgia, serif;
+    --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 400;
+    --rayon: 6px;
+    --ajustement: 0.5;
+    color-scheme: dark;
+  }
+
+  [data-theme="sylve"] {
+    --fond: #0f1d16;
+    --fond-2: #16271e;
+    --texte: #e9f1e6;
+    --texte-2: #b2c7b6;
+    --bordure: #6e8c79;
+    --separateur: #233a2d;
+    --accent: #e3cd84;
+    --texte-sur-accent: #13211a;
+    --accent-doux: #2a3a25;
+    --couleur-titre: #e3cd84;
+    --combat-pj: #74d18f;
+    --combat-pj-doux: #1d3626;
+    --combat-pj-texte: #a9e9bb;
+    --combat-adv: #f08a73;
+    --combat-adv-doux: #3a2219;
+    --combat-adv-texte: #f7b9a8;
+    --combat-sur-jeton: #0f1d16;
+    --combat-mort: #84968a;
+    --combat-reussite: #84dca0;
+    --combat-echec: #f39a85;
+    --combat-alerte: #e8c46a;
+    --combat-portee: #f08a73;
+    --combat-portee-bord: #f6ae9b;
+    --combat-cadre-jet: #6e8c79;
+    --combat-cadre-jet-fond: #1b2e23;
+    --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "Uncial Antiqua", Georgia, serif;
+    --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 400;
+    --rayon: 6px;
+    --ajustement: 0.5;
+    color-scheme: dark;
+  }
+
+  [data-theme="forge"] {
+    --fond: #1a1918;
+    --fond-2: #252321;
+    --texte: #eee8e1;
+    --texte-2: #bcb2a7;
+    --bordure: #7f746a;
+    --separateur: #36322e;
+    --accent: #f28c3b;
+    --texte-sur-accent: #1a1918;
+    --accent-doux: #3d2818;
+    --couleur-titre: #f6a35f;
+    --combat-pj: #5cbf72;
+    --combat-pj-doux: #1c2e20;
+    --combat-pj-texte: #9fdcaa;
+    --combat-adv: #ec6b5a;
+    --combat-adv-doux: #3b1d18;
+    --combat-adv-texte: #f5ada2;
+    --combat-sur-jeton: #1a1918;
+    --combat-mort: #8c8178;
+    --combat-reussite: #6fd08a;
+    --combat-echec: #f28779;
+    --combat-alerte: #f2c14e;
+    --combat-portee: #ec6b5a;
+    --combat-portee-bord: #f39a8d;
+    --combat-cadre-jet: #7f746a;
+    --combat-cadre-jet-fond: #2b2826;
+    --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "Germania One", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 400;
+    --rayon: 6px;
+    --ajustement: 0.5;
+    color-scheme: dark;
+  }
+
+  [data-theme="tenebres"] {
+    --fond: #0d0a0b;
+    --fond-2: #181214;
+    --texte: #ede4dc;
+    --texte-2: #b8aaa1;
+    --bordure: #7c6c6a;
+    --separateur: #2b2124;
+    --accent: #c9a85c;
+    --texte-sur-accent: #120d0e;
+    --accent-doux: #2e2416;
+    --couleur-titre: #e0595f;
+    --combat-pj: #5fae6d;
+    --combat-pj-doux: #182619;
+    --combat-pj-texte: #9fd3a6;
+    --combat-adv: #e5484d;
+    --combat-adv-doux: #3a1416;
+    --combat-adv-texte: #f4a2a3;
+    --combat-sur-jeton: #0d0a0b;
+    --combat-mort: #857779;
+    --combat-reussite: #74c987;
+    --combat-echec: #ee6f71;
+    --combat-alerte: #d9b45b;
+    --combat-portee: #e5484d;
+    --combat-portee-bord: #f07c7f;
+    --combat-cadre-jet: #7c6c6a;
+    --combat-cadre-jet-fond: #1f181a;
+    --police: "EB Garamond", Georgia, "Times New Roman", serif;
+    --police-titre: "Grenze Gotisch", Georgia, serif;
+    --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
+    --graisse-titre: 700;
+    --rayon: 6px;
+    --ajustement: 0.48;
+    color-scheme: dark;
+  }
+
+  [data-theme="heraldique"] {
+    --fond: #f8f4e9;
+    --fond-2: #ece5d3;
+    --texte: #1b2333;
+    --texte-2: #4a536a;
+    --bordure: #747b8c;
+    --separateur: #d9d0bb;
+    --accent: #1f3d8c;
+    --texte-sur-accent: #ffffff;
+    --accent-doux: #dfe5f3;
+    --couleur-titre: #8e2424;
+    --combat-pj: #1e7a3c;
+    --combat-pj-doux: #dff0e3;
+    --combat-pj-texte: #1b6e36;
+    --combat-adv: #b3261e;
+    --combat-adv-doux: #f8e0dd;
+    --combat-adv-texte: #a3221b;
+    --combat-sur-jeton: #ffffff;
+    --combat-mort: #6b717b;
+    --combat-reussite: #1c7439;
+    --combat-echec: #b3261e;
+    --combat-alerte: #8a5a00;
+    --combat-portee: #d9534f;
+    --combat-portee-bord: #c8372d;
+    --combat-cadre-jet: #7d838d;
+    --combat-cadre-jet-fond: #fffdf6;
+    --police: "EB Garamond", Georgia, "Times New Roman", serif;
+    --police-titre: "Cinzel", Georgia, serif;
+    --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
+    --graisse-titre: 700;
+    --rayon: 2px;
+    --ajustement: 0.48;
+    color-scheme: light;
+  }
+
+  [data-theme="sables"] {
+    --fond: #f7eddb;
+    --fond-2: #eddcbf;
+    --texte: #2a1c11;
+    --texte-2: #5d4937;
+    --bordure: #8b7860;
+    --separateur: #e0cba7;
+    --accent: #0b6977;
+    --texte-sur-accent: #ffffff;
+    --accent-doux: #d6ebe9;
+    --couleur-titre: #9b3b1c;
+    --combat-pj: #1d7a3a;
+    --combat-pj-doux: #dcefdc;
+    --combat-pj-texte: #1a6d34;
+    --combat-adv: #b02a1b;
+    --combat-adv-doux: #f6dfd6;
+    --combat-adv-texte: #a12617;
+    --combat-sur-jeton: #ffffff;
+    --combat-mort: #75695a;
+    --combat-reussite: #1b7035;
+    --combat-echec: #b02a1b;
+    --combat-alerte: #8a5000;
+    --combat-portee: #d25536;
+    --combat-portee-bord: #b8442a;
+    --combat-cadre-jet: #8b7860;
+    --combat-cadre-jet-fond: #fffaf0;
+    --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "El Messiri", Georgia, serif;
+    --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 700;
+    --rayon: 6px;
+    --ajustement: 0.5;
+    color-scheme: light;
+  }
+
+  [data-theme="givre"] {
+    --fond: #111920;
+    --fond-2: #18232c;
+    --texte: #e5eef4;
+    --texte-2: #a8bac7;
+    --bordure: #677a88;
+    --separateur: #24323d;
+    --accent: #93d6ea;
+    --texte-sur-accent: #0c161d;
+    --accent-doux: #1b3441;
+    --couleur-titre: #bfe6f0;
+    --combat-pj: #5fc48a;
+    --combat-pj-doux: #17322a;
+    --combat-pj-texte: #9fe3ba;
+    --combat-adv: #ef7a6e;
+    --combat-adv-doux: #3a1f1e;
+    --combat-adv-texte: #f6b3aa;
+    --combat-sur-jeton: #0c161d;
+    --combat-mort: #7d8b96;
+    --combat-reussite: #73d29c;
+    --combat-echec: #f28d82;
+    --combat-alerte: #e9c46a;
+    --combat-portee: #ef7a6e;
+    --combat-portee-bord: #f5a198;
+    --combat-cadre-jet: #677a88;
+    --combat-cadre-jet-fond: #1d2a34;
+    --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "Marcellus", Georgia, serif;
+    --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 400;
+    --rayon: 6px;
+    --ajustement: 0.5;
+    color-scheme: dark;
+  }
+
+  [data-theme="cathedrale"] {
+    --fond: #14161c;
+    --fond-2: #1d212a;
+    --texte: #e8e6e1;
+    --texte-2: #aeb0b8;
+    --bordure: #6e7280;
+    --separateur: #2a2e38;
+    --accent: #7fa6ff;
+    --texte-sur-accent: #10131a;
+    --accent-doux: #1f2a45;
+    --couleur-titre: #ec6a7c;
+    --combat-pj: #5fc27a;
+    --combat-pj-doux: #183022;
+    --combat-pj-texte: #a3e3b5;
+    --combat-adv: #ee7466;
+    --combat-adv-doux: #3a1d1b;
+    --combat-adv-texte: #f6b0a8;
+    --combat-sur-jeton: #14161c;
+    --combat-mort: #80858d;
+    --combat-reussite: #6fd08f;
+    --combat-echec: #f2877b;
+    --combat-alerte: #ecc35e;
+    --combat-portee: #ee7466;
+    --combat-portee-bord: #f4a097;
+    --combat-cadre-jet: #6e7280;
+    --combat-cadre-jet-fond: #1d212a;
+    --police: "EB Garamond", Georgia, "Times New Roman", serif;
+    --police-titre: "UnifrakturMaguntia", Georgia, serif;
+    --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
+    --graisse-titre: 400;
+    --rayon: 6px;
+    --ajustement: 0.48;
+    color-scheme: dark;
+  }
+
+  [data-theme="grand-cru"] {
+    --fond: #faf6f0;
+    --fond-2: #f0e6dc;
+    --texte: #24161a;
+    --texte-2: #5e4a50;
+    --bordure: #8d7a7f;
+    --separateur: #e3d5cb;
+    --accent: #7b1e2e;
+    --texte-sur-accent: #ffffff;
+    --accent-doux: #f3e0e3;
+    --couleur-titre: #6e1a2a;
+    --combat-pj: #1e7a3c;
+    --combat-pj-doux: #e0f0e3;
+    --combat-pj-texte: #1b6e36;
+    --combat-adv: #b3261e;
+    --combat-adv-doux: #f8e0dd;
+    --combat-adv-texte: #a3221b;
+    --combat-sur-jeton: #ffffff;
+    --combat-mort: #6b717b;
+    --combat-reussite: #1c7439;
+    --combat-echec: #b3261e;
+    --combat-alerte: #7d5300;
+    --combat-portee: #d9534f;
+    --combat-portee-bord: #c8372d;
+    --combat-cadre-jet: #8d7a7f;
+    --combat-cadre-jet-fond: #f0e6dc;
+    --police: "EB Garamond", Georgia, "Times New Roman", serif;
+    --police-titre: "Playfair Display", Georgia, serif;
+    --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
+    --graisse-titre: 700;
+    --rayon: 6px;
+    --ajustement: 0.48;
+    color-scheme: light;
+  }
+
+  [data-theme="velours"] {
+    --fond: #1f0d12;
+    --fond-2: #2b141b;
+    --texte: #f3e6e8;
+    --texte-2: #c9aab1;
+    --bordure: #8a6570;
+    --separateur: #3b1f27;
+    --accent: #d9a75b;
+    --texte-sur-accent: #1f0d12;
+    --accent-doux: #3d2420;
+    --couleur-titre: #e7a1ad;
+    --combat-pj: #5fc27a;
+    --combat-pj-doux: #183022;
+    --combat-pj-texte: #a3e3b5;
+    --combat-adv: #ee7466;
+    --combat-adv-doux: #3a1d1b;
+    --combat-adv-texte: #f6b0a8;
+    --combat-sur-jeton: #1f0d12;
+    --combat-mort: #80858d;
+    --combat-reussite: #6fd08f;
+    --combat-echec: #f2877b;
+    --combat-alerte: #ecc35e;
+    --combat-portee: #ee7466;
+    --combat-portee-bord: #f4a097;
+    --combat-cadre-jet: #8a6570;
+    --combat-cadre-jet-fond: #2b141b;
+    --police: "EB Garamond", Georgia, "Times New Roman", serif;
+    --police-titre: "Cormorant Garamond", Georgia, serif;
+    --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
+    --graisse-titre: 700;
+    --rayon: 6px;
+    --ajustement: 0.48;
+    color-scheme: dark;
+  }
+
+  [data-theme="ardoise"] {
+    --fond: #16181c;
+    --fond-2: #1f2228;
+    --texte: #e8eaef;
+    --texte-2: #a5acb9;
+    --bordure: #697184;
+    --separateur: #2a2e37;
+    --accent: #9aa8ff;
+    --texte-sur-accent: #10131c;
+    --accent-doux: #262c48;
+    --couleur-titre: #e8eaef;
+    --combat-pj: #4fbf73;
+    --combat-pj-doux: #173023;
+    --combat-pj-texte: #9be2b3;
+    --combat-adv: #ee6a62;
+    --combat-adv-doux: #3b1c1c;
+    --combat-adv-texte: #f6aaa5;
+    --combat-sur-jeton: #10131c;
+    --combat-mort: #7b8291;
+    --combat-reussite: #66cf8d;
+    --combat-echec: #f0847d;
+    --combat-alerte: #f0b95c;
+    --combat-portee: #ee6a62;
+    --combat-portee-bord: #f49a94;
+    --combat-cadre-jet: #6b7387;
+    --combat-cadre-jet-fond: #252931;
+    --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-journal: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --graisse-titre: 700;
+    --rayon: 10px;
+    --ajustement: none;
+    color-scheme: dark;
+  }
+
+  [data-theme="neon"] {
+    --fond: #0d0b1f;
+    --fond-2: #16132f;
+    --texte: #f3eeff;
+    --texte-2: #bcb3dd;
+    --bordure: #7d72b5;
+    --separateur: #272152;
+    --accent: #ff5bd8;
+    --texte-sur-accent: #1a0b24;
+    --accent-doux: #3a1645;
+    --couleur-titre: #6ff3ff;
+    --combat-pj: #3df08b;
+    --combat-pj-doux: #0f3326;
+    --combat-pj-texte: #8ff7bd;
+    --combat-adv: #ff5d6c;
+    --combat-adv-doux: #3d1225;
+    --combat-adv-texte: #ffa6ae;
+    --combat-sur-jeton: #0d0b1f;
+    --combat-mort: #8a83ab;
+    --combat-reussite: #4ff59a;
+    --combat-echec: #ff6f7d;
+    --combat-alerte: #ffd35c;
+    --combat-portee: #ff5d6c;
+    --combat-portee-bord: #ff8f99;
+    --combat-cadre-jet: #7d72b5;
+    --combat-cadre-jet-fond: #1d1940;
+    --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "Orbitron", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-journal: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --graisse-titre: 700;
+    --rayon: 4px;
+    --ajustement: none;
+    color-scheme: dark;
+  }
+
+  [data-theme="epure"] {
+    --fond: #ffffff;
+    --fond-2: #f4f4f2;
+    --texte: #121212;
+    --texte-2: #575757;
+    --bordure: #8a8a8a;
+    --separateur: #e6e6e3;
+    --accent: #0f6f66;
+    --texte-sur-accent: #ffffff;
+    --accent-doux: #e0f1ee;
+    --couleur-titre: #121212;
+    --combat-pj: #1b7a3e;
+    --combat-pj-doux: #e1f2e6;
+    --combat-pj-texte: #1a6f39;
+    --combat-adv: #b62b20;
+    --combat-adv-doux: #fae3e0;
+    --combat-adv-texte: #a8261c;
+    --combat-sur-jeton: #ffffff;
+    --combat-mort: #737373;
+    --combat-reussite: #1b7a3e;
+    --combat-echec: #b62b20;
+    --combat-alerte: #8a5300;
+    --combat-portee: #d9534f;
+    --combat-portee-bord: #c8372d;
+    --combat-cadre-jet: #8a8a8a;
+    --combat-cadre-jet-fond: #ffffff;
+    --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-journal: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --graisse-titre: 700;
+    --rayon: 12px;
+    --ajustement: none;
+    color-scheme: light;
+  }
+
+  [data-theme="contraste"] {
+    --fond: #ffffff;
+    --fond-2: #f2f2f2;
+    --texte: #000000;
+    --texte-2: #262626;
+    --bordure: #000000;
+    --separateur: #767676;
+    --accent: #0033cc;
+    --texte-sur-accent: #ffffff;
+    --accent-doux: #e5ebff;
+    --couleur-titre: #000000;
+    --combat-pj: #006b25;
+    --combat-pj-doux: #e3f3e8;
+    --combat-pj-texte: #005a1f;
+    --combat-adv: #b00000;
+    --combat-adv-doux: #fde4e4;
+    --combat-adv-texte: #990000;
+    --combat-sur-jeton: #ffffff;
+    --combat-mort: #555555;
+    --combat-reussite: #006b25;
+    --combat-echec: #b00000;
+    --combat-alerte: #6b4000;
+    --combat-portee: #b00000;
+    --combat-portee-bord: #b00000;
+    --combat-cadre-jet: #000000;
+    --combat-cadre-jet-fond: #ffffff;
+    --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-journal: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --graisse-titre: 700;
+    --rayon: 3px;
+    --ajustement: none;
+    color-scheme: light;
+  }
+
+  [data-theme="daltonisme"] {
+    --fond: #fbfbfa;
+    --fond-2: #f0f0ee;
+    --texte: #1a1a1a;
+    --texte-2: #4f4f4f;
+    --bordure: #7a7a7a;
+    --separateur: #deded9;
+    --accent: #5b3fa0;
+    --texte-sur-accent: #ffffff;
+    --accent-doux: #ebe5f6;
+    --couleur-titre: #1a1a1a;
+    --combat-pj: #0068a8;
+    --combat-pj-doux: #dcebf6;
+    --combat-pj-texte: #005d96;
+    --combat-adv: #c25000;
+    --combat-adv-doux: #fbe7d9;
+    --combat-adv-texte: #a94600;
+    --combat-sur-jeton: #ffffff;
+    --combat-mort: #6e6e6e;
+    --combat-reussite: #0068a8;
+    --combat-echec: #ae4800;
+    --combat-alerte: #7a5a00;
+    --combat-portee: #c56c1b;
+    --combat-portee-bord: #c25000;
+    --combat-cadre-jet: #7a7a7a;
+    --combat-cadre-jet-fond: #ffffff;
+    --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-journal: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --graisse-titre: 700;
+    --rayon: 6px;
+    --ajustement: none;
+    color-scheme: light;
+  }
+
+  [data-theme="abrasia"] {
+    --fond: #f5efe1;
+    --fond-2: #ebe1c8;
+    --texte: #211e18;
+    --texte-2: #5c5242;
+    --bordure: #8c7b58;
+    --separateur: #dcd1b5;
+    --accent: #9a4620;
+    --texte-sur-accent: #ffffff;
+    --accent-doux: #f0dfcf;
+    --couleur-titre: #7e3617;
+    --combat-pj: #2f6e3a;
+    --combat-pj-doux: #e1ecd8;
+    --combat-pj-texte: #2b6535;
+    --combat-adv: #a3301f;
+    --combat-adv-doux: #f4ddd2;
+    --combat-adv-texte: #92291a;
+    --combat-sur-jeton: #ffffff;
+    --combat-mort: #7a6f58;
+    --combat-reussite: #2f6e3a;
+    --combat-echec: #a3301f;
+    --combat-alerte: #7e5200;
+    --combat-portee: #c8553f;
+    --combat-portee-bord: #a3301f;
+    --combat-cadre-jet: #8c7b58;
+    --combat-cadre-jet-fond: #fdfbf4;
+    --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "Marcellus", Georgia, serif;
+    --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 400;
+    --rayon: 6px;
+    --ajustement: 0.5;
+    color-scheme: light;
+  }
+
+  [data-theme="enluminure"] {
+    --fond: #faf3e4;
+    --fond-2: #f1e6cf;
+    --texte: #1e1913;
+    --texte-2: #55493a;
+    --bordure: #8f7333;
+    --separateur: #e5d6b4;
+    --accent: #1f4d9b;
+    --texte-sur-accent: #ffffff;
+    --accent-doux: #e1e8f5;
+    --couleur-titre: #b13a1d;
+    --combat-pj: #23743b;
+    --combat-pj-doux: #e0efdf;
+    --combat-pj-texte: #1f6a35;
+    --combat-adv: #b13a1d;
+    --combat-adv-doux: #f6e0d6;
+    --combat-adv-texte: #a03419;
+    --combat-sur-jeton: #ffffff;
+    --combat-mort: #7a6a50;
+    --combat-reussite: #23743b;
+    --combat-echec: #b13a1d;
+    --combat-alerte: #7d5600;
+    --combat-portee: #c9502f;
+    --combat-portee-bord: #b13a1d;
+    --combat-cadre-jet: #8f7333;
+    --combat-cadre-jet-fond: #fffaf0;
+    --police: "EB Garamond", Georgia, "Times New Roman", serif;
+    --police-titre: "Cinzel Decorative", Georgia, serif;
+    --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
+    --graisse-titre: 700;
+    --rayon: 2px;
+    --ajustement: 0.48;
+    color-scheme: light;
+  }
+
+  [data-theme="constellations"] {
+    --fond: #0b1027;
+    --fond-2: #121a3a;
+    --texte: #eef1ff;
+    --texte-2: #aab4da;
+    --bordure: #6c76a8;
+    --separateur: #202a52;
+    --accent: #f3d57c;
+    --texte-sur-accent: #0b1027;
+    --accent-doux: #2c2a3c;
+    --couleur-titre: #dfe5ff;
+    --combat-pj: #6fd39a;
+    --combat-pj-doux: #15322f;
+    --combat-pj-texte: #a6ebc4;
+    --combat-adv: #f2817a;
+    --combat-adv-doux: #3b1e2c;
+    --combat-adv-texte: #f8b7b2;
+    --combat-sur-jeton: #0b1027;
+    --combat-mort: #7d86ad;
+    --combat-reussite: #7edca6;
+    --combat-echec: #f5918a;
+    --combat-alerte: #f3d57c;
+    --combat-portee: #f2817a;
+    --combat-portee-bord: #f7a59f;
+    --combat-cadre-jet: #6c76a8;
+    --combat-cadre-jet-fond: #18214a;
+    --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "Cormorant Garamond", Georgia, serif;
+    --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 700;
+    --rayon: 6px;
+    --ajustement: 0.5;
+    color-scheme: dark;
+  }
+
+  [data-theme="compagnie"] {
+    --fond: #ece0c4;
+    --fond-2: #e0d0ad;
+    --texte: #2b2117;
+    --texte-2: #5a4a36;
+    --bordure: #857150;
+    --separateur: #d3c09a;
+    --accent: #7a2a1c;
+    --texte-sur-accent: #ffffff;
+    --accent-doux: #ecd3c3;
+    --couleur-titre: #3a2a1c;
+    --combat-pj: #1e7a3c;
+    --combat-pj-doux: #e0f0e3;
+    --combat-pj-texte: #196632;
+    --combat-adv: #b3261e;
+    --combat-adv-doux: #f8e0dd;
+    --combat-adv-texte: #a3221b;
+    --combat-sur-jeton: #ffffff;
+    --combat-mort: #6b717b;
+    --combat-reussite: #196632;
+    --combat-echec: #aa241d;
+    --combat-alerte: #7a5100;
+    --combat-portee: #d43c38;
+    --combat-portee-bord: #c8372d;
+    --combat-cadre-jet: #857150;
+    --combat-cadre-jet-fond: #e0d0ad;
+    --police: "EB Garamond", Georgia, "Times New Roman", serif;
+    --police-titre: "IM Fell English", Georgia, serif;
+    --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
+    --graisse-titre: 400;
+    --rayon: 6px;
+    --ajustement: 0.48;
+    color-scheme: light;
+  }
+
+  [data-theme="bivouac"] {
+    --fond: #1c1814;
+    --fond-2: #26201a;
+    --texte: #e9dfcd;
+    --texte-2: #bba98f;
+    --bordure: #7d6d58;
+    --separateur: #352c23;
+    --accent: #d39a4a;
+    --texte-sur-accent: #1c1814;
+    --accent-doux: #3a2a18;
+    --couleur-titre: #e0ad66;
+    --combat-pj: #5fc27a;
+    --combat-pj-doux: #183022;
+    --combat-pj-texte: #a3e3b5;
+    --combat-adv: #ee7466;
+    --combat-adv-doux: #3a1d1b;
+    --combat-adv-texte: #f6b0a8;
+    --combat-sur-jeton: #1c1814;
+    --combat-mort: #80858d;
+    --combat-reussite: #6fd08f;
+    --combat-echec: #f2877b;
+    --combat-alerte: #ecc35e;
+    --combat-portee: #ee7466;
+    --combat-portee-bord: #f4a097;
+    --combat-cadre-jet: #7d6d58;
+    --combat-cadre-jet-fond: #26201a;
+    --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "IM Fell English", Georgia, serif;
+    --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 400;
+    --rayon: 6px;
+    --ajustement: 0.5;
+    color-scheme: dark;
+  }
+
+  [data-theme="abysses"] {
+    --fond: #04161f;
+    --fond-2: #0a2330;
+    --texte: #e2f6fb;
+    --texte-2: #9fc6d1;
+    --bordure: #4f7d8c;
+    --separateur: #12313f;
+    --accent: #3fe0d0;
+    --texte-sur-accent: #04161f;
+    --accent-doux: #0d3a40;
+    --couleur-titre: #7fe7ff;
+    --combat-pj: #5fc27a;
+    --combat-pj-doux: #183022;
+    --combat-pj-texte: #a3e3b5;
+    --combat-adv: #ee7466;
+    --combat-adv-doux: #3a1d1b;
+    --combat-adv-texte: #f6b0a8;
+    --combat-sur-jeton: #04161f;
+    --combat-mort: #80858d;
+    --combat-reussite: #6fd08f;
+    --combat-echec: #f2877b;
+    --combat-alerte: #ffa877;
+    --combat-portee: #ee7466;
+    --combat-portee-bord: #f4a097;
+    --combat-cadre-jet: #4f7d8c;
+    --combat-cadre-jet-fond: #0a2330;
+    --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "Exo 2", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-journal: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 700;
+    --rayon: 6px;
+    --ajustement: none;
+    color-scheme: dark;
+  }
+
+  [data-theme="bastion"] {
+    --fond: #15181f;
+    --fond-2: #1f2430;
+    --texte: #eceae2;
+    --texte-2: #b0b3bd;
+    --bordure: #7c7f8c;
+    --separateur: #2b303c;
+    --accent: #e2b74c;
+    --texte-sur-accent: #15181f;
+    --accent-doux: #33301f;
+    --couleur-titre: #9cbcff;
+    --combat-pj: #5fc27a;
+    --combat-pj-doux: #183022;
+    --combat-pj-texte: #a3e3b5;
+    --combat-adv: #ee7466;
+    --combat-adv-doux: #3a1d1b;
+    --combat-adv-texte: #f6b0a8;
+    --combat-sur-jeton: #15181f;
+    --combat-mort: #80858d;
+    --combat-reussite: #6fd08f;
+    --combat-echec: #f2877b;
+    --combat-alerte: #ecc35e;
+    --combat-portee: #ee7466;
+    --combat-portee-bord: #f4a097;
+    --combat-cadre-jet: #7c7f8c;
+    --combat-cadre-jet-fond: #1f2430;
+    --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "Cinzel", Georgia, serif;
+    --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 700;
+    --rayon: 6px;
+    --ajustement: 0.5;
+    color-scheme: dark;
+  }
+
+  [data-theme="clans"] {
+    --fond: #1a1410;
+    --fond-2: #261c15;
+    --texte: #efe2cf;
+    --texte-2: #c1ab8e;
+    --bordure: #84705a;
+    --separateur: #3a2b20;
+    --accent: #a9cc52;
+    --texte-sur-accent: #1a1410;
+    --accent-doux: #2c3318;
+    --couleur-titre: #ec6a4c;
+    --combat-pj: #5fc27a;
+    --combat-pj-doux: #183022;
+    --combat-pj-texte: #a3e3b5;
+    --combat-adv: #ee7466;
+    --combat-adv-doux: #3a1d1b;
+    --combat-adv-texte: #f6b0a8;
+    --combat-sur-jeton: #1a1410;
+    --combat-mort: #80858d;
+    --combat-reussite: #6fd08f;
+    --combat-echec: #f2877b;
+    --combat-alerte: #ecc35e;
+    --combat-portee: #ee7466;
+    --combat-portee-bord: #f4a097;
+    --combat-cadre-jet: #84705a;
+    --combat-cadre-jet-fond: #261c15;
+    --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "Germania One", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 400;
+    --rayon: 6px;
+    --ajustement: 0.5;
+    color-scheme: dark;
+  }
+
+  [data-theme="quete"] {
+    --fond: #efe3c6;
+    --fond-2: #e4d4ad;
+    --texte: #2a1d0f;
+    --texte-2: #5b4a33;
+    --bordure: #8b7349;
+    --separateur: #d6c296;
+    --accent: #1f3f7a;
+    --texte-sur-accent: #ffffff;
+    --accent-doux: #dfe3ef;
+    --couleur-titre: #7a4e12;
+    --combat-pj: #1e7a3c;
+    --combat-pj-doux: #e0f0e3;
+    --combat-pj-texte: #196833;
+    --combat-adv: #b3261e;
+    --combat-adv-doux: #f8e0dd;
+    --combat-adv-texte: #a3221b;
+    --combat-sur-jeton: #ffffff;
+    --combat-mort: #6b717b;
+    --combat-reussite: #196833;
+    --combat-echec: #af251d;
+    --combat-alerte: #7d5300;
+    --combat-portee: #d5413c;
+    --combat-portee-bord: #c8372d;
+    --combat-cadre-jet: #8b7349;
+    --combat-cadre-jet-fond: #e4d4ad;
+    --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "Marcellus", Georgia, serif;
+    --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 400;
+    --rayon: 6px;
+    --ajustement: 0.5;
+    color-scheme: light;
+  }
+
+  [data-theme="faille"] {
+    --fond: #010a13;
+    --fond-2: #0a1428;
+    --texte: #f0e6d2;
+    --texte-2: #a09b8c;
+    --bordure: #866a32;
+    --separateur: #1e2328;
+    --accent: #0ac8b9;
+    --texte-sur-accent: #010a13;
+    --accent-doux: #0b2a33;
+    --couleur-titre: #c8aa6e;
+    --combat-pj: #5fc27a;
+    --combat-pj-doux: #183022;
+    --combat-pj-texte: #a3e3b5;
+    --combat-adv: #ee7466;
+    --combat-adv-doux: #3a1d1b;
+    --combat-adv-texte: #f6b0a8;
+    --combat-sur-jeton: #010a13;
+    --combat-mort: #80858d;
+    --combat-reussite: #6fd08f;
+    --combat-echec: #f2877b;
+    --combat-alerte: #ecc35e;
+    --combat-portee: #ee7466;
+    --combat-portee-bord: #f4a097;
+    --combat-cadre-jet: #866a32;
+    --combat-cadre-jet-fond: #0a1428;
+    --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "Cinzel", Georgia, serif;
+    --police-journal: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 700;
+    --rayon: 6px;
+    --ajustement: none;
+    color-scheme: dark;
+  }
+
+  [data-theme="laiton"] {
+    --fond: #f6efe2;
+    --fond-2: #eadfc9;
+    --texte: #2a2218;
+    --texte-2: #5c4f3e;
+    --bordure: #8c7a5c;
+    --separateur: #dccfb4;
+    --accent: #0f6e6a;
+    --texte-sur-accent: #ffffff;
+    --accent-doux: #d8ece9;
+    --couleur-titre: #88591c;
+    --combat-pj: #1e7a3c;
+    --combat-pj-doux: #e0f0e3;
+    --combat-pj-texte: #1b6e36;
+    --combat-adv: #b3261e;
+    --combat-adv-doux: #f8e0dd;
+    --combat-adv-texte: #a3221b;
+    --combat-sur-jeton: #ffffff;
+    --combat-mort: #6b717b;
+    --combat-reussite: #1b7037;
+    --combat-echec: #b3261e;
+    --combat-alerte: #7d5300;
+    --combat-portee: #d84f4b;
+    --combat-portee-bord: #c8372d;
+    --combat-cadre-jet: #8c7a5c;
+    --combat-cadre-jet-fond: #eadfc9;
+    --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "Rye", Georgia, serif;
+    --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 400;
+    --rayon: 6px;
+    --ajustement: 0.5;
+    color-scheme: light;
+  }
+
+  [data-theme="arcade"] {
+    --fond: #fffdf3;
+    --fond-2: #ffe14d;
+    --texte: #111111;
+    --texte-2: #3d3400;
+    --bordure: #6b5900;
+    --separateur: #f2d23a;
+    --accent: #0047b3;
+    --texte-sur-accent: #ffffff;
+    --accent-doux: #e3ecff;
+    --couleur-titre: #c12219;
+    --combat-pj: #1e7a3c;
+    --combat-pj-doux: #e0f0e3;
+    --combat-pj-texte: #1b6e36;
+    --combat-adv: #b3261e;
+    --combat-adv-doux: #f8e0dd;
+    --combat-adv-texte: #a3221b;
+    --combat-sur-jeton: #ffffff;
+    --combat-mort: #6b717b;
+    --combat-reussite: #1c7238;
+    --combat-echec: #b3261e;
+    --combat-alerte: #7d5300;
+    --combat-portee: #d9534f;
+    --combat-portee-bord: #c8372d;
+    --combat-cadre-jet: #6b5900;
+    --combat-cadre-jet-fond: #ffe14d;
+    --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "Racing Sans One", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-journal: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 400;
+    --rayon: 6px;
+    --ajustement: none;
+    color-scheme: light;
+  }
+
+  [data-theme="belle-epoque"] {
+    --fond: #f7f1e5;
+    --fond-2: #ece2cf;
+    --texte: #1b1712;
+    --texte-2: #564b3d;
+    --bordure: #8f7a52;
+    --separateur: #e0d3b8;
+    --accent: #9b2335;
+    --texte-sur-accent: #ffffff;
+    --accent-doux: #f2dde0;
+    --couleur-titre: #7a5a1c;
+    --combat-pj: #1e7a3c;
+    --combat-pj-doux: #e0f0e3;
+    --combat-pj-texte: #1b6e36;
+    --combat-adv: #b3261e;
+    --combat-adv-doux: #f8e0dd;
+    --combat-adv-texte: #a3221b;
+    --combat-sur-jeton: #ffffff;
+    --combat-mort: #6b717b;
+    --combat-reussite: #1c7238;
+    --combat-echec: #b3261e;
+    --combat-alerte: #7d5300;
+    --combat-portee: #d9534f;
+    --combat-portee-bord: #c8372d;
+    --combat-cadre-jet: #8f7a52;
+    --combat-cadre-jet-fond: #ece2cf;
+    --police: "EB Garamond", Georgia, "Times New Roman", serif;
+    --police-titre: "Cormorant Garamond", Georgia, serif;
+    --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
+    --graisse-titre: 700;
+    --rayon: 6px;
+    --ajustement: 0.48;
+    color-scheme: light;
+  }
+
+  [data-theme="clair-obscur"] {
+    --fond: #0c0b0a;
+    --fond-2: #171411;
+    --texte: #f2eadb;
+    --texte-2: #b9ad98;
+    --bordure: #7d6f58;
+    --separateur: #29231d;
+    --accent: #e3b85c;
+    --texte-sur-accent: #0c0b0a;
+    --accent-doux: #2e2614;
+    --couleur-titre: #f0cf86;
+    --combat-pj: #5fc27a;
+    --combat-pj-doux: #183022;
+    --combat-pj-texte: #a3e3b5;
+    --combat-adv: #ee7466;
+    --combat-adv-doux: #3a1d1b;
+    --combat-adv-texte: #f6b0a8;
+    --combat-sur-jeton: #0c0b0a;
+    --combat-mort: #80858d;
+    --combat-reussite: #6fd08f;
+    --combat-echec: #f2877b;
+    --combat-alerte: #f0a35c;
+    --combat-portee: #ee7466;
+    --combat-portee-bord: #f4a097;
+    --combat-cadre-jet: #7d6f58;
+    --combat-cadre-jet-fond: #171411;
+    --police: "EB Garamond", Georgia, "Times New Roman", serif;
+    --police-titre: "Cormorant Garamond", Georgia, serif;
+    --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
+    --graisse-titre: 700;
+    --rayon: 6px;
+    --ajustement: 0.48;
+    color-scheme: dark;
+  }
+
+  [data-theme="ascension"] {
+    --fond: #1b1033;
+    --fond-2: #261845;
+    --texte: #f5ecff;
+    --texte-2: #c3b2e0;
+    --bordure: #7f6ca9;
+    --separateur: #34245a;
+    --accent: #ff6b9d;
+    --texte-sur-accent: #1b1033;
+    --accent-doux: #3d1f45;
+    --couleur-titre: #7fe3e0;
+    --combat-pj: #5fc27a;
+    --combat-pj-doux: #183022;
+    --combat-pj-texte: #a3e3b5;
+    --combat-adv: #ee7466;
+    --combat-adv-doux: #3a1d1b;
+    --combat-adv-texte: #f6b0a8;
+    --combat-sur-jeton: #1b1033;
+    --combat-mort: #80858d;
+    --combat-reussite: #6fd08f;
+    --combat-echec: #f2877b;
+    --combat-alerte: #ecc35e;
+    --combat-portee: #ee7466;
+    --combat-portee-bord: #f4a097;
+    --combat-cadre-jet: #7e6aa8;
+    --combat-cadre-jet-fond: #261845;
+    --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "Pixelify Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-journal: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 700;
+    --rayon: 6px;
+    --ajustement: none;
+    color-scheme: dark;
+  }
+
+  [data-theme="gueule-de-bois"] {
+    --fond: #141a1a;
+    --fond-2: #1d2626;
+    --texte: #e8e0d0;
+    --texte-2: #b3aa98;
+    --bordure: #6f7a72;
+    --separateur: #2a3433;
+    --accent: #e17541;
+    --texte-sur-accent: #141a1a;
+    --accent-doux: #3a2418;
+    --couleur-titre: #d9c39a;
+    --combat-pj: #5fc27a;
+    --combat-pj-doux: #183022;
+    --combat-pj-texte: #a3e3b5;
+    --combat-adv: #ee7466;
+    --combat-adv-doux: #3a1d1b;
+    --combat-adv-texte: #f6b0a8;
+    --combat-sur-jeton: #141a1a;
+    --combat-mort: #80858d;
+    --combat-reussite: #6fd08f;
+    --combat-echec: #f2877b;
+    --combat-alerte: #ecc35e;
+    --combat-portee: #ee7466;
+    --combat-portee-bord: #f4a097;
+    --combat-cadre-jet: #6f7a72;
+    --combat-cadre-jet-fond: #1d2626;
+    --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "Libre Baskerville", Georgia, serif;
+    --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 700;
+    --rayon: 6px;
+    --ajustement: 0.5;
+    color-scheme: dark;
+  }
+
+  [data-theme="huile"] {
+    --fond: #ece6d8;
+    --fond-2: #e0d8c4;
+    --texte: #1f2422;
+    --texte-2: #4f564f;
+    --bordure: #767b6f;
+    --separateur: #d3cab4;
+    --accent: #2b6661;
+    --texte-sur-accent: #ffffff;
+    --accent-doux: #d6e4df;
+    --couleur-titre: #9e4128;
+    --combat-pj: #1e7a3c;
+    --combat-pj-doux: #e0f0e3;
+    --combat-pj-texte: #1a6c35;
+    --combat-adv: #b3261e;
+    --combat-adv-doux: #f8e0dd;
+    --combat-adv-texte: #a3221b;
+    --combat-sur-jeton: #ffffff;
+    --combat-mort: #6b717b;
+    --combat-reussite: #1a6c35;
+    --combat-echec: #b3261e;
+    --combat-alerte: #7d5300;
+    --combat-portee: #d64742;
+    --combat-portee-bord: #c8372d;
+    --combat-cadre-jet: #767b6f;
+    --combat-cadre-jet-fond: #e0d8c4;
+    --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "Libre Baskerville", Georgia, serif;
+    --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 700;
+    --rayon: 6px;
+    --ajustement: 0.5;
+    color-scheme: light;
+  }
+
+  [data-theme="cendres"] {
+    --fond: #1e1715;
+    --fond-2: #29201c;
+    --texte: #e6dcc8;
+    --texte-2: #b4a990;
+    --bordure: #7d7360;
+    --separateur: #382d27;
+    --accent: #c9a35a;
+    --texte-sur-accent: #1e1715;
+    --accent-doux: #3a2e1a;
+    --couleur-titre: #e0743c;
+    --combat-pj: #5fc27a;
+    --combat-pj-doux: #183022;
+    --combat-pj-texte: #a3e3b5;
+    --combat-adv: #ee7466;
+    --combat-adv-doux: #3a1d1b;
+    --combat-adv-texte: #f6b0a8;
+    --combat-sur-jeton: #1e1715;
+    --combat-mort: #80858d;
+    --combat-reussite: #6fd08f;
+    --combat-echec: #f2877b;
+    --combat-alerte: #ecc35e;
+    --combat-portee: #ee7466;
+    --combat-portee-bord: #f4a097;
+    --combat-cadre-jet: #7d7360;
+    --combat-cadre-jet-fond: #29201c;
+    --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "Almendra", Georgia, serif;
+    --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 700;
+    --rayon: 6px;
+    --ajustement: 0.5;
+    color-scheme: dark;
+  }
+
+  [data-theme="mycelium"] {
+    --fond: #161021;
+    --fond-2: #211832;
+    --texte: #efe7f5;
+    --texte-2: #b9a9c9;
+    --bordure: #7a6a93;
+    --separateur: #2e2342;
+    --accent: #8fd6b0;
+    --texte-sur-accent: #161021;
+    --accent-doux: #1e3330;
+    --couleur-titre: #d7a6f0;
+    --combat-pj: #5fc27a;
+    --combat-pj-doux: #183022;
+    --combat-pj-texte: #a3e3b5;
+    --combat-adv: #ee7466;
+    --combat-adv-doux: #3a1d1b;
+    --combat-adv-texte: #f6b0a8;
+    --combat-sur-jeton: #161021;
+    --combat-mort: #80858d;
+    --combat-reussite: #6fd08f;
+    --combat-echec: #f2877b;
+    --combat-alerte: #ecc35e;
+    --combat-portee: #ee7466;
+    --combat-portee-bord: #f4a097;
+    --combat-cadre-jet: #7a6a93;
+    --combat-cadre-jet-fond: #211832;
+    --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --police-titre: "Almendra", Georgia, serif;
+    --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --graisse-titre: 700;
+    --rayon: 6px;
+    --ajustement: 0.5;
+    color-scheme: dark;
+  }
+
+  [data-theme="carte-aventure"] {
+    --fond: #efe6cc;
+    --fond-2: #e5dab7;
+    --texte: #2a1b10;
+    --texte-2: #5b4630;
+    --bordure: #8b4a2e;
+    --separateur: #d8c79a;
+    --accent: #2e5e2a;
+    --texte-sur-accent: #ffffff;
+    --accent-doux: #dce8d3;
+    --couleur-titre: #835611;
+    --combat-pj: #1e7a3c;
+    --combat-pj-doux: #e0f0e3;
+    --combat-pj-texte: #1b6e36;
+    --combat-adv: #b3261e;
+    --combat-adv-doux: #f8e0dd;
+    --combat-adv-texte: #a3221b;
+    --combat-sur-jeton: #ffffff;
+    --combat-mort: #6b717b;
+    --combat-reussite: #1a6c35;
+    --combat-echec: #b3261e;
+    --combat-alerte: #7d5300;
+    --combat-portee: #d74945;
+    --combat-portee-bord: #c8372d;
+    --combat-cadre-jet: #8b4a2e;
+    --combat-cadre-jet-fond: #e5dab7;
+    --police: "EB Garamond", Georgia, "Times New Roman", serif;
+    --police-titre: "IM Fell English", Georgia, serif;
+    --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
+    --graisse-titre: 400;
+    --rayon: 6px;
+    --ajustement: 0.48;
+    color-scheme: light;
+  }
+
+  [data-theme="necropole"] {
+    --fond: #111214;
+    --fond-2: #1b1c20;
+    --texte: #ece6d8;
+    --texte-2: #b3aeb3;
+    --bordure: #766b82;
+    --separateur: #28292f;
+    --accent: #a7e08a;
+    --texte-sur-accent: #111214;
+    --accent-doux: #1f3020;
+    --couleur-titre: #b9a6d6;
+    --combat-pj: #5fc27a;
+    --combat-pj-doux: #183022;
+    --combat-pj-texte: #a3e3b5;
+    --combat-adv: #ee7466;
+    --combat-adv-doux: #3a1d1b;
+    --combat-adv-texte: #f6b0a8;
+    --combat-sur-jeton: #111214;
+    --combat-mort: #80858d;
+    --combat-reussite: #6fd08f;
+    --combat-echec: #f2877b;
+    --combat-alerte: #ecc35e;
+    --combat-portee: #ee7466;
+    --combat-portee-bord: #f4a097;
+    --combat-cadre-jet: #73697f;
+    --combat-cadre-jet-fond: #1b1c20;
+    --police: "EB Garamond", Georgia, "Times New Roman", serif;
+    --police-titre: "Pirata One", Georgia, serif;
+    --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
+    --graisse-titre: 400;
+    --rayon: 6px;
+    --ajustement: 0.48;
+    color-scheme: dark;
+  }
+
+  .pastilles-atelier-clair {
+    --fond: #ffffff;
+    --accent: #1d5c8f;
+    --combat-pj: #1e7a3c;
+    --combat-adv: #b3261e;
+  }
+
+  .pastilles-atelier-sombre {
+    --fond: #15171a;
+    --accent: #7db4e3;
+    --combat-pj: #3fae62;
+    --combat-adv: #e66b61;
+  }
+}

@@ -12,9 +12,14 @@
   box-sizing: border-box;
 }
 
+/* L'ajustement de taille vient du thème (lot 5) ; les chiffres restent
+   alignés dans tous les thèmes : certaines polices les dessinent sinon « à
+   l'ancienne ». */
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  font-size-adjust: var(--ajustement);
+  font-variant-numeric: lining-nums;
 }
 
 body {
@@ -64,6 +69,18 @@ h3 {
   font-size: var(--taille-texte);
 }
 
+/* Les titres des écrans prennent la police, la couleur et la graisse du
+   thème (lot 5), sans l'ajustement du texte courant. La règle ne pèse rien :
+   celles d'aujourd'hui gardent la main. La fiche et la carte, du papier,
+   n'en prennent rien. */
+:where(h1, h2, h3):where(:not(.feuille *, .carte-adversaire *)) {
+  font-family: var(--police-titre);
+  color: var(--couleur-titre);
+  font-weight: var(--graisse-titre);
+  font-synthesis-weight: none;
+  font-size-adjust: none;
+}
+
 p,
 ul,
 ol,
@@ -99,8 +116,11 @@ dl {
   display: inline-flex;
   align-items: center;
   min-height: var(--cible-tactile);
-  color: var(--texte);
-  font-weight: var(--graisse-forte);
+  font-family: var(--police-titre);
+  color: var(--couleur-titre);
+  font-weight: var(--graisse-titre);
+  font-synthesis-weight: none;
+  font-size-adjust: none;
   text-decoration: none;
 }
 
@@ -771,7 +791,7 @@ dl {
 .valeur-pas {
   min-width: 2ch;
   font-weight: var(--graisse-forte);
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: lining-nums tabular-nums;
   text-align: center;
 }
 

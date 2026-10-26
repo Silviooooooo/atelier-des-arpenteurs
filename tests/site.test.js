@@ -93,7 +93,10 @@ test("site — la politique de sécurité du <meta>, avant tout script et tout s
   });
   assert.doesNotMatch(meta.content, /unsafe-|\*|data:|blob:/);
   const position = INDEX.indexOf("Content-Security-Policy");
-  assert.ok(position < INDEX.search(/<script|<link rel="stylesheet"/), "la politique doit précéder scripts et styles");
+  const appels = [...INDEX.matchAll(/<script\b|<link rel="stylesheet"/g)].map(({ index }) => index);
+  // Le premier appel est le script du thème au premier affichage (lot 5) : la politique le précède, lui aussi.
+  assert.ok(INDEX.startsWith('<script src="js/apparence/theme_initial.js">', appels[0]), "le premier appel n'est pas le thème du premier affichage");
+  for (const appel of appels) assert.ok(position < appel, "la politique doit précéder scripts et styles");
 });
 
 test("site — le zoom n'est jamais interdit ; ni script, ni style, ni gestionnaire en ligne", () => {
@@ -146,9 +149,19 @@ test("site — le graphe des modules de la page se résout, et atteint les seize
   for (const module of modules) assert.ok(vus.has(module), module);
   // L'écran du combat n'entre dans la page que par application.js, d'un import que ce parcours sait lire.
   assert.match(lire("js/application.js"), /^import \* as combat from "\.\/ecrans\/combat\.js";\r?$/m);
-  // Tout module de js/ est dans le graphe : aucun fichier que la page n'appelle.
+  // Tout module de js/ est dans le graphe : aucun fichier que la page n'appelle. Hors du graphe, les deux scripts
+  // classiques que la page charge (le thème du premier affichage, la veille), et, jusqu'à l'écran Apparence
+  // (lot 5, vague 2), qui l'importera, le catalogue des thèmes, que seuls lisent pour l'heure le générateur de
+  // css/themes.css et les contrôles. L'ordre du parcours dépend du disque : la liste est triée.
   const tous = readdirSync(new URL("js/", RACINE), { recursive: true }).map((chemin) => `js/${chemin.replaceAll("\\", "/")}`).filter((chemin) => chemin.endsWith(".js"));
-  assert.deepEqual(tous.filter((chemin) => !vus.has(chemin)), ["js/veille.js"], "seule la veille vit hors du graphe (§ 9)");
+  assert.deepEqual(
+    tous.filter((chemin) => !vus.has(chemin)).sort(),
+    ["js/apparence/theme_initial.js", "js/apparence/themes.js", "js/veille.js"],
+    "seuls le thème du premier affichage, le catalogue des thèmes et la veille vivent hors du graphe (§ 9)",
+  );
+  // Les deux scripts classiques sont bien appelés par la page, sans type="module".
+  const classiques = balises(INDEX, "script").filter((s) => s.type !== "module").map((s) => s.src);
+  assert.deepEqual(classiques, ["js/apparence/theme_initial.js", "js/veille.js"]);
 });
 
 test("site — le manifeste : noms, affichage, couleurs des jetons, icônes aux tailles dites", () => {

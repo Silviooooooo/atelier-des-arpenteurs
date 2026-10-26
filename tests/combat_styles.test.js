@@ -619,8 +619,11 @@ test("jetons.css — le texte du combat contraste d'au moins 4,5:1, ses ronds et
     const j = jetons(JETONS, theme);
     assert.ok(contraste(j["combat-mort"], j["fond-2"]) < 4.5, theme);
   }
-  // La feuille n'écrit donc de texte qu'avec des couleurs mesurées ci-dessus, ou avec le texte du site.
-  const permises = new Set(["texte", "texte-2", "accent", "texte-sur-accent", "combat-pj-texte", "combat-adv-texte", "combat-sur-jeton", "combat-reussite", "combat-echec", "combat-alerte"].map((nom) => `var(--${nom})`));
+  // La feuille n'écrit donc de texte qu'avec des couleurs mesurées ci-dessus, ou avec le texte du site. Le nom en
+  // tête de la bulle prend la couleur des titres (lot 5) : en Atelier, celle du texte ; un thème la fait mesurer avec
+  // ses autres jetons.
+  for (const theme of ["clair", "sombre"]) assert.equal(jetons(JETONS, theme)["couleur-titre"], jetons(JETONS, theme).texte, theme);
+  const permises = new Set(["texte", "texte-2", "accent", "texte-sur-accent", "couleur-titre", "combat-pj-texte", "combat-adv-texte", "combat-sur-jeton", "combat-reussite", "combat-echec", "combat-alerte"].map((nom) => `var(--${nom})`));
   assert.deepEqual(couleursDeTexte(COMBAT).filter((couleur) => !permises.has(couleur)), []);
   assert.deepEqual(couleursDeTexte(".combat-fiche.morte .combat-nom { color: var(--combat-mort); }").filter((couleur) => !permises.has(couleur)), ["var(--combat-mort)"]);
   // Le texte d'un mort : le second gris, barré.
@@ -1165,7 +1168,9 @@ test("combat.css — toute cible fait 44 px, hors les cases (et les lignes de la
   for (const vide of [".combat-avis:empty", ".combat-panneau:empty", ".combat-case-liste:empty", ".combat-copie:empty"]) assert.equal(valeur(COMBAT, vide, "display"), "none", vide);
   assert.equal(enRem("calc(var(--espace-6) * 10)", definis), 20);
   assert.equal(enRem("20rem", definis), null);
-  assert.equal(valeur(COMBAT, ".combat-lignes", "font-family"), "var(--police-chasse-fixe)");
+  assert.equal(valeur(COMBAT, ".combat-lignes", "font-family"), "var(--police-journal)");
+  // La police du journal vient du thème (lot 5) ; celle d'Atelier reste la chasse fixe.
+  assert.equal(definis["police-journal"], "var(--police-chasse-fixe)");
 });
 
 // ——— Le groupe 2 : la bulle, ses lignes, la hachure, le bandeau, le journal ———
@@ -1300,6 +1305,10 @@ test("combat.css — la bulle : le volet sous 56rem ; à 56rem posée sur le cad
   // Le ✕ (ou « – »), dernier du document, se pose dans le coin de la bulle : son en-tête lui laisse sa place.
   assert.equal(valeur(COMBAT, ".combat-bulle-fermer", "position"), "absolute");
   assert.match(valeur(COMBAT, ".combat-bulle-tete", "padding"), /calc\(var\(--cible-tactile\) \+ var\(--espace-\d\)\)/);
+  // Le nom en tête de la bulle, et du volet qu'elle devient : un titre du thème (lot 5), comme ceux des écrans.
+  for (const [propriete, attendue] of [["font-family", "var(--police-titre)"], ["color", "var(--couleur-titre)"], ["font-weight", "var(--graisse-titre)"], ["font-synthesis-weight", "none"], ["font-size-adjust", "none"]]) {
+    assert.equal(valeur(COMBAT, ".combat-bulle-titre", propriete), attendue, propriete);
+  }
 
   // Armé : des feuilles fautives.
   const fautive = (css, motif) => assert.match([...ecarts(css, ATTENDUES_DE_LA_BULLE), ...defautsDesFleches(css)].join("\n"), motif);
@@ -1736,7 +1745,7 @@ const ATTENDUES_DU_BANDEAU = [
   [".combat-bandeau", "background", "var(--fond-2)", null],
   [".combat-bandeau", "border-left", "var(--trait-epais) solid var(--accent)", null],
   [".combat-bandeau-en-cours", "border-left-color", "var(--combat-alerte)", null],
-  [".combat-bandeau-texte", "font-family", "var(--police-chasse-fixe)", null],
+  [".combat-bandeau-texte", "font-family", "var(--police-journal)", null],
   [".combat-bandeau-texte", "line-height", "var(--interligne)", null],
   [".combat-bandeau-texte", "overflow", "hidden", null],
   [".combat-bandeau-etiquette", "display", "none", null],
