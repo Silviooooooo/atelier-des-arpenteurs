@@ -1,18 +1,20 @@
 /* La fiche imprimable d'un personnage (SPECIFICATION.md, § 15.4).
 
-   Le recto reproduit le modèle de fiche : une page A4 de 794 × 1123 pixels
-   à 96 points par pouce, ses marges, ses rubriques et leurs hauteurs, ses
-   traits et ses cases. Ces dimensions sont celles du modèle, écrites ici ;
-   ses couleurs et ses polices viennent de jetons.css (--fiche-…). Les
-   polices Marcellus et Alegreya Sans sont hébergées dans polices/, avec
-   leur licence OFL.
+   La fiche de la spécification 1.7, celle de la maquette de l'auteur du
+   26/10/2026 (version « serrée ») : deux pages A4 de 794 × 1123 pixels à 96
+   points par pouce, une marge intérieure de 28 pixels, des cadres à 14 et
+   18 pixels du bord. Ces dimensions sont écrites ici ; les couleurs (noir et
+   blanc) et les polices viennent de jetons.css (--fiche-…). Les polices
+   Marcellus et Alegreya Sans sont hébergées dans polices/, avec leur
+   licence OFL.
 
-   Chaque rubrique garde la hauteur du modèle. Mesuré dans Chromium : le
-   modèle n'a aucune place libre (la rubrique des capacités garde 10 pixels,
-   celle de l'équipement 11, moins qu'une ligne de 18) ; une ligne de plus
-   passe donc au verso (repartition.js). À l'impression, le recto occupe
-   exactement la première page, sans marge ; le verso suit, sur des pages
-   à marges. */
+   Au recto, la colonne de gauche décide de la hauteur : ses zones (l'arme,
+   l'armure, les capacités) ont une hauteur fixe, comptée en lignes de
+   référence de 10,5 × 1,27 pixels ; l'équipement s'étire jusqu'au bas des
+   capacités, et les liens prennent ce qui reste. Une zone qui déborde fait
+   resserrer les définitions (definitions-serrees) : le texte rapetisse, la
+   hauteur des zones ne change pas. Au verso, un seul bloc « Historique », en
+   vignettes. À l'impression, chaque page occupe la sienne, sans marge. */
 
 @font-face {
   font-family: "Marcellus";
@@ -66,30 +68,37 @@
 .feuille {
   width: 794px;
   box-sizing: border-box;
-  padding: 44px;
+  padding: 28px;
   background: var(--fiche-papier);
   color: var(--fiche-encre);
   font-family: var(--police-fiche);
+  /* La taille du texte d'un thème ne vaut pas pour le papier : celle du
+     navigateur, que la maquette a mesurée. */
+  font-size: 16px;
   line-height: normal;
-  /* Ce que body transmet à l'interface ne vaut pas pour le papier : le
-     modèle ne coupe pas les mots (« Arm. » dans sa colonne de 24 px). */
+  /* Ce que body transmet à l'interface ne vaut pas pour le papier : la
+     fiche ne coupe pas les mots. */
   overflow-wrap: normal;
   text-wrap: pretty;
   /* Alegreya Sans écrit ses chiffres en bas de casse : sur une fiche, des
      chiffres alignés se lisent mieux. */
   font-variant-numeric: lining-nums;
   /* L'ajustement de taille d'un thème (lot 5) ne vaut pas pour le papier :
-     hérité, il grossirait le texte, et le recto, de hauteur fixe, couperait
-     le sien. */
+     hérité, il grossirait le texte, et les zones, de hauteur fixe,
+     couperaient le leur. */
   font-size-adjust: none;
   print-color-adjust: exact;
   -webkit-print-color-adjust: exact;
+  /* La taille d'une définition, et la ligne de référence qui mesure les
+     zones fixes : celle-ci ne change jamais, celle-là se resserre. */
+  --taille-definition: 10.5px;
+  --ligne-reference: calc(10.5px * 1.27);
 }
 
-/* Le modèle mesure ses traits sans leur bordure, comme le navigateur par
-   défaut ; l'interface, elle, compte les bordures dans les hauteurs. Et
-   aucune marge de l'interface n'entre dans la feuille : ses propres règles,
-   plus précises, posent les siennes. */
+/* Le navigateur mesure les traits sans leur bordure ; l'interface, elle,
+   compte les bordures dans les hauteurs. Et aucune marge de l'interface
+   n'entre dans la feuille : ses propres règles, plus précises, posent les
+   siennes. */
 .feuille * {
   box-sizing: content-box;
   margin: 0;
@@ -98,10 +107,17 @@
 
 .feuille p,
 .feuille h2,
+.feuille h3,
 .feuille dl,
 .feuille dd,
 .feuille ul {
   margin: 0;
+}
+
+/* L'interligne des titres de l'interface ne vaut pas pour le papier. */
+.feuille h2,
+.feuille h3 {
+  line-height: inherit;
 }
 
 .feuille.recto {
@@ -109,7 +125,7 @@
   height: 1123px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
   overflow: hidden;
 }
 
@@ -118,13 +134,14 @@
   pointer-events: none;
 }
 
+/* Les cadres à 4 et 5 mm du bord : pas plus près, l'imprimante. */
 .feuille .cadre-exterieur {
-  inset: 24px;
+  inset: 14px;
   border: 1px solid var(--fiche-cadre);
 }
 
 .feuille .cadre-interieur {
-  inset: 29px;
+  inset: 18px;
   border: 1px solid var(--fiche-cadre-interieur);
 }
 
@@ -132,12 +149,11 @@
 
 .feuille .fiche-entete {
   flex-shrink: 0;
-  height: 76px;
   position: relative;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 5px;
 }
 
 .feuille .fiche-marque {
@@ -148,7 +164,7 @@
 
 .feuille .fiche-nom-jeu {
   font-family: var(--police-fiche-titre);
-  font-size: 14px;
+  font-size: 13px;
   letter-spacing: 0.24em;
   text-transform: uppercase;
   color: var(--fiche-accent);
@@ -199,11 +215,12 @@
   min-width: 0;
 }
 
-.feuille .champ-nom { width: 232px; }
-.feuille .champ-espece { width: 130px; }
-.feuille .champ-archetype { width: 140px; }
+.feuille .champ-nom { width: 200px; }
+.feuille .champ-espece { width: 118px; }
+.feuille .champ-archetype { width: 118px; }
 .feuille .champ-style { flex: 1 1 0; }
-.feuille .champ-niveau { width: 44px; }
+.feuille .champ-niveau,
+.feuille .champ-xp { width: 40px; }
 
 .feuille .libelle {
   font-size: 11px;
@@ -246,32 +263,40 @@
 }
 
 .feuille .champ-nom .valeur-entete,
-.feuille .champ-niveau .valeur-entete {
+.feuille .champ-niveau .valeur-entete,
+.feuille .champ-xp .valeur-entete {
   border-bottom-color: var(--fiche-trait-fort);
 }
 
-.feuille .champ-niveau .valeur-entete {
+.feuille .champ-niveau .valeur-entete,
+.feuille .champ-xp .valeur-entete {
   justify-content: center;
+}
+
+/* La part laissée à la main du joueur, au bout d'une ligne. */
+.feuille .trait.trait-libre {
+  flex: 1 1 0;
+  height: 16px;
 }
 
 /* ─── Le corps : deux colonnes ───────────────────────────────────────────── */
 
+/* La colonne de gauche décide de la hauteur ; les liens prennent le reste. */
 .feuille .fiche-corps {
-  flex-shrink: 0;
-  height: 735px;
+  flex: 0 0 auto;
   display: flex;
-  gap: 16px;
+  gap: 10px;
 }
 
 .feuille .colonne {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
   min-height: 0;
 }
 
-.feuille .colonne-gauche { width: 418px; }
+.feuille .colonne-gauche { width: 456px; }
 .feuille .colonne-droite { width: 272px; }
 
 .feuille .rubrique {
@@ -287,7 +312,7 @@
 
 .feuille .rubrique-tete {
   flex-shrink: 0;
-  height: 24px;
+  height: 20px;
   box-sizing: border-box;
   padding: 0 10px;
   background: var(--fiche-bandeau);
@@ -311,35 +336,14 @@
   white-space: nowrap;
 }
 
-.feuille .rubrique-note {
-  font-size: 10.5px;
-  color: var(--fiche-note);
-  white-space: nowrap;
-}
-
 .feuille .rubrique-corps {
   flex-grow: 1;
   box-sizing: border-box;
-  padding: 10px;
+  padding: 5px 10px 6px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-
-.feuille .note {
-  font-size: 10.5px;
-  line-height: 1.25;
-  color: var(--fiche-note);
-}
-
-/* Les hauteurs du modèle. */
-.feuille .rubrique-caracteristiques { height: 200px; }
-.feuille .rubrique-attaque { height: 190px; }
-.feuille .rubrique-capacites { height: 321px; }
-.feuille .rubrique-souffle { height: 80px; }
-.feuille .rubrique-armure { height: 234px; }
-.feuille .rubrique-sante { height: 184px; }
-.feuille .rubrique-equipement { height: 201px; }
 
 /* ─── Les cases ──────────────────────────────────────────────────────────── */
 
@@ -353,8 +357,6 @@
 }
 
 .feuille .case-petite { width: 10px; height: 10px; }
-.feuille .case-souffle { width: 13px; height: 13px; }
-.feuille .case-resistance { width: 9px; height: 9px; }
 .feuille .case-corps { width: 14px; height: 14px; }
 .feuille .case-lien { width: 11px; height: 11px; }
 
@@ -363,30 +365,25 @@
   background: var(--fiche-case-teinte);
 }
 
-.feuille .case.grisee {
-  border-color: var(--fiche-cadre);
-  background: var(--fiche-case-grisee);
-}
-
 .feuille .case.cochee {
   border-color: var(--fiche-titre);
   background: var(--fiche-titre);
 }
 
-/* ─── Caractéristiques ───────────────────────────────────────────────────── */
+/* ─── Caractéristiques : la grille de 3 × 3 ──────────────────────────────── */
 
 .feuille .grille-caracteristiques {
   flex-grow: 1;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
+  gap: 3px 12px;
 }
 
-.feuille .caracteristique {
+.feuille .caracteristique-fiche {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-bottom: 3px;
+  padding-bottom: 2px;
   border-bottom: 1px solid var(--fiche-separateur);
 }
 
@@ -398,8 +395,8 @@
 }
 
 .feuille .boite-valeur {
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
   box-sizing: border-box;
   border: 1px solid var(--fiche-trait-fort);
@@ -408,191 +405,139 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 12.5px;
   font-weight: 500;
   color: var(--fiche-encre);
 }
 
-.feuille .pied-rubrique {
+/* ─── Une capacité définie (capacités, attaque, défense, objets, liens) ──── */
+
+/* Les cases de puissance à gauche du nom ; le texte s'enroule dessous. Une
+   capacité de puissance 0 n'a pas de cases. Le nom, le coût entre
+   parenthèses, les éléments notables, puis la définition. */
+.feuille .capacite-definie {
   flex-shrink: 0;
-  border-top: 1px solid var(--fiche-separateur-2);
-  padding-top: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+  font-size: var(--taille-definition);
+  line-height: 1.27;
+  color: var(--fiche-encre);
 }
 
-.feuille .table-des {
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: var(--fiche-titre);
-}
-
-/* ─── Attaque et défense ─────────────────────────────────────────────────── */
-
-.feuille .bloc-ad {
-  flex-grow: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.feuille .bloc-defense {
-  border-top: 1px solid var(--fiche-separateur-2);
-  padding-top: 6px;
-}
-
-.feuille .ligne-ad {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  height: 21px;
-}
-
-.feuille .titre-ad {
-  width: 56px;
-  flex-shrink: 0;
-  white-space: nowrap;
-  font-family: var(--police-fiche-titre);
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--fiche-accent);
-}
-
-.feuille .ligne-ad .libelle {
-  font-size: 10.5px;
-  letter-spacing: 0.12em;
-  padding-bottom: 3px;
-}
-
-.feuille .ligne-ad .trait { height: 19px; }
-.feuille .ligne-ad .trait.large { flex: 1 1 0; }
-.feuille .ligne-ad .trait.de { width: 44px; justify-content: center; border-bottom-color: var(--fiche-trait-fort); }
-.feuille .ligne-ad .trait.rang { width: 28px; justify-content: center; }
-.feuille .ligne-ad .trait.portee { width: 26px; justify-content: center; }
-.feuille .ligne-ad .trait.defense { width: 40px; justify-content: center; border-bottom-color: var(--fiche-trait-fort); }
-.feuille .ligne-ad .trait.qualite { width: 48px; justify-content: center; }
-
-.feuille .barre {
-  font-size: 11px;
-  color: var(--fiche-trait-fort);
-  padding-bottom: 3px;
-}
-
-/* ─── Capacités ──────────────────────────────────────────────────────────── */
-
-.feuille .rubrique-capacites .rubrique-corps { gap: 5px; }
-
-.feuille .reliquat {
-  font-family: var(--police-fiche);
-  font-size: 10.5px;
-  letter-spacing: 0.02em;
-  text-transform: none;
-  color: var(--fiche-accent);
-}
-
-.feuille .entete-colonnes,
-.feuille .entete-pouvoirs {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 13px;
-}
-
-.feuille .vide-flexible { flex-grow: 1; }
-
-.feuille .col-pui,
-.feuille .col-cout {
-  flex-shrink: 0;
-  text-align: center;
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--fiche-etiquette);
-}
-
-.feuille .col-pui { width: 36px; }
-.feuille .col-cout { width: 42px; }
-
-.feuille .groupe-capacites {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.feuille .titre-groupe {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 13px;
-}
-
-.feuille .titre-groupe > span:first-child {
-  font-family: var(--police-fiche-titre);
-  font-size: 10.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--fiche-accent);
-  white-space: nowrap;
-}
-
-.feuille .precision-groupe {
-  font-size: 10px;
-  color: var(--fiche-note);
-  white-space: nowrap;
-}
-
-.feuille .regle {
-  flex-grow: 1;
-  height: 1px;
-  background: var(--fiche-separateur-2);
-}
-
-.feuille .ligne-capacite,
-.feuille .ligne-pouvoir,
-.feuille .ligne-objet {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  height: 18px;
-}
-
-.feuille .nom-capacite,
-.feuille .nom-pouvoir,
-.feuille .nom-objet {
-  flex: 1 1 0;
-  height: 16px;
-  font-size: 11px;
+.feuille .capacite-definie::after {
+  content: "";
+  display: block;
+  clear: both;
 }
 
 .feuille .cases-puissance {
-  width: 36px;
-  flex-shrink: 0;
+  float: left;
   display: flex;
-  gap: 3px;
-  padding-bottom: 2px;
+  gap: 2px;
+  margin: 2px 5px 0 0;
 }
 
-.feuille .trait.cout {
-  width: 42px;
-  height: 16px;
-  justify-content: center;
-  font-size: 10.5px;
+.feuille .capacite-definie .case-petite {
+  width: 9px;
+  height: 9px;
 }
 
-.feuille .a-venir {
+.feuille .capacite-definie-nom { font-weight: 700; }
+.feuille .capacite-definie-cout { color: var(--fiche-encre-2); }
+
+.feuille .capacite-definie-elements,
+.feuille .capacite-definie-a-venir {
   font-style: italic;
   color: var(--fiche-note);
 }
 
-/* ─── Souffle ────────────────────────────────────────────────────────────── */
+/* ─── Attaque & défense : l'arme, l'armure, et leurs zones ───────────────── */
 
-.feuille .rubrique-souffle .rubrique-corps {
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
+.feuille .rubrique-attaque .rubrique-corps { gap: 2px; }
+
+.feuille .ligne-equipee {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 19px;
+}
+
+.feuille .titre-ad {
+  width: 64px;
+  flex-shrink: 0;
+  padding-bottom: 3px;
+  white-space: nowrap;
+  font-family: var(--police-fiche-titre);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fiche-accent);
+}
+
+.feuille .resume-equipe {
+  flex-shrink: 0;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  padding-bottom: 2px;
+}
+
+/* L'arme : six lignes de référence ; l'armure : quatre, son bouclier
+   compris. Une zone vide garde sa hauteur. */
+.feuille .zone-capacites {
+  flex-shrink: 0;
+  height: calc(6 * var(--ligne-reference) + 4px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.feuille .zone-capacites.zone-armure {
+  height: calc(4 * var(--ligne-reference) + 2px);
+}
+
+.feuille .separation-ad {
+  flex-shrink: 0;
+  height: 0;
+  margin: 2px 0;
+  border-top: 1px solid var(--fiche-separateur-2);
+}
+
+/* ─── Capacités : dix-sept lignes, sans ligne imprimée ───────────────────── */
+
+.feuille .liste-capacites {
+  height: calc(17 * var(--ligne-reference) + 7 * 2px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ─── État : souffle, localisation, corps et blessures ───────────────────── */
+
+.feuille .rubrique-etat .rubrique-corps { gap: 5px; }
+
+.feuille .ligne-etat {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 20px;
+}
+
+.feuille .ligne-etat .libelle {
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  padding-bottom: 2px;
+}
+
+/* Le souffle se lit comme un compte : « 7 / 10 ». Le joueur écrit le
+   souffle du moment avant la barre ; le maximum est imprimé après. */
+.feuille .ligne-souffle .trait.trait-libre {
+  height: 18px;
+  border-bottom-color: var(--fiche-trait-fort);
 }
 
 .feuille .souffle-max {
@@ -600,27 +545,10 @@
   display: flex;
   align-items: flex-end;
   gap: 5px;
-}
-
-.feuille .souffle-max .libelle {
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
-  padding-bottom: 2px;
-}
-
-.feuille .trait.max {
-  width: 34px;
-  height: 18px;
-  justify-content: center;
-  border-bottom-color: var(--fiche-trait-fort);
-}
-
-.feuille .souffle-cases {
-  flex-grow: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  align-items: flex-end;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
+  padding-bottom: 1px;
 }
 
 .feuille .rang-cases {
@@ -628,144 +556,99 @@
   gap: 4px;
 }
 
-/* ─── Armure et endurance ────────────────────────────────────────────────── */
+.feuille .ligne-corps .rang-cases { padding-bottom: 2px; }
 
-.feuille .rubrique-armure .rubrique-corps {
-  flex-direction: row;
-  gap: 8px;
+/* La silhouette de l'auteur (js/fiche/silhouette.js) : sa forme, et
+   par-dessus, les six carrés des zones. */
+.feuille .silhouette-zones {
+  display: block;
+  width: 252px;
+  height: auto;
+  margin: 0 auto;
 }
 
-.feuille .silhouette {
-  width: 84px;
-  height: 188px;
+.feuille .silhouette-zones .forme-silhouette { fill: var(--fiche-silhouette); }
+
+.feuille .silhouette-zones .cadre-zone {
+  fill: var(--fiche-case);
+  stroke: var(--fiche-encre);
+  stroke-width: 3;
+}
+
+.feuille .silhouette-zones .case-endurance {
+  fill: none;
+  stroke: var(--fiche-encre);
+  stroke-width: 1.5;
+}
+
+.feuille .silhouette-zones .nom-zone-svg {
+  font-family: var(--police-fiche-titre);
+  font-size: 23px;
+  fill: var(--fiche-encre);
+  text-anchor: middle;
+}
+
+.feuille .silhouette-zones .nom-zone-svg.sur-silhouette { fill: var(--fiche-sur-silhouette); }
+
+.feuille .silhouette-zones .valeur-armure {
+  font-family: var(--police-fiche);
+  font-size: 17px;
+  font-weight: 500;
+  fill: var(--fiche-encre);
+}
+
+.feuille .blessures-etat {
   flex-shrink: 0;
-}
-
-.feuille .silhouette-formes {
-  fill: var(--fiche-silhouette);
-  stroke: var(--fiche-silhouette-trait);
-  stroke-width: 1.2;
-  stroke-linejoin: round;
-}
-
-.feuille .table-zones {
-  flex-grow: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.feuille .zone {
-  display: flex;
-  align-items: center;
-  height: 26px;
-  border-top: 1px solid var(--fiche-separateur);
-}
-
-.feuille .zone-tete {
-  height: 14px;
-  border-top: 0;
-}
-
-.feuille .table-zones > .zone:nth-child(7) {
-  border-bottom: 1px solid var(--fiche-separateur);
-}
-
-.feuille .zone-tete span {
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--fiche-etiquette);
-}
-
-.feuille .col-zone { width: 46px; flex-shrink: 0; }
-.feuille .col-d20 { width: 24px; flex-shrink: 0; }
-.feuille .col-arm { width: 24px; flex-shrink: 0; display: flex; justify-content: center; }
-.feuille .zone-tete .col-arm { display: block; text-align: center; }
-.feuille .col-resist { flex-grow: 1; display: flex; gap: 3px; }
-
-.feuille .nom-zone {
-  font-size: 11.5px;
-  color: var(--fiche-encre-2);
-}
-
-.feuille .d20 {
-  font-size: 10.5px;
-  color: var(--fiche-etiquette);
-}
-
-.feuille .trait.arm {
-  width: 20px;
-  height: 17px;
-  justify-content: center;
-  font-size: 11px;
-  border-bottom-color: var(--fiche-trait-fort);
-}
-
-.feuille .zone-pied {
-  flex-grow: 1;
-  display: flex;
-  align-items: flex-end;
-}
-
-/* ─── Corps et blessures ─────────────────────────────────────────────────── */
-
-.feuille .rubrique-sante .rubrique-corps { gap: 6px; }
-
-.feuille .points-corps {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.feuille .points-corps .libelle,
-.feuille .blessures .libelle {
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
-}
-
-.feuille .blessures {
-  flex-grow: 1;
   display: flex;
   flex-direction: column;
   gap: 3px;
-  border-top: 1px solid var(--fiche-separateur-2);
-  padding-top: 6px;
+}
+
+.feuille .blessures-etat .libelle {
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
 }
 
 .feuille .ligne-libre {
   display: block;
-  flex-grow: 1;
   border-bottom: 1px solid var(--fiche-trait);
 }
 
-/* ─── Équipement ─────────────────────────────────────────────────────────── */
+.feuille .blessures-etat .ligne-libre { flex: 0 0 17px; }
 
-.feuille .rubrique-equipement .rubrique-corps { gap: 4px; }
+/* ─── Équipement et ceinture : ce que le personnage porte et a sous la main */
 
-.feuille .lignes-equipement {
-  flex-grow: 1;
+/* Le bas de l'équipement s'aligne sur le bas des capacités. */
+.feuille .rubrique-equipement {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.feuille .rubrique-equipement .rubrique-corps { gap: 2px; }
+
+.feuille .objet-ceinture {
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-}
-
-.feuille .trait.qualite-objet {
-  width: 44px;
-  height: 16px;
-  justify-content: center;
+  gap: 1px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--fiche-separateur);
   font-size: 11px;
+  line-height: 1.25;
 }
 
-/* ─── Liens primordiaux ──────────────────────────────────────────────────── */
+/* Les définitions de l'équipement : un demi-pixel de moins. */
+.feuille .objet-ceinture .capacite-definie { font-size: calc(var(--taille-definition) - 0.5px); }
+
+/* ─── Liens primordiaux : toute la hauteur qui reste ─────────────────────── */
 
 .feuille .rubrique-liens {
-  flex-shrink: 0;
-  height: 200px;
+  flex: 1 1 0;
+  min-height: 0;
 }
 
 .feuille .rubrique-liens .rubrique-tete { padding: 0 12px; }
-.feuille .rubrique-liens .rubrique-corps { padding: 12px; gap: 8px; }
+.feuille .rubrique-liens .rubrique-corps { padding: 6px 10px 8px; }
 
 .feuille .colonnes-liens {
   flex-grow: 1;
@@ -778,7 +661,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .feuille .separateur-liens {
@@ -815,10 +698,7 @@
   padding-bottom: 3px;
 }
 
-.feuille .entete-pouvoirs .libelle.petite {
-  padding-bottom: 0;
-}
-
+/* Les points de lien du personnage, cochés ; aucune case n'est grisée. */
 .feuille .cases-lien {
   flex-shrink: 0;
   display: flex;
@@ -826,60 +706,127 @@
   padding-bottom: 4px;
 }
 
-.feuille .legende-primordiaux {
+/* Le domaine du primordial : la colonne Infos de son bloc. */
+.feuille .domaine-primordial {
   flex-shrink: 0;
-  border-top: 1px solid var(--fiche-separateur-2);
-  padding-top: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.feuille .domaine {
-  color: var(--fiche-etiquette);
+  min-height: 14px;
+  font-size: 10.5px;
   font-style: italic;
+  color: var(--fiche-encre-2);
+  border-bottom: 1px solid var(--fiche-separateur);
+  padding-bottom: 2px;
 }
 
 /* ─── Le pied de page ────────────────────────────────────────────────────── */
 
+/* La version de la banque, au coin inférieur droit, juste à l'intérieur du
+   cadre intérieur : plus près du bord, bien des imprimantes la couperaient. */
 .feuille .fiche-pied {
-  font-size: 8.5px;
+  position: absolute;
+  right: 24px;
+  bottom: 20px;
+  font-size: 7.5px;
   letter-spacing: 0.04em;
   color: var(--fiche-note);
   text-align: right;
 }
 
-.feuille.recto .fiche-pied {
-  position: absolute;
-  left: 44px;
-  right: 44px;
-  bottom: 31px;
-}
+/* ─── Si une zone déborde : les définitions se resserrent ────────────────── */
 
-/* ─── Le verso ───────────────────────────────────────────────────────────── */
+/* Le texte rapetisse ; la hauteur des zones, en lignes de référence, ne
+   change pas. */
+.feuille.definitions-serrees { --taille-definition: 9.5px; }
+
+/* ─── Le verso : un seul bloc « Historique », en vignettes ───────────────── */
 
 .feuille.verso {
-  min-height: 1123px;
+  position: relative;
+  height: 1123px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
+  overflow: hidden;
 }
 
-.feuille .verso-marque {
-  margin-bottom: 4px;
+/* L'en-tête du verso : le nom du jeu, le personnage et ses points
+   d'historique. */
+.feuille .verso-entete {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
 }
 
-.feuille .verso-haut {
+.feuille .verso-entete .fiche-nom-jeu { margin-right: auto; }
+.feuille .verso-entete .fiche-genre { color: var(--fiche-encre); }
+
+.feuille .points-historique {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  padding-bottom: 0;
+}
+
+.feuille .trait.trait-points {
+  width: 44px;
+  height: 14px;
+  border-bottom-color: var(--fiche-trait-fort);
+}
+
+.feuille .rubrique-historique {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.feuille .rubrique-historique .rubrique-corps {
+  gap: 6px;
+  padding: 6px;
+}
+
+.feuille .vignettes-haut,
+.feuille .vignettes-bas {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
+  gap: 6px;
 }
 
-.feuille .rubrique-verso .rubrique-corps {
-  gap: 6px;
+/* Les vignettes remplissent la page : autant que la mesure en laisse, et
+   leurs rangées s'étirent jusqu'en bas. Le sac à dos prend deux rangées,
+   sous le contexte ; la constellation est à sa droite. */
+.feuille .vignettes-bas {
+  flex: 1 1 0;
+  min-height: 0;
+  grid-auto-rows: minmax(132px, 1fr);
+}
+
+.feuille .vignette-verso-sac { grid-row: span 2; }
+
+/* Une vignette cache ce qui la dépasse ; l'écran le dit. */
+.feuille .vignette-verso {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--fiche-bord);
+  border-radius: 8px;
+  overflow: hidden;
   font-size: 10.5px;
   line-height: 1.3;
 }
+
+.feuille .vignette-verso-titre {
+  font-family: var(--police-fiche-titre);
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fiche-titre);
+}
+
+/* Le contexte ne dépasse pas 360 pixels ; les réputations en ont au moins
+   209, la hauteur de l'ancien bloc « Historique ». */
+.feuille .vignette-verso-contexte { max-height: 360px; }
+.feuille .vignette-verso-reputations { min-height: 209px; }
 
 .feuille .paires-verso {
   display: grid;
@@ -899,84 +846,26 @@
   white-space: pre-wrap;
 }
 
-.feuille .rubrique-verso .ligne-libre {
-  flex: 0 0 18px;
-}
+.feuille .nom-constellation { font-weight: 700; }
 
-.feuille .table-verso {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.feuille .table-verso th {
-  text-align: left;
-  font-weight: 400;
-  font-size: 9.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--fiche-etiquette);
-  border-bottom: 1px solid var(--fiche-bord);
-  padding: 0 6px 2px 0;
-}
-
-.feuille .table-verso td {
-  padding: 3px 6px 3px 0;
-  border-bottom: 1px solid var(--fiche-separateur);
-}
-
-.feuille .points-verso {
-  color: var(--fiche-titre);
-}
-
-.feuille .details-capacites {
-  column-count: 2;
-  column-gap: 18px;
-}
-
-.feuille .detail-capacite {
-  break-inside: avoid;
-  margin-bottom: 6px;
-  font-size: 10px;
-  line-height: 1.3;
-}
-
-.feuille .detail-titre {
+.feuille .champ-vignette {
   font-size: 10.5px;
-}
-
-.feuille .detail-niveau {
-  color: var(--fiche-note);
-}
-
-.feuille .detail-origine {
-  font-size: 9.5px;
-  font-style: italic;
+  letter-spacing: 0.04em;
   color: var(--fiche-etiquette);
 }
 
-.feuille .liste-verso {
-  padding-left: 16px;
-}
+.feuille .champ-vignette + .champ-vignette { margin-top: 2px; }
 
-.feuille.verso .fiche-pied {
-  margin-top: auto;
-}
-
-/* ─── L'impression ───────────────────────────────────────────────────────── */
+/* ─── L'impression : deux pages A4, sans marge ───────────────────────────── */
 
 @page {
   size: A4;
   margin: 0;
 }
 
-@page verso {
-  size: A4;
-  margin: 14mm 14mm 16mm;
-}
-
 @media print {
   html,
-body {
+  body {
     margin: 0;
     padding: 0;
     background: var(--fiche-papier);
@@ -994,7 +883,7 @@ body {
   }
 
   body > :not(main),
-.ne-pas-imprimer {
+  .ne-pas-imprimer {
     display: none !important;
   }
 
@@ -1013,21 +902,15 @@ body {
     zoom: 1 !important;
   }
 
-  .feuille.recto {
+  /* Le recto et le verso, chacun sa page entière. */
+  .feuille.recto,
+  .feuille.verso {
     width: 210mm;
     height: 297mm;
-    break-after: page;
     break-inside: avoid;
   }
 
-  /* Firefox met tout le document en page à la largeur de la première
-     page, sans marge : le verso, à marges de 14 mm, a donc sa largeur
-     propre, 210 − 2 × 14 mm. */
-  .feuille.verso {
-    page: verso;
-    width: 182mm;
-    min-height: 0;
-    padding: 0;
-    background: var(--fiche-papier);
+  .feuille.recto {
+    break-after: page;
   }
 }

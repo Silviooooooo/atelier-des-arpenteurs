@@ -76,8 +76,6 @@ export const ZONES = [
   { code: "tete", nom: "Tête", abrege: "Tête", d20: "1" },
 ];
 export const ORDRE_FICHE_ZONES = ["tete", "torse", "bras_gauche", "bras_droit", "jambe_gauche", "jambe_droite"];
-// Livret, « Jets de localisation » : sur 20, l'attaque est annulée.
-export const LOCALISATION_20 = "20 → attaque annulée, contre-attaque.";
 
 // Livret, « Ressources » : 10 points de souffle à la création, un de plus
 // par point d'historique (aucun à la création) ; 10 points de corps ; 5
@@ -105,23 +103,14 @@ export const ELEMENTS = {
   arme: "Arme",
   armure: "Armure",
   qualite: "Qualité",
-  style: "Style de combat",
   maitrise: "Maîtrise",
 };
 export const PARAMETRES = { degats: "degats", armure: "armure", defense: "defense", qualite: "qualite", portee: "portee" };
 export const RANGS = { degats: 3, armure: 6 };
 export const PARAMETRES_QUALIFIES = ["degats", "defense", "armure"];
 
-// La légende des huit primordiaux et de leurs domaines, reproduite du
-// modèle de fiche (décision de l'auteur, 29/09/2026) : le livret n'en dit
-// rien, et la colonne Infos du classeur n'a pas de valeur légale.
-export const LEGENDE_PRIMORDIAUX = [
-  ["Derkat", "vengeance"],
-  ["Enaël", "savoir"],
-  ["Ithilvion", "choix"],
-  ["Kalester", "endurance"],
-  ["Neru", "équilibre"],
-  ["Makith", "noirceur"],
-  ["Kouvîmäar", "protection"],
-  ["Sillybir", "pardon"],
-];
+// Le style de combat : une capacité dont la colonne « origine » de la
+// feuille Capacites (la colonne A du classeur) dit « Style de combat »,
+// comparée par cle(). Décision de l'auteur, 26/10/2026 : cette colonne
+// remplace l'élément propre du même nom, qui ne désigne plus rien.
+export const ORIGINE_STYLE = "Style de combat";

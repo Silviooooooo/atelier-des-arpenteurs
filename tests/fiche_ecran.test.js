@@ -61,14 +61,26 @@ test("adresses — la liste, la fiche, les étapes 1 à 9, le lien reçu ; rien 
   assert.equal(adressePersonnage(id, 3), `#/personnage/${id}/etape/3`);
 });
 
-test("dom — svg() : des formes et leur géométrie, jamais de gestionnaire, de style ni d'adresse", () => {
+test("dom — svg() : des formes, leurs textes et leur géométrie, des attributs de la liste admise ; jamais de gestionnaire, de style, d'adresse ni d'élément dans un texte", () => {
   const retirer = installerDom();
   try {
     const forme = svg("rect", { x: 1, y: 2, width: 3, height: 4, classe: "a" });
     assert.equal(forme.getAttribute("width"), "3");
     assert.equal(forme.getAttribute("class"), "a");
-    for (const [balise, attributs] of [["script", {}], ["foreignObject", {}], ["a", {}], ["rect", { onclick: "x" }], ["rect", { style: "fill:red" }], ["rect", { href: "#" }], ["rect", { "xlink:href": "#" }]]) {
+    for (const [balise, attributs] of [["script", {}], ["foreignObject", {}], ["a", {}], ["tspan", {}], ["rect", { onclick: "x" }], ["rect", { style: "fill:red" }], ["rect", { href: "#" }], ["rect", { "xlink:href": "#" }]]) {
       assert.throws(() => svg(balise, attributs), /(?:non|pas) permis/, `${balise} ${JSON.stringify(attributs)}`);
+    }
+    // Un texte (la silhouette de la fiche, § 15.4) : son contenu par textContent, un seul nœud texte.
+    const texte = svg("text", { classe: "nom-zone-svg", x: 10, y: 20 }, "Tête : ", 1, null);
+    assert.equal(texte.textContent, "Tête : 1");
+    assert.equal(texte.childNodes.length, 1);
+    assert.equal(texte.getAttribute("x"), "10");
+    // Aucun élément ne s'y glisse ; les signes qui commandent le sens de l'écriture ne s'affichent pas.
+    assert.throws(() => svg("text", {}, "a", svg("rect", {})), /ne reçoit que du texte/);
+    assert.equal(svg("text", {}, "13\u202E/26").textContent, "13/26");
+    // Hors de la liste admise, aucun attribut : ni couleur, ni gestionnaire, ni style, ni adresse.
+    for (const nom of ["fill", "onload", "style", "href", "xlink:href", "font-family", "textLength", "lengthAdjust", "src"]) {
+      assert.throws(() => svg("text", { [nom]: "x" }, "a"), /pas permis/, nom);
     }
   } finally {
     retirer();
@@ -159,36 +171,54 @@ test("écran de la fiche — introuvable sur l'appareil ; banque sans types : le
   }
 });
 
-test("relecture — la mesure du recto lit les rubriques elles-mêmes, et une rubrique sans hauteur ne dit rien", () => {
-  const { ajuster } = fichePersonnage;
-  // Un recto dont le navigateur donnerait les hauteurs.
-  const recto = (hauteurs) => ({
-    querySelector: (selecteur) => (Object.hasOwn(hauteurs, selecteur) ? { clientHeight: hauteurs[selecteur][0], scrollHeight: hauteurs[selecteur][1] } : null),
-  });
-  let rendus = [];
-  const conteneur = (suite) => ({
-    querySelector: () => suite.shift() ?? null,
-    replaceChildren: (noeud) => rendus.push(noeud),
-  });
+test("écran de la fiche — le déplacement par la table des rôles, attendue une fois ; la barre dit, hors impression, ce que la fiche n'a pas pu écrire", async () => {
   const retirer = installerDom();
+  const avant = { raf: globalThis.requestAnimationFrame, fonts: document.fonts };
   try {
-    const f = { groupes: { espece: [], archetype: [], style: [], constellation: [], acquises: [] }, constellation: null, equipement: [], liens: [], defense: { pieces: [] }, identite: { nom: "" }, caracteristiques: [], capacites: [], armes: [], attaque: {}, points: {}, ressources: {}, armure: { zones: {} }, avertissements: [], manques: [], banque: {} };
-    // Les corps débordent mais pas les rubriques : rien.
-    const sain = { ".rubrique-capacites": [319, 319], ".rubrique-equipement": [199, 199], ".rubrique-liens": [198, 198], ".rubrique-capacites .rubrique-corps": [300, 381] };
-    rendus = [];
-    assert.deepEqual(ajuster(conteneur([recto(sain)]), f, { capacites: 9, equipement: 8, pouvoirs: 3 }), { capacites: 9, equipement: 8, pouvoirs: 3 });
-    assert.equal(rendus.length, 0);
-    // La rubrique des capacités déborde : une place de moins, puis plus rien.
-    const deborde = { ...sain, ".rubrique-capacites": [319, 381] };
-    rendus = [];
-    const places = ajuster(conteneur([recto(deborde), recto(sain)]), f, { capacites: 9, equipement: 8, pouvoirs: 3 });
-    assert.deepEqual(places, { capacites: 8, equipement: 8, pouvoirs: 3 });
-    assert.equal(rendus.length, 1);
-    // Une fiche pas encore mise en page (hauteur nulle) : rien.
-    rendus = [];
-    ajuster(conteneur([recto({ ".rubrique-capacites": [0, 40] })]), f, { capacites: 9, equipement: 8, pouvoirs: 3 });
-    assert.equal(rendus.length, 0);
+    const etagere = creerEtagere(magasinPersonnagesMemoire(), "demo");
+    await etagere.garder(personnageEssai());
+    const ouvrir = async (contexte) => {
+      const ecran = fichePersonnage.afficher(contexte, { ecran: "personnage", id: "demo-aubepine-0000000001" });
+      document.body.replaceChildren(ecran);
+      await laisserFiler(20);
+      return ecran;
+    };
+    // La démonstration : « Pas chassé » a le rôle « deplacement » ; rien à dire.
+    let ecran = await ouvrir(contexteDe(etagere));
+    const liste = texteDe(ecran.querySelector(".impression .recto .liste-capacites"));
+    assert.match(liste, /Pas chassé \(0\) — Se déplace de 1 case\.$/);
+    const avis = ecran.querySelector(".barre-personnage .avis-fiche");
+    assert.ok(avis, "la zone des avis, dans la barre");
+    assert.equal(avis.getAttribute("role"), "status");
+    assert.equal(texteDe(avis), "");
+    // Le nom changé dans la banque : la fiche s'écrit sans, et la barre le dit.
+    const renommee = structuredClone(BANQUE);
+    renommee.capacites.find((c) => c.nom === "Pas chassé").nom = "Pas glissé";
+    for (const bloc of renommee.blocs) for (const c of bloc.capacites) if (c.nom === "Pas chassé") c.nom = "Pas glissé";
+    ecran = await ouvrir(contexteDe(etagere, renommee));
+    assert.doesNotMatch(texteDe(ecran.querySelector(".impression .recto .liste-capacites")), /Pas glissé|Pas chassé/);
+    assert.equal(texteDe(ecran.querySelector(".barre-personnage .avis-fiche")), "Le déplacement ne s'écrit pas sur la fiche : aucune capacité du bloc de base n'a le rôle « deplacement ».");
+    // La table des rôles en échec : la fiche s'affiche quand même, et la barre dit pourquoi.
+    const contexte = contexteDe(etagere);
+    contexte.etat = { ...contexte.etat, mode: "inconnu" };
+    ecran = await ouvrir(contexte);
+    assert.ok(ecran.querySelector(".impression .recto"));
+    assert.match(texteDe(ecran.querySelector(".barre-personnage .avis-fiche")), /^Le déplacement ne s'écrit pas sur la fiche : les rôles des capacités ne se lisent pas \(Mode inconnu : inconnu\)\.$/);
+    // Le premier dessin et les polices chargées mesurent la fiche : elle se refait, rien ne déborde dans le document simulé.
+    let dessins = 0;
+    globalThis.requestAnimationFrame = (f) => ((dessins += 1), f());
+    document.fonts = { ready: Promise.resolve(), load: async () => [] };
+    ecran = await ouvrir(contexteDe(etagere));
+    assert.equal(dessins, 1);
+    assert.ok(ecran.querySelector(".impression .recto"));
+    // La fiche refaite par la mesure garde le déplacement.
+    assert.match(texteDe(ecran.querySelector(".impression .recto .liste-capacites")), /Pas chassé \(0\) — Se déplace de 1 case\.$/);
+    assert.ok(!ecran.querySelector(".impression .recto").className.includes("definitions-serrees"));
+    assert.equal(ecran.querySelector(".impression .verso").querySelectorAll(".vignette-verso-point").length, 14);
+    assert.equal(texteDe(ecran.querySelector(".barre-personnage .avis-fiche")), "");
   } finally {
+    globalThis.requestAnimationFrame = avant.raf;
+    if (avant.fonts === undefined) delete document.fonts;
     retirer();
   }
 });
@@ -261,7 +291,7 @@ test("écran de la fiche — la qualité des objets se change ici, objet par obj
   }
 });
 
-test("écran de la fiche — un personnage qui n'est pas sur l'appareil s'ouvre depuis le site ; le pied dit « tirée N fois »", async () => {
+test("écran de la fiche — un personnage qui n'est pas sur l'appareil s'ouvre depuis le site ; la vue lecture dit « tirée N fois », la fiche imprimée non", async () => {
   const retirer = installerDom();
   try {
     const etagere = creerEtagere(magasinPersonnagesMemoire(), "reel");
@@ -273,7 +303,9 @@ test("écran de la fiche — un personnage qui n'est pas sur l'appareil s'ouvre 
     await laisserFiler(20);
     assert.equal(texteDe(ecran.querySelector("h1")), "Aubépine Crèmebrûlée");
     assert.match(texteDe(ecran.querySelector(".barre-personnage")), /Enregistré le 30\/09\/2026 · en ligne/);
-    assert.match(texteDe(ecran.querySelector(".recto .fiche-pied")), /constellation tirée 3 fois/);
+    assert.match(texteDe(ecran.querySelector(".vue-lecture-contenu")), /constellation tirée 3 fois/);
+    // La spécification 1.7 : le pied du recto ne dit plus que la banque.
+    assert.equal(texteDe(ecran.querySelector(".recto .fiche-pied")), "Banque du 29/09/2026");
     const absent = fichePersonnage.afficher(contexte, { ecran: "personnage", id: "BBBBBBBBBBBBBBBBBBBBBB" });
     document.body.replaceChildren(absent);
     await laisserFiler(20);

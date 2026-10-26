@@ -43,6 +43,11 @@
 // tests/controle.test.js ; le classeur propre s'écrit de même. Seuls des
 // mots changent : aucune ligne, aucune valeur d'un adversaire.
 //
+// À la nouvelle fiche (spécification 1.7), la colonne Infos des deux
+// primordiaux dit leur domaine, que la fiche imprime ; la colonne
+// « origine » des trois styles de combat disait déjà « Style de combat ».
+// Aucune anomalie ne change.
+//
 // Après une modification, réécrire essais/classeur_essai.xlsx :
 //   node tests/outils/classeur_essai.js
 
@@ -104,8 +109,8 @@ export const CLASSEUR_ESSAI = {
         ["Constellation du Chaudron", _, "Bouillonnement", _, "Constellation", "Constellation"],
         ["Constellation de la Cuillère", _, "Cuillère d'argent", _, "Constellation", "Constellation"],
         ["Constellation du Sablier", _, _, _, "Constellation sans capacité ; I3", "Constellation"],
-        ["Grand Four", _, "Fournaise, (Braise | Cendre)", _, "Primordial : une capacité à trois puissances, un choix", "Primordial"],
-        ["Givre éternel", _, _, _, "Primordial sans capacité ; I3", "Primordial"],
+        ["Grand Four", _, "Fournaise, (Braise | Cendre)", _, "Chaleur, cuisson, appétit", "Primordial"],
+        ["Givre éternel", _, _, _, "Froid, patience, conservation", "Primordial"],
         ["Rouleau de fonte", "Arme, Lourde", "Frappe, Choc sourd", "{degats:8/11/13}, {qualite:X}, {portee:0}", "Arme lourde", "Arme"],
         ["Spatule souple", "Arme, Agile", "Frappe, Moulinet farineux", "{degats:5/10/15}, {qualite:X}, {portee:0}", "Arme agile ; Moulinet farineux, comme la louche", "Arme"],
         ["Couteau d'office", "Arme, Précise", "Frappe, Émincer", "{degats:3/8/20}, {qualite:X}, {portee:1}", "Arme précise", "Arme"],

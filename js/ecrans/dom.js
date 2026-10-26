@@ -46,26 +46,34 @@ export function el(balise, attributs = {}, ...enfants) {
 }
 
 const SVG = "http://www.w3.org/2000/svg";
-const SVG_PERMIS = new Set(["svg", "g", "ellipse", "rect", "circle", "path", "title"]);
+const SVG_PERMIS = new Set(["svg", "g", "ellipse", "rect", "circle", "path", "title", "text"]);
+// Les seuls attributs admis : la géométrie, la classe et ce que lit un
+// lecteur d'écran. Aucun gestionnaire, aucun style, aucune adresse.
+const SVG_ATTRIBUTS = new Set(["classe", "viewBox", "role", "aria-label", "aria-hidden", "x", "y", "width", "height", "rx", "ry", "cx", "cy", "r", "d", "transform"]);
 
 /**
  * Un élément SVG dessiné par le code (la silhouette de la fiche, § 15.4) :
- * quelques formes, des attributs de géométrie, jamais d'adresse, de
- * gestionnaire ni de style.
+ * quelques formes et leurs textes, des attributs de la liste admise, jamais
+ * d'adresse, de gestionnaire ni de style. Un texte (text) ne reçoit que du
+ * texte, par textContent, sans les signes qui commandent le sens de
+ * l'écriture : aucun élément ne s'y glisse.
  */
 export function svg(balise, attributs = {}, ...enfants) {
   if (!SVG_PERMIS.has(balise)) throw new TypeError(`Élément SVG non permis : ${balise}`);
   const noeud = document.createElementNS(SVG, balise);
   for (const [nom, valeur] of Object.entries(attributs)) {
     if (valeur === null || valeur === undefined || valeur === false) continue;
-    if (nom.startsWith("on") || nom === "style" || nom === "href" || nom.includes(":")) throw new TypeError(`L'attribut ${nom} n'est pas permis.`);
+    if (!SVG_ATTRIBUTS.has(nom)) throw new TypeError(`L'attribut ${nom} n'est pas permis.`);
     if (nom === "classe") noeud.setAttribute("class", valeur);
     else noeud.setAttribute(nom, String(valeur));
   }
-  for (const enfant of enfants.flat(Infinity)) {
-    if (enfant === null || enfant === undefined || enfant === false) continue;
-    noeud.append(enfant instanceof Node ? enfant : String(enfant));
+  const presents = enfants.flat(Infinity).filter((enfant) => enfant !== null && enfant !== undefined && enfant !== false);
+  if (balise === "text") {
+    if (presents.some((enfant) => enfant instanceof Node)) throw new TypeError("Un texte SVG ne reçoit que du texte : aucun élément n'est permis.");
+    noeud.textContent = sansSensForce(presents.join(""));
+    return noeud;
   }
+  for (const enfant of presents) noeud.append(enfant instanceof Node ? enfant : String(enfant));
   return noeud;
 }
 

@@ -1,31 +1,95 @@
 // Le recto et le verso imprimables d'un personnage (SPECIFICATION.md,
 // § 15.4).
 //
-// Le recto reproduit le modèle de fiche (plans/modele_fiche_personnage.*,
-// hors dépôt) : sa mise en page, ses couleurs, ses polices, ses cadres et
-// ses cases, dans css/fiche.css. Il ne déborde jamais sur une seconde page :
-// repartition.js décide ce qui y tient, le reste passe au verso sous « Suite
-// du recto ». Le verso dit le contexte, l'historique et le détail de toutes
-// les capacités et de toutes les armes.
+// La fiche de la spécification 1.7, dessinée et mesurée dans la maquette de
+// l'auteur (26/10/2026) : sa mise en page, ses jetons et ses polices dans
+// css/fiche.css. Le recto a des zones de hauteur fixe (l'arme, l'armure, les
+// capacités) et des rubriques qui prennent la place qui reste (l'équipement,
+// les liens) ; le verso, un seul bloc « Historique », en vignettes. Rien ne
+// passe d'une page à l'autre : ce qui ne tient pas se cache, et l'écran le
+// dit (js/ecrans/fiche_personnage.js, qui mesure).
 
 import { dateLisible } from "../banque/dates.js";
-import { el, svg } from "../ecrans/dom.js";
-import { LEGENDE_PRIMORDIAUX, LOCALISATION_20, ORDRE_FICHE_ZONES, TYPES_OBJET, ZONES } from "../personnage/regles.js";
-import { coutEcrit, niveauEcrit, obtentionEcrite } from "./lecture.js";
-import { MODELE_CAPACITES, repartir } from "./repartition.js";
+import { cle } from "../banque/noms.js";
+import { el } from "../ecrans/dom.js";
+import { typeObjet } from "../personnage/calcul.js";
+import { TYPES_OBJET, ZONES } from "../personnage/regles.js";
+import { reussitesLisibles } from "./lecture.js";
+import { silhouette } from "./silhouette.js";
 
-const ZONE = Object.fromEntries(ZONES.map((z) => [z.code, z]));
-const TITRES_GROUPES = { espece: "Espèce", archetype: "Archétype", style: "Style de combat", constellation: "Constellation de naissance", acquises: "Acquises en progression" };
+// Les éléments propres qui servent au créateur et au calcul, jamais écrits
+// sur la fiche ; les autres sont ses « éléments notables » (§ 12).
+const ELEMENTS_TUS = new Set(
+  ["Style de combat", "Maîtrise", "Espèce", "Archétype", "Primordial", "Arme", "Armure", "Lourde", "Agile", "Précise", "Dégâts", "Qualité", "Défense", "Consommable", "Équipement"].map(cle),
+);
 
-// ─── Les pièces du modèle ───────────────────────────────────────────────────
+// Les vignettes « Évènement » que le verso prépare ; la mesure retire celles
+// qui ne tiennent pas, une au moins restant.
+export const VIGNETTES_POINT = 14;
 
-/** Une case à cocher du modèle : cochée, grisée, teintée, ou vide. */
-function cases(nombre, { cochees = 0, grisees = Infinity, teintees = Infinity, taille = "moyenne" } = {}) {
+// ─── Ce que la fiche écrit ──────────────────────────────────────────────────
+
+/**
+ * Les éléments notables d'une capacité : « passif », « JA (parole,
+ * empathie) ». La première lettre passe en minuscule, sauf un sigle.
+ */
+export function elementsNotables(elements) {
+  return elements
+    .map((element) => {
+      const lu = String(element).match(/^([^[]+)(?:\[(.*)\])?$/);
+      return lu ? { nom: lu[1].trim(), valeur: lu[2] ?? "" } : { nom: String(element), valeur: "" };
+    })
+    .filter((element) => !ELEMENTS_TUS.has(cle(element.nom)))
+    .map(({ nom, valeur }) => `${/^.\p{Ll}/u.test(nom) ? nom.charAt(0).toLowerCase() + nom.slice(1) : nom}${valeur ? ` (${valeur})` : ""}`);
+}
+
+/** Le coût d'une capacité : « 1 », « 0 · 1 lien », « 0 · 3 liens » ; un souffle vide vaut 0. */
+export function coutEntreParentheses(cout) {
+  if (!cout) return "";
+  const souffle = cout.souffle === "" || cout.souffle === null || cout.souffle === undefined ? "0" : String(cout.souffle);
+  const lien = cout.lien === "" || cout.lien === null || cout.lien === undefined || cout.lien === "0" ? null : String(cout.lien);
+  return lien ? `${souffle} · ${lien} ${lien === "1" ? "lien" : "liens"}` : souffle;
+}
+
+/** La ligne ARME : « nom (A/B/C), type, dé », puis la portée s'il y en a une. */
+export function resumeArme(attaque) {
+  const parties = [`${attaque.nom}${attaque.degats ? ` (${attaque.degats.join("/")})` : ""}`];
+  // Sans type ou sans dé (un brouillon, les mains nues), ni l'un ni l'autre.
+  if (attaque.typeObjet && attaque.de) parties.push(TYPES_OBJET[attaque.typeObjet].nom, attaque.de.de);
+  if (attaque.portee && attaque.portee !== "0") parties.push(`portée ${attaque.portee}`);
+  return parties.join(", ");
+}
+
+// Le type d'une pièce portée, par son code ; null pour une pièce sans type.
+const typeDe = (objet) => typeObjet(objet.bloc).type ?? null;
+const nomDuType = (type) => (type ? TYPES_OBJET[type].nom : "sans type");
+// Les types des pièces, rangés lourde, agile, précise, puis « sans type ».
+const ORDRE_TYPES = [...Object.keys(TYPES_OBJET), null];
+const typesRanges = (pieces) => ORDRE_TYPES.filter((type) => pieces.some((piece) => typeDe(piece) === type));
+
+/** La ligne ARMURE : « lourde (40,20,20,20,20,10), d12 », « aucune, d10 ». */
+export function resumeArmure(fiche) {
+  const pieces = fiche.equipement.filter((o) => o.porte);
+  const de = fiche.defense.de?.de ?? null;
+  const types = pieces.length ? `${typesRanges(pieces).map(nomDuType).join(" et ")} (${ZONES.map((z) => fiche.armure.zones[z.code] ?? 0).join(",")})` : "aucune";
+  return [types, de].filter(Boolean).join(", ");
+}
+
+/** La ligne BOUCLIER : « nom (défense) ». */
+export function resumeBouclier(bouclier) {
+  const defense = bouclier.defense ?? bouclier.defenseBrute;
+  return defense === null || defense === undefined || defense === "" ? bouclier.nom : `${bouclier.nom} (${defense})`;
+}
+
+// Les capacités que donne l'objet de ce rang (rôle « equipement »).
+const capacitesDeLObjet = (fiche, rang) => fiche.capacites.filter((c) => c.role === "equipement" && c.sources.some((s) => s.rang === rang));
+
+// ─── Les pièces de la fiche ─────────────────────────────────────────────────
+
+/** Des cases à cocher : cochées, puis vides. */
+function cases(nombre, { cochees = 0, taille = "petite", teinteesDes = Infinity } = {}) {
   return Array.from({ length: nombre }, (_, i) =>
-    el("span", {
-      classe: ["case", `case-${taille}`, i < cochees ? "cochee" : null, i >= grisees ? "grisee" : null, i >= teintees ? "teintee" : null].filter(Boolean).join(" "),
-      "aria-hidden": "true",
-    }),
+    el("span", { classe: ["case", `case-${taille}`, i < cochees ? "cochee" : null, i >= teinteesDes ? "teintee" : null].filter(Boolean).join(" "), "aria-hidden": "true" }),
   );
 }
 
@@ -39,12 +103,30 @@ function etiquette(texte, classe = "") {
   return el("span", { classe: `libelle ${classe}`.trim() }, texte);
 }
 
-function rubrique(classe, titre, sousTitre, ...contenu) {
+function rubrique(classe, titre, ...contenu) {
+  return el("section", { classe: `rubrique ${classe}` }, el("header", { classe: "rubrique-tete" }, el("h2", {}, titre)), el("div", { classe: "rubrique-corps" }, ...contenu));
+}
+
+/**
+ * Une capacité définie : ses cases de puissance à gauche (aucune à la
+ * puissance 0 ni pour une capacité à venir), son nom, son coût, ses
+ * éléments notables, puis sa définition. source : le nom du bloc dont la
+ * description compte (un objet), ou rien pour la première.
+ */
+export function capaciteDefinie(capacite, source = null) {
+  const description = (source ? capacite.descriptions.find((d) => d.source === source) : null) ?? capacite.descriptions[0];
+  const nombre = capacite.aVenir ? 0 : (capacite.niveauMax ?? 0);
+  const cout = capacite.aVenir ? "" : coutEntreParentheses(capacite.cout);
+  const notables = elementsNotables(capacite.elements ?? []);
+  const texte = capacite.aVenir ? "" : reussitesLisibles(description?.texte ?? "");
   return el(
-    "section",
-    { classe: `rubrique ${classe}` },
-    el("header", { classe: "rubrique-tete" }, el("h2", {}, ...[titre].flat()), el("span", { classe: "rubrique-note" }, sousTitre)),
-    el("div", { classe: "rubrique-corps" }, ...contenu),
+    "p",
+    { classe: "capacite-definie" },
+    nombre > 0 ? el("span", { classe: "cases-puissance" }, cases(nombre, { cochees: capacite.niveau ?? 0 })) : null,
+    el("span", { classe: "capacite-definie-nom" }, capacite.nom),
+    cout !== "" ? [" ", el("span", { classe: "capacite-definie-cout" }, `(${cout})`)] : null,
+    notables.length ? [" ", el("span", { classe: "capacite-definie-elements" }, notables.join(", "))] : null,
+    capacite.aVenir ? [" ", el("span", { classe: "capacite-definie-a-venir" }, "— à venir")] : texte ? [" ", el("span", { classe: "capacite-definie-texte" }, `— ${texte}`)] : null,
   );
 }
 
@@ -70,6 +152,8 @@ function entete(fiche) {
       champ("champ-archetype", fiche.archetype, "Archétype"),
       champ("champ-style", fiche.style, "Style de combat"),
       champ("champ-niveau", fiche.niveau, "Niv."),
+      // L'expérience s'écrit à la main.
+      champ("champ-xp", "", "XP"),
     ),
   );
 }
@@ -78,209 +162,99 @@ function caracteristiques(fiche) {
   return rubrique(
     "rubrique-caracteristiques",
     "Caractéristiques",
-    "somme 36 · de 2 à 6",
     el(
       "div",
       { classe: "grille-caracteristiques" },
-      fiche.caracteristiques.map((c) => el("div", { classe: "caracteristique" }, el("span", { classe: "nom-caracteristique" }, c.nom), el("span", { classe: "boite-valeur" }, c.valeur ?? ""))),
-    ),
-    el(
-      "div",
-      { classe: "pied-rubrique" },
-      el("span", { classe: "note" }, "Somme des 2 carac. (×2 si une seule), arrondie au pair inférieur :"),
-      el("span", { classe: "table-des" }, "4 → d4 · 6 → d6 · 8 → d8 · 10 → d10 · 12 → d12"),
+      fiche.caracteristiques.map((c) => el("div", { classe: "caracteristique-fiche" }, el("span", { classe: "nom-caracteristique" }, c.nom), el("span", { classe: "boite-valeur" }, c.valeur ?? ""))),
     ),
   );
 }
 
-function attaqueDefense(fiche, repartition) {
-  const { attaque, defense, bouclier } = fiche;
-  const degats = attaque.degats ?? [null, null, null];
-  const ligne = (...enfants) => el("div", { classe: "ligne-ad" }, ...enfants);
+function ligneEquipee(classe, titre, resume) {
+  return el("div", { classe: `ligne-equipee ${classe}` }, el("span", { classe: "titre-ad" }, titre), el("span", { classe: "resume-equipe", title: resume || null }, resume), trait("", "trait-libre"));
+}
+
+function attaqueDefense(fiche) {
+  const { attaque, bouclier } = fiche;
+  const deLArme = attaque.mainsNues ? [] : capacitesDeLObjet(fiche, attaque.rang).map((c) => capaciteDefinie(c, attaque.nom));
+  const deLArmure = fiche.equipement.filter((o) => o.porte).flatMap((o) => capacitesDeLObjet(fiche, o.rang).map((c) => capaciteDefinie(c, o.nom)));
+  const duBouclier = bouclier
+    ? [ligneEquipee("ligne-bouclier", "Bouclier", resumeBouclier(bouclier)), capacitesDeLObjet(fiche, bouclier.rang).map((c) => capaciteDefinie(c, bouclier.nom))]
+    : [];
   return rubrique(
     "rubrique-attaque",
     "Attaque & défense",
-    "réussites : 1 → A · 2 → B · 3 → C",
-    el(
-      "div",
-      { classe: "bloc-ad" },
-      ligne(el("span", { classe: "titre-ad" }, "Attaque"), etiquette("Arme"), trait(attaque.nom, "large"), etiquette("Dé"), trait(attaque.de?.de ?? "", "de")),
-      ligne(
-        el("span", { classe: "titre-ad" }),
-        etiquette("Dégâts"),
-        trait(degats[0], "rang"),
-        el("span", { classe: "barre" }, "/"),
-        trait(degats[1], "rang"),
-        el("span", { classe: "barre" }, "/"),
-        trait(degats[2], "rang"),
-        etiquette("Portée"),
-        trait(attaque.portee, "portee"),
-        etiquette("Qualité"),
-        trait(attaque.qualite?.applicable ? attaque.qualite.texte : "", "large"),
-      ),
-      el("span", { classe: "note" }, "Dé : lourde For+Pré · agile Agi+For · précise Pré+Agi"),
-    ),
-    el(
-      "div",
-      { classe: "bloc-ad bloc-defense" },
-      ligne(el("span", { classe: "titre-ad" }, "Défense"), etiquette("Armure"), trait(repartition.armure.texte, "large"), etiquette("Dé"), trait(defense.de?.de ?? "", "de")),
-      ligne(
-        el("span", { classe: "titre-ad" }),
-        etiquette("Défense"),
-        trait(bouclier ? (bouclier.defense ?? bouclier.defenseBrute) : "", "defense"),
-        etiquette("Bouclier"),
-        trait(bouclier?.nom ?? "", "large"),
-        etiquette("Qualité"),
-        trait(bouclier?.qualite?.applicable ? bouclier.qualite.texte : "", "qualite"),
-      ),
-      el(
-        "span",
-        { classe: "note" },
-        noteDefense(defense),
-      ),
-    ),
+    ligneEquipee("ligne-arme", "Arme", resumeArme(attaque)),
+    el("div", { classe: "zone-capacites zone-arme" }, deLArme),
+    el("span", { classe: "separation-ad", "aria-hidden": "true" }),
+    ligneEquipee("ligne-armure", "Armure", resumeArmure(fiche)),
+    el("div", { classe: "zone-capacites zone-armure" }, deLArmure, duBouclier),
   );
 }
 
-// La note sous la défense : la légende du modèle, ou ce que le livret dit
-// du dé quand les types se mêlent ou quand aucune pièce n'est portée.
-function noteDefense(defense) {
-  const type = defense.type ? TYPES_OBJET[defense.type].nom : "";
-  if (defense.meles) return `Types mêlés : dé ${type}, désavantage sans la maîtrise de toutes les pièces`;
-  if (!defense.pieces.length && defense.de) return `Sans armure : dé ${type}, le plus avantageux des trois`;
-  return "Dé : lourde For+Sen · agile Agi+Cré · précise Pré+Emp";
+/**
+ * Les capacités du bloc « Capacités », dans l'ordre du calcul : celles de
+ * l'espèce et de l'archétype (style et maîtrise compris), puis la capacité
+ * de déplacement du bloc de base, que l'écran nomme (le rôle « deplacement »
+ * du combat, § 17). Les autres capacités du bloc de base ne s'écrivent pas.
+ */
+export function capacitesDuRecto(fiche, deplacement = null) {
+  const propres = fiche.capacites.filter((c) => c.role === "espece" || c.role === "archetype");
+  const pas = deplacement ? fiche.capacites.filter((c) => c.role === "base" && cle(c.nom) === cle(deplacement)) : [];
+  return [...propres, ...pas];
 }
 
-function ligneCapacite(l) {
-  if (l.vide) return el("div", { classe: "ligne-capacite" }, trait("", "nom-capacite"), el("span", { classe: "cases-puissance" }, cases(3, { taille: "petite" })), trait("", "cout"));
-  if (l.aVenirGroupe) return el("div", { classe: "ligne-capacite" }, trait(`${l.nom} — capacités à venir`, "nom-capacite a-venir"), el("span", { classe: "cases-puissance" }, cases(3, { taille: "petite", grisees: 0 })), trait("", "cout"));
-  const cout = l.aVenir ? "" : coutRecto(l.cout);
-  return el(
-    "div",
-    { classe: "ligne-capacite" },
-    trait(l.aVenir ? `${l.nom} — à venir` : l.nom, `nom-capacite${l.aVenir ? " a-venir" : ""}`),
-    el("span", { classe: "cases-puissance" }, cases(3, { taille: "petite", cochees: l.niveau ?? 0, grisees: l.aVenir ? 0 : (l.niveauMax ?? 3) })),
-    trait(cout, "cout"),
-  );
+function capacites(fiche, deplacement) {
+  return rubrique("rubrique-capacites", "Capacités", el("div", { classe: "liste-capacites" }, capacitesDuRecto(fiche, deplacement).map((c) => capaciteDefinie(c))));
 }
 
-/** Le coût dans sa colonne étroite : le souffle, et le lien s'il y en a. */
-export function coutRecto(cout) {
-  if (!cout) return "";
-  return cout.lien !== "0" ? `${cout.souffle}·${cout.lien}L` : cout.souffle;
-}
-
-function capacites(fiche, repartition) {
-  const groupes = Object.keys(MODELE_CAPACITES).map((g) =>
-    el(
-      "div",
-      { classe: "groupe-capacites" },
-      el(
-        "div",
-        { classe: "titre-groupe" },
-        el("span", {}, TITRES_GROUPES[g]),
-        g === "constellation" && fiche.constellation && fiche.groupes.constellation.length ? el("span", { classe: "precision-groupe" }, fiche.constellation.nom) : null,
-        repartition.suite.capacites.some((s) => s.groupe === g) ? el("span", { classe: "precision-groupe" }, "suite au verso") : null,
-        el("span", { classe: "regle" }),
-      ),
-      repartition.capacites[g].map(ligneCapacite),
-    ),
-  );
-  const reliquat = fiche.points.reliquat;
+function etat(fiche) {
+  const { souffle, corps } = fiche.ressources;
   return rubrique(
-    "rubrique-capacites",
-    ["Capacités", el("span", { classe: "reliquat" }, `Reliquat : ${reliquat} point${reliquat > 1 ? "s" : ""}`)],
-    "puissance de 1 à 3",
-    el("div", { classe: "entete-colonnes" }, el("span", { classe: "vide-flexible" }), el("span", { classe: "col-pui" }, "Pui."), el("span", { classe: "col-cout" }, "Coût")),
-    groupes,
+    "rubrique-etat",
+    "État",
+    el("div", { classe: "ligne-etat ligne-souffle" }, etiquette("Souffle"), trait("", "trait-libre"), el("span", { classe: "souffle-max" }, `/ ${souffle}`)),
+    silhouette(fiche.armure.zones),
+    el("div", { classe: "ligne-etat ligne-corps" }, etiquette("Corps"), el("div", { classe: "rang-cases" }, cases(corps, { taille: "corps", teinteesDes: 5 }))),
+    el("div", { classe: "blessures-etat" }, etiquette("Blessures & états"), el("span", { classe: "ligne-libre" }), el("span", { classe: "ligne-libre" })),
   );
 }
 
-function souffle(fiche) {
-  const max = fiche.ressources.souffle;
-  return rubrique(
-    "rubrique-souffle",
-    "Souffle",
-    "10 à la création · +1 par point d'historique",
-    el("div", { classe: "souffle-max" }, etiquette("Max"), trait(max, "max")),
-    el("div", { classe: "souffle-cases" }, el("div", { classe: "rang-cases" }, cases(10, { taille: "souffle", grisees: max })), el("div", { classe: "rang-cases" }, cases(10, { taille: "souffle", grisees: Math.max(0, max - 10) }))),
-  );
+/**
+ * Ce que le personnage porte et a sous la main (places arme, pack, équipé),
+ * dans l'ordre de son équipement : les pièces portées regroupées par type
+ * sur une ligne, à la place de la première ; les autres objets un par ligne,
+ * avec leurs capacités, sauf l'arme tenue et le bouclier, dont les capacités
+ * sont sous l'attaque et la défense. Le sac passe au verso.
+ */
+export function ceinture(fiche) {
+  const { attaque, bouclier } = fiche;
+  const pieces = fiche.equipement.filter((o) => o.porte);
+  const objets = [];
+  const typesVus = new Set();
+  for (const o of fiche.equipement.filter((x) => x.place !== "sac")) {
+    if (o.porte) {
+      const type = typeDe(o);
+      if (typesVus.has(type)) continue;
+      typesVus.add(type);
+      objets.push({ nom: `Armure ${nomDuType(type)} (${pieces.filter((p) => typeDe(p) === type).map((p) => p.nom).join(", ")})`, capacites: [] });
+      continue;
+    }
+    const ailleurs = (!attaque.mainsNues && o.rang === attaque.rang) || o.rang === bouclier?.rang;
+    objets.push({ nom: o.nom, capacites: ailleurs ? [] : capacitesDeLObjet(fiche, o.rang).map((c) => ({ capacite: c, source: o.nom })) });
+  }
+  return objets;
 }
 
-function silhouette() {
-  return svg(
-    "svg",
-    { viewBox: "0 0 88 202", classe: "silhouette", role: "img", "aria-label": "Silhouette de localisation : tête, torse, bras et jambes" },
-    svg(
-      "g",
-      { classe: "silhouette-formes" },
-      svg("ellipse", { cx: 44, cy: 22, rx: 14, ry: 16 }),
-      svg("rect", { x: 39, y: 35, width: 10, height: 10, rx: 3 }),
-      svg("rect", { x: 22, y: 44, width: 44, height: 66, rx: 8 }),
-      svg("rect", { x: 6, y: 47, width: 13, height: 72, rx: 6.5 }),
-      svg("rect", { x: 69, y: 47, width: 13, height: 72, rx: 6.5 }),
-      svg("rect", { x: 24, y: 113, width: 19, height: 84, rx: 8 }),
-      svg("rect", { x: 45, y: 113, width: 19, height: 84, rx: 8 }),
-    ),
-  );
-}
-
-function armure(fiche) {
-  return rubrique(
-    "rubrique-armure",
-    "Armure & endurance",
-    `${fiche.ressources.resistance} / zone`,
-    silhouette(),
-    el(
-      "div",
-      { classe: "table-zones" },
-      el("div", { classe: "zone zone-tete" }, el("span", { classe: "col-zone" }, "Zone"), el("span", { classe: "col-d20" }, "d20"), el("span", { classe: "col-arm" }, "Arm."), el("span", { classe: "col-resist" }, "Résist.")),
-      ORDRE_FICHE_ZONES.map((code) =>
-        el(
-          "div",
-          { classe: "zone" },
-          el("span", { classe: "col-zone nom-zone" }, ZONE[code].abrege),
-          el("span", { classe: "col-d20 d20" }, ZONE[code].d20),
-          el("span", { classe: "col-arm" }, trait(fiche.armure.zones[code], "arm")),
-          el("span", { classe: "col-resist cases-resistance" }, cases(fiche.ressources.resistance, { taille: "resistance" })),
-        ),
-      ),
-      el("div", { classe: "zone-pied" }, el("span", { classe: "note" }, LOCALISATION_20)),
-    ),
-  );
-}
-
-function corps(fiche) {
-  return rubrique(
-    "rubrique-sante",
-    "Corps & blessures",
-    `${fiche.ressources.corps} points`,
-    el(
-      "div",
-      { classe: "points-corps" },
-      etiquette("Points de corps"),
-      el("div", { classe: "rang-cases" }, cases(fiche.ressources.corps, { taille: "corps", teintees: 5 })),
-      el("span", { classe: "note" }, "1 pt / semaine (1 à 5) · 1 pt / mois (6 à 10)"),
-    ),
-    el("div", { classe: "blessures" }, etiquette("Blessures & états"), el("span", { classe: "ligne-libre" }), el("span", { classe: "ligne-libre" }), el("span", { classe: "ligne-libre" })),
-  );
-}
-
-function equipement(repartition) {
+function equipement(fiche) {
   return rubrique(
     "rubrique-equipement",
-    "Équipement",
-    repartition.suite.equipement.length ? "objet · qualité · suite au verso" : "objet · qualité",
-    el(
-      "div",
-      { classe: "lignes-equipement" },
-      repartition.equipement.map((o) => el("div", { classe: "ligne-objet" }, trait(o.vide ? "" : o.nom, "nom-objet"), trait(o.vide ? "" : o.qualite, "qualite-objet"))),
-    ),
+    "Équipement et ceinture",
+    ceinture(fiche).map((o) => el("div", { classe: "objet-ceinture" }, el("span", { classe: "objet-nom" }, o.nom), o.capacites.map(({ capacite, source }) => capaciteDefinie(capacite, source)))),
   );
 }
 
 function colonneLien(lien) {
-  const pouvoirs = lien?.pouvoirs ?? [{ vide: true }, { vide: true }, { vide: true }];
   return el(
     "div",
     { classe: "colonne-lien" },
@@ -288,178 +262,117 @@ function colonneLien(lien) {
       "div",
       { classe: "ligne-primordial" },
       el("span", { classe: "titre-primordial" }, "Primordial"),
-      trait(lien ? lien.nom : "", "nom-primordial"),
+      trait(lien?.nom ?? "", "nom-primordial"),
       etiquette("Lien", "petite"),
-      el("span", { classe: "cases-lien" }, cases(8, { taille: "lien", grisees: lien ? lien.points : Infinity })),
+      el("span", { classe: "cases-lien" }, cases(8, { cochees: lien?.points ?? 0, taille: "lien" })),
     ),
-    el(
-      "div",
-      { classe: "entete-pouvoirs" },
-      el("span", { classe: "vide-flexible libelle petite" }, lien?.suite.length ? "Pouvoirs choisis · suite au verso" : "Pouvoirs choisis"),
-      el("span", { classe: "col-pui libelle petite" }, "Pui."),
-    ),
-    pouvoirs.map((p) => {
-      const texte = p.aVenirGroupe ? "capacités à venir" : p.vide ? "" : p.aVenir ? `${p.nom} — à venir` : p.nom;
-      const grisees = p.vide ? Infinity : p.aVenir || p.aVenirGroupe ? 0 : (p.niveauMax ?? 3);
-      return el(
-        "div",
-        { classe: "ligne-pouvoir" },
-        trait(texte, `nom-pouvoir${p.aVenir || p.aVenirGroupe ? " a-venir" : ""}`),
-        el("span", { classe: "cases-puissance" }, cases(3, { taille: "petite", cochees: p.niveau ?? 0, grisees })),
-      );
-    }),
+    el("p", { classe: "domaine-primordial" }, lien?.domaine ?? ""),
+    (lien?.pouvoirs ?? []).map((c) => capaciteDefinie(c)),
   );
 }
 
-function liens(repartition) {
-  const [premier, second] = repartition.liens;
-  return rubrique(
-    "rubrique-liens",
-    "Liens primordiaux",
-    "points de lien = puissance investie dans les capacités du primordial",
-    el("div", { classe: "colonnes-liens" }, colonneLien(premier), el("span", { classe: "separateur-liens" }), colonneLien(second)),
-    el(
-      "div",
-      { classe: "legende-primordiaux" },
-      [LEGENDE_PRIMORDIAUX.slice(0, 5), LEGENDE_PRIMORDIAUX.slice(5)].map((rang) =>
-        el(
-          "span",
-          { classe: "note" },
-          rang.flatMap(([nom, domaine], i) => [i ? " · " : "", `${nom} `, el("span", { classe: "domaine" }, domaine)]),
-        ),
-      ),
-    ),
-  );
+function liens(fiche) {
+  const [premier = null, second = null] = fiche.liens;
+  return rubrique("rubrique-liens", "Liens primordiaux", el("div", { classe: "colonnes-liens" }, colonneLien(premier), el("span", { classe: "separateur-liens" }), colonneLien(second)));
 }
 
 function pied(fiche) {
-  const parties = [fiche.banque.publiee_le ? `Banque du ${dateLisible(fiche.banque.publiee_le).slice(0, 10)}` : null, obtentionEcrite(fiche.constellation)];
-  return el("p", { classe: "fiche-pied" }, parties.filter(Boolean).join(" · "));
+  return el("p", { classe: "fiche-pied" }, fiche.banque.publiee_le ? `Banque du ${dateLisible(fiche.banque.publiee_le).slice(0, 10)}` : "");
 }
 
-/** Le recto : le modèle de fiche, rempli. */
-export function recto(fiche, repartition = repartir(fiche)) {
+/**
+ * Le recto. deplacement : le nom de la capacité de déplacement du bloc de
+ * base, ou rien ; serrees : les définitions resserrées (classe
+ * definitions-serrees), quand une zone déborde.
+ */
+export function recto(fiche, { deplacement = null, serrees = false } = {}) {
   return el(
     "section",
-    { classe: "feuille recto", "aria-label": "Recto de la fiche" },
+    { classe: serrees ? "feuille recto definitions-serrees" : "feuille recto", "aria-label": "Recto de la fiche" },
     el("span", { classe: "cadre cadre-exterieur", "aria-hidden": "true" }),
     el("span", { classe: "cadre cadre-interieur", "aria-hidden": "true" }),
     entete(fiche),
     el(
       "div",
       { classe: "fiche-corps" },
-      el("div", { classe: "colonne colonne-gauche" }, caracteristiques(fiche), attaqueDefense(fiche, repartition), capacites(fiche, repartition)),
-      el("div", { classe: "colonne colonne-droite" }, souffle(fiche), armure(fiche), corps(fiche), equipement(repartition)),
+      el("div", { classe: "colonne colonne-gauche" }, caracteristiques(fiche), attaqueDefense(fiche), capacites(fiche, deplacement)),
+      el("div", { classe: "colonne colonne-droite" }, etat(fiche), equipement(fiche)),
     ),
-    liens(repartition),
+    liens(fiche),
     pied(fiche),
   );
 }
 
 // ─── Le verso ───────────────────────────────────────────────────────────────
 
-function sectionVerso(titre, ...contenu) {
-  return el("section", { classe: "rubrique rubrique-verso" }, el("header", { classe: "rubrique-tete" }, el("h2", {}, titre)), el("div", { classe: "rubrique-corps" }, ...contenu));
+function vignette(classe, titre, ...contenu) {
+  return el("article", { classe: `vignette-verso ${classe}` }, titre ? el("h3", { classe: "vignette-verso-titre" }, titre) : null, ...contenu);
 }
 
-function suiteDuRecto(fiche, repartition) {
-  const { suite } = repartition;
-  if (!repartition.deborde) return null;
-  const lignes = [
-    ...suite.capacites.map((l) => `${TITRES_GROUPES[l.groupe]} : ${l.nom}${l.aVenir ? " (à venir)" : ""}${l.niveau ? `, niveau ${l.niveau}` : ""}${l.cout ? `, coût ${coutEcrit(l.cout)}` : ""}`),
-    ...suite.pouvoirs.map((p) => `${p.primordial} : ${p.nom}${p.niveau ? `, niveau ${p.niveau}` : ""}`),
-    ...suite.equipement.map((o) => `Équipement : ${o.nom}${o.qualite ? `, qualité ${o.qualite}` : ""}`),
-    suite.armure.length ? `Armure portée : ${suite.armure.join(", ")}` : null,
-  ].filter(Boolean);
-  return sectionVerso("Suite du recto", el("ul", { classe: "liste-verso" }, lignes.map((l) => el("li", {}, l))));
+function point() {
+  return vignette("vignette-verso-point", null, ["Évènement :", "Bonus :", "Contexte :"].map((champ) => el("p", { classe: "champ-vignette" }, champ)));
 }
 
-function detailCapacite(c) {
-  return el(
-    "article",
-    { classe: "detail-capacite" },
-    el("p", { classe: "detail-titre" }, el("strong", {}, c.nom), el("span", { classe: "detail-niveau" }, ` — ${niveauEcrit(c)}${c.aVenir ? "" : ` · coût ${coutEcrit(c.cout)}`}`)),
-    el("p", { classe: "detail-origine" }, `${c.origines.join(", ")}${c.elements.length ? ` · ${c.elements.join(", ")}` : ""}`),
-    c.aVenir ? el("p", { classe: "detail-texte" }, "Capacité à venir : absente de la feuille Capacites.") : c.descriptions.map((d) => el("p", { classe: "detail-texte" }, c.descriptions.length > 1 ? `${d.source} : ${d.texte}` : d.texte)),
-  );
-}
-
-/** Le verso : contexte, historique, détail des capacités et des armes. */
-export function verso(fiche, repartition = repartir(fiche)) {
+/** Le verso : le contexte, les réputations, le sac à dos, la constellation et les points d'historique. */
+export function verso(fiche) {
   const { identite } = fiche;
-  const armes = fiche.armes;
+  const constellation = fiche.constellation;
+  const deLaConstellation = fiche.capacites.filter((c) => c.role === "constellation");
   return el(
     "section",
     { classe: "feuille verso", "aria-label": "Verso de la fiche" },
     el(
       "header",
-      { classe: "fiche-marque verso-marque" },
+      { classe: "verso-entete" },
       el("p", { classe: "fiche-nom-jeu" }, "Les Arpenteurs d’Abrasia"),
-      el("span", { classe: "fiche-filet" }, el("span", { classe: "filet" }), el("span", { classe: "losange" }), el("span", { classe: "filet" })),
-      el("span", { classe: "fiche-genre" }, `${identite.nom || "Personnage"} — verso`),
+      el("span", { classe: "fiche-genre" }, identite.nom || "Personnage"),
+      etiquette("— Points d'historique :", "points-historique"),
+      trait("", "trait-points"),
     ),
-    suiteDuRecto(fiche, repartition),
     el(
-      "div",
-      { classe: "verso-haut" },
-      sectionVerso(
-        "Contexte",
+      "section",
+      { classe: "rubrique rubrique-historique" },
+      el("header", { classe: "rubrique-tete" }, el("h2", {}, "Historique")),
+      el(
+        "div",
+        { classe: "rubrique-corps" },
         el(
-          "dl",
-          { classe: "paires-verso" },
-          [["Nom", identite.nom], ["Âge", identite.age], ["Description", identite.description], ["Histoire", identite.histoire]].map(([t, v]) => [el("dt", {}, t), el("dd", {}, v || "—")]),
+          "div",
+          { classe: "vignettes-haut" },
+          vignette(
+            "vignette-verso-contexte",
+            "Contexte",
+            // Un champ que le joueur n'a pas rempli reste vide, sans tiret.
+            el("dl", { classe: "paires-verso" }, [["Nom", identite.nom], ["Âge", identite.age], ["Description", identite.description], ["Histoire", identite.histoire]].map(([t, v]) => [el("dt", {}, t), el("dd", {}, v || "")])),
+          ),
+          vignette("vignette-verso-reputations", "Réputations"),
+        ),
+        el(
+          "div",
+          { classe: "vignettes-bas" },
+          vignette(
+            "vignette-verso-sac",
+            "Sac à dos",
+            fiche.equipement.filter((o) => o.place === "sac").map((o) => el("p", { classe: "objet-sac" }, o.nom)),
+          ),
+          vignette(
+            "vignette-verso-constellation",
+            "Constellation de naissance",
+            constellation
+              ? [
+                  el("p", { classe: "nom-constellation" }, constellation.nom),
+                  deLaConstellation.length ? deLaConstellation.map((c) => capaciteDefinie(c)) : el("p", { classe: "capacite-definie-a-venir" }, "Capacités à venir."),
+                ]
+              : null,
+          ),
+          Array.from({ length: VIGNETTES_POINT }, point),
         ),
       ),
-      sectionVerso(
-        "Historique",
-        el("p", { classe: "note" }, "Un point d'historique dépensé : une phrase, écrite ici."),
-        Array.from({ length: 6 }, () => el("span", { classe: "ligne-libre" })),
-      ),
     ),
-    sectionVerso(
-      "Armes",
-      armes.length
-        ? el(
-            "table",
-            { classe: "table-verso" },
-            el("thead", {}, el("tr", {}, ["Arme", "Type", "Dé", "Dégâts", "Portée", "Qualité"].map((t) => el("th", { scope: "col" }, t)))),
-            el(
-              "tbody",
-              {},
-              armes.map((a) =>
-                el(
-                  "tr",
-                  {},
-                  el("td", {}, a.nom, a.rang === fiche.attaque.rang && !fiche.attaque.mainsNues ? " (principale)" : ""),
-                  el("td", {}, a.typeObjet ? TYPES_OBJET[a.typeObjet].nom : "—"),
-                  el("td", {}, a.de?.de ?? "—"),
-                  el("td", {}, a.degats ? a.degats.join(" / ") : a.degatsBruts || "—"),
-                  el("td", {}, a.portee || "—"),
-                  el("td", {}, a.qualite.applicable ? a.qualite.texte : "—"),
-                ),
-              ),
-            ),
-          )
-        : el("p", {}, `Aucune arme : ${fiche.attaque.nom}, dégâts ${fiche.attaque.degats ? fiche.attaque.degats.join(" / ") : "—"}, dé vide (aucune règle ne le donne).`),
-    ),
-    sectionVerso(
-      "Capacités",
-      el(
-        "p",
-        { classe: "points-verso" },
-        `Points de capacité : ${fiche.points.depenses} / ${fiche.points.plafond} (reçus : ${fiche.points.recus}) · reliquat : ${fiche.points.reliquat} point${fiche.points.reliquat > 1 ? "s" : ""}.`,
-      ),
-      el("div", { classe: "details-capacites" }, fiche.capacites.map(detailCapacite)),
-    ),
-    fiche.avertissements.length || fiche.manques.length
-      ? sectionVerso("Avertissements", el("ul", { classe: "liste-verso" }, [...fiche.manques, ...fiche.avertissements.map((a) => a.texte)].map((t) => el("li", {}, t))))
-      : null,
-    pied(fiche),
   );
 }
 
-/** Le recto puis le verso, prêts à imprimer. */
-export function feuilles(fiche, places) {
-  const repartition = repartir(fiche, places);
-  return el("div", { classe: "feuilles" }, recto(fiche, repartition), verso(fiche, repartition));
+/** Le recto puis le verso, prêts à imprimer ; options : celles du recto. */
+export function feuilles(fiche, options = {}) {
+  return el("div", { classe: "feuilles" }, recto(fiche, options), verso(fiche));
 }

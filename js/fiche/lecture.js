@@ -2,7 +2,8 @@
 //
 // Les rubriques de la fiche, empilées, lisibles sans zoom sur un téléphone :
 // la même fiche calculée (calcul.js) que le recto et le verso, dans les
-// styles de l'interface. Le détail de chaque capacité se déplie.
+// styles de l'interface. Le détail de chaque capacité se déplie, et ses
+// niveaux de réussite s'y lisent comme sur la fiche (reussitesLisibles).
 
 import { dateLisible } from "../banque/dates.js";
 import { el } from "../ecrans/dom.js";
@@ -17,6 +18,16 @@ export function coutEcrit(cout) {
   if (cout.souffle !== "0") parties.push(`${cout.souffle} souffle`);
   if (cout.lien !== "0") parties.push(`${cout.lien} lien`);
   return parties.length ? parties.join(" · ") : "0";
+}
+
+/**
+ * Une description telle qu'elle se lit : la syntaxe des trois niveaux de
+ * réussite du lisez_moi du classeur, « //effet 1/effet 2/effet 3// »,
+ * s'écrit « 1 → effet 1 · 2 → effet 2 · 3 → effet 3 » (§ 12). La fiche
+ * imprimée et cette vue la partagent.
+ */
+export function reussitesLisibles(texte) {
+  return String(texte ?? "").replace(/\/\/(.+?)\/\//g, (_, effets) => effets.split("/").map((effet, i) => `${i + 1} → ${effet.trim()}`).join(" · "));
 }
 
 /** Le niveau d'une capacité : « 2 / 3 », « 0 (n'évolue pas) », « à venir ». */
@@ -64,7 +75,7 @@ function ligneCapacite(capacite) {
     ? [el("p", { classe: "secondaire-texte" }, `Absente de la feuille Capacites. Donnée par : ${capacite.origines.join(", ")}.`)]
     : [
         el("p", { classe: "secondaire-texte petit" }, `Donnée par : ${capacite.origines.join(", ")}${capacite.elements.length ? ` · éléments : ${capacite.elements.join(", ")}` : ""}`),
-        ...capacite.descriptions.map((d) => el("p", {}, capacite.descriptions.length > 1 ? `${d.source} : ${d.texte}` : d.texte)),
+        ...capacite.descriptions.map((d) => el("p", {}, capacite.descriptions.length > 1 ? `${d.source} : ${reussitesLisibles(d.texte)}` : reussitesLisibles(d.texte))),
       ];
   return el("li", {}, el("details", {}, resume, ...details));
 }

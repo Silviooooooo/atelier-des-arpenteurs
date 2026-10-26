@@ -8,8 +8,8 @@
 
 import { cle } from "../banque/noms.js";
 import { TYPES, banqueSansTypes, typeDe } from "../banque/types.js";
-import { calculerFiche, capacitesDuBloc, estBouclier, indexerCreation } from "./calcul.js";
-import { CARACTERISTIQUES, CARACTERISTIQUE_MAX, CARACTERISTIQUE_MIN, COUT_NIVEAU, ELEMENTS, POINTS_CREATION, SOMME_CARACTERISTIQUES } from "./regles.js";
+import { calculerFiche, capacitesDuBloc, estBouclier, estStyleDeCombat, indexerCreation } from "./calcul.js";
+import { CARACTERISTIQUES, CARACTERISTIQUE_MAX, CARACTERISTIQUE_MIN, COUT_NIVEAU, ELEMENTS, ORIGINE_STYLE, POINTS_CREATION, SOMME_CARACTERISTIQUES } from "./regles.js";
 
 export const ETAPES = [
   { numero: 1, cle: "identite", titre: "Identité" },
@@ -34,27 +34,28 @@ export function banqueUtilisable(banque) {
 
 /**
  * Une capacité porte l'élément si l'une de ses variantes l'a parmi ses
- * éléments propres (convention du lot 2 pour styles et maîtrises, § 12).
+ * éléments propres (convention du lot 2 pour les maîtrises, § 12).
  */
 export function porteElement(capacite, nomElement) {
   return Boolean(capacite?.variantes.some((v) => v.elements.some((e) => e.nom && cle(e.nom) === cle(nomElement))));
 }
 
 /**
- * L'intitulé d'un groupe de choix : « Style de combat » ou « Maîtrise »
- * quand toutes ses options portent cet élément, sinon « Au choix » ou
- * « Facultatif », selon sa forme.
+ * L'intitulé d'un groupe de choix : « Style de combat » quand toutes ses
+ * options sont des styles (leur colonne « origine », § 15.2), « Maîtrise »
+ * quand toutes portent cet élément, sinon « Au choix » ou « Facultatif »,
+ * selon sa forme.
  */
 export function legendeDuGroupe(index, groupe) {
-  const toutes = (nomElement) => groupe.options.length > 0 && groupe.options.every((option) => porteElement(index.capacite(option), nomElement));
-  if (toutes(ELEMENTS.style)) return ELEMENTS.style;
-  if (toutes(ELEMENTS.maitrise)) return ELEMENTS.maitrise;
+  const toutes = (est) => groupe.options.length > 0 && groupe.options.every((option) => est(index.capacite(option)));
+  if (toutes(estStyleDeCombat)) return ORIGINE_STYLE;
+  if (toutes((capacite) => porteElement(capacite, ELEMENTS.maitrise))) return ELEMENTS.maitrise;
   return groupe.forme === "choix" ? "Au choix" : "Facultatif";
 }
 
 // Un mot par groupe, dans le résumé d'une vignette (complément du lot 4,
 // groupe 2, § 7).
-const MOT_DU_GROUPE = { [ELEMENTS.style]: "un style", [ELEMENTS.maitrise]: "une maîtrise", "Au choix": "un choix", Facultatif: "facultatif" };
+const MOT_DU_GROUPE = { [ORIGINE_STYLE]: "un style", [ELEMENTS.maitrise]: "une maîtrise", "Au choix": "un choix", Facultatif: "facultatif" };
 
 /**
  * Le résumé d'un bloc, sur sa vignette : les noms de ses capacités séparés

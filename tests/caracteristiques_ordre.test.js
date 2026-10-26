@@ -129,7 +129,7 @@ test("un personnage d'avant le lot, gardé sur l'appareil : l'étape 2 du créat
     document.body.replaceChildren(ecran);
     await laisserFiler(20);
     assert.deepEqual(paires([...ecran.querySelector(".lecture-caracteristiques").querySelectorAll("li")], "span", "strong"), AFFICHE);
-    assert.deepEqual(paires([...ecran.querySelector(".impression .recto").querySelectorAll(".caracteristique")], ".nom-caracteristique", ".boite-valeur"), AFFICHE);
+    assert.deepEqual(paires([...ecran.querySelector(".impression .recto").querySelectorAll(".caracteristique-fiche")], ".nom-caracteristique", ".boite-valeur"), AFFICHE);
 
     // Rien n'a été réécrit : le personnage gardé a les mêmes valeurs.
     assert.deepEqual((await etagere.lire(donnees.id)).caracteristiques, D_AVANT);

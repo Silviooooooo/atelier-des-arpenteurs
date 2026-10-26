@@ -38,9 +38,9 @@ import { ecrireTypes } from "../adversaire/carte.js";
 import { defautDe } from "../adversaire/lecture.js";
 import { horsMaitrise, positionDans, rangsDeMaitrise } from "../adversaire/resolution.js";
 import { cle } from "../banque/noms.js";
-import { calculerFiche, contexte, coutA, decrire, degatsDecrits, donneAuCombat, elementsDe, indexerCreation, typesDuBloc, varianteA } from "../personnage/calcul.js";
+import { calculerFiche, contexte, coutA, decrire, degatsDecrits, donneAuCombat, elementsDe, estStyleDeCombat, indexerCreation, typesDuBloc, varianteA } from "../personnage/calcul.js";
 import { accepter } from "../personnage/format.js";
-import { ELEMENTS, NIVEAU_MAX, PARAMETRES, TYPES_OBJET, ZONES } from "../personnage/regles.js";
+import { NIVEAU_MAX, ORIGINE_STYLE, PARAMETRES, TYPES_OBJET, ZONES } from "../personnage/regles.js";
 import { validerPhoto } from "./forme.js";
 import { ACTIONS_PJ, BORNES_PHOTO, ELEMENTS_COMBAT, FACE_CONTRE, GRILLE_PJ, PARAMETRE_LOC, ROLES_PASSIFS, SIGNES } from "./regles.js";
 
@@ -170,8 +170,6 @@ const GENRE_DU_ROLE = { espece: "espece", archetype: "archetype", constellation:
 const AUCUNE_CAPACITE = { nom: "", variantes: [] };
 const CLE_LOC = cle(PARAMETRE_LOC);
 
-const estDeStyle = (capacite) => Boolean(capacite?.variantes.some((variante) => variante.elements.some((element) => element.nom && cle(element.nom) === cle(ELEMENTS.style))));
-
 /**
  * L'origine que vaut une source au combat, ou null si elle ne donne rien.
  * Ce qui donne se lit par donneAuCombat (js/personnage/calcul.js), que le
@@ -183,8 +181,8 @@ function origineDe(index, fiche, source, capacite) {
   if (!donneAuCombat(index, fiche, source)) return null;
   if (source.role !== "equipement") {
     const bloc = index.bloc(source.nom);
-    const genre = source.role === "archetype" && estDeStyle(capacite) ? "style" : GENRE_DU_ROLE[source.role];
-    return { genre, titre: genre === "style" ? ELEMENTS.style : bloc.nom, bloc, qualite: null, rang: null, choix: fiche.choix[source.role] ?? [] };
+    const genre = source.role === "archetype" && estStyleDeCombat(capacite) ? "style" : GENRE_DU_ROLE[source.role];
+    return { genre, titre: genre === "style" ? ORIGINE_STYLE : bloc.nom, bloc, qualite: null, rang: null, choix: fiche.choix[source.role] ?? [] };
   }
   const objet = fiche.equipement[source.rang];
   const commun = { bloc: objet.bloc, qualite: objet.qualite, rang: objet.rang, choix: fiche.choix.equipement[objet.rang] ?? [] };

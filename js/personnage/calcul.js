@@ -24,6 +24,10 @@
 // Au lot 5 (§ 15.3) : donneAuCombat dit si une source donne ses capacités
 // au combat, pour la photographie comme pour la maîtrise que le créateur
 // montre à l'étape 7. La fiche, elle, ne change pas.
+//
+// À la nouvelle fiche (spécification 1.7) : le style de combat se lit dans
+// la colonne « origine » des capacités (estStyleDeCombat), et chaque lien
+// dit le domaine de son primordial, la colonne Infos de son bloc.
 
 import { accorder } from "../banque/accord.js";
 import { cle, repertoire } from "../banque/noms.js";
@@ -35,9 +39,9 @@ import {
   CARACTERISTIQUE_MIN,
   CORPS,
   COUT_NIVEAU,
-  ELEMENTS,
   NIVEAU_MAX,
   NIVEAU_PERSONNAGE,
+  ORIGINE_STYLE,
   PARAMETRES,
   PARAMETRES_QUALIFIES,
   POINTS_CREATION,
@@ -430,8 +434,13 @@ function sources(index, personnage, avertissements) {
   return liste;
 }
 
-function aElementPropre(capacite, nomElement) {
-  return capacite.variantes.some((v) => v.elements.some((e) => e.nom && cle(e.nom) === cle(nomElement)));
+/**
+ * Vrai si la capacité de la banque est un style de combat : la colonne
+ * « origine » de l'une de ses variantes dit ORIGINE_STYLE (§ 15.2). Le
+ * créateur et la photographie du combat lisent la même règle.
+ */
+export function estStyleDeCombat(capacite) {
+  return Boolean(capacite?.variantes?.some((v) => cle(v.notes) === cle(ORIGINE_STYLE)));
 }
 
 // ─── La fiche ───────────────────────────────────────────────────────────────
@@ -501,7 +510,7 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
     const role = premiere.role;
     let groupe = null;
     if (entree.capacite) {
-      if (role === "archetype" && aElementPropre(entree.capacite, ELEMENTS.style)) groupe = "style";
+      if (role === "archetype" && estStyleDeCombat(entree.capacite)) groupe = "style";
       else if (role === "espece" || role === "archetype" || role === "constellation" || role === "primordial") groupe = role;
     } else if (role === "espece" || role === "archetype" || role === "constellation" || role === "primordial") groupe = role;
     const cout = entree.capacite ? coutA(entree.capacite, entree.niveau) : null;
@@ -575,12 +584,15 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
   const armure = armureParZone(portees, personnage, avertir);
   const bouclier = bouclierDe(equipement, personnage, avertir);
 
-  // Les liens primordiaux (livret, « Ressources » et « Lien »).
+  // Les liens primordiaux (livret, « Ressources » et « Lien »). Le domaine
+  // du primordial est la colonne Infos de son bloc (décision de l'auteur,
+  // 26/10/2026), sans ses espaces de bord.
   const primordial = blocs.find((s) => s.role === "primordial");
   const liens = primordial
     ? [
         {
           nom: primordial.nom,
+          domaine: String(primordial.bloc?.notes ?? "").trim(),
           pouvoirs: capacites.filter((c) => c.origines.includes(primordial.nom) && c.role === "primordial"),
           points: capacites
             .filter((c) => !c.aVenir && c.origines.includes(primordial.nom))
@@ -604,13 +616,17 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
     ? { nom: personnage.constellation.nom, saisie: personnage.constellation.obtention === "saisie", tirages: personnage.constellation.tirages ?? 0 }
     : null;
   const groupe = (nom) => capacites.filter((c) => c.groupe === nom);
+  // Un personnage n'a qu'un style de combat ; s'il en reçoit plusieurs, la
+  // fiche écrit le premier, et le dit.
+  const styles = groupe("style").map((c) => c.nom);
+  if (styles.length > 1) avertir("banque", `Plusieurs styles de combat (${styles.map((nom) => `« ${nom} »`).join(", ")}) : la fiche écrit le premier.`);
 
   return {
     identite: { nom: personnage.identite?.nom ?? "", age: personnage.identite?.age ?? "", description: personnage.identite?.description ?? "", histoire: personnage.identite?.histoire ?? "" },
     niveau: NIVEAU_PERSONNAGE,
     espece: personnage.espece?.nom ?? "",
     archetype: personnage.archetype?.nom ?? "",
-    style: groupe("style").map((c) => c.nom).join(", "),
+    style: styles[0] ?? "",
     caracteristiques: caracs,
     somme,
     caracteristiquesCompletes: completes && somme === SOMME_CARACTERISTIQUES,

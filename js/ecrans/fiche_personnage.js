@@ -11,14 +11,19 @@
 // objets, 2 à la création, se change ici, objet par objet, et le personnage
 // modifié repart en ligne.
 //
-// Le recto ne déborde jamais : repartition.js répartit les lignes selon les
-// places mesurées du modèle ; si le navigateur mesure malgré tout un
-// débordement (une police qui manque), une ligne de plus passe au verso.
+// Depuis la spécification 1.7 : rien ne passe d'une page à l'autre. Chaque
+// mesure refait les feuilles et lit ce qui déborde : une zone du recto qui
+// déborde fait resserrer ses définitions ; au verso, les vignettes
+// « Évènement » de trop se retirent. Ce qui déborde encore se dit dans la
+// barre de l'écran, jamais sur le papier. Le bloc « Capacités » écrit la
+// capacité de déplacement du bloc de base, que la table des rôles du combat
+// reconnaît (js/combat/roles.js) : l'écran l'attend une fois.
 
 import { dateLisible } from "../banque/dates.js";
+import { cle } from "../banque/noms.js";
+import { tableDesRoles } from "../combat/roles.js";
 import { feuilles } from "../fiche/feuilles.js";
 import { lecture } from "../fiche/lecture.js";
-import { PLACES } from "../fiche/repartition.js";
 import { calculerFiche } from "../personnage/calcul.js";
 import { ErreurPersonnage, verifier } from "../personnage/format.js";
 import { ETAPES, banqueUtilisable } from "../personnage/parcours.js";
@@ -53,30 +58,88 @@ function memoriserVue(vue) {
   }
 }
 
+// Ce que la mesure lit, par son nom à l'écran : au recto, les zones de
+// hauteur fixe et les deux rubriques qui prennent la place qui reste ; au
+// verso, les vignettes qui portent un texte.
+export const ZONES_MESUREES = [
+  [".zone-arme", "la zone de l'arme"],
+  [".zone-armure", "la zone de l'armure"],
+  [".liste-capacites", "les capacités"],
+  [".rubrique-equipement", "l'équipement"],
+  [".rubrique-liens", "les liens primordiaux"],
+];
+export const VIGNETTES_MESUREES = [
+  [".vignette-verso-contexte", "Contexte"],
+  [".vignette-verso-sac", "Sac à dos"],
+  [".vignette-verso-constellation", "Constellation de naissance"],
+];
+
+// Un nœud déborde quand son contenu dépasse sa boîte de plus d'un pixel ; un
+// nœud sans hauteur (la fiche pas encore mise en page) ne dit rien.
+const deborde = (noeud) => Boolean(noeud && noeud.clientHeight > 0 && noeud.scrollHeight > noeud.clientHeight + 1);
+
 /**
- * Réduit les places du recto tant qu'une rubrique déborde, mesure du
- * navigateur faite. Ce sont les rubriques elles-mêmes qui ont la hauteur du
- * modèle et cachent ce qui dépasse : c'est elles qu'on mesure. Une rubrique
- * sans hauteur (fiche pas encore mise en page) ne dit rien.
+ * Mesure la fiche, une fois mise en page : refait les feuilles, sans rien
+ * garder d'une mesure à l'autre, puis lit ce qui déborde. Une zone du recto
+ * qui déborde fait refaire le recto aux définitions resserrées ; au verso,
+ * les vignettes « Évènement » se retirent tant que leur grille déborde, une
+ * au moins restant. Rend { serrees, recto, verso, points } : recto et verso
+ * nomment ce qui déborde encore ; points, les vignettes « Évènement » gardées.
  */
-export function ajuster(conteneur, fiche, places) {
-  for (let essai = 0; essai < 8; essai += 1) {
-    const rectoNoeud = conteneur.querySelector(".recto");
-    if (!rectoNoeud) return places;
-    const deborde = (selecteur) => {
-      const noeud = rectoNoeud.querySelector(selecteur);
-      return Boolean(noeud && noeud.clientHeight > 0 && noeud.scrollHeight > noeud.clientHeight + 1);
-    };
-    const capacites = deborde(".rubrique-capacites");
-    const equipement = deborde(".rubrique-equipement");
-    const liens = deborde(".rubrique-liens");
-    if (!capacites && !equipement && !liens) return places;
-    if (capacites) places.capacites -= 1;
-    if (equipement) places.equipement -= 1;
-    if (liens) places.pouvoirs -= 1;
-    conteneur.replaceChildren(feuilles(fiche, places));
+export function mesurerFiche(conteneur, fiche, options = {}) {
+  const lire = (cote, liste) => liste.filter(([selecteur]) => deborde(conteneur.querySelector(`${cote} ${selecteur}`))).map(([, nom]) => nom);
+  conteneur.replaceChildren(feuilles(fiche, { ...options, serrees: false }));
+  let serrees = false;
+  let recto = lire(".recto", ZONES_MESUREES);
+  if (recto.length) {
+    serrees = true;
+    conteneur.replaceChildren(feuilles(fiche, { ...options, serrees }));
+    recto = lire(".recto", ZONES_MESUREES);
   }
-  return places;
+  const grille = conteneur.querySelector(".verso .vignettes-bas");
+  const points = [...conteneur.querySelectorAll(".verso .vignette-verso-point")];
+  while (deborde(grille) && points.length > 1) points.pop().remove();
+  return { serrees, recto, verso: lire(".verso", VIGNETTES_MESUREES), points: points.length };
+}
+
+const enumeration = (noms) => (noms.length > 1 ? `${noms.slice(0, -1).join(", ")} et ${noms.at(-1)}` : noms[0]);
+
+/**
+ * Ce que l'écran dit de la fiche, hors impression : ce qui déborde encore
+ * (mesure, ou null avant la première), et la capacité de déplacement que la
+ * fiche n'a pas pu écrire (roles).
+ */
+export function avisDeLaFiche(mesure, roles) {
+  const avis = [];
+  if (roles.erreur) avis.push(`Le déplacement ne s'écrit pas sur la fiche : les rôles des capacités ne se lisent pas (${roles.erreur}).`);
+  else if (!roles.deplacement) avis.push("Le déplacement ne s'écrit pas sur la fiche : aucune capacité du bloc de base n'a le rôle « deplacement ».");
+  if (mesure?.recto.length) {
+    avis.push(`Recto : ${enumeration(mesure.recto)} ${mesure.recto.length > 1 ? "débordent" : "déborde"}, même aux définitions resserrées ; ce qui dépasse ne s'imprime pas.`);
+  }
+  if (mesure?.verso.length) {
+    const noms = mesure.verso.map((nom) => `« ${nom} »`);
+    avis.push(`Verso : ${noms.length > 1 ? "les vignettes" : "la vignette"} ${enumeration(noms)} ${noms.length > 1 ? "débordent" : "déborde"} ; ce qui dépasse ne s'imprime pas.`);
+  }
+  return avis;
+}
+
+/**
+ * La capacité de déplacement d'une banque, pour la fiche : la table des
+ * rôles du combat, attendue une fois. Rend { parCle } ou { erreur }.
+ */
+export async function lireLesRoles(banque, mode) {
+  try {
+    const { parCle } = await tableDesRoles(banque, mode);
+    return { parCle };
+  } catch (erreur) {
+    return { erreur: erreur?.message ?? String(erreur) };
+  }
+}
+
+/** Le nom de la capacité de déplacement que la fiche écrit, ou null. */
+export function deplacementDe(fiche, roles) {
+  if (!roles.parCle) return null;
+  return fiche.capacites.find((c) => c.role === "base" && !c.aVenir && roles.parCle.get(cle(c.nom)) === "deplacement")?.nom ?? null;
 }
 
 // Les écouteurs de la fiche affichée : une seule fiche à la fois, et ceux
@@ -95,7 +158,7 @@ async function imprimer(mesurer) {
   // Les polices de la fiche avant l'impression : sinon le PDF prend celles
   // du système. Puis une dernière mesure, avec elles.
   try {
-    await Promise.all(["11px Marcellus", "11px 'Alegreya Sans'", "italic 11px 'Alegreya Sans'", "500 11px 'Alegreya Sans'"].map((police) => document.fonts.load(police)));
+    await Promise.all(["11px Marcellus", "11px 'Alegreya Sans'", "italic 11px 'Alegreya Sans'", "500 11px 'Alegreya Sans'", "700 11px 'Alegreya Sans'"].map((police) => document.fonts.load(police)));
     await document.fonts.ready;
   } catch {
     // polices indisponibles : l'impression se fait avec celles de secours
@@ -107,7 +170,7 @@ async function imprimer(mesurer) {
 // La qualité des objets, que le MJ fixe (2 à la création) : un champ par
 // objet dont la qualité n'est pas fixée par le classeur. Enregistrer garde
 // le personnage sur l'appareil et, en ligne, le redépose.
-function qualites(contexte, personnage, fiche, zone) {
+function qualites(contexte, personnage, fiche, zone, roles) {
   const modifiables = fiche.equipement.filter((o) => o.qualite.applicable && !o.qualite.fixee);
   if (!modifiables.length) return null;
   const message = el("div", { classe: "qualites-resultat" });
@@ -149,7 +212,7 @@ function qualites(contexte, personnage, fiche, zone) {
         }
         const depot = contexte.etat.depot;
         const envoi = depot && copie.etat === "enregistre" && contexte.etat.mode === "reel" ? await depot.envoyer(copie, { action: "remplacer" }) : null;
-        afficherPersonnage(contexte, copie, zone);
+        afficherPersonnage(contexte, copie, zone, { roles });
         const suite = envoi ? (envoi.envoye ? " Il part en ligne : visible par tous d'ici quelques minutes." : ` Non envoyé : ${envoi.erreur}`) : "";
         const panneau = zone.querySelector(".qualites");
         panneau?.setAttribute("open", "");
@@ -171,14 +234,25 @@ function qualites(contexte, personnage, fiche, zone) {
   );
 }
 
-function afficherPersonnage(contexte, personnage, zone, { enLigne = false } = {}) {
+function afficherPersonnage(contexte, personnage, zone, { enLigne = false, roles }) {
   const { banque, mode } = contexte.etat;
   const fiche = calculerFiche(banque, personnage);
-  const places = { ...PLACES };
+  const deplacement = deplacementDe(fiche, roles);
   titrer(personnage.identite.nom || "Personnage");
   let vue = vueMemorisee();
   const racine = el("div", { classe: `ecran-personnage vue-${vue}` });
-  const impression = el("div", { classe: "impression" }, feuilles(fiche));
+  const impression = el("div", { classe: "impression" }, feuilles(fiche, { deplacement }));
+  // Ce que la mesure et les rôles disent, hors impression ; le texte ne se
+  // récrit que s'il change.
+  const avis = el("div", { classe: "avis-fiche", role: "status" });
+  let avisEcrits = null;
+  const dire = (mesure) => {
+    const lignes = avisDeLaFiche(mesure, { ...roles, deplacement });
+    if (avisEcrits === lignes.join("\n")) return;
+    avisEcrits = lignes.join("\n");
+    avis.replaceChildren(...lignes.map((ligne) => el("p", { classe: "message" }, ligne)));
+  };
+  dire(null);
   const cadreImpression = el("div", { classe: "cadre-feuilles" }, impression);
   const telephone = el("div", { classe: "ne-pas-imprimer" });
   const boutonsVue = {
@@ -253,21 +327,23 @@ function afficherPersonnage(contexte, personnage, zone, { enLigne = false } = {}
         el("a", { href: "#/personnages" }, "Tous les personnages"),
       ),
       telephone,
+      avis,
       el("div", { classe: "qualites-message" }),
-      qualites(contexte, personnage, fiche, zone),
+      qualites(contexte, personnage, fiche, zone, roles),
     ),
     el("div", { classe: "vue-lecture-contenu ne-pas-imprimer" }, lecture(fiche)),
     cadreImpression,
   );
   zone.replaceChildren(racine);
-  // La mesure demande la page affichée, et ses polices chargées ; en vue
-  // lecture, la fiche reste mise en page, invisible, et se mesure aussi.
+  // La mesure demande la page affichée ; elle tourne au premier dessin,
+  // puis ses polices chargées. En vue lecture, la fiche reste mise en page,
+  // invisible, et se mesure aussi.
   function mesurer() {
     if (!impression.isConnected) {
       retirerEcouteurs();
       return;
     }
-    ajuster(impression, fiche, places);
+    dire(mesurerFiche(impression, fiche, { deplacement }));
     if (vue === "fiche") poserEchelle(impression, LARGEUR_FEUILLE);
   }
   retirerEcouteurs();
@@ -304,7 +380,10 @@ export function afficher(contexte, route) {
         zone.replaceChildren(titre("Personnage introuvable"), el("p", { classe: "message" }, "Ce personnage n'est ni sur cet appareil, ni en ligne."), el("p", { classe: "lien-retour" }, el("a", { href: "#/personnages" }, "Tous les personnages")));
         return;
       }
-      afficherPersonnage(contexte, personnage, zone, { enLigne: Boolean(enLigne) });
+      // La table des rôles, attendue une fois : elle nomme la capacité de
+      // déplacement que la fiche écrit.
+      const roles = await lireLesRoles(contexte.etat.banque, contexte.etat.mode);
+      afficherPersonnage(contexte, personnage, zone, { enLigne: Boolean(enLigne), roles });
     })
     .catch((erreur) => {
       zone.replaceChildren(el("p", { classe: "message", role: "alert" }, `Ce personnage n'a pas pu s'ouvrir : ${erreur?.message ?? String(erreur)}`));
