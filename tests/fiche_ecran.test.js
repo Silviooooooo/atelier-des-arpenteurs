@@ -202,7 +202,8 @@ test("écran de la fiche — le déplacement par la table des rôles, attendue �
     // Une fiche quittée avant la fin de l'attente ne s'affiche pas.
     const quittee = fichePersonnage.afficher(contexteDe(etagere), { ecran: "personnage", id: "demo-aubepine-0000000001" });
     await laisserFiler(20);
-    assert.equal(quittee.querySelector(".ecran-personnage"), null);
+    // Par identité, jamais assert.equal sur un nœud : à l'échec, Node déroulerait la page entière (lot 4).
+    assert.ok(quittee.querySelector(".ecran-personnage") === null, "la fiche quittée ne s'affiche pas");
     assert.match(texteDe(quittee), /Lecture du personnage/);
     // Le nom changé dans la banque : la fiche s'écrit sans, et la barre le dit.
     const renommee = structuredClone(BANQUE);
@@ -219,10 +220,13 @@ test("écran de la fiche — le déplacement par la table des rôles, attendue �
     assert.match(texteDe(ecran.querySelector(".barre-personnage .avis-fiche")), /^Le déplacement ne s'écrit pas sur la fiche : les rôles des capacités ne se lisent pas \(Mode inconnu : inconnu\)\.$/);
     // Le premier dessin et les polices chargées mesurent la fiche : elle se refait, rien ne déborde dans le document simulé.
     let dessins = 0;
+    const demandees = [];
     globalThis.requestAnimationFrame = (f) => ((dessins += 1), f());
-    document.fonts = { ready: Promise.resolve(), load: async () => [] };
+    document.fonts = { ready: Promise.resolve(), load: async (police) => (demandees.push(police), []) };
     ecran = await ouvrir(contexteDe(etagere));
     assert.equal(dessins, 1);
+    // Les cinq polices du papier sont demandées avant la mesure : document.fonts.ready seul peut se tenir trop tôt.
+    assert.deepEqual(demandees.sort(), ["11px 'Alegreya Sans'", "11px Marcellus", "500 11px 'Alegreya Sans'", "700 11px 'Alegreya Sans'", "italic 11px 'Alegreya Sans'"]);
     assert.ok(ecran.querySelector(".impression .recto"));
     // La fiche refaite par la mesure garde le déplacement.
     assert.match(texteDe(ecran.querySelector(".impression .recto .liste-capacites")), /Pas chassé \(0\) — Se déplace de 1 case\.$/);
