@@ -2458,10 +2458,10 @@ dansUnePage("enregistrement — une version plus récente de l'Atelier : rien ne
   await laisserFiler(30);
   assert.deepEqual(await lieu.gardee(), posee, "le combat plus récent n'est pas écrasé");
 
-  // Un contenu d'une autre version des règles (la 1, la version courante étant la 2) : il se dit, ne se rejoue pas, et se remplace.
+  // Un contenu d'une autre version des règles (la 2, d'avant le lot 5, la version courante étant la 3) : il se dit, ne se rejoue pas, et se remplace.
   const AUTRE_VERSION = "Ce combat a été commencé avec une autre version du simulateur : il ne se reprend pas.";
   const autre = lieuSimule();
-  await poserEnBase(autre, texteDuCombat(2, 3, (contenu) => ({ ...contenu, regles: 1, effets: [] })));
+  await poserEnBase(autre, texteDuCombat(2, 3, (contenu) => ({ ...contenu, regles: 2, effets: [] })));
   const { ecran: second } = await ouvrirLEcran(await pageNeuve(), { magasin: await autre.onglet() });
   assert.equal(garde(second), AUTRE_VERSION);
   assert.deepEqual(tous(avis(second), "p").map(texteDe), [AUTRE_VERSION]);

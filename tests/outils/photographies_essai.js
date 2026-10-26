@@ -21,7 +21,7 @@
 //
 // pjEssai() — « Aubépine » (un seul mot : son nom court est son nom).
 //   2 actions, souffle 10, corps 10 ; les neuf caractéristiques à 4 (toute
-//   paire fait donc un d8) ; six zones, armure 10 et résistance 5 chacune ;
+//   paire fait donc un d8) ; six zones, armure 10 et endurance 5 chacune ;
 //   défense : d8, agile (Agilité et Créativité), types non mêlés, sans
 //   égalité ; pas de bouclier ; une jauge de lien, Grand Four, 2 points ;
 //   aucun passif câblé.
@@ -41,7 +41,7 @@
 // adversaireEssai() — « Marmiton ».
 //   1 action, souffle 5, corps 10, attaque 4, défense 5 ; Torse 2-11, Jambe
 //   gauche 12-13, Jambe droite 14-15, Bras gauche 16-17, Bras droit 18-19,
-//   Tête 20, armure 10 et résistance 5 chacune ; aucun passif câblé.
+//   Tête 20, armure 10 et endurance 5 chacune ; aucun passif câblé.
 //   Arme : 0, Spatule souple, agile, 5/10/15, portée 0.
 //   Capacités, dans cet ordre :
 //     Frappe             arme        attaque gratuite, dans sa maîtrise
@@ -260,7 +260,7 @@ export function pjEssai(retoucher = sansRetouche) {
           evolue: true,
           groupe: GESTES,
           facons: [
-            faconEssai({ puissance: 1, description: "Se déplace de 1 cases." }),
+            faconEssai({ puissance: 1, description: "Se déplace de 1 case." }),
             faconEssai({ puissance: 2, cout: { souffle: 1, lien: 0 }, description: "Se déplace de 2 cases." }),
           ],
         }),
@@ -277,7 +277,7 @@ export function pjEssai(retoucher = sansRetouche) {
           nom: "Pas de côté",
           role: "esquive",
           groupe: GESTES,
-          facons: [faconEssai({ cout: { souffle: "X", lien: 0 }, description: "Annulez X dégâts reçus.", elements: ["Intervention"], intervention: true })],
+          facons: [faconEssai({ cout: { souffle: "X", lien: 0 }, description: "Annulez X dégât(s) reçu(s).", elements: ["Intervention"], intervention: true })],
         }),
       ],
     },
@@ -320,7 +320,7 @@ const capacitesDeSpatule = ({ degats, moulinetHorsMaitrise, rangDuPas }) => [
     evolue: true,
     groupe: CAPACITES,
     facons: Array.from({ length: rangDuPas }, (_rien, rang) =>
-      faconEssai({ puissance: rang + 1, cout: { souffle: rang, lien: 0 }, description: `Se déplace de ${rang + 1} cases.` }),
+      faconEssai({ puissance: rang + 1, cout: { souffle: rang, lien: 0 }, description: `Se déplace de ${rang + 1} ${rang === 0 ? "case" : "cases"}.` }),
     ),
   }),
 ];
@@ -419,7 +419,7 @@ export function aubepineEssai(retoucher = sansRetouche) {
             }),
           ],
         }),
-        capaciteEssai({ nom: "Réduction", role: "degrossir", niveau: 1, evolue: true, groupe: SAUCIER, facons: [passive({ puissance: 1, description: "Retire 1 points d'armure par réussite." })] }),
+        capaciteEssai({ nom: "Réduction", role: "degrossir", niveau: 1, evolue: true, groupe: SAUCIER, facons: [passive({ puissance: 1, description: "Retire 1 point d'armure par réussite." })] }),
         capaciteEssai({
           nom: "Flambage",
           niveau: 2,
@@ -436,7 +436,7 @@ export function aubepineEssai(retoucher = sansRetouche) {
           niveau: 1,
           evolue: true,
           groupe: SAUCIER,
-          facons: [passive({ puissance: 1, description: "Les 1 premières capacités d'un objet Agile, sans désavantage.", elements: ["Maîtrise", "Passif"] })],
+          facons: [passive({ puissance: 1, description: "Sans désavantage pour 1 capacité d'un objet Agile, en commençant par la première.", elements: ["Maîtrise", "Passif"] })],
         }),
         capaciteEssai({ nom: "Vif", role: "bonus_agilite", niveau: 1, evolue: true, groupe: MARMITON, facons: [passive({ puissance: 1, description: "Ajoutez 1 aux jets d'agilité." })] }),
         capaciteEssai({ nom: "Nez fin", groupe: MARMITON, facons: [passive({ cout: { souffle: 1, lien: 0 }, description: "Retournez un dé devant un plat douteux." })] }),
@@ -446,7 +446,7 @@ export function aubepineEssai(retoucher = sansRetouche) {
           niveau: 1,
           evolue: true,
           groupe: { genre: "style", titre: "Style de combat" },
-          facons: [passive({ puissance: 1, description: "Seul sur sa case : 1 avantages.", elements: ["Style de combat", "Passif"] })],
+          facons: [passive({ puissance: 1, description: "Seul sur sa case : 1 avantage.", elements: ["Style de combat", "Passif"] })],
         }),
         capaciteEssai({
           nom: "Fournaise",
@@ -463,7 +463,7 @@ export function aubepineEssai(retoucher = sansRetouche) {
           facons: [faconEssai({ description: "Reportez les dommages sur les 8 points du couvercle." })],
         }),
         capaciteEssai({ nom: "Boire le bouillon", groupe: { genre: "objet", titre: "Bouillon revigorant" }, facons: [faconEssai({ description: "Regagnez 5 points de résistance." })] }),
-        capaciteEssai({ nom: "Pas chassé", role: "deplacement", niveau: 1, evolue: true, groupe: GESTES, facons: [faconEssai({ puissance: 1, description: "Se déplace de 1 cases." })] }),
+        capaciteEssai({ nom: "Pas chassé", role: "deplacement", niveau: 1, evolue: true, groupe: GESTES, facons: [faconEssai({ puissance: 1, description: "Se déplace de 1 case." })] }),
         capaciteEssai({ nom: "Goûter", role: "jet_de_caracteristique", groupe: GESTES, facons: [faconEssai({ description: "Fait un jet de caractéristique." })] }),
         capaciteEssai({
           nom: "Taloche",
@@ -477,7 +477,7 @@ export function aubepineEssai(retoucher = sansRetouche) {
           nom: "Pas de côté",
           role: "esquive",
           groupe: GESTES,
-          facons: [faconEssai({ cout: { souffle: "X", lien: 0 }, description: "Annulez X dégâts reçus.", elements: ["Intervention"], intervention: true })],
+          facons: [faconEssai({ cout: { souffle: "X", lien: 0 }, description: "Annulez X dégât(s) reçu(s).", elements: ["Intervention"], intervention: true })],
         }),
         capaciteEssai({
           nom: "Guetter",

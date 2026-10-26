@@ -389,7 +389,7 @@ function segmentsDuBilan(etat, geste) {
   if (fixes.base === "lettre") pousser(pousser(segments, "texte", recoit), "lettre", lettre);
   else if (fixes.base === "arme") pousser(pousser(segments, "texte", "touché, dégâts de l'arme : "), "lettre", lettre);
   else pousser(segments, "texte", "touché");
-  if (saisie !== null && directs) pousser(segments, "texte", `, dégâts directs ${fixes.nature === "corps" ? "au corps" : "à la résistance"} : ${saisie.valeur} (${saisie.raison})`);
+  if (saisie !== null && directs) pousser(segments, "texte", `, dégâts directs ${fixes.nature === "corps" ? "au corps" : "à l'endurance"} : ${saisie.valeur} (${saisie.raison})`);
   else if (saisie !== null) pousser(pousser(pousser(segments, "texte", ", ajusté à "), "ajuste", `${saisie.valeur}`), "texte", ` (${saisie.raison})`);
   if (fixes.surplus !== 0) pousser(segments, "texte", `, +${fixes.surplus} contre l'armure (${fixes.sourceDuSurplus})`);
   return segments;
@@ -524,8 +524,8 @@ export function ecrireIntervention(etat, geste, intervention) {
 }
 
 /**
- * Ce que le coup a changé, et cela seul, dans l'ordre armure, résistance,
- * corps : « Armure 5 → 0, résistance 5 → 0, corps 10 → 0. » Dès que le geste
+ * Ce que le coup a changé, et cela seul, dans l'ordre armure, endurance,
+ * corps : « Armure 5 → 0, endurance 5 → 0, corps 10 → 0. » Dès que le geste
  * a plusieurs d20, chaque coup porte sa zone : « Torse : armure 30 → 19.
  * Jambe gauche : armure 15 → 4. » null si rien n'a changé.
  */
@@ -535,7 +535,7 @@ export function ecrireDegats(etat, geste) {
   for (const coup of geste.resultat?.coups ?? []) {
     const changements = [
       ["armure", coup.armure],
-      ["résistance", coup.resistance],
+      ["endurance", coup.resistance],
       ["corps", coup.corps],
     ]
       .filter(([, [avant, apres]]) => avant !== apres)
@@ -548,7 +548,7 @@ export function ecrireDegats(etat, geste) {
 }
 
 /**
- * Une phrase par zone dont la résistance tombe à 0, dans l'ordre des dés :
+ * Une phrase par zone dont l'endurance tombe à 0, dans l'ordre des dés :
  * « Blessure (jambe gauche) : −1 à ses jets. » pour un PJ, le nombre étant
  * celui de ses blessures après ce coup ; « Blessure (jambe droite), sans effet
  * calculé. » pour un adversaire. null sans blessure, ou si le coup tue.

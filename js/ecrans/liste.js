@@ -1,4 +1,4 @@
-// Les listes : blocs, capacités, éléments, adversaires et leurs types
+// Les listes : blocs, capacités, éléments, adversaires et leurs classes
 // (SPECIFICATION.md, § 9 et § 16.6).
 //
 // Une recherche instantanée sur les noms et les descriptions, sans casse ni
@@ -20,20 +20,21 @@ import * as ficheElement from "./fiche_element.js";
 import * as ficheType from "./fiche_type.js";
 
 const FICHES = { blocs: ficheBloc, capacites: ficheCapacite, elements: ficheElement, adversaires: ficheAdversaire, types: ficheType };
+// Le singulier, le pluriel, et « aucun » ou « aucune ».
 const NOMS = {
-  blocs: ["bloc", "blocs"],
-  capacites: ["capacité", "capacités"],
-  elements: ["élément", "éléments"],
-  adversaires: ["adversaire", "adversaires"],
-  types: ["type d'adversaire", "types d'adversaires"],
+  blocs: ["bloc", "blocs", "aucun"],
+  capacites: ["capacité", "capacités", "aucune"],
+  elements: ["élément", "éléments", "aucun"],
+  adversaires: ["adversaire", "adversaires", "aucun"],
+  types: ["classe d'adversaire", "classes d'adversaires", "aucune"],
 };
-const TOUS = { blocs: "Tous les blocs", capacites: "Toutes les capacités", elements: "Tous les éléments", adversaires: "Tous les adversaires", types: "Tous les types" };
+const TOUS = { blocs: "Tous les blocs", capacites: "Toutes les capacités", elements: "Tous les éléments", adversaires: "Tous les adversaires", types: "Toutes les classes" };
 // Ce que le champ de recherche annonce (js/banque/recherche.js).
 const OU_CHERCHER = {
   blocs: "Nom ou description",
   capacites: "Nom ou description",
   elements: "Nom ou description",
-  adversaires: "Nom, type, équipement ou capacité",
+  adversaires: "Nom, classe, équipement ou capacité",
   types: "Nom",
 };
 
@@ -46,9 +47,9 @@ function detail(contexte, categorie, entree) {
     const puissances = entree.variantes.map((v) => v.puissance).filter(Boolean);
     return puissances.length > 1 ? `puissances ${puissances.join(", ")}` : puissances.length ? `puissance ${puissances[0]}` : "";
   }
-  // Ses types tels qu'il les écrit, multiplicateur compris : « Commis/Rôtisseur[1,4] ».
+  // Ses classes telles qu'il les écrit, multiplicateur compris : « Commis/Rôtisseur[1,4] ».
   // texteDe : une cellule forgée qui n'est pas un texte vaut une cellule vide.
-  if (categorie === "adversaires") return texteDe(entree.types) || "sans type";
+  if (categorie === "adversaires") return texteDe(entree.types) || "sans classe";
   if (categorie === "types") return compte(contexte.etat.index.adversaires().utilisateurs(entree.nom).length, "adversaire", "adversaires");
   return entree.description;
 }
@@ -135,7 +136,7 @@ export function afficher(contexte, route) {
   else {
     titrer(CATEGORIES[categorie].titre);
     const aucune = listeDe(contexte.etat.banque, categorie).length === 0;
-    fiche = el("p", { classe: "secondaire-texte" }, aucune ? `Cette banque n'a aucun ${NOMS[categorie][0]}.` : `Choisissez ${CATEGORIES[categorie].un} dans la liste.`);
+    fiche = el("p", { classe: "secondaire-texte" }, aucune ? `Cette banque n'a ${NOMS[categorie][2]} ${NOMS[categorie][0]}.` : `Choisissez ${CATEGORIES[categorie].un} dans la liste.`);
   }
   const panneau = panneauDe(contexte, categorie, avecFiche ? route.nom : null);
   const entete = avecFiche ? null : el("h1", { tabindex: "-1" }, CATEGORIES[categorie].titre);

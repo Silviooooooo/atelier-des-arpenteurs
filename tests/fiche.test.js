@@ -98,7 +98,9 @@ test("recto — le modèle rempli : en-tête, caractéristiques, attaque, défen
     const noeud = feuilles(f);
     const recto = noeud.querySelector(".recto");
     assert.deepEqual([...recto.querySelectorAll(".valeur-entete")].map(texteDe), ["Aubépine Crèmebrûlée", "Marmiton", "Saucier", "Solo du chef", "1"]);
-    assert.deepEqual([...recto.querySelectorAll(".boite-valeur")].map(texteDe), ["4", "5", "5", "3", "4", "3", "4", "4", "4"]);
+    // Les neuf dans l'ordre du livret du 25/10/2026 (lot 5), chacune avec sa valeur.
+    assert.deepEqual([...recto.querySelectorAll(".nom-caracteristique")].map(texteDe), ["Force", "Agilité", "Précision", "Parole", "Culture néruvienne", "Savoir sauvage", "Sens", "Empathie", "Créativité"]);
+    assert.deepEqual([...recto.querySelectorAll(".boite-valeur")].map(texteDe), ["4", "5", "5", "4", "4", "3", "3", "4", "4"]);
     const attaque = texteDe(recto.querySelector(".rubrique-attaque"));
     assert.match(attaque, /Couteau d'office/);
     assert.match(attaque, /d10/);
@@ -122,9 +124,11 @@ test("recto — le modèle rempli : en-tête, caractéristiques, attaque, défen
     assert.equal(souffle.filter((c) => c.className.includes("grisee")).length, 10);
     assert.match(texteDe(recto.querySelector(".rubrique-souffle")), /10 à la création · \+1 par point d'historique/);
     assert.doesNotMatch(texteDe(recto), /5 par niveau/);
-    // Armure par zone, dans l'ordre du modèle ; cinq cases de résistance.
+    // Armure par zone, dans l'ordre du modèle ; cinq cases d'endurance.
     assert.deepEqual([...recto.querySelectorAll(".trait.arm")].map(texteDe), ["6", "30", "10", "10", "10", "10"]);
     assert.equal(recto.querySelectorAll(".case-resistance").length, 30);
+    // « Endurance » (lot 5) : le mot du livret du 25/10/2026 pour ces points.
+    assert.equal(texteDe(recto.querySelector(".rubrique-armure h2")), "Armure & endurance");
     // Corps : dix cases, les cinq dernières teintées.
     assert.equal([...recto.querySelectorAll(".case-corps")].filter((c) => c.className.includes("teintee")).length, 5);
     assert.equal(recto.querySelectorAll(".ligne-objet").length, 8);

@@ -933,7 +933,7 @@ test("combat.css — la raison d'un bouton inactif ne s'écrit pas à côté de 
 
 // ——— La barre, les fiches, le panneau : la maquette ———
 
-test("combat.css — comme sur la maquette : « Fin de tour » ferme la barre ; l'état suit la ligne sous le nom ; les jauges, la résistance, le texte de la capacité", () => {
+test("combat.css — comme sur la maquette : « Fin de tour » ferme la barre ; l'état suit la ligne sous le nom ; les jauges, l'endurance, le texte de la capacité", () => {
   // La barre : sur un grand écran, tout sur une ligne ; l'enregistrement, puis, au bout, « Nouveau combat » devant
   // « Fin de tour », bouton principal. Le document, lui, garde l'ordre du téléphone.
   assert.equal(valeur(COMBAT, ".combat-autres", "order", MEDIA_56), "1");
@@ -968,7 +968,7 @@ test("combat.css — comme sur la maquette : « Fin de tour » ferme la barre ; 
   assert.equal(valeur(COMBAT, ".combat-point", "flex"), "1 1 0");
   assert.equal(valeur(COMBAT, ".combat-jauge-souffle .combat-point", "background"), "var(--accent)");
   assert.equal(valeur(COMBAT, ".combat-jauge .combat-point.vide", "background"), "transparent");
-  // La résistance : une case intacte est vide, une case perdue est pleine.
+  // L'endurance : une case intacte est vide, une case perdue est pleine.
   assert.equal(valeur(COMBAT, ".combat-zones .combat-point", "background"), "transparent");
   assert.equal(valeur(COMBAT, ".combat-zones .combat-point.vide", "background"), "var(--combat-echec)");
   // La table : l'armure rangée à droite, les noms abrégés sans soulignement.

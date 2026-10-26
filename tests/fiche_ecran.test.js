@@ -129,6 +129,10 @@ test("écran de la fiche — vues lecture et fiche, « Imprimer / PDF », le rec
     assert.ok(ecran.querySelector(".impression .recto"));
     assert.ok(ecran.querySelector(".impression .verso"));
     assert.ok(ecran.querySelector(".barre-personnage").className.includes("ne-pas-imprimer"));
+    // « Endurance » (lot 5) : le mot du livret du 25/10/2026 pour les points de chaque zone.
+    const zones = ecran.querySelector(".lecture-zones");
+    assert.equal(texteDe(zones.parentNode.querySelector("h2")), "Armure et endurance");
+    assert.deepEqual([...zones.querySelectorAll("thead th")].map(texteDe), ["Zone", "d20", "Armure", "Endurance"]);
     const vueFiche = [...ecran.querySelectorAll("button")].find((b) => texteDe(b) === "Vue fiche");
     vueFiche.click();
     assert.ok(racine.className.includes("vue-fiche"));

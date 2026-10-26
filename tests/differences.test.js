@@ -77,7 +77,7 @@ test("différences — ajout, modification champ par champ, retrait", async () =
   assert.deepEqual(parNom.Jet, [{ champ: "puissance", colonne: "puissance", variante: null, avant: "N", apres: "1" }]);
   // Plusieurs variantes : elles se comparent puissance par puissance.
   assert.deepEqual(parNom["Brûlure"], [
-    { champ: "description", colonne: "description", variante: "2", avant: "[N] brûlures.", apres: "[N] brûlures vives." },
+    { champ: "description", colonne: "description", variante: "2", avant: "[N] brûlure(s).", apres: "[N] brûlures vives." },
     { champ: "variante", colonne: "puissance", variante: "3", avant: "", apres: "variante ajoutée" },
   ]);
   assert.deepEqual(d.elements, {
@@ -160,7 +160,7 @@ test("différences — le résumé d'une ligne, message de commit (§ 8.2)", asy
   assert.deepEqual(premiere.blocs.ajoutes, ["Louche", "Tablier"]);
   assert.equal(
     resumer(premiere, { date: DATE, erreurs: 1 }),
-    "Publication du classeur des règles — 28/09/2026 14:32 — première publication : 2 blocs, 7 capacités, 4 éléments, 1 type d'adversaire, 1 adversaire — publiée malgré 1 erreur",
+    "Publication du classeur des règles — 28/09/2026 14:32 — première publication : 2 blocs, 7 capacités, 4 éléments, 1 classe d'adversaire, 1 adversaire — publiée malgré 1 erreur",
   );
   assert.match(resumer(premiere, { date: DATE, erreurs: 12 }), /— publiée malgré 12 erreurs$/);
   // Un classeur sans feuille Adversaires garde la phrase d'avant le lot 3.
@@ -197,7 +197,7 @@ test("différences — adversaires et types : ajout, modification cellule par ce
   assert.deepEqual(d.totaux, { blocs: 2, capacites: 7, elements: 4, types_adversaires: 2, adversaires: 2 });
   assert.equal(
     resumer(d, { date: DATE }),
-    "Publication du classeur des règles — 28/09/2026 14:32 — 1 type d'adversaire ajouté, 1 modifié, 0 retiré ; 1 adversaire ajouté, 1 modifié, 0 retiré",
+    "Publication du classeur des règles — 28/09/2026 14:32 — 1 classe d'adversaire ajoutée, 1 modifiée, 0 retirée ; 1 adversaire ajouté, 1 modifié, 0 retiré",
   );
   // Dans l'autre sens : des retraits.
   const retour = comparer(modifiee, propre);
@@ -274,7 +274,7 @@ test("différences — une banque publiée avant la feuille Adversaires : tout y
   const d = comparer(ancienne, propre);
   assert.deepEqual([d.types_adversaires.ajoutes, d.adversaires.ajoutes], [["Marmiton"], ["Apprenti"]]);
   assert.deepEqual([d.blocs, d.capacites.modifies, d.lisez_moi_modifie], [{ ajoutes: [], modifies: [], retires: [] }, [], false]);
-  assert.match(resumer(d, { date: DATE }), /— 1 type d'adversaire ajouté, 0 modifié, 0 retiré ; 1 adversaire ajouté, 0 modifié, 0 retiré$/);
+  assert.match(resumer(d, { date: DATE }), /— 1 classe d'adversaire ajoutée, 0 modifiée, 0 retirée ; 1 adversaire ajouté, 0 modifié, 0 retiré$/);
   // Et l'inverse : une banque sans adversaires importée après une banque qui en avait.
   const retour = comparer(propre, ancienne);
   assert.deepEqual([retour.types_adversaires.retires, retour.adversaires.retires, retour.totaux.adversaires], [["Marmiton"], ["Apprenti"], 0]);

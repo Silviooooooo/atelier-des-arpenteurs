@@ -74,15 +74,15 @@ export function lireNombreCellule(texte) {
 }
 
 /**
- * La colonne Type d'un adversaire : « Hachoir/Saucier[2] ». Rend { types:
+ * La colonne Classe d'un adversaire : « Hachoir/Saucier[2] ». Rend { types:
  * [noms], multiplicateur: { ecrit, valeur } ou null }, et { defaut } quand
- * la notation ne se lit pas : le multiplicateur n'est permis qu'après le
- * dernier type, entre crochets fermés, et il est strictement positif.
+ * la notation ne se lit pas : le multiplicateur n'est permis qu'après la
+ * dernière classe, entre crochets fermés, et il est strictement positif.
  */
 export function lireTypes(texte) {
   const ecrit = blancsReduits(texte);
-  // « aucun » : aucun type, comme une cellule vide. Un adversaire n'hérite
-  // de ses types que par cette colonne : il n'y a rien d'autre à effacer.
+  // « aucun » : aucune classe, comme une cellule vide. Un adversaire n'hérite
+  // de ses classes que par cette colonne : il n'y a rien d'autre à effacer.
   if (ecrit === "" || estAucun(ecrit)) return { types: [], multiplicateur: null };
   const illisible = (defaut) => ({ types: [], multiplicateur: null, defaut });
   const ouvrants = [...ecrit].filter((signe) => signe === "[").length;
@@ -95,7 +95,7 @@ export function lireTypes(texte) {
     if (ouvre === -1) return illisible("crochet « ] » sans « [ » qui l'ouvre");
     if (ferme === -1) return illisible("crochet « [ » jamais fermé");
     if (ouvrants > 1 || fermants > 1 || ferme < ouvre || ferme !== ecrit.length - 1) {
-      return illisible("le multiplicateur n'est permis qu'une fois, après le dernier type");
+      return illisible("le multiplicateur n'est permis qu'une fois, après la dernière classe");
     }
     const interieur = ecrit.slice(ouvre + 1, ferme).trim();
     if (interieur === "") return illisible("le multiplicateur est vide");
@@ -106,7 +106,7 @@ export function lireTypes(texte) {
     multiplicateur = { ecrit: interieur, valeur };
   }
   const types = corps.split("/").map((nom) => nom.trim().replace(/\s+/gu, " "));
-  if (types.some((nom) => nom === "")) return illisible("un nom de type manque");
+  if (types.some((nom) => nom === "")) return illisible("un nom de classe manque");
   return { types, multiplicateur };
 }
 

@@ -528,7 +528,7 @@ test("l'ordre des caractéristiques : données à l'envers, la liste posée est 
   const taloche = jouer(depart, capacite(depart, "pj1", "Taloche"), viser("adv2"));
   assert.deepEqual(offre(taloche).reglages.caracteristiques, {
     valeur: null,
-    options: ["force", "agilite", "precision", "sens", "culture_neruvienne", "savoir_sauvage", "parole", "empathie", "creativite"],
+    options: ["force", "agilite", "precision", "parole", "culture_neruvienne", "savoir_sauvage", "sens", "empathie", "creativite"],
   });
   assert.deepEqual(offre(taloche).pret, { ok: false, manque: "Choisissez une ou deux caractéristiques." });
 
@@ -691,11 +691,11 @@ test("confirmer et le premier dé demandent un geste prêt ; sinon le refus dit 
   // Un jet de caractéristique : les caractéristiques, puis la difficulté.
   const gouter = jouer(depart, capacite(depart, "pj1", "Goûter"));
   refuse(gouter, d8(4), "interdit", "Choisissez une ou deux caractéristiques.");
-  const choisies = jouer(gouter, regler("caracteristiques", ["parole", "sens"]));
+  const choisies = jouer(gouter, regler("caracteristiques", ["sens", "parole"]));
   refuse(choisies, d8(4), "interdit", "Choisissez une difficulté.");
   const pret = jouer(choisies, regler("difficulte", 6));
   assert.deepEqual(offre(pret).pret, { ok: true });
-  assert.deepEqual(gesteEnCours(jouer(pret, d8(7))).jet.caracteristiques, ["sens", "parole"]);
+  assert.deepEqual(gesteEnCours(jouer(pret, d8(7))).jet.caracteristiques, ["parole", "sens"]);
 
   // Une capacité sans jet ne demande rien : elle se confirme telle quelle.
   const flambage = jouer(depart, capacite(depart, "pj1", "Flambage"));
@@ -779,8 +779,8 @@ test("la fin de la chaîne : manqué, c'est fini ; touché, le bilan s'ouvre ave
   const gouter = jouer(depart, capacite(depart, "pj1", "Goûter"), regler("caracteristiques", ["sens", "parole"]), regler("difficulte", 6));
   const reussi = jouer(gouter, d8(7), d8(4));
   assert.deepEqual(reussi.pile, []);
-  assert.equal(derniereLigne(reussi), "Aubépine : Goûter, d8 (Sens + Parole) contre 6 (compliqué) → 7 ✓, 4 ✗ : 1 réussite.");
-  assert.equal(derniereLigne(jouer(gouter, d8(5))), "Aubépine : Goûter, d8 (Sens + Parole) contre 6 (compliqué) → 5 ✗ : aucune réussite.");
+  assert.equal(derniereLigne(reussi), "Aubépine : Goûter, d8 (Parole + Sens) contre 6 (compliqué) → 7 ✓, 4 ✗ : 1 réussite.");
+  assert.equal(derniereLigne(jouer(gouter, d8(5))), "Aubépine : Goûter, d8 (Parole + Sens) contre 6 (compliqué) → 5 ✗ : aucune réussite.");
 });
 
 test("relancer, garder, exploser : chacun à son attente, et le geste suit", () => {
@@ -832,7 +832,7 @@ test("fixer les dégâts : pendant le bilan seulement, autant de fois qu'on veut
   refuse(bilan, degats("lettre", [...ajuster(1), ...ajuster(2)], "normaux"), "forme");
   refuse(bilan, degats("lettre", ajuster(1, ""), "normaux"), "forme");
 
-  // Des dégâts directs : à la résistance de la zone (le reste au corps), ou droit au corps, sans toucher l'armure.
+  // Des dégâts directs : à l'endurance de la zone (le reste au corps), ou droit au corps, sans toucher l'armure.
   const directs = jouer(bilan, degats("lettre", ajuster(7, "Huile chaude"), "resistance"), d20(5), APPLIQUER);
   assert.deepEqual(directs.protagonistes.adv2.zones[0], { armure: 10, armureMax: 10, resistance: 0, resistanceMax: 5 });
   assert.equal(directs.protagonistes.adv2.corps, 8);
@@ -933,7 +933,7 @@ test("décaler la face : aux suites, tant qu'aucune esquive n'est jouée, et san
   assert.deepEqual(gesteEnCours(decale).localisation, [{ brut: 5, decalage: { valeur: 9, raison: "Coup d'œil" } }]);
   assert.equal(gesteEnCours(decale).moment, "suites", "il n'y a pas d'étape de validation");
   const fini = jouer(decale, APPLIQUER);
-  assert.match(derniereLigne(fini), /Localisation d20 → 5, décalée à 14 \(Coup d'œil\) : jambe droite\. Armure 10 → 0, résistance 5 → 0\. Blessure/);
+  assert.match(derniereLigne(fini), /Localisation d20 → 5, décalée à 14 \(Coup d'œil\) : jambe droite\. Armure 10 → 0, endurance 5 → 0\. Blessure/);
   // 0 retire le décalage.
   assert.deepEqual(gesteEnCours(jouer(decale, { type: "decaler", de: 0, valeur: 0 })).localisation, [{ brut: 5, decalage: null }]);
 
@@ -964,8 +964,8 @@ test("l'esquive : offerte au PJ visé, de 1 au plus petit du souffle et des dég
   assert.deepEqual(offre(esquive).types, ["appliquer"], "après une esquive, il ne reste qu'« Appliquer »");
   const fini = jouer(esquive, APPLIQUER);
   assert.equal(fini.protagonistes.pj1.zones[1].armure, 0);
-  assert.equal(fini.protagonistes.pj1.zones[1].resistance, 3, "15 − 3 = 12 : l'armure tombe, 2 passent à la résistance");
-  assert.match(derniereLigne(fini), /Aubépine intervient : Pas de côté \(1 action, 3 souffle\), 15 → 12\. Armure 10 → 0, résistance 5 → 3\.$/);
+  assert.equal(fini.protagonistes.pj1.zones[1].resistance, 3, "15 − 3 = 12 : l'armure tombe, 2 passent à l'endurance");
+  assert.match(derniereLigne(fini), /Aubépine intervient : Pas de côté \(1 action, 3 souffle\), 15 → 12\. Armure 10 → 0, endurance 5 → 3\.$/);
 
   // Le plus petit du souffle et des dégâts.
   const adverse = (pj) => combat(surD4(pj, MARMITON), { quiCommence: "adv" });
@@ -1005,7 +1005,7 @@ test("l'esquive n'est proposée qu'à un PJ : un adversaire qui en porte la capa
         nom: "Pas de côté",
         role: "esquive",
         groupe: { genre: "capacites", titre: "Capacités" },
-        facons: [faconEssai({ cout: { souffle: "X", lien: 0 }, description: "Annulez X dégâts reçus.", elements: ["Intervention"], intervention: true })],
+        facons: [faconEssai({ cout: { souffle: "X", lien: 0 }, description: "Annulez X dégât(s) reçu(s).", elements: ["Intervention"], intervention: true })],
       }),
     );
   });
@@ -1469,7 +1469,7 @@ test("le lecteur de scénario : les champs que la référence n'emploie pas (sur
       "Aubépine : Frappe contre Marmiton n° 2. d8+1 contre 5 (+1 à la main : Sel fin), 1 avantage (à la main : Minutie) → 8 ✓, 3 ✗ : 1 réussite, A = 5. Localisation d20 → 20, décalée à 12 (Coup d'œil) : jambe gauche. Armure 10 → 5.",
       "Fin du tour des PJ : ils retrouvent leurs actions.",
       "— Tour 1 · camp des adversaires —",
-      "Marmiton n° 1 : Frappe contre Aubépine. Aubépine lance sa défense, d8 contre 4 → 1 ✗ : aucune réussite, Aubépine reçoit C = 15. Localisation d20 → 3 : torse. Aubépine intervient : Pas de côté (1 action, 4 souffle), 15 → 11. Armure 10 → 0, résistance 5 → 4.",
+      "Marmiton n° 1 : Frappe contre Aubépine. Aubépine lance sa défense, d8 contre 4 → 1 ✗ : aucune réussite, Aubépine reçoit C = 15. Localisation d20 → 3 : torse. Aubépine intervient : Pas de côté (1 action, 4 souffle), 15 → 11. Armure 10 → 0, endurance 5 → 4.",
       "Marmiton n° 2 : Pas chassé [1], A1 → B2.",
       "Fin du tour des adversaires : ils retrouvent leurs actions.",
       "— Tour 2 · camp des PJ —",
@@ -1508,7 +1508,7 @@ test("le lecteur de scénario : des dégâts fixés, une face décalée, une arm
     etat.journal.slice(2, 4).map((ligne) => ligne.texte),
     [
       "Aubépine : Flambage [1] (5 souffle) contre Marmiton. d8 contre 5 → 8 ✓, 1 ✗ : 1 réussite, touché, dégâts de l'arme : A = 5. Localisation d20 → 14, décalée à 12 (Coup d'œil) : jambe gauche. Armure 10 → 5.",
-      "Aubépine : Frappe contre Marmiton. d8 contre 5 → 8 ✓, 8 ✓, 1 ✗ : 2 réussites, B = 10, dégâts directs à la résistance : 12 (Coup de torchon). Localisation d20 → 2 : torse. Résistance 5 → 0, corps 10 → 3. Blessure (torse), sans effet calculé.",
+      "Aubépine : Frappe contre Marmiton. d8 contre 5 → 8 ✓, 8 ✓, 1 ✗ : 2 réussites, B = 10, dégâts directs à l'endurance : 12 (Coup de torchon). Localisation d20 → 2 : torse. Endurance 5 → 0, corps 10 → 3. Blessure (torse), sans effet calculé.",
     ],
   );
   assert.equal(etat.quiCommence, "pj", "sans « quiCommence », les PJ commencent");

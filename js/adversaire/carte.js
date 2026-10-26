@@ -1,7 +1,7 @@
 // La carte d'un adversaire (SPECIFICATION.md, § 16.5).
 //
 // La carte que le meneur imprime et annote à la table : l'en-tête, la bande
-// du d20 avec l'armure et la résistance de chaque zone, le corps, les
+// du d20 avec l'armure et l'endurance de chaque zone, le corps, les
 // capacités, puis le nombre d'actions, le souffle, l'attaque et la défense.
 // Elle suit la maquette du lot 3 (plans/maquette_adversaires.html, hors
 // dépôt), dans css/adversaire.css. Sa hauteur est variable : autant de lignes
@@ -46,8 +46,8 @@ export function abregerZone(nom, faces) {
 export const ecrireMultiplicateur = (multiplicateur) => `×${multiplicateur}`;
 
 /**
- * Les types d'un adversaire, tels que la carte les écrit : « Commis,
- * Rôtisseur ×1,4 » ; rien pour un adversaire sans type. La fiche vivante du
+ * Les classes d'un adversaire, telles que la carte les écrit : « Commis,
+ * Rôtisseur ×1,4 » ; rien pour un adversaire sans classe. La fiche vivante du
  * simulateur de combat les écrit de même (§ 17) : c'est pourquoi la phrase
  * se fabrique ici, une seule fois.
  */
@@ -127,7 +127,7 @@ function bande(resolu) {
     el("div", { classe: "carte-contre" }, el("span", {}, "Contre-attaque")),
     etiquette("armure", "Armure"),
     resolu.zones.map((zone) => caseDeZone(zone, "armure", zone.armure)),
-    etiquette("resistance", "Résistance"),
+    etiquette("resistance", "Endurance"),
     resolu.zones.map((zone) => caseDeZone(zone, "resistance", zone.resistance)),
     etiquette("corps", "Corps"),
     el(
@@ -139,11 +139,11 @@ function bande(resolu) {
   );
 }
 
-// La première ligne des capacités : les types, les maîtrises, l'équipement.
+// La première ligne des capacités : les classes, les maîtrises, l'équipement.
 // Un segment sans rien s'omet, avec son libellé ; null quand tous manquent.
 function resume(resolu) {
   const segments = [];
-  if (resolu.types.length) segments.push(["Types", ecrireTypes(resolu)]);
+  if (resolu.types.length) segments.push(["Classes", ecrireTypes(resolu)]);
   if (resolu.maitrises.length) {
     segments.push(["Maîtrises", entre(resolu.maitrises.map((maitrise) => [maitrise.nom, " ", el("span", { classe: "carte-rang" }, `[${maitrise.rang}]`)]), () => ", ")]);
   }

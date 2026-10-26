@@ -128,8 +128,9 @@ test("regles — la face de contre-attaque d'un adversaire est celle de la notat
 });
 
 test("regles — le plateau, les plafonds, les bornes", () => {
-  // La version 2, celle du groupe 2 (décision de l'auteur, 25/10/2026).
-  assert.equal(REGLES, 2);
+  // La version 3, celle du lot 5 : l'endurance et l'ordre des caractéristiques
+  // (le groupe 3 du lot 4 la passera à 4).
+  assert.equal(REGLES, 3);
   assert.equal(COTE, 10);
   assert.equal(COLONNES, "ABCDEFGHIJ");
   assert.equal(COLONNES.length, COTE);
@@ -835,7 +836,7 @@ test("photographies d'essai — les trois de la démonstration", () => {
     ["Moulinet farineux", 1, [[1, 5, false, null]]],
     ["Pas chassé", 2, [[1, 0, false, null], [2, 1, false, null]]],
   ]);
-  assert.deepEqual(chef.capacites[2].facons.map((f) => f.description), ["Se déplace de 1 cases.", "Se déplace de 2 cases."]);
+  assert.deepEqual(chef.capacites[2].facons.map((f) => f.description), ["Se déplace de 1 case.", "Se déplace de 2 cases."]);
   // Il passe la forme d'une photographie, par JSON comme il est.
   assert.deepEqual(validerPhoto(parJson(chefDePartieEssai())), { photo: chefDePartieEssai() });
 
@@ -1623,13 +1624,15 @@ test("validerContenu — une autre version des règles se dit, avant tout autre 
   assert.deepEqual(validerContenu({ regles: 1, revision: "?", miseEnPlace: null }, { mode: "reel", revision: 3 }), { autreVersion: { regles: 1 } });
   // Un combat du groupe 1, tel quel : la version 1 ne se reprend pas.
   assert.deepEqual(validerContenu(contenuEssai((contenu) => (contenu.regles = 1)), OPTIONS), { autreVersion: { regles: 1 } });
-  assert.deepEqual(validerContenu({ regles: 3 }, OPTIONS), { autreVersion: { regles: 3 } });
+  // Un combat d'avant le lot 5, tel quel : la version 2 ne se reprend pas non plus.
+  assert.deepEqual(validerContenu(contenuEssai((contenu) => (contenu.regles = 2)), OPTIONS), { autreVersion: { regles: 2 } });
+  assert.deepEqual(validerContenu({ regles: 4 }, OPTIONS), { autreVersion: { regles: 4 } });
   assert.deepEqual(validerContenu({ regles: 0 }, OPTIONS), { autreVersion: { regles: 0 } });
   assert.ok(validerContenu({ regles: 0 }, OPTIONS).autreVersion, "ce qui est rendu se teste d'un simple « if »");
   // La même cinquième clé, à la version d'ici, est une donnée abîmée.
   assert.equal(validerContenu({ ...contenuEssai(), effets: [] }, OPTIONS).erreur, "Le contenu porte un champ inconnu.");
   // Une version qui n'est pas un entier n'est pas « une autre version ».
-  for (const regles of ["2", 1.5, null, undefined, [2]]) {
+  for (const regles of ["3", 1.5, null, undefined, [3]]) {
     assert.equal(contenuRefuse((contenu) => (contenu.regles = regles)), "La version des règles du contenu ne se lit pas.");
   }
 });

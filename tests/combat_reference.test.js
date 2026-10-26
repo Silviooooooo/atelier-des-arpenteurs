@@ -26,8 +26,8 @@
 // changent pas, et chacune est la concaténation de ses segments ; à chaque
 // événement, la ligne en cours est le début exact de la ligne que le geste
 // écrira ; à la fin de chaque geste, « annuler » rend l'état d'avant lui ;
-// et le même combat, écrit en version 1 des règles, se dit d'une autre
-// version.
+// et le même combat, écrit en version 1 ou 2 des règles (d'avant le lot 5),
+// se dit d'une autre version.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -320,10 +320,10 @@ test("le combat de référence couvre chaque point que la mission lui demande, e
     ["un déplacement payant, celui du Chef de partie", /^Chef : Pas chassé \[2\] \(1 souffle\), F6 → D4\.$/],
     ["un avantage et un désavantage de maîtrise qui s'annulent", "Son avantage (Solo du chef) et son désavantage (Émincer hors maîtrise) s'annulent."],
     ["des dégâts fixés à la main, et Réduction", "B = 8, ajusté à 20 (Émincer), +2 contre l'armure (Réduction)."],
-    ["une mort par l'armure, la résistance et le corps", "Armure 5 → 0, résistance 5 → 0, corps 10 → 0. Marmiton n° 1 meurt."],
-    ["un coup sur une zone sans armure d'un adversaire, et sa blessure", "Localisation d20 → 14 : jambe droite. Résistance 5 → 0, corps 10 → 7. Blessure (jambe droite), sans effet calculé."],
-    ["un coup sur une zone sans armure d'Aubépine, et sa blessure", `Localisation d20 → 12 : jambe gauche. Résistance 5 → 0. Blessure (jambe gauche) : ${MOINS}1 à ses jets.`],
-    ["puis un jet où la blessure compte", `Aubépine : Goûter, d6${MOINS}1 (Sens + Savoir sauvage) contre 6 (compliqué)`],
+    ["une mort par l'armure, l'endurance et le corps", "Armure 5 → 0, endurance 5 → 0, corps 10 → 0. Marmiton n° 1 meurt."],
+    ["un coup sur une zone sans armure d'un adversaire, et sa blessure", "Localisation d20 → 14 : jambe droite. Endurance 5 → 0, corps 10 → 7. Blessure (jambe droite), sans effet calculé."],
+    ["un coup sur une zone sans armure d'Aubépine, et sa blessure", `Localisation d20 → 12 : jambe gauche. Endurance 5 → 0. Blessure (jambe gauche) : ${MOINS}1 à ses jets.`],
+    ["puis un jet où la blessure compte", `Aubépine : Goûter, d6${MOINS}1 (Savoir sauvage + Sens) contre 6 (compliqué)`],
     ["une défense avec relance d'avantage", "Aubépine lance sa défense, d8+1 contre 4, 1 avantage → 7 ✓, 3 ✗, relancé 5 ✓, 2 ✗ : 2 réussites"],
     ["une défense à trois réussites", /Aubépine lance sa défense, .* : 3 réussites, aucun dégât\.$/],
     ["une esquive pendant le tour adverse", "Aubépine intervient : Pas de côté (1 action, 3 souffle), 12 → 9."],
@@ -510,13 +510,15 @@ test("à la fin de chaque geste, « annuler » rend l'état d'avant lui, écrit 
   assert.deepEqual(appliquer(etat, { type: "annuler" }).refus, { code: "interdit", message: "Rien à annuler depuis le lancement." });
 });
 
-test("le combat de référence écrit en version 1 des règles se dit d'une autre version, et ne se rejoue pas ; en version courante, il se relit et se rejoue", () => {
-  assert.equal(REGLES, 2);
+test("le combat de référence écrit en version 1 ou 2 des règles (d'avant le lot 5) se dit d'une autre version, et ne se rejoue pas ; en version courante, il se relit et se rejoue", () => {
+  assert.equal(REGLES, 3);
   const texte = JSON.stringify(JOUE.contenu);
-  const enVersion1 = { ...JSON.parse(texte), regles: 1 };
-  assert.deepEqual(validerContenu(enVersion1, { mode: "demo", revision: JOUE.contenu.revision, accepter }), { autreVersion: { regles: 1 } });
-  assert.equal(rejouer(enVersion1).erreur.pas, 0);
-  assert.equal(rejouer(enVersion1).etat, undefined);
+  for (const regles of [1, 2]) {
+    const enVersionAncienne = { ...JSON.parse(texte), regles };
+    assert.deepEqual(validerContenu(enVersionAncienne, { mode: "demo", revision: JOUE.contenu.revision, accepter }), { autreVersion: { regles } });
+    assert.equal(rejouer(enVersionAncienne).erreur.pas, 0);
+    assert.equal(rejouer(enVersionAncienne).etat, undefined);
+  }
   // Désarmé : la version courante.
   const lu = validerContenu(JSON.parse(texte), { mode: "demo", revision: JOUE.contenu.revision, accepter });
   assert.equal(lu.erreur, undefined, lu.erreur);
@@ -576,11 +578,11 @@ test("la comparaison de l'état nomme le protagoniste et ce qui s'écarte, champ
     [(attendus) => (attendus[1].mort = null), "Chef : mort au tour 5, attendu vivant."],
     [(attendus) => (attendus[2].mort = { tour: 3 }), "Marmiton n° 1 : mort au tour 2, attendu mort au tour 3."],
     [(attendus) => (attendus[0].zones[0].armure = 1), "Aubépine, jambe gauche : armure 0/10, attendu 1/10."],
-    [(attendus) => (attendus[0].zones[0].resistance = 5), "Aubépine, jambe gauche : résistance 0/5, attendu 5/5."],
+    [(attendus) => (attendus[0].zones[0].resistance = 5), "Aubépine, jambe gauche : endurance 0/5, attendu 5/5."],
     [(attendus) => (attendus[2].zones[0].armureMax = 16), "Marmiton n° 1, bras gauche : armure 11/15, attendu 11/16."],
     [(attendus) => (attendus[1].zones[1].armure = 37), "Chef, torse : armure 38/38, attendu 37/38."],
     // Une zone touchée que l'état attendu ne dit plus : elle devrait être intacte.
-    [(attendus) => attendus[3].zones.pop(), "Marmiton n° 2, jambe droite : armure 0/0, résistance 0/5, attendue intacte."],
+    [(attendus) => attendus[3].zones.pop(), "Marmiton n° 2, jambe droite : armure 0/0, endurance 0/5, attendue intacte."],
     [(attendus) => attendus[2].zones.push({ code: "queue", armure: 1, armureMax: 1, resistance: 5, resistanceMax: 5 }), "Marmiton n° 1 : aucune zone « queue » dans sa grille (torse, jambe_gauche, jambe_droite, bras_gauche, bras_droit, tete)."],
     [(attendus) => (attendus[1].protagoniste = "Sous-chef"), "Sous-chef : absent du combat (noms courts : Aubépine, Chef, Marmiton n° 1, Marmiton n° 2)."],
     [(attendus) => attendus.pop(), "Le combat compte 4 protagoniste(s), l'état attendu 3."],
@@ -620,7 +622,7 @@ test("la comparaison de l'état nomme le protagoniste et ce qui s'écarte, champ
   parNom[3].zones = [{ nom: "Jambe droite", armure: 0, armureMax: 0, resistance: 0, resistanceMax: 5 }];
   assert.deepEqual(ecartsDeLEtat(etat, parNom), []);
   parNom[3].zones[0].resistance = 1;
-  assert.deepEqual(ecartsDeLEtat(etat, parNom), ["Marmiton n° 2, jambe droite : résistance 0/5, attendu 1/5."]);
+  assert.deepEqual(ecartsDeLEtat(etat, parNom), ["Marmiton n° 2, jambe droite : endurance 0/5, attendu 1/5."]);
 
   // Un état d'avant la fin n'est pas l'état final.
   assert.ok(ecartsDeLEtat(arrete(17), etatAttendu).length > 0);

@@ -23,8 +23,10 @@ test("routes — l'adresse d'une fiche se décode (§ 9)", () => {
   assert.deepEqual(lireRoute("#/element/Port%C3%A9e"), { ecran: "fiche", categorie: "elements", nom: "Portée" });
   // Un navigateur peut laisser le nom en clair dans l'adresse.
   assert.deepEqual(lireRoute("#/capacite/Attaque de base"), { ecran: "fiche", categorie: "capacites", nom: "Attaque de base" });
-  // Les adversaires et leurs types (§ 16.6) : la catégorie « types » n'est pas la clé de la banque.
+  // Les adversaires et leurs classes (§ 16.6) : la catégorie « types » n'est pas la clé de la banque.
   assert.deepEqual(lireRoute("#/adversaire/Chef%20de%20partie"), { ecran: "fiche", categorie: "adversaires", nom: "Chef de partie" });
+  assert.deepEqual(lireRoute("#/classe/R%C3%B4tisseur"), { ecran: "fiche", categorie: "types", nom: "Rôtisseur" });
+  // L'adresse d'avant le lot 5, qu'un lien envoyé peut porter, mène à la même fiche.
   assert.deepEqual(lireRoute("#/type/R%C3%B4tisseur"), { ecran: "fiche", categorie: "types", nom: "Rôtisseur" });
 });
 
@@ -33,13 +35,13 @@ test("routes — aller-retour des noms difficiles", () => {
   for (const nom of ["Attaque de base", "Constellation d'Enaël", "Maîtrise du combat précis", "50 % / 100 %", "a#b?c&d", "Œil (de) [lynx]", "trouvé !", "Hachoir/Saucier[2]", "<b>Marmiton</b>", "__proto__"]) {
     for (const categorie of Object.keys(CATEGORIES)) {
       const adresse = adresseFiche(categorie, nom);
-      assert.match(adresse, /^#\/(bloc|capacite|element|adversaire|type)\/[^ #?<>]+$/);
+      assert.match(adresse, /^#\/(bloc|capacite|element|adversaire|classe)\/[^ #?<>]+$/);
       assert.deepEqual(lireRoute(adresse), { ecran: "fiche", categorie, nom });
     }
   }
   assert.equal(adresseFiche("capacites", "Attaque de base"), "#/capacite/Attaque%20de%20base");
   assert.equal(adresseFiche("adversaires", "Marmiton de corvée"), "#/adversaire/Marmiton%20de%20corv%C3%A9e");
-  assert.equal(adresseFiche("types", "Saucier"), "#/type/Saucier");
+  assert.equal(adresseFiche("types", "Saucier"), "#/classe/Saucier");
   // Un demi-codet seul ne fait pas lever la fabrication de l'adresse (relecture du lot 3) ; une paire reste entière.
   const [haut, bas] = [String.fromCharCode(0xd800), String.fromCharCode(0xdc00)];
   assert.throws(() => encodeURIComponent(haut), URIError, "le défaut que l'adresse évite");
@@ -51,7 +53,10 @@ test("routes — aller-retour des noms difficiles", () => {
 test("routes — accueil, listes, anomalies, auteur, rencontre, combat, apparence, et les adresses abîmées", () => {
   for (const adresse of ["", "#", "#/", null]) assert.deepEqual(lireRoute(adresse), { ecran: "accueil" });
   for (const categorie of Object.keys(CATEGORIES)) assert.deepEqual(lireRoute(adresseListe(categorie)), { ecran: "liste", categorie });
-  assert.deepEqual([lireRoute("#/adversaires"), lireRoute("#/types")], [{ ecran: "liste", categorie: "adversaires" }, { ecran: "liste", categorie: "types" }]);
+  assert.deepEqual([lireRoute("#/adversaires"), lireRoute("#/classes")], [{ ecran: "liste", categorie: "adversaires" }, { ecran: "liste", categorie: "types" }]);
+  // Les classes (lot 5) : l'adresse neuve s'écrit, l'ancienne se lit encore.
+  assert.deepEqual([adresseListe("types"), adresseListe("adversaires")], ["#/classes", "#/adversaires"]);
+  assert.deepEqual(lireRoute("#/types"), { ecran: "liste", categorie: "types" });
   assert.deepEqual(lireRoute("#/anomalies"), { ecran: "anomalies" });
   assert.deepEqual(lireRoute(adresseAnomalies("Blocs", 14)), { ecran: "anomalies", feuille: "Blocs", ligne: 14 });
   assert.deepEqual(lireRoute(adresseAnomalies("Eléments", 3)), { ecran: "anomalies", feuille: "Eléments", ligne: 3 });
@@ -70,19 +75,19 @@ test("routes — accueil, listes, anomalies, auteur, rencontre, combat, apparenc
   const combats = ["#/combat/", "#/combat/2", "#/combat/demo", "#/combat/Chef%20de%20partie", "#/combats", "#/Combat", "#/combat%20", "#/ combat", "#/rencontre/combat", "#/combat?demo=1"];
   // Les noms d'Object.prototype ne sont ni des listes ni des fiches.
   const prototype = ["#/constructor", "#/__proto__", "#/__proto__/x", "#/toString", "#/hasOwnProperty", "#/valueOf/abc", "#/anomalies/constructor/3"];
-  const adversaires = ["#/adversaire", "#/adversaire/", "#/adversaire/%E0%A4%A", "#/adversaires/Chef", "#/type/", "#/types/Commis", "#/rencontre/2", "#/rencontres", "#/anomalies/adversaires/3", "#/anomalies/Adversaires/-1"];
+  const adversaires = ["#/adversaire", "#/adversaire/", "#/adversaire/%E0%A4%A", "#/adversaires/Chef", "#/type/", "#/types/Commis", "#/classe/", "#/classes/Commis", "#/classe", "#/Classes", "#/rencontre/2", "#/rencontres", "#/anomalies/adversaires/3", "#/anomalies/Adversaires/-1"];
   for (const abimee of ["#/bloc/%E0%A4%A", "#/bloc/", "#/sorts", "#/anomalies/Blocs/x", "#/anomalies/Inconnue/3", "#/auteur/cle", ...prototype, ...adversaires, ...combats, ...apparences]) {
     assert.equal(lireRoute(abimee).ecran, "introuvable", abimee);
   }
 });
 
-test("routes — chaque écran marque son lien de la navigation ; les types marquent « Adversaires »", () => {
+test("routes — chaque écran marque son lien de la navigation ; les classes marquent « Adversaires »", () => {
   const marque = (adresse) => rubriqueDe(lireRoute(adresse));
   assert.deepEqual(
     ["#/blocs", "#/bloc/Louche", "#/capacites", "#/elements", "#/anomalies", "#/anomalies/Adversaires/3", "#/auteur"].map(marque),
     ["blocs", "blocs", "capacites", "elements", "anomalies", "anomalies", "auteur"],
   );
-  assert.deepEqual(["#/adversaires", "#/adversaire/Chef%20de%20partie", "#/types", "#/type/Commis"].map(marque), Array(4).fill("adversaires"));
+  assert.deepEqual(["#/adversaires", "#/adversaire/Chef%20de%20partie", "#/classes", "#/classe/Commis", "#/types", "#/type/Commis"].map(marque), Array(6).fill("adversaires"));
   assert.equal(marque("#/rencontre"), "rencontre");
   // Le combat a sa rubrique à lui (§ 17) : ni celle de la rencontre, ni celle des adversaires.
   assert.equal(marque("#/combat"), "combat");

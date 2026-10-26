@@ -1,6 +1,6 @@
 // La fiche d'un adversaire (SPECIFICATION.md, § 16.6).
 //
-// Un adversaire s'ouvre résolu : ses types appliqués, son multiplicateur,
+// Un adversaire s'ouvre résolu : ses classes appliquées, son multiplicateur,
 // son équipement et ses capacités (js/adversaire/resolution.js). Sur un
 // grand écran, la carte puis la lecture, où chaque valeur dit d'où elle
 // vient, se montrent ensemble (css/ecran.css). Sur un téléphone, deux vues,
@@ -121,7 +121,7 @@ export function afficher(contexte, nom, services = {}) {
       el("div", { classe: "boutons choix-vue" }, boutonsVue.lecture, boutonsVue.carte),
       el("div", { classe: "boutons" }, ajout, el("button", { type: "button", classe: "bouton bouton-principal", onclick: () => imprimerCartes() }, "Imprimer / PDF")),
       dansLaRencontre,
-      el("p", { classe: "lien-retour" }, versRencontre, " · ", el("a", { href: adresseListe("types") }, "Types d'adversaires")),
+      el("p", { classe: "lien-retour" }, versRencontre, " · ", el("a", { href: adresseListe("types") }, "Classes d'adversaires")),
     ),
     el(
       "div",

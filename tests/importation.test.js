@@ -187,7 +187,7 @@ test("import — capacités : une variante par ligne, retrouvée malgré l'ordre
     cout_souffle: "4",
     cout_lien: "1",
     elements: [{ nom: "Brûlant" }],
-    description: "[N*{chaleur}] points.",
+    description: "[N*{chaleur}] point(s).",
     notes: "",
   });
   assert.equal(brut.ligne, 7);
@@ -225,7 +225,7 @@ test("import — les ajouts du simulateur de combat : deux éléments, Passif et
   // Les deux capacités, cellule par cellule, en fin de feuille.
   const variantes = (nom) => b.capacites.find((c) => c.nom === nom).variantes.map(({ brut, notes, ...variante }) => ({ ...variante, ligne: brut.ligne }));
   assert.deepEqual(variantes("Pas de côté"), [
-    { puissance: "0", cout_souffle: "X", cout_lien: "", elements: [{ nom: "Intervention" }], description: "Annulez [X] dégâts reçus.", ligne: 52 },
+    { puissance: "0", cout_souffle: "X", cout_lien: "", elements: [{ nom: "Intervention" }], description: "Annulez [X] dégât(s) reçu(s).", ligne: 52 },
   ]);
   assert.deepEqual(variantes("Guetter"), [
     {

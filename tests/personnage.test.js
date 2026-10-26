@@ -254,7 +254,7 @@ test("démonstration — Aubépine a les deux capacités nouvelles du bloc de ba
     "Frappe", "Émincer", "Choc sourd", "Se couvrir", "Boire le bouillon",
   ]);
   const nouvelles = {
-    "Pas de côté": { cout: { souffle: "X", lien: "0" }, elements: ["Intervention"], texte: "Annulez X dégâts reçus." },
+    "Pas de côté": { cout: { souffle: "X", lien: "0" }, elements: ["Intervention"], texte: "Annulez X dégât(s) reçu(s)." },
     Guetter: {
       cout: { souffle: "0", lien: "0" },
       elements: [],

@@ -10,8 +10,10 @@
 // personnage reçu par lien, § 15.1). L'identifiant et le code ne portent
 // que des signes base64url.
 //
-// Les adversaires (lot 3) : #/adversaires et #/adversaire/<nom>, #/types et
-// #/type/<nom> pour leurs types, #/rencontre pour les cartes à imprimer.
+// Les adversaires (lot 3) : #/adversaires et #/adversaire/<nom>, #/classes et
+// #/classe/<nom> pour leurs classes, #/rencontre pour les cartes à imprimer.
+// Les adresses d'avant le lot 5, #/types et #/type/<nom>, qu'un lien envoyé
+// peut encore porter, mènent au même écran.
 //
 // Le simulateur de combat (lot 4) : #/combat, et rien après. Le combat en
 // cours ne se lit pas dans l'adresse : il vit dans son écran et sur
@@ -21,16 +23,21 @@
 // se garde sur l'appareil, pas dans l'adresse.
 
 // Une catégorie de la consultation : une liste, et une fiche par nom. Sa clé
-// est son adresse ; la liste de la banque qu'elle montre se lit dans
-// js/banque/consultation.js, car ce n'est pas toujours la même clé.
+// est l'adresse de sa liste, sauf quand « liste » en donne une autre ; la
+// liste de la banque qu'elle montre se lit dans js/banque/consultation.js,
+// car ce n'est pas toujours la même clé. Les classes d'adversaires gardent
+// la clé « types » (lot 5) : le code les nomme toujours ainsi.
 export const CATEGORIES = {
   blocs: { fiche: "bloc", titre: "Blocs", un: "un bloc" },
   capacites: { fiche: "capacite", titre: "Capacités", un: "une capacité" },
   elements: { fiche: "element", titre: "Éléments", un: "un élément" },
   adversaires: { fiche: "adversaire", titre: "Adversaires", un: "un adversaire" },
-  types: { fiche: "type", titre: "Types", un: "un type d'adversaire" },
+  types: { liste: "classes", fiche: "classe", titre: "Classes", un: "une classe d'adversaire" },
 };
-const PAR_FICHE = Object.fromEntries(Object.entries(CATEGORIES).map(([categorie, { fiche }]) => [fiche, categorie]));
+// La catégorie d'une adresse de liste, puis de fiche : les adresses d'avant
+// le lot 5 (#/types, #/type/<nom>) y restent, à côté des neuves.
+const PAR_LISTE = { ...Object.fromEntries(Object.entries(CATEGORIES).map(([categorie, { liste = categorie }]) => [liste, categorie])), types: "types" };
+const PAR_FICHE = { ...Object.fromEntries(Object.entries(CATEGORIES).map(([categorie, { fiche }]) => [fiche, categorie])), type: "types" };
 const FEUILLES = ["lisez_moi", "Blocs", "Eléments", "Capacites", "Adversaires"];
 const ECRANS_PERSONNAGE = ["personnages", "personnage", "creation", "recevoir"];
 const IDENTIFIANT = /^[A-Za-z0-9_-]{16,40}$/;
@@ -51,7 +58,7 @@ export function lireRoute(adresse) {
   const [tete, ...reste] = chemin.split("/");
   if (tete === "" && reste.length === 0) return { ecran: "accueil" };
   // Object.hasOwn : « constructor » ou « __proto__ » ne sont pas des catégories.
-  if (Object.hasOwn(CATEGORIES, tete) && reste.length === 0) return { ecran: "liste", categorie: tete };
+  if (Object.hasOwn(PAR_LISTE, tete) && reste.length === 0) return { ecran: "liste", categorie: PAR_LISTE[tete] };
   if (Object.hasOwn(PAR_FICHE, tete) && reste.length > 0) {
     // Un nom peut contenir « / » : tout ce qui suit la catégorie en fait partie.
     const nom = decoder(reste.join("/"));
@@ -78,7 +85,7 @@ export function lireRoute(adresse) {
 /**
  * Le lien de la navigation principale que marque une route : la valeur de
  * son data-route (index.html). Les écrans d'un personnage marquent
- * « Personnages » ; la liste et la fiche des types d'adversaires, qui n'ont
+ * « Personnages » ; la liste et la fiche des classes d'adversaires, qui n'ont
  * pas de lien à eux, marquent « Adversaires ».
  */
 export function rubriqueDe(route) {
@@ -94,8 +101,9 @@ export function adresseFiche(categorie, nom) {
   return `#/${CATEGORIES[categorie].fiche}/${encodeURIComponent(String(nom).replace(/\p{Cs}/gu, String.fromCodePoint(0xfffd)))}`;
 }
 
+/** L'adresse d'une liste : categorie est une clé de CATEGORIES. */
 export function adresseListe(categorie) {
-  return `#/${categorie}`;
+  return `#/${CATEGORIES[categorie]?.liste ?? categorie}`;
 }
 
 /** L'adresse de la fiche d'un personnage, ou d'une étape de son parcours. */

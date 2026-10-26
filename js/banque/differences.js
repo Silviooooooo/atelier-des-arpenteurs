@@ -8,7 +8,7 @@
 // nom de sa colonne. Une capacité à plusieurs puissances se compare variante
 // par variante.
 //
-// Les types d'adversaires et les adversaires (lot 3, § 16) se comparent de
+// Les classes d'adversaires et les adversaires (lot 3, § 16) se comparent de
 // même : leurs cellules, gardées telles qu'écrites, se comparent sur ce que
 // la notation des adversaires y lit. Une banque publiée avant la feuille
 // « Adversaires » n'en a aucun : tout y est ajouté.
@@ -148,7 +148,7 @@ function comparerCategorie(categorie, anciens, nouveaux) {
 
 /**
  * Compare la banque publiée (null à la première publication) à la banque
- * importée. Rend, pour les blocs, les capacités, les éléments, les types
+ * importée. Rend, pour les blocs, les capacités, les éléments, les classes
  * d'adversaires et les adversaires, les noms ajoutés et retirés, et les
  * modifications champ par champ ; plus le changement éventuel de lisez_moi,
  * et les totaux de la banque importée. Une banque sans adversaires (publiée
@@ -172,7 +172,7 @@ const NOMS = {
   blocs: ["bloc", "blocs", ""],
   capacites: ["capacité", "capacités", "e"],
   elements: ["élément", "éléments", ""],
-  types_adversaires: ["type d'adversaire", "types d'adversaires", ""],
+  types_adversaires: ["classe d'adversaire", "classes d'adversaires", "e"],
   adversaires: ["adversaire", "adversaires", ""],
 };
 // À la première publication, les totaux des adversaires ne se disent que

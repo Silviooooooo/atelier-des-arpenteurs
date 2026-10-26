@@ -175,15 +175,15 @@ test("listes — cinq onglets ; les adversaires et leurs types dans l'ordre, ave
     let ecran = ouvrir(contexte, "#/adversaires");
     assert.equal(texteDe(ecran.querySelector("h1")), "Adversaires");
     assert.equal(document.title, "Adversaires — L'Atelier des Arpenteurs");
-    assert.deepEqual(liens(ecran, ".onglets a"), [["Blocs", "#/blocs"], ["Capacités", "#/capacites"], ["Éléments", "#/elements"], ["Adversaires", "#/adversaires"], ["Types", "#/types"]]);
+    assert.deepEqual(liens(ecran, ".onglets a"), [["Blocs", "#/blocs"], ["Capacités", "#/capacites"], ["Éléments", "#/elements"], ["Adversaires", "#/adversaires"], ["Classes", "#/classes"]]);
     assert.deepEqual(textes(ecran, ".onglets a[aria-current=page]"), ["Adversaires"]);
     assert.equal(texteDe(ecran.querySelector("label")), "Rechercher parmi les adversaires");
     // Le détail : ses types tels qu'il les écrit, multiplicateur compris.
     assert.deepEqual(entrees(ecran), [
       ["Chef de partie", "Commis/Rôtisseur[1,4]"],
-      ["Homard furieux", "sans type"],
+      ["Homard furieux", "sans classe"],
       ["Marmiton de corvée", "Commis/Rôtisseur"],
-      ["Mouette chapardeuse", "sans type"],
+      ["Mouette chapardeuse", "sans classe"],
       ["Plongeur", "Commis / Rôtisseur"],
     ]);
     assert.deepEqual(liens(ecran, ".liste-entrees a").map(([, href]) => href).slice(0, 2), ["#/adversaire/Chef%20de%20partie", "#/adversaire/Homard%20furieux"]);
@@ -200,7 +200,7 @@ test("listes — cinq onglets ; les adversaires et leurs types dans l'ordre, ave
     saisir(recherche, "nez fin");
     assert.deepEqual(entrees(ecran).map(([nom]) => nom), ["Mouette chapardeuse"]);
     // Ce qu'il porte une fois résolu se trouve aussi : la spatule est celle du Rôtisseur, la frappe vient des armes.
-    assert.equal(recherche.getAttribute("placeholder"), "Nom, type, équipement ou capacité");
+    assert.equal(recherche.getAttribute("placeholder"), "Nom, classe, équipement ou capacité");
     saisir(recherche, "spatule");
     assert.deepEqual(entrees(ecran).map(([nom]) => nom), ["Chef de partie", "Marmiton de corvée"]);
     assert.equal(texteDe(ecran.querySelector("[role=status]")), "2 adversaires sur 5");
@@ -213,20 +213,23 @@ test("listes — cinq onglets ; les adversaires et leurs types dans l'ordre, ave
     assert.deepEqual(textes(ecran, ".liste-entrees a[aria-current=page] span").slice(0, 1), ["Homard furieux"]);
     assert.deepEqual(liens(ecran, ".retour a"), [["Tous les adversaires", "#/adversaires"]]);
 
-    // Les types : la catégorie « types » lit la liste « types_adversaires » de la banque.
-    ecran = ouvrir(contexte, "#/types");
-    assert.equal(texteDe(ecran.querySelector("h1")), "Types");
-    assert.equal(texteDe(ecran.querySelector("label")), "Rechercher parmi les types d'adversaires");
+    // Les classes : la catégorie « types » lit la liste « types_adversaires » de la banque.
+    ecran = ouvrir(contexte, "#/classes");
+    assert.equal(texteDe(ecran.querySelector("h1")), "Classes");
+    assert.equal(texteDe(ecran.querySelector("label")), "Rechercher parmi les classes d'adversaires");
     assert.deepEqual(entrees(ecran), [["Commis", "3 adversaires"], ["Rôtisseur", "3 adversaires"]]);
-    assert.deepEqual(liens(ecran, ".liste-entrees a").map(([, href]) => href), ["#/type/Commis", "#/type/R%C3%B4tisseur"]);
-    assert.equal(texteDe(ecran.querySelector("[role=status]")), "2 types d'adversaires");
-    assert.match(texteDe(ecran.querySelector(".panneau-fiche")), /^Choisissez un type d'adversaire dans la liste\.$/);
+    assert.deepEqual(liens(ecran, ".liste-entrees a").map(([, href]) => href), ["#/classe/Commis", "#/classe/R%C3%B4tisseur"]);
+    assert.equal(texteDe(ecran.querySelector("[role=status]")), "2 classes d'adversaires");
+    assert.match(texteDe(ecran.querySelector(".panneau-fiche")), /^Choisissez une classe d'adversaire dans la liste\.$/);
     saisir(ecran.querySelector("#recherche-types"), "rot");
     assert.deepEqual(entrees(ecran), [["Rôtisseur", "3 adversaires"]]);
-    assert.equal(texteDe(ecran.querySelector("[role=status]")), "1 type d'adversaire sur 2");
-    assert.deepEqual(liens(ouvrir(contexte, "#/type/Commis"), ".retour a"), [["Tous les types", "#/types"]]);
+    assert.equal(texteDe(ecran.querySelector("[role=status]")), "1 classe d'adversaire sur 2");
+    assert.deepEqual(liens(ouvrir(contexte, "#/classe/Commis"), ".retour a"), [["Toutes les classes", "#/classes"]]);
+    // L'adresse d'avant le lot 5, qu'un lien envoyé peut porter, mène au même écran.
+    assert.equal(texteDe(ouvrir(contexte, "#/types").querySelector("h1")), "Classes");
+    assert.equal(texteDe(ouvrir(contexte, "#/type/Commis").querySelector(".panneau-fiche h1")), "Commis");
     // Les autres listes portent les deux onglets aussi.
-    assert.deepEqual(textes(ouvrir(contexte, "#/blocs"), ".onglets a"), ["Blocs", "Capacités", "Éléments", "Adversaires", "Types"]);
+    assert.deepEqual(textes(ouvrir(contexte, "#/blocs"), ".onglets a"), ["Blocs", "Capacités", "Éléments", "Adversaires", "Classes"]);
   }));
 
 test("accueil — les comptes des adversaires et de leurs types, à côté des autres", () =>
@@ -238,12 +241,12 @@ test("accueil — les comptes des adversaires et de leurs types, à côté des a
       ["#/capacites", String(BANQUE.capacites.length), "capacités"],
       ["#/elements", String(BANQUE.elements.length), "éléments"],
       ["#/adversaires", "5", "adversaires"],
-      ["#/types", "2", "types d'adversaires"],
+      ["#/classes", "2", "classes d'adversaires"],
     ]);
     assert.doesNotMatch(texteDe(ecran), /republiée/);
     // Un seul de chaque : le singulier.
     const seul = await ouvrirAccueil(contexteDe({ ...BANQUE, adversaires: BANQUE.adversaires.slice(0, 1), types_adversaires: BANQUE.types_adversaires.slice(0, 1) }));
-    assert.deepEqual(textes(seul, ".comptes a").slice(3), ["1adversaire", "1type d'adversaire"]);
+    assert.deepEqual(textes(seul, ".comptes a").slice(3), ["1adversaire", "1classe d'adversaire"]);
   }));
 
 test("banque publiée avant le lot 3 — aucun écran ne tombe, les adversaires disent la phrase, le reste se consulte", () =>
@@ -254,7 +257,7 @@ test("banque publiée avant le lot 3 — aucun écran ne tombe, les adversaires 
     assert.deepEqual(liens(premier, ".comptes a").map(([, href]) => href), ["#/blocs", "#/capacites", "#/elements"]);
     assert.ok(textes(premier, "p").includes(MESSAGE_BANQUE_SANS_ADVERSAIRES));
     // Les deux listes : la phrase, une liste vide, et rien à choisir.
-    for (const [adresse, compte, rien] of [["#/adversaires", "0 adversaire", "Cette banque n'a aucun adversaire."], ["#/types", "0 type d'adversaire", "Cette banque n'a aucun type d'adversaire."]]) {
+    for (const [adresse, compte, rien] of [["#/adversaires", "0 adversaire", "Cette banque n'a aucun adversaire."], ["#/classes", "0 classe d'adversaire", "Cette banque n'a aucune classe d'adversaire."]]) {
       const ecran = ouvrir(contexte, adresse);
       assert.deepEqual(textes(ecran, ".panneau-liste .message"), [MESSAGE_BANQUE_SANS_ADVERSAIRES], adresse);
       assert.equal(texteDe(ecran.querySelector("[role=status]")), compte);
@@ -264,7 +267,7 @@ test("banque publiée avant le lot 3 — aucun écran ne tombe, les adversaires 
       assert.equal(texteDe(ecran.querySelector("[role=status]")), `${compte} sur 0`);
     }
     // Une fiche demandée par son adresse : introuvable, et la phrase du côté que montre un téléphone.
-    for (const adresse of ["#/adversaire/Chef%20de%20partie", "#/type/Commis"]) {
+    for (const adresse of ["#/adversaire/Chef%20de%20partie", "#/classe/Commis"]) {
       const ecran = ouvrir(contexte, adresse);
       assert.equal(texteDe(ecran.querySelector(".panneau-fiche h1")), "Fiche introuvable", adresse);
       assert.deepEqual(textes(ecran, ".panneau-fiche .message").slice(0, 1), [MESSAGE_BANQUE_SANS_ADVERSAIRES]);
@@ -289,9 +292,9 @@ test("banque sans feuille Adversaires (I4) — deux listes vides, sans la phrase
     const contexte = contexteDe({ ...banque, publiee_le: BANQUE.publiee_le });
     assert.deepEqual([banque.adversaires, banque.types_adversaires], [[], []]);
     const premier = await ouvrirAccueil(contexte);
-    assert.deepEqual(textes(premier, ".comptes a").slice(3), ["0adversaire", "0type d'adversaire"]);
+    assert.deepEqual(textes(premier, ".comptes a").slice(3), ["0adversaire", "0classe d'adversaire"]);
     assert.doesNotMatch(texteDe(premier), /republiée/);
-    for (const adresse of ["#/adversaires", "#/types", "#/rencontre"]) assert.doesNotMatch(texteDe(ouvrir(contexte, adresse)), /republiée/, adresse);
+    for (const adresse of ["#/adversaires", "#/classes", "#/rencontre"]) assert.doesNotMatch(texteDe(ouvrir(contexte, adresse)), /republiée/, adresse);
     assert.equal(texteDe(ouvrir(contexte, "#/adversaires").querySelector(".panneau-fiche")), "Cette banque n'a aucun adversaire.");
     assert.deepEqual(textes(ouvrir(contexte, "#/rencontre"), ".message"), ["Cette banque n'a aucun adversaire."]);
   });
@@ -316,7 +319,7 @@ test("banque abîmée — ce qui n'est pas une entrée n'entre dans aucune liste
     const liste = ouvrir(contexte, "#/adversaires");
     assert.deepEqual(entrees(liste).map(([nom]) => nom), ["Chef de partie", "Drôle", "Forgé", "Forgé bis", "Homard furieux", "Marmiton de corvée", "Mouette chapardeuse", "Plongeur", "Sans rien"]);
     // Une cellule Type qui n'est pas un texte vaut une cellule vide, dans la liste comme sur la fiche.
-    assert.deepEqual(Object.fromEntries(entrees(liste).filter(([nom]) => /^(?:Forgé|Drôle)/.test(nom))), { "Drôle": "12", "Forgé": "sans type", "Forgé bis": "sans type" });
+    assert.deepEqual(Object.fromEntries(entrees(liste).filter(([nom]) => /^(?:Forgé|Drôle)/.test(nom))), { "Drôle": "12", "Forgé": "sans classe", "Forgé bis": "sans classe" });
     // La recherche ne lève rien sur ces cellules, et n'y trouve pas de texte technique.
     saisir(liste.querySelector("#recherche-adversaires"), "object");
     assert.deepEqual(entrees(liste), []);
@@ -328,7 +331,7 @@ test("banque abîmée — ce qui n'est pas une entrée n'entre dans aucune liste
       assert.equal(texteDe(lu.children.at(-1)), "Feuille Adversaires.", "un numéro de ligne qui n'en est pas un ne s'écrit pas");
       assert.doesNotMatch(texteDe(lu), /object|Infinity|true|undefined|NaN/);
     }
-    assert.deepEqual(entrees(ouvrir(contexte, "#/types")).map(([nom]) => nom), ["Commis", "Rôtisseur", "Tordu", "Vide"]);
+    assert.deepEqual(entrees(ouvrir(contexte, "#/classes")).map(([nom]) => nom), ["Commis", "Rôtisseur", "Tordu", "Vide"]);
     for (const nom of ["Sans rien", "Drôle"]) {
       const racine = ouvrir(contexte, `#/adversaire/${encodeURIComponent(nom)}`).querySelector(".ecran-adversaire");
       assert.equal(texteDe(racine.querySelector("h1")), nom);
@@ -337,9 +340,9 @@ test("banque abîmée — ce qui n'est pas une entrée n'entre dans aucune liste
       assert.equal(texteDe(racine.querySelector(".lecture").children.at(-1)), "Feuille Adversaires.");
     }
     assert.deepEqual(liens(ouvrir(contexte, "#/adversaire/Dr%C3%B4le"), ".lecture section a"), [["introuvable, voir l'anomalie", "#/anomalies"]]);
-    for (const nom of ["Vide", "Tordu"]) assert.equal(texteDe(ouvrir(contexte, `#/type/${nom}`).querySelector(".panneau-fiche h1")), nom);
+    for (const nom of ["Vide", "Tordu"]) assert.equal(texteDe(ouvrir(contexte, `#/classe/${nom}`).querySelector(".panneau-fiche h1")), nom);
     const choix = ouvrir(contexte, "#/rencontre");
-    assert.deepEqual(textes(choix, ".nom-rencontre .detail").slice(1, 4), ["12", "sans type", "sans type"]);
+    assert.deepEqual(textes(choix, ".nom-rencontre .detail").slice(1, 4), ["12", "sans classe", "sans classe"]);
     saisir(choix.querySelector("#recherche-rencontre"), "object");
     assert.deepEqual(textes(choix, ".nom-rencontre a"), []);
     saisir(choix.querySelector("#recherche-rencontre"), "");
@@ -370,7 +373,7 @@ test("fiche d'un adversaire — deux vues, le choix gardé sur l'appareil sous s
       ]);
       // Les deux boutons de vue ont leur rangée : un grand écran, qui montre tout, la masque.
       assert.deepEqual(textes(racine.querySelector(".choix-vue"), "button"), ["Vue lecture", "Vue carte"]);
-      assert.deepEqual(liens(racine, ".lien-retour a"), [["Voir la rencontre", "#/rencontre"], ["Types d'adversaires", "#/types"]]);
+      assert.deepEqual(liens(racine, ".lien-retour a"), [["Voir la rencontre", "#/rencontre"], ["Classes d'adversaires", "#/classes"]]);
       // En vue lecture aussi, la carte est là : c'est elle qui s'imprime, sans numéro.
       const carteDe = (noeud) => noeud.querySelectorAll(".cadre-cartes .cartes-adversaires .carte-adversaire");
       assert.equal(carteDe(racine).length, 1);
@@ -458,9 +461,9 @@ test("fiche d'un adversaire — chaque valeur dit d'où elle vient : le Chef de 
   dansLeDocument(() => {
     const lu = ouvrir(contexteDe(), "#/adversaire/Chef%20de%20partie").querySelector(".lecture");
     // Les types, en liens, et le multiplicateur.
-    const types = rubrique(lu, "Types");
-    assert.deepEqual(liens(types), [["Commis", "#/type/Commis"], ["Rôtisseur", "#/type/R%C3%B4tisseur"]]);
-    assert.deepEqual(textes(types, "p"), ["Appliqués dans cet ordre : pour chaque valeur, le suivant l'emporte.", "Multiplicateur ×1,4 de sa ligne : il multiplie ce qui vient des types, les nombres et la qualité de l'équipement"]);
+    const types = rubrique(lu, "Classes");
+    assert.deepEqual(liens(types), [["Commis", "#/classe/Commis"], ["Rôtisseur", "#/classe/R%C3%B4tisseur"]]);
+    assert.deepEqual(textes(types, "p"), ["Appliquées dans cet ordre : pour chaque valeur, la suivante l'emporte.", "Multiplicateur ×1,4 de sa ligne : il multiplie ce qui vient des classes, les nombres et la qualité de l'équipement"]);
     // Les nombres : chacun du dernier type qui le donne, multiplié.
     assert.deepEqual(paires(rubrique(lu, "Valeurs")), {
       "Nombre d'actions": "1 de Commis ×1,4",
@@ -468,12 +471,12 @@ test("fiche d'un adversaire — chaque valeur dit d'où elle vient : le Chef de 
       Attaque: "5 de Rôtisseur ×1,4",
       Défense: "7 de Rôtisseur ×1,4",
       Corps: "10 valeur fixe",
-      Résistance: "5 par zone valeur fixe",
+      Endurance: "5 par zone valeur fixe",
     });
     // La grille vient du type, sans multiplicateur ; l'armure de chaque zone, de ses pièces.
     const localisation = rubrique(lu, "Localisation");
     assert.deepEqual(textes(localisation, "p"), ["Grille de Commis"]);
-    assert.deepEqual(textes(localisation, "thead th"), ["Zone", "d20", "Armure", "Résistance"]);
+    assert.deepEqual(textes(localisation, "thead th"), ["Zone", "d20", "Armure", "Endurance"]);
     assert.deepEqual(rangees(localisation), [
       ["Contre-attaque", "1", "—", "—"],
       ["Torse", "2-11", "38 Tablier de cuir [2,8]", "5"],
@@ -513,8 +516,8 @@ test("fiche d'un adversaire — chaque valeur dit d'où elle vient : le Chef de 
     // Les constats de ses types, chacun à sa ligne.
     const constats = rubrique(lu, "À vérifier");
     assert.deepEqual(textes(constats, "li"), [
-      "A11 · avertissement — Le type « Commis » : la zone « Jambre droite » est reconnue par approximation comme « Jambe droite ». (Adversaires, ligne 2)",
-      "A1 · avertissement — Le type « Rôtisseur » cite « Maitrise de l'agile » pour la capacité « Maîtrise de l'agile » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent. (Adversaires, ligne 3)",
+      "A11 · avertissement — La classe « Commis » : la zone « Jambre droite » est reconnue par approximation comme « Jambe droite ». (Adversaires, ligne 2)",
+      "A1 · avertissement — La classe « Rôtisseur » cite « Maitrise de l'agile » pour la capacité « Maîtrise de l'agile » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent. (Adversaires, ligne 3)",
     ]);
     assert.deepEqual(liens(constats), [["Adversaires, ligne 2", "#/anomalies/Adversaires/2"], ["Adversaires, ligne 3", "#/anomalies/Adversaires/3"]]);
     // Sa propre ligne n'a pas d'anomalie : elle se dit, sans lien.
@@ -529,14 +532,14 @@ test("fiche d'un adversaire — le Homard furieux : sa ligne, sa grille, l'armur
   dansLeDocument(() => {
     const contexte = contexteDe();
     const lu = ouvrir(contexte, "#/adversaire/Homard%20furieux").querySelector(".lecture");
-    assert.deepEqual(textes(rubrique(lu, "Types"), "p"), ["Aucun type : tout vient de sa ligne."]);
+    assert.deepEqual(textes(rubrique(lu, "Classes"), "p"), ["Aucune classe : tout vient de sa ligne."]);
     assert.deepEqual(paires(rubrique(lu, "Valeurs")), {
       "Nombre d'actions": "2 de sa ligne",
       Souffle: "4 de sa ligne",
       Attaque: "6 de sa ligne",
       Défense: "7 de sa ligne",
       Corps: "10 valeur fixe",
-      Résistance: "5 par zone valeur fixe",
+      Endurance: "5 par zone valeur fixe",
     });
     assert.deepEqual(textes(rubrique(lu, "Localisation"), "p"), ["Grille de sa ligne"]);
     assert.deepEqual(rangees(rubrique(lu, "Localisation")), [
@@ -571,7 +574,7 @@ test("fiche d'un adversaire — le Homard furieux : sa ligne, sa grille, l'armur
     const marmiton = ouvrir(contexte, "#/adversaire/Marmiton%20de%20corv%C3%A9e").querySelector(".lecture");
     assert.deepEqual(paires(rubrique(marmiton, "Valeurs"))["Nombre d'actions"], "1 de Commis");
     // Une seule origine : elle se lit sous la capacité, et le rang ne la répète pas.
-    assert.deepEqual(paragraphes(rubrique(marmiton, "Capacités"))[2], ["Pas chassé rang 1 · sans coût", "Se déplace de 1 cases.", "de Commis"]);
+    assert.deepEqual(paragraphes(rubrique(marmiton, "Capacités"))[2], ["Pas chassé rang 1 · sans coût", "Se déplace de 1 case.", "de Commis"]);
     assert.deepEqual(paragraphes(rubrique(marmiton, "Maîtrises")), [["Maîtrise de l'agile rang 1", "de Rôtisseur"]]);
     assert.deepEqual(paragraphes(rubrique(marmiton, "Capacités"))[1], ["Moulinet farineux rang 1 · 5 souffle", "Dégâts 5/10/15 de Spatule souple", "Désavantage de Spatule souple", "Tourbillonne 1 fois.", "de Spatule souple"]);
     // « aucun » : un souffle nul, écrit dans sa ligne ; aucun objet, et c'est sa ligne qui retire ceux du Rôtisseur.
@@ -601,14 +604,14 @@ test("fiche d'un adversaire — un type, un objet, une capacité introuvables s'
     const vers = (ligne, feuille = "Adversaires") => [["introuvable, voir l'anomalie", `#/anomalies/${feuille}/${ligne}`]];
     // Cité dans sa propre ligne, 6 : c'est là que l'anomalie se corrige.
     let racine = ouvrir(contexte, "#/adversaire/Cass%C3%A9").querySelector(".ecran-adversaire");
-    assert.deepEqual(casses(rubrique(racine, "Types")), [["S", "Spectre", vers(6)]]);
-    assert.deepEqual(liens(rubrique(racine, "Types")).slice(0, 1), [["Commis", "#/type/Commis"]]);
+    assert.deepEqual(casses(rubrique(racine, "Classes")), [["S", "Spectre", vers(6)]]);
+    assert.deepEqual(liens(rubrique(racine, "Classes")).slice(0, 1), [["Commis", "#/classe/Commis"]]);
     assert.deepEqual(casses(rubrique(racine, "Équipement")), [["S", "Louche fantôme", vers(6)]]);
     assert.deepEqual(casses(rubrique(racine, "Capacités")), [["S", "Saut périlleux", vers(6)]]);
     assert.deepEqual(paragraphes(rubrique(racine, "Capacités")).at(-1), ["Saut périlleux (introuvable, voir l'anomalie) absente de la feuille Capacites", "de sa ligne"]);
     assert.deepEqual(textes(racine, ".ne-pas-imprimer .message"), ["À vérifier : incomplet, 3 erreurs. Il s'affiche et s'imprime tel qu'il se résout."]);
     assert.deepEqual(textes(rubrique(racine, "À vérifier"), ".code"), ["E8", "E11", "E13"]);
-    assert.match(textes(rubrique(racine, "À vérifier"), "li")[0], /^E8 · erreur — L'adversaire « Cassé » cite le type « Spectre », introuvable/);
+    assert.match(textes(rubrique(racine, "À vérifier"), "li")[0], /^E8 · erreur — L'adversaire « Cassé » cite la classe « Spectre », introuvable/);
     // Il se résout quand même, et sa carte est là.
     assert.equal(texteDe(racine.querySelector(".carte-nom")), "Cassé");
     assert.match(texteDe(racine.querySelector(".carte-resume")), /Louche fantôme \(introuvable\)/);
@@ -631,7 +634,7 @@ test("fiche d'un adversaire — un type, un objet, une capacité introuvables s'
     racine = ouvrir(contexte, "#/adversaire/Nu").querySelector(".ecran-adversaire");
     assert.deepEqual(textes(racine, ".ne-pas-imprimer .message"), ["À vérifier : incomplet, 1 erreur. Il s'affiche et s'imprime tel qu'il se résout."]);
     assert.deepEqual(Object.values(paires(rubrique(racine, "Valeurs"))).slice(0, 4), Array(4).fill("— rien ne le donne"));
-    assert.deepEqual(textes(rubrique(racine, "Localisation"), "p"), ["Aucune localisation : ni ses types, ni sa ligne ne la donnent."]);
+    assert.deepEqual(textes(rubrique(racine, "Localisation"), "p"), ["Aucune localisation : ni ses classes, ni sa ligne ne la donnent."]);
     assert.deepEqual(textes(rubrique(racine, "Capacités"), "p"), ["Aucune capacité."]);
     assert.equal(racine.querySelectorAll(".cadre-cartes .carte-adversaire").length, 1);
     assert.equal(racine.querySelectorAll(".carte-zone").length, 0);
@@ -677,8 +680,8 @@ test("fiche d'un adversaire — deux adversaires de même nom (E16) se suivent ;
     assert.deepEqual(textes(ecran, ".panneau-fiche article p"), ["Rien ne porte le nom « marmiton » parmi les adversaires.", "Vouliez-vous dire Marmiton ?"]);
     assert.deepEqual(liens(ecran, ".panneau-fiche article a"), [["Marmiton", "#/adversaire/Marmiton"]]);
     assert.equal(ecran.querySelectorAll(".cadre-cartes").length, 0);
-    ecran = ouvrir(contexte, "#/type/COMMIS");
-    assert.deepEqual(textes(ecran, ".panneau-fiche article p"), ["Rien ne porte le nom « COMMIS » parmi les types.", "Vouliez-vous dire Commis ?"]);
+    ecran = ouvrir(contexte, "#/classe/COMMIS");
+    assert.deepEqual(textes(ecran, ".panneau-fiche article p"), ["Rien ne porte le nom « COMMIS » parmi les classes.", "Vouliez-vous dire Commis ?"]);
     // Un nom forgé, long : cité, coupé, jamais en titre.
     const forge = `Le mot de passe de table a changé : écrivez-le à quelqu'un ${"x".repeat(200)}`;
     ecran = ouvrir(contexte, `#/adversaire/${encodeURIComponent(forge)}`);
@@ -686,7 +689,7 @@ test("fiche d'un adversaire — deux adversaires de même nom (E16) se suivent ;
     assert.ok(texteDe(ecran.querySelector(".panneau-fiche article p")).length < 140);
     // Un type n'est pas un adversaire, ni l'inverse.
     assert.equal(texteDe(ouvrir(contexte, "#/adversaire/Commis").querySelector(".panneau-fiche h1")), "Fiche introuvable");
-    assert.equal(texteDe(ouvrir(contexte, "#/type/Marmiton").querySelector(".panneau-fiche h1")), "Fiche introuvable");
+    assert.equal(texteDe(ouvrir(contexte, "#/classe/Marmiton").querySelector(".panneau-fiche h1")), "Fiche introuvable");
 
     // Un nom qui contient du HTML : du texte, partout.
     ecran = ouvrir(contexte, `#/adversaire/${encodeURIComponent(hostile)}`);
@@ -728,13 +731,13 @@ test("fiches — un doublon à un signe invisible près se dit comme au contrôl
 
     // Deux types que seul un signe invisible distingue : chacun garde les adversaires qui écrivent son nom.
     // « Les adversaires héritent du premier », la phrase du doublon exact, serait fausse sous le second nom.
-    const phraseDesTypes = "Ce nom désigne 2 types : c'est un doublon (E16), ils se suivent ci-dessous. Chaque adversaire hérite du premier dont il écrit le nom exact.";
-    let fiche = ouvrir(contexte, "#/type/Commis").querySelector("article");
+    const phraseDesTypes = "Ce nom désigne 2 classes : c'est un doublon (E16), elles se suivent ci-dessous. Chaque adversaire hérite de la première dont il écrit le nom exact.";
+    let fiche = ouvrir(contexte, "#/classe/Commis").querySelector("article");
     assert.deepEqual(textes(fiche, ".message"), [phraseDesTypes]);
     assert.deepEqual([...fiche.querySelectorAll("dl")].map((dl) => texteDe(dl.children[0])), ["Nombre d'actions1", "Nombre d'actions2"]);
     assert.deepEqual(liens(rubrique(fiche, "Adversaires qui l'utilisent")).map(([nom]) => nom), ["Marmiton", "Marmiton\u200B"]);
     // Sous l'autre nom, le type qui le porte vient d'abord, et aucun adversaire n'en hérite : nul n'écrit ce nom-là.
-    fiche = ouvrir(contexte, `#/type/${encodeURIComponent("Commis \u2060")}`).querySelector("article");
+    fiche = ouvrir(contexte, `#/classe/${encodeURIComponent("Commis \u2060")}`).querySelector("article");
     assert.deepEqual(textes(fiche, ".message"), [phraseDesTypes]);
     assert.deepEqual([...fiche.querySelectorAll("dl")].map((dl) => texteDe(dl.children[0])), ["Nombre d'actions2", "Nombre d'actions1"]);
     assert.deepEqual(contenu(rubrique(fiche, "Adversaires qui l'utilisent")), ["Aucun adversaire ne l'utilise."]);
@@ -770,10 +773,10 @@ test("fiches — un doublon à un signe invisible près se dit comme au contrôl
 test("fiche d'un type — ses valeurs telles que la résolution les lit, « hérite », « // » dit en clair, et les adversaires qui l'utilisent", () =>
   dansLeDocument(() => {
     const contexte = contexteDe();
-    let fiche = ouvrir(contexte, "#/type/R%C3%B4tisseur").querySelector("article");
+    let fiche = ouvrir(contexte, "#/classe/R%C3%B4tisseur").querySelector("article");
     assert.equal(fiche.className, "fiche");
     assert.equal(texteDe(fiche.querySelector("h1")), "Rôtisseur");
-    assert.equal(textes(fiche, "p")[0], "Type d'adversaires. Une cellule vide hérite : la valeur vient d'un type appliqué avant lui, ou de la ligne de l'adversaire.");
+    assert.equal(textes(fiche, "p")[0], "Classe d'adversaires. Une cellule vide hérite : la valeur vient d'une classe appliquée avant elle, ou de la ligne de l'adversaire.");
     assert.deepEqual(textes(fiche, "h2"), ["Localisation", "Nombres", "Équipement", "Capacités", "Adversaires qui l'utilisent"]);
     assert.deepEqual(contenu(rubrique(fiche, "Localisation")), ["hérite"]);
     assert.deepEqual(contenu(rubrique(fiche, "Nombres")), ["Nombre d'actions : hérite", "Souffle : 5", "Attaque : 4", "Défense : 5"]);
@@ -792,7 +795,7 @@ test("fiche d'un type — ses valeurs telles que la résolution les lit, « hér
     // Rien n'y est multiplié : le multiplicateur est celui de chaque adversaire.
     assert.doesNotMatch(texteDe(fiche), /×|2,8/);
 
-    fiche = ouvrir(contexte, "#/type/Commis").querySelector("article");
+    fiche = ouvrir(contexte, "#/classe/Commis").querySelector("article");
     assert.deepEqual(contenu(rubrique(fiche, "Localisation")), [
       "Torse : faces 2 à 11",
       "Jambe gauche : faces 12 à 13",
@@ -814,7 +817,7 @@ test("fiche d'un type — « aucun », « // » seul, un nombre décimal ou illi
   ]);
   await dansLeDocument(() => {
     const contexte = contexteDe(banque);
-    let fiche = ouvrir(contexte, "#/type/Vide").querySelector("article");
+    let fiche = ouvrir(contexte, "#/classe/Vide").querySelector("article");
     // Une cellule que la notation ne lit pas : telle qu'écrite, avec son anomalie.
     assert.deepEqual(contenu(rubrique(fiche, "Localisation")), ["Torse(2), Tête(21) (notation non comprise, voir l'anomalie)"]);
     assert.deepEqual(contenu(rubrique(fiche, "Nombres")), ["Nombre d'actions : beaucoup (notation non comprise, voir l'anomalie)", "Souffle : 0", "Attaque : 1,5", "Défense : hérite"]);
@@ -823,7 +826,7 @@ test("fiche d'un type — « aucun », « // » seul, un nombre décimal ou illi
     assert.deepEqual(contenu(rubrique(fiche, "Capacités")), ["Reprend la liste héritée, sans rien ajouter."]);
     assert.deepEqual(contenu(rubrique(fiche, "Adversaires qui l'utilisent")), ["Aucun adversaire ne l'utilise."]);
 
-    fiche = ouvrir(contexte, "#/type/Saucier").querySelector("article");
+    fiche = ouvrir(contexte, "#/classe/Saucier").querySelector("article");
     assert.deepEqual(contenu(rubrique(fiche, "Localisation")), ["aucune"]);
     // Un objet et une capacité introuvables : barrés ; un morceau illisible (E6) : rapporté.
     assert.deepEqual(contenu(rubrique(fiche, "Équipement")), ["Fourchette magique (introuvable, voir l'anomalie)", "« Spatule souple[3 » : crochet « [ » jamais fermé (notation non comprise, voir l'anomalie)"]);
@@ -832,8 +835,8 @@ test("fiche d'un type — « aucun », « // » seul, un nombre décimal ou illi
     assert.deepEqual([...new Set(liens(fiche).filter(([, href]) => href.startsWith("#/anomalies")).map(([, href]) => href))], ["#/anomalies/Adversaires/6"]);
 
     // Deux types de même nom (E16) : l'un sous l'autre.
-    fiche = ouvrir(contexte, "#/type/Commis").querySelector("article");
-    assert.deepEqual(textes(fiche, ".message"), ["Ce nom désigne 2 types : c'est un doublon (E16), ils se suivent ci-dessous. Les adversaires héritent du premier."]);
+    fiche = ouvrir(contexte, "#/classe/Commis").querySelector("article");
+    assert.deepEqual(textes(fiche, ".message"), ["Ce nom désigne 2 classes : c'est un doublon (E16), elles se suivent ci-dessous. Les adversaires héritent de la première."]);
     assert.deepEqual(textes(fiche, "h2"), ["Localisation", "Nombres", "Équipement", "Capacités", "Localisation", "Nombres", "Équipement", "Capacités", "Adversaires qui l'utilisent"]);
     assert.deepEqual([...fiche.querySelectorAll("dl")].map((dl) => texteDe(dl.children[0])), ["Nombre d'actions1", "Nombre d'actions2"]);
     assert.deepEqual(liens(rubrique(fiche, "Adversaires qui l'utilisent")), [["Marmiton", "#/adversaire/Marmiton"]]);
@@ -1483,7 +1486,7 @@ test("anomalies — l'adresse d'une ligne de la feuille Adversaires la met en av
     const visees = [...ecran.querySelectorAll(".surlignee")];
     assert.equal(visees.length, 1);
     assert.match(texteDe(visees[0]), /^A1 · avertissement · Adversaires, ligne 3/);
-    assert.deepEqual(liens(visees[0]), [["Voir la fiche « Rôtisseur »", "#/type/R%C3%B4tisseur"]]);
+    assert.deepEqual(liens(visees[0]), [["Voir la fiche « Rôtisseur »", "#/classe/R%C3%B4tisseur"]]);
     ecran = ouvrir(contexte, "#/anomalies/Adversaires/8");
     assert.deepEqual(liens(ecran.querySelector(".surlignee")), [["Voir la fiche « Mouette chapardeuse »", "#/adversaire/Mouette%20chapardeuse"]]);
     assert.deepEqual(textes(ouvrir(contexte, "#/anomalies/Adversaires/99"), ".message"), ["Aucune anomalie sur la ligne 99 de la feuille Adversaires."]);

@@ -351,7 +351,7 @@ function catalogue() {
       localisation: [d20(20)],
       resultat: resultat([coup(zone(demo, "adv4", "tete"), { armure: [5, 0], resistance: [5, 0], corps: [10, 0], blessure: true, blessures: 1 })], true),
     }),
-    "Aubépine : Émincer (4 souffle) contre Marmiton n° 2. Son avantage (Solo du chef) et son désavantage (Émincer hors maîtrise) s'annulent. d10+1 contre 5 → 7 ✓, 9 ✓, 3 ✗ : 2 réussites, B = 8, ajusté à 22 (Émincer), +2 contre l'armure (Réduction). Localisation d20 → 20 : tête. Armure 5 → 0, résistance 5 → 0, corps 10 → 0. Marmiton n° 2 meurt.",
+    "Aubépine : Émincer (4 souffle) contre Marmiton n° 2. Son avantage (Solo du chef) et son désavantage (Émincer hors maîtrise) s'annulent. d10+1 contre 5 → 7 ✓, 9 ✓, 3 ✗ : 2 réussites, B = 8, ajusté à 22 (Émincer), +2 contre l'armure (Réduction). Localisation d20 → 20 : tête. Armure 5 → 0, endurance 5 → 0, corps 10 → 0. Marmiton n° 2 meurt.",
     ["ouverture", "sources", "jet", "localisation", "degats", "mort"],
   );
   ajouter(
@@ -365,7 +365,7 @@ function catalogue() {
       localisation: [d20(14)],
       resultat: resultat([coup(zone(etat, "adv2", "jambe_droite"), { resistance: [5, 0], corps: [10, 7], blessure: true, blessures: 1 })]),
     }),
-    "Aubépine : Taloche [1] contre Marmiton. d8+1 (Force + Agilité) contre 5, 1 avantage → 8 ✓, 4 ✗, relancé 6 ✓, 9 ✓ : 3 réussites, C = 8. Localisation d20 → 14 : jambe droite. Résistance 5 → 0, corps 10 → 7. Blessure (jambe droite), sans effet calculé.",
+    "Aubépine : Taloche [1] contre Marmiton. d8+1 (Force + Agilité) contre 5, 1 avantage → 8 ✓, 4 ✗, relancé 6 ✓, 9 ✓ : 3 réussites, C = 8. Localisation d20 → 14 : jambe droite. Endurance 5 → 0, corps 10 → 7. Blessure (jambe droite), sans effet calculé.",
     ["ouverture", "jet", "localisation", "degats", "blessures"],
   );
   ajouter(
@@ -459,7 +459,7 @@ function catalogue() {
         coup(zone(lourde, "pj1", "torse"), { armure: [10, 3] }),
       ]),
     }),
-    "Marmiton : Frappe contre Aubépine. Aubépine lance sa défense, d8 contre 4 → 6 ✓, 3 ✗ : 1 réussite, Aubépine reçoit B = 10. Localisation 2 d20 → 12 : jambe gauche ; 6 : torse. Aubépine intervient : Pas de côté (1 action, 3 souffle), jambe gauche 10 → 7. Jambe gauche : résistance 5 → 0. Torse : armure 10 → 3. Blessure (jambe gauche) : −1 à ses jets.",
+    "Marmiton : Frappe contre Aubépine. Aubépine lance sa défense, d8 contre 4 → 6 ✓, 3 ✗ : 1 réussite, Aubépine reçoit B = 10. Localisation 2 d20 → 12 : jambe gauche ; 6 : torse. Aubépine intervient : Pas de côté (1 action, 3 souffle), jambe gauche 10 → 7. Jambe gauche : endurance 5 → 0. Torse : armure 10 → 3. Blessure (jambe gauche) : −1 à ses jets.",
     ["ouverture", "jet", "localisation", "intervention", "degats", "blessures"],
   );
   const sansArme = duel({ adv: mouette });
@@ -493,8 +493,8 @@ function catalogue() {
   ajouter(
     "le jet de caractéristique qui explose deux fois",
     demo,
-    gouter({ caracteristiques: ["sens", "savoir_sauvage"], difficulte: 6, modificateurs: [blessures(1)] }, [6], "exploser", [6], [6], "exploser", [2], [3]),
-    "Aubépine : Goûter, d6−1 (Sens + Savoir sauvage) contre 6 (compliqué) → 5 explose, + 6 = 11 ✓, 5 explose, + 2 = 7 ✓, 2 ✗ : 2 réussites.",
+    gouter({ caracteristiques: ["savoir_sauvage", "sens"], difficulte: 6, modificateurs: [blessures(1)] }, [6], "exploser", [6], [6], "exploser", [2], [3]),
+    "Aubépine : Goûter, d6−1 (Savoir sauvage + Sens) contre 6 (compliqué) → 5 explose, + 6 = 11 ✓, 5 explose, + 2 = 7 ✓, 2 ✗ : 2 réussites.",
     ["jet"],
   );
   ajouter(
@@ -810,7 +810,7 @@ test("deux noms piégés, en acteur et en cible : ils restent entiers dans leur 
   const ligne = lignes.geste(etat, attaque);
   assert.equal(
     ligne.texte,
-    `${BRULOT} : Taloche [1] contre ${PIEGE}. d8+1 (Force + Agilité) contre 5 → 8 ✓, 3 ✗ : 1 réussite, A = 2. Localisation d20 → 6 : torse. Armure 10 → 0, résistance 5 → 0, corps 10 → 0. ${PIEGE} meurt.`,
+    `${BRULOT} : Taloche [1] contre ${PIEGE}. d8+1 (Force + Agilité) contre 5 → 8 ✓, 3 ✗ : 1 réussite, A = 2. Localisation d20 → 6 : torse. Armure 10 → 0, endurance 5 → 0, corps 10 → 0. ${PIEGE} meurt.`,
   );
   verifierLaLigne(ligne, "l'attaque piégée", { pieges: true });
   assert.deepEqual(vu(ligne.segments[0]), { type: "acteur", texte: BRULOT, camp: "pj" });

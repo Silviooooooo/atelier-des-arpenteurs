@@ -278,10 +278,10 @@ test("attaqueDe, defenseDe : les nombres courants d'un adversaire, jamais ceux d
   assert.equal(defenseDe(change, "adv2").valeur, 3);
 });
 
-test("blessuresDe : une par zone dont la résistance est à 0", () => {
+test("blessuresDe : une par zone dont l'endurance est à 0", () => {
   assert.equal(blessuresDe(duel(), "pj1"), 0);
   const entamee = duel({ retoucher: (etat) => { etat.protagonistes.pj1.zones[2].resistance = 1; etat.protagonistes.pj1.zones[2].armure = 0; } });
-  assert.equal(blessuresDe(entamee, "pj1"), 0, "une résistance entamée, ou une armure à 0, ne sont pas une blessure");
+  assert.equal(blessuresDe(entamee, "pj1"), 0, "une endurance entamée, ou une armure à 0, ne sont pas une blessure");
   const une = duel({ retoucher: (etat) => { etat.protagonistes.pj1.zones[2].resistance = 0; } });
   assert.equal(blessuresDe(une, "pj1"), 1);
   assert.equal(blessuresDe(une, "adv2"), 0, "chacun les siennes");
@@ -579,7 +579,7 @@ test("modificateurs 4 et 5, petit : +N aux jets de défense ; −1 aux jets qui 
   assert.deepEqual(gouter.modificateurs, [{ genre: "passif", nom: "Demi-portion", valeur: -1 }], "un jet de caractéristique n'est pas une défense");
 });
 
-test("modificateur 6, blessures : −1 par zone dont la résistance est à 0, à chaque jet du PJ", () => {
+test("modificateur 6, blessures : −1 par zone dont l'endurance est à 0, à chaque jet du PJ", () => {
   const blesser = (...zones) => (etat) => {
     for (const zone of zones) etat.protagonistes.pj1.zones[zone].resistance = 0;
   };
@@ -593,7 +593,7 @@ test("modificateur 6, blessures : −1 par zone dont la résistance est à 0, à
   assert.deepEqual(attaqueDuPj(duel({ retoucher: blesser(0, 1, 5) })).modificateurs, [{ genre: "blessures", nom: null, valeur: -3 }]);
   assert.deepEqual(attaqueDuPj(duel()).modificateurs, [], "sans blessure, rien");
   const entamee = duel({ retoucher: (etat) => { etat.protagonistes.pj1.zones[2].resistance = 1; } });
-  assert.deepEqual(attaqueDuPj(entamee).modificateurs, [], "une résistance à 1 n'est pas une blessure");
+  assert.deepEqual(attaqueDuPj(entamee).modificateurs, [], "une endurance à 1 n'est pas une blessure");
 });
 
 test("modificateur 7, la main : ±N avec sa raison, en dernier ; nul ou absent, rien", () => {
@@ -993,7 +993,7 @@ test("un jet prêté ne porte pas le désavantage de maîtrise, ni pour qui le l
 
 test("un jet de caractéristique n'a que la main : ni passif, ni maîtrise, ni armure mêlée", () => {
   const etat = duel({ pj: ensemble(solo(), brigade(), coude(), melee), adv: solo(), autres: [{ photo: brioche(), case: "D4" }] });
-  const gouter = (reglages) => circonstances(etat, joue(etat, "pj1", "Goûter", { mode: "caracteristique", caracteristiques: ["sens", "parole"], difficulte: 6, cible: "adv2", reglages }));
+  const gouter = (reglages) => circonstances(etat, joue(etat, "pj1", "Goûter", { mode: "caracteristique", caracteristiques: ["parole", "sens"], difficulte: 6, cible: "adv2", reglages }));
   const nu = gouter({ modificateur: null, avantages: null });
   assert.deepEqual(nu.avantages, []);
   assert.deepEqual(nu.desavantages, []);
@@ -1215,11 +1215,11 @@ test("référence, étape 12 : Moulinet farineux hors maîtrise, « Ses 2 avanta
   });
 });
 
-test("référence, étape 14 : Goûter avec une blessure, « d6−1 (Sens + Savoir sauvage) contre 6 (compliqué) », sans avantage", () => {
+test("référence, étape 14 : Goûter avec une blessure, « d6−1 (Savoir sauvage + Sens) contre 6 (compliqué) », sans avantage", () => {
   const etat = reference({ retoucher: blesserAubepine(2) });
-  const rendu = circonstances(etat, joue(etat, "pj1", "Goûter", { mode: "caracteristique", caracteristiques: ["sens", "savoir_sauvage"], difficulte: 6 }));
+  const rendu = circonstances(etat, joue(etat, "pj1", "Goûter", { mode: "caracteristique", caracteristiques: ["savoir_sauvage", "sens"], difficulte: 6 }));
   assert.equal(rendu.libelle, "compliqué");
-  assert.deepEqual(rendu.caracteristiques, ["sens", "savoir_sauvage"]);
+  assert.deepEqual(rendu.caracteristiques, ["savoir_sauvage", "sens"]);
   assert.deepEqual(rendu.modificateurs, [{ genre: "blessures", nom: null, valeur: -1 }], "l'Agilité n'y est pas : pas de Vif");
   verifier(rendu, { faces: 6, modificateur: -1, difficulte: 6, net: 0, avantages: [], desavantages: [] });
 });

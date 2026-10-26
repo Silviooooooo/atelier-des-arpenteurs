@@ -190,7 +190,7 @@ const LIGNES = {
 const CLES = ["0:0", "1:0", "4:0", "4:1", "6:0", "9:0", "9:1", "15:0"];
 
 const PASSIFS = [
-  { cle: "passif:3", libelle: "Réduction [1]", survol: survolDe("Réduction", { origine: "Saucier", description: "Retire 1 points d'armure par réussite.", cout: "Passif : ne se joue pas" }) },
+  { cle: "passif:3", libelle: "Réduction [1]", survol: survolDe("Réduction", { origine: "Saucier", description: "Retire 1 point d'armure par réussite.", cout: "Passif : ne se joue pas" }) },
   { cle: "passif:10", libelle: "Vif [1]", survol: survolDe("Vif", { origine: "Marmiton", description: "Ajoutez 1 aux jets d'agilité.", cout: "Passif : ne se joue pas" }) },
   { cle: "passif:12", libelle: "Solo du chef [1]", survol: survolDe("Solo du chef", { origine: "Saucier", description: "Seul sur sa case : 1 avantage.", cout: "Passif : ne se joue pas" }) },
 ];
@@ -1100,7 +1100,7 @@ test("aperçu — un passif ouvre le sien au doigt, sans bouton ni hachure, sous
     const reduction = tous(lieu, "span.combat-passif")[0];
     appuyer(reduction, "touch");
     assert.equal(tous(lieu, ".combat-apercu").length, 1);
-    assert.equal(lieu.querySelector(".combat-apercu").textContent.includes("Retire 1 points d'armure par réussite."), true);
+    assert.equal(lieu.querySelector(".combat-apercu").textContent.includes("Retire 1 point d'armure par réussite."), true);
     appuyer(reduction, "touch");
     assert.equal(lieu.querySelector(".combat-apercu"), null);
     assert.equal(r.memoire.apercu, null);
@@ -1821,14 +1821,14 @@ test("jet — fixer les dégâts : la base, la nature, et un nombre avec sa rais
       ],
       natures: [
         { libelle: "Normaux", choisie: true, commande: { evenement: { type: "degats", base: "aucun", operations: [], nature: "normaux" } } },
-        { libelle: "Directs, à la résistance", choisie: false, commande: { evenement: { type: "degats", base: "aucun", operations: [], nature: "resistance" } } },
+        { libelle: "Directs, à l'endurance", choisie: false, commande: { evenement: { type: "degats", base: "aucun", operations: [], nature: "resistance" } } },
       ],
       saisie: { valeur: null, raison: null, raisonParDefaut: "Fournaise", min: 0, max: 999, gabarit: { evenement: { type: "degats", base: "aucun", nature: "normaux" } } },
     };
     rendre(vueJet({ geste: gesteVu({ choix: [], degats }) }));
     assert.deepEqual(tous(noeud, ".combat-degats-bases button").map((b) => [texteDe(b), b.getAttribute("aria-pressed")]), [["Sans dégâts", "true"], ["Dégâts de l'arme", "false"]]);
     leBouton(noeud, "Dégâts de l'arme").click();
-    leBouton(noeud, "Directs, à la résistance").click();
+    leBouton(noeud, "Directs, à l'endurance").click();
     assert.deepEqual(appels.map((appel) => [appel.commande.evenement.base, appel.commande.evenement.nature, appel.origine]), [["arme", "normaux", "panneau"], ["aucun", "resistance", "panneau"]]);
 
     const ligne = leBouton(noeud, "Fixer les dégâts").parentNode;

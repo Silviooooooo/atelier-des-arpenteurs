@@ -119,7 +119,7 @@ const LIGNES = {
 const CLES = ["0:0", "1:0", "4:0", "4:1", "9:0", "15:0"];
 
 const PASSIFS = [
-  { cle: "passif:3", libelle: "Réduction [1]", survol: survolDe("Réduction", { origine: "Saucier", description: "Retire 1 points d'armure par réussite.", cout: "Passif : ne se joue pas" }) },
+  { cle: "passif:3", libelle: "Réduction [1]", survol: survolDe("Réduction", { origine: "Saucier", description: "Retire 1 point d'armure par réussite.", cout: "Passif : ne se joue pas" }) },
   { cle: "passif:10", libelle: "Vif [1]", survol: survolDe("Vif", { origine: "Marmiton", description: "Ajoutez 1 aux jets d'agilité.", cout: "Passif : ne se joue pas" }) },
 ];
 

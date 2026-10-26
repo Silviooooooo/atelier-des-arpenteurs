@@ -3,12 +3,12 @@
 // L'adversaire résolu (resolution.js), ses rubriques empilées dans les
 // styles de l'interface, lisibles sans zoom sur un téléphone. C'est ici, et
 // ici seulement, que chaque valeur dit d'où elle vient : « de Saucier ×2 »
-// pour ce qu'un type donne sous le multiplicateur, « de sa ligne » pour ce
+// pour ce qu'une classe donne sous le multiplicateur, « de sa ligne » pour ce
 // que l'adversaire écrit lui-même, « de Spatule souple » pour ce que donne un
 // objet. La carte (carte.js), qui s'imprime, n'en dit rien.
 //
-// Rien ne se recalcule : la vue affiche ce que la résolution a rendu. Un
-// type, un objet ou une capacité introuvable s'affiche barré, avec un lien
+// Rien ne se recalcule : la vue affiche ce que la résolution a rendu. Une
+// classe, un objet ou une capacité introuvable s'affiche barré, avec un lien
 // vers l'anomalie de la ligne qui le cite, comme tout renvoi cassé (§ 9).
 
 import { GRAVITES } from "../banque/controle.js";
@@ -25,7 +25,7 @@ const VOYELLE = /^[aeiouàâäéèêëîïôöùûüœæ]/iu;
 const de = (nom) => (VOYELLE.test(nom) ? `d'${nom}` : `de ${nom}`);
 
 /**
- * D'où vient une valeur : « de Saucier ×2 » (un type, sous le
+ * D'où vient une valeur : « de Saucier ×2 » (une classe, sous le
  * multiplicateur de l'adversaire), « de Commis », « de sa ligne », « de
  * Spatule souple » (un objet). Rien pour une valeur que rien ne donne.
  */
@@ -73,13 +73,13 @@ export function lecture(resolu, index) {
     const plusieurs = new Set(origines.map(origineDe).filter(Boolean)).size > 1;
     return `rang ${rang}${plusieurs && citation ? `, ${origineDe(citation)}` : ""}`;
   };
-  // Une liste que ses types donnaient, et qu'une cellule écrite sans « // »
+  // Une liste que ses classes donnaient, et qu'une cellule écrite sans « // »
   // laisse vide (« aucun ») : c'est dit, avec la ligne qui la vide.
   const listeVide = (texte, origine, accord) =>
     el("p", { classe: "secondaire-texte" }, origine ? [`${texte} `, provenance(`${origineDe(origine)}, qui n'en garde ${accord}`)] : `${texte}.`);
 
-  // La ligne où se corrige ce qu'une origine cite : celle du bloc, celle du
-  // type, sinon celle de l'adversaire.
+  // La ligne où se corrige ce qu'une origine cite : celle du bloc, celle de la
+  // classe, sinon celle de l'adversaire.
   const lieuDe = (origine) => {
     const bloc = origine?.objet === undefined ? null : index.entrees("blocs", origine.objet)[0];
     if (bloc?.brut?.ligne) return { feuille: "Blocs", ligne: bloc.brut.ligne };
@@ -102,15 +102,15 @@ export function lecture(resolu, index) {
           { classe: "lecture-liste" },
           resolu.types.map((type) => el("li", {}, type.absent ? renvoiCasse(type.nom, propre) : el("a", { href: adresseFiche("types", type.nom) }, type.nom))),
         ),
-        resolu.types.length > 1 ? el("p", { classe: "provenance" }, "Appliqués dans cet ordre : pour chaque valeur, le suivant l'emporte.") : null,
+        resolu.types.length > 1 ? el("p", { classe: "provenance" }, "Appliquées dans cet ordre : pour chaque valeur, la suivante l'emporte.") : null,
         multiplicateur
-          ? el("p", {}, "Multiplicateur ", el("strong", {}, ecrireMultiplicateur(multiplicateur)), " ", provenance("de sa ligne : il multiplie ce qui vient des types, les nombres et la qualité de l'équipement"))
+          ? el("p", {}, "Multiplicateur ", el("strong", {}, ecrireMultiplicateur(multiplicateur)), " ", provenance("de sa ligne : il multiplie ce qui vient des classes, les nombres et la qualité de l'équipement"))
           : null,
       ]
-    : vide("Aucun type : tout vient de sa ligne.");
+    : vide("Aucune classe : tout vient de sa ligne.");
 
   const localisation = () => {
-    if (!resolu.localisation) return vide("Aucune localisation : ni ses types, ni sa ligne ne la donnent.");
+    if (!resolu.localisation) return vide("Aucune localisation : ni ses classes, ni sa ligne ne la donnent.");
     const grille = el("p", {}, "Grille ", provenance(origineDe(resolu.localisation.origine)));
     if (resolu.localisation.invalide) return [grille, vide("Cette grille ne se lit pas : aucune zone n'est posée.")];
     if (!resolu.zones.length) return [grille, vide("Aucune zone.")];
@@ -120,7 +120,7 @@ export function lecture(resolu, index) {
       el(
         "table",
         { classe: "lecture-zones" },
-        el("thead", {}, el("tr", {}, el("th", { scope: "col" }, "Zone"), el("th", { scope: "col" }, "d20"), el("th", { scope: "col" }, "Armure"), el("th", { scope: "col" }, "Résistance"))),
+        el("thead", {}, el("tr", {}, el("th", { scope: "col" }, "Zone"), el("th", { scope: "col" }, "d20"), el("th", { scope: "col" }, "Armure"), el("th", { scope: "col" }, "Endurance"))),
         el(
           "tbody",
           {},
@@ -187,7 +187,7 @@ export function lecture(resolu, index) {
   return el(
     "div",
     { classe: "lecture" },
-    section("Types", types),
+    section("Classes", types),
     section(
       "Valeurs",
       el(
@@ -198,7 +198,7 @@ export function lecture(resolu, index) {
         paire("Attaque", nombre(resolu.attaque)),
         paire("Défense", nombre(resolu.defense)),
         paire("Corps", fixe(resolu.corps)),
-        paire("Résistance", fixe(`${resolu.resistance} par zone`)),
+        paire("Endurance", fixe(`${resolu.resistance} par zone`)),
       ),
     ),
     section("Localisation", localisation()),

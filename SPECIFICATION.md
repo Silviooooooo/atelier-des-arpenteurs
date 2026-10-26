@@ -578,6 +578,7 @@ signale** (E6), il ne l'avale pas.
 | Capacites · éléments propres | nom, valeur éventuelle entre crochets | `Portee[1]` | élément Portée, `valeur: "1"` |
 | Eléments · paramètres reçus | liste de noms entre accolades | `{portee}` | paramètre reçu `portee` |
 | Descriptions | `[N]`, `[N*{degats}]`, `{portee}` | — | gardées telles quelles au lot 1 ; les `{nom}` sont les paramètres invoqués (A5) |
+| | un mot suivi de `(s)` ou de `(x)` (lot 5) | — | gardé tel quel dans la banque, accordé à l'affichage (plus bas) |
 
 **Une ligne de la feuille ne se découpe jamais sur une virgule située entre
 accolades, crochets ou parenthèses** : `{force}*0,5` contient une virgule
@@ -599,6 +600,32 @@ l'avertissement A7.
 - des délimiteurs ailleurs qu'aux places du tableau, par exemple une barre
   hors d'un choix ou deux paramètres collés ;
 - un paramètre reçu écrit sans accolades.
+
+**L'accord des nombres** (lot 5 ; la notation est à écrire dans
+`lisez_moi`, § 12). Un mot suivi immédiatement de « (s) » ou de « (x) »
+prend la marque du pluriel quand le dernier nombre écrit avant lui, dans
+la même phrase, vaut 2 ou plus en valeur absolue, et la perd sinon :
+« Se déplace de [N] case(s). » donne « 1 case », « 2 cases » ; « Rallume
+[N] feu(x). », « 1 feu », « 3 feux » ; 1,5, 0 et −1 ne la prennent pas.
+`accorder(texte)`, dans `js/banque/accord.js`, ne lit qu'une chaîne et ne
+lève pas d'exception :
+
+- la phrase s'arrête à « . », « ! », « ? », « ; », « : » ou à un retour à
+  la ligne : un nombre de la phrase d'avant ne compte pas, ni un nombre
+  écrit après le mot ;
+- un nombre s'écrit en chiffres, avec une virgule décimale et un signe
+  moins éventuels ; dans « 2/4/8 », le dernier est 8 ;
+- sans nombre dans la phrase, le texte reste tel qu'écrit, marque
+  comprise : rien ne dit combien (« Annulez X dégât(s) reçu(s). », au coût
+  X).
+
+**Où** : dans `decrire` seulement (`js/personnage/calcul.js`), sur sa
+sortie, une fois les nombres calculés. La résolution des adversaires et la
+photographie du combat passent par `decrire` : la carte, la lecture d'un
+adversaire et le combat s'accordent comme le créateur et la fiche du
+personnage. La banque garde les descriptions brutes, et une description
+montrée brute, avec ses « [N] », garde ses marques. Un pluriel écrit sans
+marque se signale : I6 (§ 6.3).
 
 ### 6.3 Le contrôle de cohérence
 
@@ -627,7 +654,7 @@ U+00AD, U+061C, U+200B à U+200F, U+202A à U+202E, U+2060 à U+2064, U+2066
   nom, et « marmiton » n'est pas un doublon de « Marmiton ». Le doublon est
   la définition la plus basse de la feuille, et son message cite la ligne de
   la plus haute, quelle que soit celle des deux qui porte le signe.
-- **Les fiches** d'un bloc, d'un élément, d'un adversaire et d'un type
+- **Les fiches** d'un bloc, d'un élément, d'un adversaire et d'une classe
   comptent un doublon de la même façon (§ 9, § 16.6) : sous un nom que
   porte une entrée, elles montrent d'abord celles qui le portent tel qu'il
   est écrit, puis celles qui n'en diffèrent que par un signe invisible.
@@ -676,38 +703,72 @@ U+00AD, U+061C, U+200B à U+200F, U+202A à U+202E, U+2060 à U+2064, U+2066
 | I1 | information | espaces de bord retirés d'un nom |
 | I2 | information | description vide |
 | I3 | information | bloc sans capacité (décision de l'auteur, 28/09/2026 : ce fut A6, avertissement, jusqu'à la 0.6 ; le code A6 ne sera pas réutilisé) |
-| E8 | erreur | feuille Adversaires (§ 16) : type cité par un adversaire, introuvable parmi les types de la feuille |
-| E9 | erreur | notation de type illisible : multiplicateur ailleurs qu'après le dernier type, crochet non fermé, multiplicateur nul, négatif ou qui n'est pas un nombre, nom de type manquant ; ou un type dont le nom porte « / » ou un crochet, que la colonne Type d'un adversaire ne pourrait pas citer |
+| I6 | information | description (Capacites, Eléments) où une expression entre crochets ou un paramètre entre accolades précède un mot au pluriel, en « s » ou en « x », sans « (s) » ni « (x) » : avec un 1, il resterait au pluriel (lot 5 ; la règle et les mots exclus, plus bas) |
+| E8 | erreur | feuille Adversaires (§ 16) : classe citée par un adversaire, introuvable parmi les classes de la feuille |
+| E9 | erreur | colonne Classe illisible : multiplicateur ailleurs qu'après la dernière classe, crochet non fermé, multiplicateur nul, négatif ou qui n'est pas un nombre, nom de classe manquant ; ou une classe dont le nom porte « / » ou un crochet, que la colonne Classe d'un adversaire ne pourrait pas citer |
 | E10 | erreur | localisation invalide : face hors de 2 à 20 (la face 1 est la contre-attaque), deux zones sur une même face, faces non couvertes (aucune zone ne commence à 2), forme autre que `Nom(face)` |
 | E11 | erreur | objet d'équipement introuvable : ni un bloc, ni un pack d'armure ; ou un pack dont aucune pièce n'existe |
 | E12 | erreur | armure dont le nombre de valeurs n'est ni 1, ni 6, ni celui des zones de l'adversaire |
-| E13 | erreur | capacité citée par un type ou un adversaire, introuvable dans Capacites |
+| E13 | erreur | capacité citée par une classe ou un adversaire, introuvable dans Capacites |
 | E14 | erreur | valeur numérique illisible : nombre d'actions, souffle, attaque, défense, qualité (elle vaut alors la qualité par défaut), rang (un entier de 1 au maximum de la capacité ; il vaut alors le rang par défaut), rang sans variante de puissance écrite dans Capacites, armure ou dégâts d'un bloc porté qui ne se calculent pas, produit par le multiplicateur ou somme d'armures hors des nombres calculables |
-| E15 | erreur | adversaire incomplet une fois l'héritage appliqué : sans localisation, sans attaque ou sans défense (une cellule illisible ou un type introuvable, déjà signalés, ne le sont pas deux fois) |
-| E16 | erreur | deux types, ou deux adversaires, de même nom (noms comparés exactement, signes invisibles et espaces de bord retirés, comme E3) |
+| E15 | erreur | adversaire incomplet une fois l'héritage appliqué : sans localisation, sans attaque ou sans défense (une cellule illisible ou une classe introuvable, déjà signalées, ne le sont pas deux fois) |
+| E16 | erreur | deux classes, ou deux adversaires, de même nom (noms comparés exactement, signes invisibles et espaces de bord retirés, comme E3) |
 | A11 | avertissement | zone reconnue par approximation : à deux lettres d'écart au plus d'une des six zones des personnages |
 | A12 | avertissement | armure à six valeurs dont une valeur non nulle vise une zone que l'adversaire n'a pas (aucune de ses zones n'en porte le nom) : cette valeur ne couvre rien, ou, s'il a justement six zones, les six valeurs se posent dans l'ordre du d20 |
 | A13 | avertissement | rang supérieur au maximum de la capacité (3, ou sa plus haute variante) : ramené au maximum |
 | A14 | avertissement | rang donné à une capacité qui n'évolue pas : ignoré |
 | A15 | avertissement | capacité d'arme sans arme : sa description invoque `{degats}`, et rien de ce que porte l'adversaire ne les lui donne |
-| A16 | avertissement | un type et un adversaire de même nom (comparés comme E16) |
+| A16 | avertissement | une classe et un adversaire de même nom (comparés comme E16) |
 | I4 | information | feuille Adversaires absente : la banque n'a pas d'adversaires |
-| I5 | information | type qu'aucun adversaire n'utilise |
+| I5 | information | classe qu'aucun adversaire n'utilise |
+
+**I6** (lot 5). Dans une description (Capacites, Eléments), une expression
+entre crochets ou un paramètre entre accolades suivi, après des espaces
+sans retour à la ligne, d'un mot qui finit par « s » ou « x », sans
+« (s) » ni « (x) » après lui : avec un 1, le mot resterait au pluriel
+(§ 6.2). Une fois par cellule, au premier mot trouvé. **Les mots exclus**,
+invariables ou qui ne sont pas des noms, comparés sans casse : fois, pas,
+temps, corps, poids, prix, choix, croix, voix, bras, dos, os, mois, avis,
+repas, cours, succès, progrès, accès, plus, moins, sous, sans, vers,
+après, très, deux, trois, six, dix, aux, des, les, ses, ces, mes, tes,
+nos, vos, leurs, dans, hors, lors, alors, puis, mais, jamais, toujours,
+depuis, envers. **Les deux messages** :
+« La description de « Pas chassé » écrit « [N] cases » : avec un 1, elle
+s'affichera « 1 cases ». Écrivez « case(s) » pour l'accorder. » ; pour un
+mot en « x » : « … écrit « [N] feux » : avec un 1, elle s'affichera
+« 1 feux ». Écrivez « feu(x) » pour l'accorder. » **Son rang** : dans le tableau, avec les codes communs,
+après I3 ; son numéro suit I5, le dernier donné ; le rapport le range comme
+les autres, par gravité, feuille et ligne. Les codes sont donc
+trente-sept. Le classeur d'essai n'en porte aucune (§ 10.3) : I6 se met à
+l'épreuve sur une variante fabriquée dans `tests/controle.test.js`.
 
 **Les codes de la feuille Adversaires** (lot 3 : E8 à E16, A11 à A16, I4,
 I5, à la suite des autres et dans l'ordre de l'instruction) viennent de la
 résolution des adversaires, la même que celle de la page (§ 16.2) ; l'import
 relève la feuille absente (I4). Les codes communs y valent aussi : E1 (un
-en-tête absent d'une feuille présente), E2 (une ligne sans nom, un type
-sans nom), E6 (une liste illisible), A1 (un type, un bloc ou une capacité
-cités à la casse, aux accents ou à un signe invisible près, du même message
-que sur les autres feuilles), I1. Une anomalie se range **à la
-ligne où elle se corrige** : celle d'une cellule d'un type à la ligne du
-type, une seule fois, même quand dix adversaires en héritent ; ce qui ne se
+en-tête absent d'une feuille présente), E2 (une ligne sans nom, une classe
+sans nom), E6 (une liste illisible), A1 (une classe, un bloc ou une
+capacité cités à la casse, aux accents ou à un signe invisible près, du
+même message que sur les autres feuilles), I1. Une anomalie se range **à la
+ligne où elle se corrige** : celle d'une cellule d'une classe à la ligne de
+la classe, une seule fois, même quand dix adversaires en héritent ; ce qui ne se
 voit qu'une fois l'héritage appliqué (E12, E15, A12, A15), à la ligne de
 l'adversaire. Les anomalies de la feuille se trient après celles des autres
 feuilles ; sur une même ligne, les codes se rangent dans l'ordre des
 nombres (E9 avant E11).
+
+**« Classe »** (lot 5). La colonne s'appelle « Classe » depuis le
+26/10/2026 (§ 4.1), et les messages disent « classe », au féminin, là où
+ils disaient « type » ; « type » reste aux blocs. E2 : « La ligne {n}
+définit une classe sans nom (colonne Classe vide) : elle n'entre pas dans
+la banque. » (l'en-tête cité tel qu'écrit) ; E8 : « L'adversaire « {nom} »
+cite la classe « {nom} », introuvable parmi les classes de la feuille
+Adversaires. » ; E9 : « … : la colonne Classe, « {cellule} », ne se lit
+pas : … », et « La classe « {nom} » porte « / » ou un crochet dans son
+nom : la colonne Classe d'un adversaire ne pourrait pas la citer. » ;
+E16 : « La classe « {nom} » est déjà définie ligne {n}. » ; I5 : « La
+classe « {nom} » n'est utilisée par aucun adversaire. ». Les codes, les
+clés JSON et les noms internes (`types_adversaires`) ne changent pas.
 
 **Publier malgré des erreurs** (validé par l'auteur le 28/09/2026). Une erreur
 bloque la publication par défaut.
@@ -1644,7 +1705,7 @@ Toute dépendance future est justifiée ici, avant son arrivée.
   - **Intervention** sur deux : Dressage minute et Coup de chalumeau ;
   - deux capacités de puissance 0 dans le bloc de base, « Gestes de
     cuisine », en fin de `Capacites` : **Pas de côté** (Intervention, coût
-    en souffle X, « Annulez [X] dégâts reçus. ») et **Guetter** (« Après un
+    en souffle X, « Annulez [X] dégât(s) reçu(s). » depuis le lot 5) et **Guetter** (« Après un
     déplacement, ou pour finir son tour : une de vos capacités se joue en
     intervention jusqu'au prochain tour de votre camp. »).
 
@@ -1652,11 +1713,30 @@ Toute dépendance future est justifiée ici, avant son arrivée.
   ligne ne change de numéro, aucune anomalie ne s'ajoute, et les cinq
   adversaires se résolvent à l'identique (un contrôle les résout aussi sur
   le classeur d'avant, refabriqué, § 11). Mesuré le 12/10/2026 : 37 blocs,
-  46 capacités (51 variantes), 22 éléments, 2 types d'adversaires,
+  46 capacités (51 variantes), 22 éléments, 2 classes d'adversaires,
   5 adversaires ; 40 anomalies, dont 15 erreurs, comme avant. Le classeur
   d'essai n'a toujours ni paramètre `loc_multiple`, ni élément
   « Localisation multiple » ou « Centré », ni bloc de type État ou
   Blessure.
+
+  **Au lot 5**, ses descriptions écrivent « (s) » ou « (x) » partout où un
+  nombre ou une expression précède un nom au pluriel (§ 6.2), dans des
+  cellules existantes : aucune ligne, aucune anomalie, aucune valeur d'un
+  adversaire ne change, et il ne porte aucune I6 (§ 6.3).
+  - `Capacites` : Pas chassé (« Se déplace de [N] case(s). »), Feuilletage
+    (« Pare [N] coup(s) par tour. »), Glaçage, Marmitage, Réduction,
+    Bouillonnement, Braise (« Rallume [N] feu(x). »), Solo du chef,
+    Brigade, Minutie (« [N] avantage(s) »), Coup de louche, Sauce piquante
+    (ses trois lignes), Fournaise (sa puissance 3), Se couvrir, Pas de côté
+    (« Annulez [X] dégât(s) reçu(s). ») ;
+  - les trois maîtrises, réécrites : « Sans désavantage pour [N]
+    capacité(s) d'un objet Agile, en commençant par la première. » (de même
+    pour Lourde et Précise) ;
+  - `Eléments` : Brûlant, Épais, Armure, Portée, Défense.
+
+  Vif et Costaud (« [N] aux … ») ne changent pas : « aux » est exclu
+  d'I6. Le classeur propre des contrôles s'écrit de même, et les contrôles
+  qui citent ces textes mot pour mot les suivent.
 - Messages de commit en prose française : un titre, puis ce qui a changé, ce
   qui a été mesuré, ce qui a été laissé.
 - **Le dépôt est public, l'historique aussi** : chaque commit porte le nom et
@@ -2326,6 +2406,20 @@ n'a pas vu les autres.
   mi-fenêtre, et le plancher de 9,8 px reste. De même, la carte sur un
   téléphone (ses initiales très petites à deux par case, sa grille pâle)
   ne change pas.
+
+**Pour le lot 5 — l'accord des nombres** (mission du lot 5, § 6).
+
+- **La notation « (s) » et « (x) »** : à écrire dans le `lisez_moi` du
+  classeur, rubrique Syntaxe (l'auteur l'a annoncé). Un mot suivi
+  immédiatement de « (s) » ou de « (x) » prend la marque du pluriel quand
+  le nombre qui le précède vaut 2 ou plus en valeur absolue (« Se déplace
+  de [N] case(s) » : « 1 case », « 2 cases » ; « Rallume [N] feu(x) » :
+  « 1 feu », « 2 feux »). Le site l'applique depuis le lot 5 (§ 6.2), avec
+  la lecture que précise la mission, à reprendre ou à corriger en
+  l'écrivant : le nombre est le dernier écrit avant le mot dans la même
+  phrase (dans « 2/4/8 », 8), et, sans nombre, la marque reste écrite. Dans
+  le classeur, I6 (§ 6.3) désigne les descriptions qui écrivent un pluriel
+  sans marque.
 
 **Pour le lot des objets, sorts et équipement** (lot à fixer, § 13) : ce
 qu'est un sort (le mot n'apparaît pas dans le Word) ; la grammaire des
@@ -3341,7 +3435,7 @@ la section du livret ou l'élément du classeur qui la fonde, en commentaire
 
 | Règle | Source |
 |---|---|
-| Neuf caractéristiques (Force, Agilité, Précision, Sens, Culture néruvienne, Savoir sauvage, Parole, Empathie, Créativité), de 2 à 6, somme 36 | livret, « Caractéristiques » |
+| Neuf caractéristiques, dans l'ordre du livret du 25/10/2026 (lot 5) : Force, Agilité, Précision, Parole, Culture néruvienne, Savoir sauvage, Sens, Empathie, Créativité ; de 2 à 6, somme 36 | livret, « Caractéristiques » |
 | Dé d'un jet : somme de deux caractéristiques, ou le double d'une seule, arrondie au pair inférieur ou égal : 4 → d4 … 12 → d12 | livret, « Caractéristiques » et « Types de dés » |
 | Dé d'attaque selon l'arme : lourde For+Pré, agile Agi+For, précise Pré+Agi ; le type d'un objet est l'élément Lourde, Agile ou Précise qu'il porte | livret, « Jets d'attaque » ; classeur, Eléments |
 | Dé de défense selon l'armure portée : lourde For+Sen, agile Agi+Cré, précise Pré+Emp. Types mêlés : le dé le plus faible, et « désavantage sans la maîtrise de toutes les pièces » (la maîtrise n'est pas calculée). Aucune pièce : le plus avantageux des trois, avec son type | livret, « Jets de défense » |
@@ -3353,7 +3447,7 @@ la section du livret ou l'élément du classeur qui la fonde, en commentaire
 | Valeurs décimales : l'entier inférieur, une fois l'opération faite. Le calcul se fait **en fractions exactes** : en virgule flottante, 15 × (1/3 + 4/3) vaut 24,999… et donnerait 24 au lieu de 25 (contrôlé) | livret, « Valeurs décimales » |
 | Expressions : nombres à virgule décimale, `{caractéristique}` ou `{paramètre}`, `N`, et + − × ÷, la multiplication et la division d'abord. `X` reste « X ». Toute autre forme (parenthèses, signe seul) s'affiche telle qu'écrite, avec un avertissement dans le rapport du personnage. Un paramètre à rangs (`degats` : 3, `armure` : 6) se découpe sur ses barres ; ailleurs la barre divise | classeur, lisez_moi « Syntaxe » |
 | Descriptions : les `[expression]` et les `{nom}` remplacés par leur valeur ; un paramètre à rangs donne un résultat par rang (`[N*{degats}]` → 2/4/8). Les paramètres d'une capacité : ceux de son bloc sans cible, puis ceux qui la visent, puis ceux de ses éléments propres (`Portée[1]`), qui priment | livret, « Paramètre » ; lisez_moi |
-| Ressources : souffle 10 à la création (+1 par point d'historique, aucun à la création), corps 10, résistance 5 par zone, armure selon l'équipement | livret, « Ressources » |
+| Ressources : souffle 10 à la création (+1 par point d'historique, aucun à la création), corps 10, endurance 5 par zone (« résistance » jusqu'au lot 5), armure selon l'équipement | livret, « Ressources » |
 | Points de lien d'un primordial lié : la puissance investie dans ses capacités (la somme de leurs niveaux) | livret, « Ressources » et « Lien » |
 | Création : un archétype (ses capacités et ses groupes, dont style et maîtrise), une espèce, toutes les capacités du bloc de base, une constellation tirée au hasard parmi les blocs de type Constellation (le tirage **se refait à volonté** et se compte : la fiche dit « tirée N fois », ou « saisie à la main »), un primordial choisi et ses capacités, l'équipement à volonté | livret, « Création » ; tirage refait : décision de l'auteur, lot 2 bis (§ 12) |
 | Niveau d'une capacité : 1 à la création, sauf si elle ne peut évoluer (puissance « 0 ») : niveau 0. Une puissance N va de 1 à 3 ; une capacité à variantes (1, 2, 3) monte jusqu'à la plus haute | livret, « Création » et « Capacités » ; lisez_moi |
@@ -3365,6 +3459,17 @@ la section du livret ou l'élément du classeur qui la fonde, en commentaire
 | Style de combat : une capacité est un style si ses éléments propres contiennent « Style de combat », une maîtrise s'ils contiennent « Maîtrise » ; sinon les options d'un archétype s'affichent sous « Archétype » | convention, § 12 |
 | Attaque à mains nues : la capacité que vise le paramètre `degats` du bloc de base ; ses dégâts sont ceux que dit sa description à sa puissance (`[N*{degats}]` : 2/4/8 au niveau 1 avec une Force de 4, le double au niveau 2), sinon le paramètre lui-même, si bien que le recto et le verso concordent ; **dé vide**, faute de règle | classeur ; § 12 |
 | Bouclier : un objet équipé (place `equipe`) qui transmet un paramètre `defense` ; un seul compte ; la fiche en montre la défense après qualité | convention, § 12 |
+
+**L'ordre des caractéristiques** (lot 5) est celui du livret du
+25/10/2026, dans `CARACTERISTIQUES` (`js/personnage/regles.js`) : il range
+l'étape 2 du créateur, la fiche à l'écran et au PDF, et les deux
+caractéristiques d'un dé au choix au combat (§ 17.9). Les paires des types
+d'arme ne changent pas. Un personnage garde ses valeurs par code : celui
+d'avant le lot, dont le fichier les range dans l'ancien ordre (Force,
+Agilité, Précision, Sens, Culture néruvienne, Savoir sauvage, Parole,
+Empathie, Créativité), se lit par son fichier, son lien et l'appareil, et
+montre les mêmes valeurs à l'étape 2, à la fiche à l'écran et à la feuille
+à imprimer (`tests/caracteristiques_ordre.test.js`).
 
 **Mesures.** Chaque règle a ses contrôles, vus échouer puis passer : 62
 mutations des règles, du format et du lien, désarmées une à une, font
@@ -3421,7 +3526,7 @@ son nom sur un téléphone ; une description ouverte ou fermée le reste quand
 l'étape se redessine, et le focus va au bouton actionné, ou à son voisin
 quand il devient inactif. Un refus (une pièce qui ne se porte pas) se dit
 près de ce qui l'a causé, et le focus y va. 1. Identité (nom obligatoire ; âge, description,
-histoire). 2. Caractéristiques : toutes à 2 au départ, des **boutons + et
+histoire). 2. Caractéristiques, dans l'ordre du livret (§ 15.2) : toutes à 2 au départ, des **boutons + et
 −** de 2 à 6, la somme en direct (36 exigés : « + » s'arrête à 36), l'aperçu
 des dés. 3. Archétype : **en vignettes** (plus bas), puis, sous elles, le
 choisi, décrit, et ses groupes de choix, nommés « Style de combat » ou
@@ -3532,7 +3637,7 @@ débordent jamais sur l'autre (deux collisions réelles, `.etiquette` et
 écrit en bas de casse.
 
 Remplissage : l'en-tête (nom, espèce, archétype, style de combat, niveau
-1) ; les caractéristiques ; l'attaque (l'arme principale, son dé, ses
+1) ; les caractéristiques, dans l'ordre du livret (§ 15.2) ; l'attaque (l'arme principale, son dé, ses
 dégâts A/B/C après qualité, sa portée, sa qualité ; sans arme, l'attaque à
 mains nues du bloc de base, ses dégâts calculés et un dé vide) ; la défense
 (les pièces portées ou « aucune », le dé du § 15.2 et sa mention, la
@@ -3545,8 +3650,9 @@ puissance cochées jusqu'au niveau et grisées au-delà du maximum, la colonne
 coût (le souffle, et « ·1L » pour un lien), et **« Reliquat : N points »**
 près du titre ; le souffle, sous-titré **« 10 à la création · +1 par point
 d'historique »** (le modèle dit « 5 par niveau », que le livret contredit),
-« Max 10 », les cases au-delà grisées ; l'armure de chaque zone et cinq
-cases de résistance ; le corps, 10 ; l'équipement, chaque objet et sa
+« Max 10 », les cases au-delà grisées ; la rubrique « Armure & endurance »
+(« Armure & résistance » jusqu'au lot 5) : l'armure de chaque zone et cinq
+cases d'endurance ; le corps, 10 ; l'équipement, chaque objet et sa
 qualité (« suite au verso » en sous-titre s'il y en a plus de huit) ; le
 primordial lié, ses points de lien (cases grisées au-delà) et ses pouvoirs
 avec leur puissance (sans capacité : « capacités à venir » sur la première
@@ -3594,7 +3700,8 @@ sans fenêtre (WebDriver BiDi) imprime le personnage de démonstration en
 ### 15.5 Le téléphone
 
 **La vue lecture** : les rubriques empilées, dans les styles de
-l'interface, lisibles sans zoom ; le détail de chaque capacité se déplie,
+l'interface, lisibles sans zoom (« Armure et endurance » et sa table des
+zones, dont la colonne « Endurance », depuis le lot 5) ; le détail de chaque capacité se déplie,
 et un triangle le dit ; un coût nul s'écrit « sans coût »
 (`js/fiche/lecture.js`, `css/personnage.css`). **La vue fiche** : le recto
 et le verso réduits à la largeur de l'écran (`zoom`, l'échelle posée par
@@ -3669,6 +3776,14 @@ personnage de démonstration », puis « Remplacer », les fait disparaître.
 Le sel de la banque de démonstration est gardé d'une régénération à
 l'autre : la clé de démonstration qu'un appareil a gardée rouvre la
 nouvelle banque.
+
+**Au lot 5**, sept de ses capacités ont une description qui écrit
+désormais « (s) » (§ 10.3) : Réduction, Solo du chef, Maîtrise de
+l'agile, Fournaise, Pas chassé, Pas de côté et Se couvrir. Leurs
+empreintes suivent ; un appareil qui avait rangé Aubépine avant lit sept
+avertissements du même genre, que « Remplacer » efface de même. Ses
+valeurs ne changent pas : ses caractéristiques se gardent par code, et
+seul leur ordre d'affichage suit le livret (§ 15.2).
 
 ### 15.8 Les personnages en ligne (lot 2 bis)
 
@@ -3829,7 +3944,7 @@ identifiants, des dates et des tailles.
 
 Ce paragraphe suit le § 15 pour ne rien renuméroter. Le lot 3 (instruction
 du 11/10/2026, validée par l'auteur, `plans/instruction_lot3.md`) : l'import
-de la feuille « Adversaires » et ses contrôles ; la consultation des types
+de la feuille « Adversaires » et ses contrôles ; la consultation des classes
 et des adversaires, **résolus** ; l'impression d'une rencontre. Hors lot :
 l'éditeur d'adversaire dans la page, l'assistant de calibrage, les
 prétirés, l'enregistrement d'une rencontre, le suivi des dégâts à l'écran.
@@ -3869,14 +3984,22 @@ d'actions, Souffle, Attaque, Défense, Equipement, Capacités. Depuis le lot 5,
 « Type » et « Localisation » (§ 4.1). Une autre colonne (des notes) se garde
 dans `brut`, sans être lue.
 
-**Une ligne par type ou par adversaire.** Une ligne qui porte « Classe » ou,
-comme avant le lot 5, « Type » dans la colonne Nom (sans casse ni accents)
-définit un **type**, dont le nom est dans la colonne Classe ; un type
-n'hérite de rien. Sans nom, elle n'entre pas dans la banque (E2 : « La
+**Une ligne par classe ou par adversaire.** Une ligne qui porte « Classe »
+ou, comme avant le lot 5, « Type » dans la colonne Nom (sans casse ni
+accents) définit une **classe d'adversaire**, dont le nom est dans la
+colonne Classe ; une classe n'hérite de rien. Sans nom, elle n'entre pas dans la banque (E2 : « La
 ligne 6 définit une classe sans nom (colonne Classe vide) : elle n'entre pas
 dans la banque. », l'en-tête cité tel qu'il est écrit dans le classeur).
-**Toute autre ligne est un adversaire**, et sa colonne Classe cite les types
-dont il hérite.
+**Toute autre ligne est un adversaire**, et sa colonne Classe cite les
+classes dont il hérite.
+
+**« Classe d'adversaire »** (lot 5). Le site disait « type d'adversaire » ;
+il dit désormais « classe », au féminin (une, aucune, définie, utilisée),
+partout où il en nomme une : messages (§ 6.3), listes, fiches, carte,
+rencontre, combat, et le message de commit d'une publication. « Type »
+reste aux blocs (colonne Type de la feuille Blocs). Les noms internes et
+les clés JSON ne changent pas : la banque garde `types_adversaires`, et la
+catégorie de la consultation sa clé « types ».
 
 **Les cellules** se gardent dans la banque telles qu'écrites, espaces de
 bord retirés (§ 5.1) ; rien n'y est lu à l'import. C'est la résolution
@@ -3884,9 +4007,9 @@ bord retirés (§ 5.1) ; rien n'y est lu à l'import. C'est la résolution
 
 | Cellule | Forme | Exemple | Lecture |
 |---|---|---|---|
-| toute | vide | | **hérite** : la valeur vient des types |
+| toute | vide | | **hérite** : la valeur vient des classes |
 | toute | `aucune`, `aucun`, seul dans la cellule | `aucun` | rien pour une liste, 0 pour un nombre |
-| Classe | types séparés par `/`, multiplicateur entre crochets après le dernier | `Humain/Brigand[2]`, `Humain[1,4]` | les types, dans l'ordre, et le multiplicateur |
+| Classe | classes séparées par `/`, multiplicateur entre crochets après la dernière | `Humain/Brigand[2]`, `Humain[1,4]` | les classes, dans l'ordre, et le multiplicateur |
 | Localisations | `Nom(face)`, séparés par des virgules, sur une ou plusieurs lignes | `Torse(2), Jambe gauche(12)` | la **première face** de chaque zone |
 | Nombre d'actions, Souffle, Attaque, Défense | un nombre, à virgule décimale | `1,5` | une fraction exacte |
 | Equipement | noms de blocs ou de packs, qualité entre crochets | `Spatule souple, Armure agile[3]` | les objets ; qualité 2 sans crochets |
@@ -3895,7 +4018,7 @@ bord retirés (§ 5.1) ; rien n'y est lu à l'import. C'est la résolution
 
 Une liste ne se découpe pas sur une virgule entre crochets (`Dague[2,5]`).
 Sans « // », une liste **remplace** la liste héritée. Ce qui ne se lit pas
-est signalé, jamais avalé : E9 pour la colonne Type, E10 pour la
+est signalé, jamais avalé : E9 pour la colonne Classe, E10 pour la
 localisation, E14 pour un nombre, E6 pour une liste (crochet jamais fermé,
 « // » ailleurs qu'en tête).
 
@@ -3909,13 +4032,13 @@ que l'écran montre. La résolution est une fonction pure, ne lève pas
 d'exception sur une donnée inattendue, et rend ses **constats**, chacun avec
 son code (§ 6.3) et la ligne de la feuille où il se corrige.
 
-1. **Les types**, dans l'ordre de la colonne Type : pour chaque cellule non
-   vide, le suivant l'emporte sur le précédent. Une liste écrite avec « // »
+1. **Les classes**, dans l'ordre de la colonne Classe : pour chaque cellule
+   non vide, la suivante l'emporte sur la précédente. Une liste écrite avec « // »
    s'ajoute à ce qui précède ; sans, elle le remplace. La colonne peut être
    vide : l'adversaire n'hérite alors de rien.
-2. **Le multiplicateur**, global, permis après le dernier type seulement
+2. **Le multiplicateur**, global, permis après la dernière classe seulement
    (`Humain/Brigand[2]`, `Humain[1,4]`), strictement positif. **Il multiplie
-   tout ce qui est hérité des types** : le nombre d'actions, le souffle,
+   tout ce qui est hérité des classes** : le nombre d'actions, le souffle,
    l'attaque, la défense, et la **qualité de l'équipement hérité**, la
    qualité 2 par défaut comprise (une arme héritée sous `[2]` est de qualité
    4). **Il ne touche pas** les faces du d20, le rang des capacités, les
@@ -3929,7 +4052,7 @@ son code (§ 6.3) et la ligne de la feuille où il se corrige.
    entière s'écrit avec deux décimales au plus, à la virgule (« 2,8 »,
    « 2,67 », au plus proche) ; le calcul garde la fraction.
 
-Un type introuvable (E8) ou une colonne Type illisible (E9) rend la suite
+Une classe introuvable (E8) ou une colonne Classe illisible (E9) rend la suite
 incertaine : l'adversaire se résout avec ce qui se lit, l'écran le dit, et
 le contrôle ne lui ajoute aucun autre constat (pas d'« incomplet » en
 plus). Un produit qui sort des entiers sûrs ne se calcule pas : la valeur
@@ -3957,7 +4080,8 @@ reconnaissance ne sert qu'à poser les armures à six valeurs. Limite connue :
 un nom court et voisin (« Tige », à deux lettres de « tête ») est reconnu
 aussi ; l'avertissement le dit, et l'auteur renomme la zone s'il le faut.
 
-**Résistance et corps** : 5 par zone, et 10 (livret, « Ressources »). Ce
+**Endurance et corps** : 5 par zone, et 10 (livret, « Ressources » ;
+« résistance » jusqu'au lot 5). Ce
 sont des valeurs fixes, qui ne se saisissent pas.
 
 **Attaque et défense** : des nombres, les difficultés des jets du joueur
@@ -4011,7 +4135,7 @@ rang au-delà du maximum y est ramené (A13), un rang donné à une capacité
 qui n'évolue pas est ignoré (A14).
 
 - **Les capacités de l'équipement sont héritées**, dans l'ordre des objets
-  puis de chaque bloc ; celles que citent les types et la ligne viennent
+  puis de chaque bloc ; celles que citent les classes et la ligne viennent
   ensuite. Seules les capacités simples d'un bloc sont données : un groupe
   au choix ne l'est pas, rien n'étant choisi.
 - **Une même capacité héritée au rang X et propre au rang Y** : seul le
@@ -4083,7 +4207,7 @@ pas d'où vient une valeur : la provenance est l'affaire de l'écran (§ 16.6).
   rencontre (« n° 2 »).
 - **Bande du d20**, de 1 à 20. Une case « Contre-attaque », verticale,
   occupe la face 1 sur les trois rangées. **Armure** : chaque zone avec sa
-  valeur. **Résistance** : chaque zone avec 5. **Corps** : dix cases, et 10.
+  valeur. **Endurance** : chaque zone avec 5. **Corps** : dix cases, et 10.
   Une zone de deux faces au plus s'abrège en initiales (« J. g. ») si son
   nom a plusieurs mots, un nombre restant entier (« Patte 12 » : « P. 12 ») ;
   une zone d'une seule face s'écrit plus petit. Limite connue, celle de la
@@ -4091,7 +4215,7 @@ pas d'où vient une valeur : la provenance est l'affaire de l'écran (§ 16.6).
   huit lettres pour un mot seul sur une face, d'une vingtaine de signes sur
   trois faces) ; les valeurs, elles, restent entières (§ 12).
 - **Capacités, au moins quatre lignes, et autant qu'il en faut.** Une
-  première ligne donne les types (avec « ×2 » ou « ×1,4 » s'il y a un
+  première ligne donne les classes (avec « ×2 » ou « ×1,4 » s'il y a un
   multiplicateur), puis les maîtrises avec leur rang, puis l'équipement
   avec sa qualité (« Armure agile [4] (6 pièces) ») ; un segment sans rien
   s'omet. Les maîtrises ne figurent pas dans les lignes suivantes. Ensuite,
@@ -4141,23 +4265,31 @@ fond de la fiche de personnage.
 ### 16.6 Les écrans
 
 **Deux catégories de plus dans la consultation** (§ 9) : « Adversaires »
-(`#/adversaires`, `#/adversaire/<nom>`) et « Types » (`#/types`,
-`#/type/<nom>`), chacune avec sa liste, sa recherche instantanée et ses
-fiches, dans les onglets des listes. La catégorie « types » lit la liste
-`types_adversaires` de la banque : le nom d'une catégorie n'est plus
-forcément celui de sa liste (`js/banque/consultation.js`). Un adversaire se
-cherche par son nom, par ses types, son équipement et ses capacités tels
-qu'il les écrit dans sa ligne, **et par ce qu'il porte une fois résolu** :
-ce qu'il hérite de ses types, les capacités que donne son équipement, les
-pièces d'un pack (« spatule » trouve ceux qui la tiennent de leur type).
-Chaque adversaire n'est résolu qu'une fois pour cela, à la première
-recherche. Dans la liste, un adversaire montre ses types tels qu'écrits
-(« Commis/Rôtisseur[1,4] », ou « sans type »), un type le nombre
-d'adversaires qui l'utilisent. L'accueil compte les adversaires et leurs
-types. `#/anomalies/Adversaires/3` met en avant les anomalies d'une ligne de
-la feuille, et mène à la fiche du type ou de l'adversaire qui l'occupe.
+(`#/adversaires`, `#/adversaire/<nom>`) et « Classes » (`#/classes`,
+`#/classe/<nom>`), chacune avec sa liste, sa recherche instantanée et ses
+fiches, dans les onglets des listes. **Les adresses d'avant le lot 5**,
+`#/types` et `#/type/<nom>`, qu'un lien envoyé peut encore porter, se
+lisent toujours et mènent au même écran ; le site n'écrit que les neuves
+(`adresseListe`, `adresseFiche`, `js/routes.js`), et les unes comme les
+autres marquent « Adversaires » dans la navigation. La catégorie garde sa
+clé, « types » (`CATEGORIES.types` : « Classes », « une classe
+d'adversaire »), et lit la liste `types_adversaires` de la banque : le nom
+d'une catégorie n'est plus forcément celui de sa liste, ni celui de son
+adresse (`js/banque/consultation.js`). Un adversaire se cherche par son
+nom, par ses classes, son équipement et ses capacités tels qu'il les écrit
+dans sa ligne, **et par ce qu'il porte une fois résolu** : ce qu'il hérite
+de ses classes, les capacités que donne son équipement, les pièces d'un
+pack (« spatule » trouve ceux qui la tiennent de leur classe). Chaque
+adversaire n'est résolu qu'une fois pour cela, à la première recherche.
+Dans la liste, un adversaire montre ses classes telles qu'écrites
+(« Commis/Rôtisseur[1,4] », ou « sans classe »), une classe le nombre
+d'adversaires qui l'utilisent ; sans classe, la liste dit « Cette banque
+n'a aucune classe d'adversaire. ». L'accueil compte les adversaires et
+leurs classes. `#/anomalies/Adversaires/3` met en avant les anomalies d'une
+ligne de la feuille, et mène à la fiche de la classe ou de l'adversaire
+qui l'occupe.
 
-**Une banque publiée avant le lot 3** n'a ni adversaires ni types : rien ne
+**Une banque publiée avant le lot 3** n'a ni adversaires ni classes : rien ne
 tombe. L'accueil, les deux listes, une fiche demandée par son adresse et la
 rencontre disent « Les adversaires ont besoin d'une banque republiée depuis
 le classeur à jour. », et le reste se consulte comme avant. Un classeur sans
@@ -4179,12 +4311,13 @@ lecture : l'écart est voulu, la provenance n'existant qu'à l'écran.)
 
 - **La vue lecture** (`js/adversaire/lecture.js`) : les rubriques empilées,
   dans les styles de l'interface. **Chaque valeur dit d'où elle vient** :
-  « de Rôtisseur ×1,4 » (un type, sous le multiplicateur de l'adversaire),
-  « de Commis » (un type, pour ce que le multiplicateur ne touche pas : la
+  « de Rôtisseur ×1,4 » (une classe, sous le multiplicateur de
+  l'adversaire), « de Commis » (une classe, pour ce que le multiplicateur
+  ne touche pas : la
   grille, le rang d'une capacité), « de sa ligne », « de Spatule souple »
   (un objet, pour une capacité et ses dégâts). L'armure d'une zone nomme les
   pièces qui la donnent, avec leur qualité (« Carapace épaisse [2] + Toque
-  renforcée [3] ») ; le corps et la résistance sont dits « valeur fixe » ;
+  renforcée [3] ») ; le corps et l'endurance sont dits « valeur fixe » ;
   un nombre que rien ne donne, « rien ne le donne » ; une cellule illisible,
   « illisible », avec son origine. « de » s'élide devant une voyelle. Une
   capacité dit son rang (ou « n'évolue pas »), son coût (ou « sans coût »),
@@ -4194,16 +4327,16 @@ lecture : l'écart est voulu, la provenance n'existant qu'à l'écran.)
   dit de laquelle il vient**, la dernière : « rang 2, de sa ligne ». **Une
   liste que rien ne remplit dit qui la vide** : « Aucun objet », suivi de
   « de sa ligne, qui n'en garde aucun », quand sa ligne écrit « aucun » là
-  où son type donnait un équipement ; « Aucun objet. » seul quand personne
+  où sa classe donnait un équipement ; « Aucun objet. » seul quand personne
   n'en donne. La résolution rend pour cela, pour chaque liste, d'où vient
   la dernière cellule écrite sans « // » (`listes`).
-- Les types, les objets, les pièces d'un pack et les capacités sont des
-  liens vers leurs fiches. Un type, un objet ou une capacité introuvable
+- Les classes, les objets, les pièces d'un pack et les capacités sont des
+  liens vers leurs fiches. Une classe, un objet ou une capacité introuvable
   s'affiche barré, avec un lien vers l'anomalie de la ligne qui le cite :
-  celle de l'adversaire, celle du type dont il l'hérite, ou, dans la feuille
+  celle de l'adversaire, celle de la classe dont il l'hérite, ou, dans la feuille
   Blocs, celle du bloc qui donne une capacité absente.
 - **« À vérifier »** : les constats de la résolution, ceux de sa ligne et
-  ceux de ses types, chacun avec son code et sa gravité en toutes lettres
+  ceux de ses classes, chacun avec son code et sa gravité en toutes lettres
   quand il en a un, suivis d'un lien vers les anomalies de leur ligne quand
   le rapport publié en porte. Un adversaire incomplet ou en erreur le dit en
   tête, dans les deux vues, et s'affiche tel qu'il se résout.
@@ -4216,7 +4349,8 @@ lecture : l'écart est voulu, la provenance n'existant qu'à l'écran.)
   « Imprimer / PDF » sort la seule carte, sans numéro, quelle que soit la
   vue, après avoir chargé les trois faces de sa police.
 - « Ajouter à la rencontre » ajoute un exemplaire, et dit combien la
-  rencontre en porte déjà ; un lien mène à la rencontre, un autre aux types.
+  rencontre en porte déjà ; un lien mène à la rencontre, un autre aux
+  classes (« Classes d'adversaires »).
   Au plafond, le bouton devient inactif et le focus passe au lien de la
   rencontre.
 - Deux adversaires de même nom (E16) s'affichent l'un sous l'autre, chacun
@@ -4226,7 +4360,7 @@ lecture : l'écart est voulu, la provenance n'existant qu'à l'écran.)
   d'abord. Un nom introuvable donne « Fiche introuvable » et le nom approché
   (§ 9).
 
-**La fiche d'un type** (`js/ecrans/fiche_type.js`) : sa ligne telle que la
+**La fiche d'une classe** (`js/ecrans/fiche_type.js`) : sa ligne telle que la
 résolution la lit, cellule par cellule — la localisation et ses zones, les
 quatre nombres, l'équipement avec sa qualité (« qualité par défaut » quand
 elle n'est pas écrite) et les pièces d'un pack, les capacités avec leur rang
@@ -4234,13 +4368,13 @@ elle n'est pas écrite) et les pièces d'un pack, les capacités avec leur rang
 se dit ; « // » se dit en clair : « Reprend la liste héritée, et ajoute : ».
 Rien n'y est multiplié ni arrondi. Une cellule que la notation ne lit pas
 s'affiche telle qu'écrite, avec son anomalie. Puis **les adversaires qui
-l'utilisent**, en liens, et les anomalies de sa ligne. Deux types de même
-nom (E16) s'affichent l'un sous l'autre, avec la phrase du doublon, qui
-finit par « Les adversaires héritent du premier. ». Quand seul un signe
-invisible les distingue (§ 6.3, lot 4), chacun garde les adversaires qui
-écrivent son nom, et celui que porte l'adresse vient d'abord : la phrase
-finit alors par « Chaque adversaire hérite du premier dont il écrit le nom
-exact. », sous l'un et l'autre nom.
+l'utilisent**, en liens, et les anomalies de sa ligne. Deux classes de
+même nom (E16) s'affichent l'une sous l'autre, avec la phrase du doublon,
+qui finit par « Les adversaires héritent de la première. ». Quand seul un
+signe invisible les distingue (§ 6.3, lot 4), chacune garde les
+adversaires qui écrivent son nom, et celle que porte l'adresse vient
+d'abord : la phrase finit alors par « Chaque adversaire hérite de la
+première dont il écrit le nom exact. », sous l'un et l'autre nom.
 
 **La rencontre** (`js/ecrans/rencontre.js`, `#/rencontre`). La liste des
 adversaires, avec la même recherche ; pour chacun, des boutons + et − :
@@ -4331,9 +4465,9 @@ composer (§ 17.7).
 cadre des cartes qui défile, jamais la page. Un nom fait d'un seul mot plus
 large que l'écran se replie dans la rencontre ; une grille au nom de zone
 démesuré fait défiler sa seule rubrique ; les faces d'une zone (« 12-13 »)
-tiennent sur une ligne. Le lien d'un type, seul dans sa ligne, se touche sur
-ses 44 px ; les liens pris dans une phrase (les pièces d'un pack, les
-adversaires d'un type) gardent la hauteur du texte, comme sur les fiches du
+tiennent sur une ligne. Le lien d'une classe, seul dans sa ligne, se touche
+sur ses 44 px ; les liens pris dans une phrase (les pièces d'un pack, les
+adversaires d'une classe) gardent la hauteur du texte, comme sur les fiches du
 lot 1 (§ 12).
 
 **Une banque forgée ou abîmée** ne fait rien lever, et ne montre rien de
@@ -4348,12 +4482,12 @@ Elle couvre chaque règle :
 
 | Ligne | Ce qu'elle montre |
 |---|---|
-| type **Commis** | une grille de six zones, dont « Jambre droite », mal orthographiée (A11) ; quatre nombres ; une capacité |
-| type **Rôtisseur** | une arme, **un pack d'armure** (« Armure agile » : trois pièces), et « // » qui ajoute une maîtrise à la liste héritée (citée à l'accent près : A1) |
-| **Marmiton de corvée** | **deux types**, rien en propre : 1 action, 5 de souffle, 4 d'attaque, 5 de défense ; désavantage sur la seconde capacité de sa spatule |
+| classe **Commis** | une grille de six zones, dont « Jambre droite », mal orthographiée (A11) ; quatre nombres ; une capacité |
+| classe **Rôtisseur** | une arme, **un pack d'armure** (« Armure agile » : trois pièces), et « // » qui ajoute une maîtrise à la liste héritée (citée à l'accent près : A1) |
+| **Marmiton de corvée** | **deux classes**, rien en propre : 1 action, 5 de souffle, 4 d'attaque, 5 de défense ; désavantage sur la seconde capacité de sa spatule |
 | **Chef de partie** | un **multiplicateur décimal**, `[1,4]` : 1, 7, 5, 7 ; qualité 2,8 ; dégâts 6/12/19 ; armure 38, 19, 6 ; **deux rangs qui en remplacent d'autres** (maîtrise au rang 3, déplacement au rang 2), aucun désavantage |
 | **Plongeur** | **« aucun »** : ni souffle (0), ni équipement |
-| **Homard furieux** | sans type, sa propre grille de quatre zones ; **une armure naturelle globale plus une pièce** (30 partout, 36 à la tête) ; **deux armes**, dont une naturelle : une capacité donnée par les deux, avec le désavantage par l'une seulement |
+| **Homard furieux** | sans classe, sa propre grille de quatre zones ; **une armure naturelle globale plus une pièce** (30 partout, 36 à la tête) ; **deux armes**, dont une naturelle : une capacité donnée par les deux, avec le désavantage par l'une seulement |
 | **Mouette chapardeuse** | un souffle que rien ne donne ; une capacité d'arme sans arme (A15) |
 
 Deux blocs s'ajoutent à la feuille `Blocs` : « Pinces de homard », une arme
@@ -4365,7 +4499,7 @@ trois avertissements de la feuille : A11, A1 et A15.
 
 **Les ajouts du lot 4** au classeur d'essai (§ 10.3) touchent ce que
 portent des adversaires : Passif sur « Nez fin », que cite la Mouette
-chapardeuse, et sur la maîtrise que citent le type Rôtisseur et le Chef de
+chapardeuse, et sur la maîtrise que citent la classe Rôtisseur et le Chef de
 partie. **Aucune valeur
 d'un adversaire n'en change**, et la feuille garde ses trois
 avertissements. Un contrôle le vérifie : il refabrique le classeur d'avant
@@ -4378,7 +4512,7 @@ octet le fichier du lot 3 (mesuré le 12/10/2026, hors des contrôles).
 
 **Le banc sur le classeur réel** (§ 6.3), lancé hors dépôt le 11/10/2026 sur
 le classeur de l'auteur : la feuille Adversaires compte cinq lignes, deux
-types et trois adversaires. **Les mesures de référence de l'instruction du
+classes et trois adversaires. **Les mesures de référence de l'instruction du
 lot sont retrouvées exactement**, pour les deux adversaires qu'elle mesure :
 les quatre nombres, les dégâts de l'arme aux trois rangs, l'armure des six
 zones, les capacités jouées avec un désavantage, et, pour celui qui porte un
@@ -5700,7 +5834,8 @@ c'est un volet, que son nom déplie.
   nombres) ; **une table des zones** pour chaque protagoniste : les faces
   du d20 et le nom de la zone (celui des personnages si elle est reconnue,
   même à deux lettres près, sinon le nom écrit), l'armure, signalée dès
-  qu'elle baisse et en rouge à 0, la résistance en cases, la face de
+  qu'elle baisse et en rouge à 0, l'endurance en cases (colonne
+  « Endurance » ; « Résistance » jusqu'au lot 5), la face de
   contre-attaque en pied ; l'attaque et la défense : pour un personnage, le
   dé et son modificateur, l'arme (son type, ses dégâts) et l'armure (son
   type) ; pour un adversaire, les deux nombres et ses armes ; le bouclier,
@@ -6526,17 +6661,21 @@ banque, qui ne s'écrit jamais en clair sur un appareil.
   événement refusé arrête tout : la suite n'est jamais tronquée en
   silence. Un contenu refusé, ou un rejeu refusé, est
   une donnée abîmée.
-- **La version des règles** est dans le contenu. Toute correction qui
-  change un nombre, un mot du journal ou un moment la fait monter ; un
-  combat d'une autre version ne se rejoue pas, et se dit. **Elle vaut 2
-  depuis le groupe 2** (décision de l'auteur, 25/10/2026) : l'événement
-  « annuler », la puissance au choix des adversaires et la défense à
-  égalité changent le rejeu. Un combat gardé au groupe 1 se dit
+- **La version des règles** est dans le contenu (`REGLES`,
+  `js/combat/regles.js`). Toute correction qui change un nombre, un mot du
+  journal ou un moment la fait monter ; un combat d'une autre version ne
+  se rejoue pas, et se dit. **Elle vaut 3 depuis le lot 5** : des mots du
+  journal changent, « endurance » au lieu de « résistance », et l'ordre
+  des caractéristiques d'un dé au choix (« Savoir sauvage + Sens »,
+  § 17.9). Un combat gardé d'avant le lot, en version 1 ou 2, se dit
   « commencé avec une autre version du simulateur » et ne se reprend pas :
   sur chaque appareil, et dans chaque mode, un combat commence par
-  « Nouveau combat ». Le groupe 3 la passera à 3. Au groupe 1, elle valait
-  1, et les corrections de sa relecture de fin de groupe ne l'avaient pas
-  fait monter.
+  « Nouveau combat ». Le groupe 3 du lot 4 la passera à 4. Elle valait 2
+  depuis le groupe 2 du lot 4 (décision de l'auteur, 25/10/2026 :
+  l'événement « annuler », la puissance au choix des adversaires et la
+  défense à égalité changent le rejeu), et 1 au groupe 1, dont les
+  corrections de la relecture de fin de groupe ne l'avaient pas fait
+  monter.
 
 **Quand.** Après chaque événement, et après chaque changement de la
 préparation, dans **une file à une seule place** : jamais deux écritures à
@@ -6742,7 +6881,7 @@ geste.
 - Une capacité sans jet : « Aubépine : Fournaise [1] (1 souffle,
   1 lien). »
 - Un jet de caractéristique, sous le nom que la banque donne à la
-  capacité : « Aubépine : Goûter, d6−1 (Sens + Savoir sauvage) contre 6
+  capacité : « Aubépine : Goûter, d6−1 (Savoir sauvage + Sens) contre 6
   (compliqué) → 5 explose, + 6 = 11 ✓, 5 explose, + 2 = 7 ✓, 2 ✗ :
   2 réussites. » Sans réussite : « : aucune réussite. »
 - Une attaque à mains nues : « Aubépine : Taloche [1] contre Marmiton
@@ -6815,10 +6954,10 @@ geste.
   de côté (1 action, 7 souffle), torse 5 → 0, jambe gauche 5 → 3. »
 - **Les dégâts appliqués** : seuls figurent ce qui change, la première
   partie avec une majuscule. « Armure 10 → 1. » ; « Armure 5 → 0,
-  résistance 5 → 0, corps 10 → 0. » ; armure déjà nulle : « Résistance
+  endurance 5 → 0, corps 10 → 0. » ; armure déjà nulle : « Endurance
   5 → 0. » ; sur plusieurs zones : « Torse : armure 30 → 22. Jambe
   gauche : armure 10 → 2. »
-- **Une blessure**, quand la résistance d'une zone tombe à 0 : d'un
+- **Une blessure**, quand l'endurance d'une zone tombe à 0 : d'un
   personnage, « Blessure (jambe gauche) : −1 à ses jets. », puis « Blessure
   (bras gauche) : −2 à ses jets. » ; d'un adversaire, « Blessure (jambe
   droite), sans effet calculé. » ; rien, si le coup tue.
@@ -6865,7 +7004,9 @@ terminé… ». La région d'annonce la dit.
 - une capacité que donnent l'arme tenue et une arme au sac ne porte pas le
   nom de l'arme entre parenthèses : l'arme au sac ne donne rien ;
 - les caractéristiques d'un dé au choix s'écrivent dans l'ordre de la liste
-  des neuf (§ 15.2), non dans celui du choix ;
+  des neuf (§ 15.2), non dans celui du choix : depuis le lot 5, celui du
+  livret du 25/10/2026, « Savoir sauvage + Sens » et non plus « Sens +
+  Savoir sauvage » ;
 - « Fin de tour », par le bouton, écrit la même ligne que la fin
   automatique.
 
@@ -6889,7 +7030,7 @@ premiers.
 | une défense contre un jet prêté, « Dégâts de l'arme » | « 1 réussite, touché, dégâts de l'arme : B = 12 » |
 | une attaque ou un jet prêté d'un personnage, sans dégâts, puis un nombre saisi | « 1 réussite, touché, ajusté à 4 (Fournaise) » |
 | une défense sans réussite contre une attaque aux dégâts saisis | « aucune réussite, Aubépine reçoit 4 (à la main : Frappe) » |
-| des dégâts directs, à la place de « , ajusté à … » | « , dégâts directs à la résistance : 4 (Frappe) » ; « , dégâts directs au corps : 4 (Frappe) » ; en défense sans dégâts propres, le nombre n'est dit qu'une fois : « 1 réussite, touché, dégâts directs à la résistance : 4 (Frappe) » |
+| des dégâts directs, à la place de « , ajusté à … » | « , dégâts directs à l'endurance : 4 (Frappe) » ; « , dégâts directs au corps : 4 (Frappe) » ; en défense sans dégâts propres, le nombre n'est dit qu'une fois : « 1 réussite, touché, dégâts directs à l'endurance : 4 (Frappe) » |
 | le jet prêté d'un adversaire qui a plusieurs armes | le nom de l'arme prêtée entre en tête de la parenthèse : « (Pinces de homard, 2 souffle) » ; si la capacité a elle-même plusieurs armes, celle de la façon d'abord, puis l'arme prêtée si c'en est une autre |
 | un coût en lien non payé | seul dans sa parenthèse : « (coût en lien non payé : un adversaire n'a pas de lien) » ; après un coût, le point-virgule entre deux espaces, comme partout au journal : « (5 souffle ; coût en lien non payé : un adversaire n'a pas de lien) » |
 | l'esquive, dès que le geste a plusieurs dés de localisation | chaque coup qu'elle change porte sa zone, même s'il est seul : « Aubépine intervient : Pas de côté (1 action, 3 souffle), torse 12 → 9. » |
@@ -6960,6 +7101,12 @@ pendant fictif du combat de la maquette.
   signe près, et le même état final. **Il est arrêté** : le fichier est une
   transcription, que rien ne retouche d'après ce que rend le moteur. Un
   écart est un défaut du moteur, ou une lecture à porter devant l'auteur.
+  **Au lot 5**, la mission en a redonné six lignes mot pour mot, et rien
+  d'autre : « endurance » au lieu de « résistance » (lignes 12, 13, 17, 31
+  et 35), et la ligne 20 dans l'ordre du livret, « Aubépine : Goûter, d6−1
+  (Savoir sauvage + Sens) contre 6 (compliqué) → … ». Aucun dé, aucun
+  nombre, ni l'état final ne change ; le même combat, écrit en version 1 ou
+  2 des règles, se dit d'une autre version et ne se rejoue pas (§ 17.8).
 - **Son déroulé** : vingt-cinq étapes, dont sept fins automatiques de
   tour, sur cinq tours ; 105 événements, dont 48 événements de dé (37 de
   chaîne, 11 de localisation), qui portent 50 lancers : deux dés lancés
@@ -6968,10 +7115,10 @@ pendant fictif du combat de la maquette.
 - **Ce qu'il couvre** : les ajouts posés d'office (A1, J1, J2, J2), puis
   déplacés ; un déplacement gratuit et un déplacement payant ; un avantage
   et un désavantage de maîtrise qui s'annulent ; des dégâts fixés à la
-  main, et « dégrossir » ; une mort par l'armure, la résistance et le
+  main, et « dégrossir » ; une mort par l'armure, l'endurance et le
   corps ; un coup sur une zone sans armure d'un adversaire, et sa blessure
   sans effet calculé ; deux coups sur une même zone d'Aubépine, le premier
-  vidant l'armure, le second la résistance, puis un jet d'Aubépine à −1 ;
+  vidant l'armure, le second l'endurance, puis un jet d'Aubépine à −1 ;
   une défense avec relance d'avantage, venue par inversion du désavantage
   de maîtrise d'un Marmiton, et une défense à trois réussites ; une
   esquive pendant le tour adverse, et l'action qui manque ensuite ; une

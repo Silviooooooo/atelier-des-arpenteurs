@@ -12,7 +12,7 @@
 //
 // Deux sources, qui ne se mêlent pas (§ 17) :
 // - ce qui bouge pendant le combat (case, actions, souffle, corps, armure,
-//   résistance, attaque, défense, mort) se lit dans etat.protagonistes ;
+//   endurance, attaque, défense, mort) se lit dans etat.protagonistes ;
 // - ce qui ne bouge pas (capacités, armes, passifs, grille, caractéristiques)
 //   se lit dans etat.photos, qui porte les valeurs de chaque photographie,
 //   jamais sa source.
@@ -97,7 +97,7 @@ export function defenseDe(etat, id) {
 }
 
 /**
- * Le nombre de ses blessures : une par zone dont la résistance est à 0
+ * Le nombre de ses blessures : une par zone dont l'endurance est à 0
  * (livret, « Ressources »). Pour un PJ, chacune retire 1 à ses jets ; pour un
  * adversaire, le compte n'a pas d'effet calculé (convention provisoire, § 12).
  */

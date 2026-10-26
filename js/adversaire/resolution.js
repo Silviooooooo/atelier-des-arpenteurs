@@ -253,7 +253,7 @@ export function indexerAdversaires(banque, index = indexerCreation(banque)) {
    */
   function analyser(entree, genre) {
     if (analyses.has(entree)) return analyses.get(entree);
-    const sujet = genre === "type" ? `Le type « ${citer(entree.nom)} »` : `L'adversaire « ${citer(entree.nom)} »`;
+    const sujet = genre === "type" ? `La classe « ${citer(entree.nom)} »` : `L'adversaire « ${citer(entree.nom)} »`;
     const ligne = entree.brut?.ligne ?? null;
     const constats = [];
     const signaler = (code, message) => constats.push({ code, ligne, message });
@@ -267,17 +267,17 @@ export function indexerAdversaires(banque, index = indexerCreation(banque)) {
       if (blancs(trouve) !== ecrit) signaler("A1", `${sujet} cite « ${citer(ecrit)} » pour ${quoi} « ${citer(trouve)} » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent.`);
     };
 
-    // La colonne Type d'un adversaire ; un type n'hérite de rien. Le nom
-    // d'un type ne peut porter ni « / » ni crochets : nul ne pourrait le citer.
+    // La colonne Classe d'un adversaire ; une classe n'hérite de rien. Le nom
+    // d'une classe ne peut porter ni « / » ni crochets : nul ne pourrait la citer.
     if (genre === "type" && /[/[\]]/.test(entree.nom)) {
-      signaler("E9", `${sujet} porte « / » ou un crochet dans son nom : la colonne Type d'un adversaire ne pourrait pas le citer.`);
+      signaler("E9", `${sujet} porte « / » ou un crochet dans son nom : la colonne Classe d'un adversaire ne pourrait pas la citer.`);
     }
     const typesLus = genre === "adversaire" ? lireTypes(entree.types) : { types: [], multiplicateur: null };
-    if (typesLus.defaut) signaler("E9", `${sujet} : la colonne Type, « ${citer(texteDe(entree.types).trim())} », ne se lit pas : ${typesLus.defaut}.`);
+    if (typesLus.defaut) signaler("E9", `${sujet} : la colonne Classe, « ${citer(texteDe(entree.types).trim())} », ne se lit pas : ${typesLus.defaut}.`);
     const typesCites = typesLus.types.map((nom) => {
       const trouve = repertoireTypes.resoudre(nom);
-      if (trouve.nom) approche(nom, trouve.nom, "le type");
-      else signaler("E8", `${sujet} cite le type « ${citer(nom)} », introuvable parmi les types de la feuille ${FEUILLE}${ambigu(trouve)}.`);
+      if (trouve.nom) approche(nom, trouve.nom, "la classe");
+      else signaler("E8", `${sujet} cite la classe « ${citer(nom)} », introuvable parmi les classes de la feuille ${FEUILLE}${ambigu(trouve)}.`);
       return { ecrit: nom, entree: trouve.nom ? types.get(trouve.nom) : null };
     });
 

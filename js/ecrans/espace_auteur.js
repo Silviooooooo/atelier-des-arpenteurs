@@ -164,7 +164,7 @@ function importation() {
     bilan = el(
       "p",
       {},
-      `« ${fichier.nom} » : ${compte(b.blocs.length, "bloc", "blocs")}, ${compte(b.capacites.length, "capacité", "capacités")}, ${compte(b.elements.length, "élément", "éléments")}, ${compte(b.adversaires.length, "adversaire", "adversaires")} (${compte(b.types_adversaires.length, "type", "types")}).`,
+      `« ${fichier.nom} » : ${compte(b.blocs.length, "bloc", "blocs")}, ${compte(b.capacites.length, "capacité", "capacités")}, ${compte(b.elements.length, "élément", "éléments")}, ${compte(b.adversaires.length, "adversaire", "adversaires")} (${compte(b.types_adversaires.length, "classe", "classes")}).`,
     );
   } else if (fichier) bilan = el("p", { classe: "message", role: "alert" }, `« ${fichier.nom} » ne peut pas être importé : une feuille ou un en-tête attendu manque (E1).`);
   return [
@@ -312,7 +312,7 @@ function listeDesDifferences(d) {
     ["blocs", "Blocs"],
     ["capacites", "Capacités"],
     ["elements", "Éléments"],
-    ["types_adversaires", "Types d'adversaires"],
+    ["types_adversaires", "Classes d'adversaires"],
     ["adversaires", "Adversaires"],
   ]) {
     const { ajoutes, modifies, retires } = d[categorie] ?? { ajoutes: [], modifies: [], retires: [] };

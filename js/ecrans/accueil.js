@@ -128,7 +128,7 @@ export function afficher(contexte) {
       carte("blocs", "bloc", "blocs"),
       carte("capacites", "capacité", "capacités"),
       carte("elements", "élément", "éléments"),
-      manque ? null : [carte("adversaires", "adversaire", "adversaires"), carte("types", "type d'adversaire", "types d'adversaires")],
+      manque ? null : [carte("adversaires", "adversaire", "adversaires"), carte("types", "classe d'adversaire", "classes d'adversaires")],
     ),
     manque ? el("p", { classe: "secondaire-texte" }, manque) : null,
     banque.anomalies.length

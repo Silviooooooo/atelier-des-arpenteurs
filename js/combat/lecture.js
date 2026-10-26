@@ -954,7 +954,7 @@ function lettresVues(etat, geste, facon, jet) {
   return lignes.filter(present);
 }
 
-const LIBELLES_DE_NATURE = { normaux: "Dégâts normaux", resistance: "Directs, à la résistance", corps: "Directs, au corps" };
+const LIBELLES_DE_NATURE = { normaux: "Dégâts normaux", resistance: "Directs, à l'endurance", corps: "Directs, au corps" };
 
 // Les dégâts à fixer, à la fin du jet : la base, un nombre et sa raison, la
 // nature. Choisir une base retire le nombre saisi ; des dégâts directs
@@ -1027,7 +1027,7 @@ function detailVu(etat, geste) {
   if (victime === null || courant === null) return null;
   const change = ([avant, apres], mot) => (avant === apres ? null : `${mot} ${avant} ${SIGNES.fleche} ${apres}`);
   return frapper(courant, coupsDuGeste(etat, geste)).coups.map((coup) => {
-    const parties = [change(coup.armure, "armure"), change(coup.resistance, "résistance"), change(coup.corps, "corps")].filter(present);
+    const parties = [change(coup.armure, "armure"), change(coup.resistance, "endurance"), change(coup.corps, "corps")].filter(present);
     return { zone: element(victime.zones, coup.zone)?.nom ?? "?", texte: parties.length > 0 ? parties.join(", ") : "aucun dégât" };
   });
 }

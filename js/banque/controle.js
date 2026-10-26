@@ -1,10 +1,11 @@
 // Contrôle de cohérence de la banque (SPECIFICATION.md, § 6.3).
 //
-// Les trente-six codes du § 6.3 sont définis ici, avec leur gravité (A6,
+// Les trente-sept codes du § 6.3 sont définis ici, avec leur gravité (A6,
 // retiré, ne revient pas : le bloc sans capacité est devenu I3). L'import en
 // relève six en lisant les lignes (E1, E2, E6, A7, I1, I4) ; ce module relève
 // les autres sur la banque : doublons, renvois, paramètres, rattachements,
-// descriptions. Ceux de la feuille Adversaires (E8 à E16, A11 à A16, I5)
+// descriptions (I2 ; et I6 au lot 5 : une expression devant un mot au
+// pluriel, sans « (s) » pour l'accorder). Ceux de la feuille Adversaires (E8 à E16, A11 à A16, I5)
 // viennent de la résolution des adversaires, la même que celle de la page
 // (js/adversaire/). Il ne corrige rien et n'ajoute aucune règle du jeu : là
 // où le classeur laisse une ambiguïté, il la signale.
@@ -53,6 +54,7 @@ export const GRAVITES = {
   I3: "information",
   I4: "information",
   I5: "information",
+  I6: "information",
 };
 
 /** Une anomalie, au format du § 5.1. */
@@ -81,6 +83,35 @@ function ajouter(table, cleTable, valeur) {
 
 const ecrire = (parametre) => `{${parametre.nom}:${parametre.valeur}}${parametre.cible ? `(${parametre.cible})` : ""}`;
 const ambigu = (trouve) => (trouve.candidats?.length > 1 ? ` (renvoi ambigu : ${trouve.candidats.map((n) => `« ${n} »`).join(", ")})` : "");
+
+// I6 (lot 5) : dans une description, une expression entre crochets ou un
+// paramètre entre accolades suivi, après des espaces, d'un mot qui finit par
+// « s » ou « x », sans « (s) » ni « (x) » après lui. Avec un 1, le mot
+// resterait au pluriel : « [N] cases » s'afficherait « 1 cases ». Les mots
+// invariables, ou qui ne sont pas des noms, sont exclus : la liste du § 6.2,
+// telle quelle. Les espaces ne passent pas un retour à la ligne, où la phrase
+// s'arrête (js/banque/accord.js).
+const MOTS_EXCLUS = new Set(
+  "fois, pas, temps, corps, poids, prix, choix, croix, voix, bras, dos, os, mois, avis, repas, cours, succès, progrès, accès, plus, moins, sous, sans, vers, après, très, deux, trois, six, dix, aux, des, les, ses, ces, mes, tes, nos, vos, leurs, dans, hors, lors, alors, puis, mais, jamais, toujours, depuis, envers".split(", "),
+);
+const EXPRESSION_SUIVIE = /(\[[^[\]]*\]|\{[^{}]*\})[^\S\r\n]+(\p{L}+)/gu;
+
+/** Les mots au pluriel sans marque d'une description, le premier seul : I6 vaut une fois par cellule. */
+function plurielsSansMarque(description) {
+  const texte = String(description ?? "");
+  const trouves = [];
+  for (const trouve of texte.matchAll(EXPRESSION_SUIVIE)) {
+    const [tout, expression, mot] = trouve;
+    const fin = trouve.index + tout.length;
+    const finale = mot.slice(-1).toLowerCase();
+    const marquee = texte.startsWith("(s)", fin) || texte.startsWith("(x)", fin);
+    if ((finale === "s" || finale === "x") && !MOTS_EXCLUS.has(mot.toLowerCase()) && !marquee) trouves.push({ expression, mot, finale });
+  }
+  return trouves.slice(0, 1);
+}
+
+const messageI6 = (nom, { expression, mot, finale }) =>
+  `La description de « ${nom} » écrit « ${expression} ${mot} » : avec un 1, elle s'affichera « 1 ${mot} ». Écrivez « ${mot.slice(0, -1)}(${finale}) » pour l'accorder.`;
 
 /** Contrôle une banque importée ; rend ses anomalies (hors E1, E2, E6, A7, I1). */
 export function controler(banque) {
@@ -267,6 +298,7 @@ export function controler(banque) {
         if (!porte(capacite.nom, propres, parametre)) signaler("A5", lieu, `${lieu.sujet} invoque {${parametre}}, que ni elle ni ses blocs ne portent.`);
       }
       if (variante.description.trim() === "") signaler("I2", lieu, `${lieu.sujet} a une description vide.`);
+      for (const pluriel of plurielsSansMarque(variante.description)) signaler("I6", lieu, messageI6(capacite.nom, pluriel));
     }
   }
 
@@ -274,6 +306,7 @@ export function controler(banque) {
     const lieu = { feuille: "Eléments", ligne: element.brut.ligne };
     if (!portes.has(element.nom)) signaler("A4", lieu, `L'élément « ${element.nom} » n'est porté par rien : ni bloc, ni capacité, ni paramètre transmis.`);
     if (element.description.trim() === "") signaler("I2", lieu, `L'élément « ${element.nom} » a une description vide.`);
+    for (const pluriel of plurielsSansMarque(element.description)) signaler("I6", lieu, messageI6(element.nom, pluriel));
   }
 
   // La feuille Adversaires : ce que trouve la résolution de chaque adversaire.

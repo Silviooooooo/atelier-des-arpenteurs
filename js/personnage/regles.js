@@ -10,15 +10,18 @@ import { cle } from "../banque/noms.js";
 
 // Livret, « Éléments de personnage », « Caractéristiques » : neuf
 // caractéristiques, de 2 à 6, pour une somme de 36. Les abréviations sont
-// celles du modèle de fiche.
+// celles du modèle de fiche. L'ordre est celui du livret du 25/10/2026
+// (lot 5) : il range l'étape 2 du créateur, la fiche à l'écran et au PDF, et
+// les deux caractéristiques d'un jet au combat. Un personnage garde ses
+// valeurs par code : l'ordre ne change aucune d'elles.
 export const CARACTERISTIQUES = [
   { code: "force", nom: "Force", abrege: "For" },
   { code: "agilite", nom: "Agilité", abrege: "Agi" },
   { code: "precision", nom: "Précision", abrege: "Pré" },
-  { code: "sens", nom: "Sens", abrege: "Sen" },
+  { code: "parole", nom: "Parole", abrege: "Par" },
   { code: "culture_neruvienne", nom: "Culture néruvienne", abrege: "Cul" },
   { code: "savoir_sauvage", nom: "Savoir sauvage", abrege: "Sav" },
-  { code: "parole", nom: "Parole", abrege: "Par" },
+  { code: "sens", nom: "Sens", abrege: "Sen" },
   { code: "empathie", nom: "Empathie", abrege: "Emp" },
   { code: "creativite", nom: "Créativité", abrege: "Cré" },
 ];
@@ -78,7 +81,7 @@ export const LOCALISATION_20 = "20 → attaque annulée, contre-attaque.";
 
 // Livret, « Ressources » : 10 points de souffle à la création, un de plus
 // par point d'historique (aucun à la création) ; 10 points de corps ; 5
-// points de résistance par partie du corps ; l'armure selon l'équipement.
+// points d'endurance par partie du corps ; l'armure selon l'équipement.
 export const SOUFFLE_CREATION = 10;
 export const CORPS = 10;
 export const RESISTANCE_PAR_ZONE = 5;

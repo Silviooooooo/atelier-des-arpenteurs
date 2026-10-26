@@ -8,7 +8,7 @@
 // rien : il est la racine du graphe du noyau, et js/adversaire/resolution.js
 // y prend le nom du paramètre « loc_multiple » sans créer de cycle.
 //
-// Les nombres propres à un protagoniste (résistance 5, corps 10, souffle 10)
+// Les nombres propres à un protagoniste (endurance 5, corps 10, souffle 10)
 // ne sont pas ici : ils viennent de sa fiche ou de sa résolution, figés dans
 // sa photographie.
 
@@ -17,9 +17,10 @@
 // ou un moment la fait monter, et un combat d'une autre version ne se reprend
 // pas. Décision de l'auteur (25/10/2026) : 2 au groupe 2 du lot 4 (l'événement
 // « annuler », la puissance au choix des adversaires, la défense à égalité) ;
-// un combat gardé au groupe 1 se dit « commencé avec une autre version du
-// simulateur ». Le groupe 3 la passera à 3.
-export const REGLES = 2;
+// 3 au lot 5 : l'endurance et l'ordre des caractéristiques ; le groupe 3 du
+// lot 4 la passera à 4. Un combat gardé d'avant (version 1 ou 2) se dit
+// « commencé avec une autre version du simulateur ».
+export const REGLES = 3;
 
 // Décision de l'auteur : la carte fait 10 × 10 cases, colonnes A à J, lignes
 // 1 à 10. Une case s'écrit « D4 ».

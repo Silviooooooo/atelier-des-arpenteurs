@@ -15,10 +15,12 @@ import { CLASSEUR_ESSAI, CLASSEUR_PROPRE } from "./classeur_essai.js";
 
 const _ = null;
 
+// Les noms d'en-tête d'avant le lot 5 (« Type », « Localisation »), que
+// l'import admet toujours ; les messages nomment la colonne « Classe ».
 export const ENTETES = ["Nom", "Type", "Localisation", "Nombre d'actions", "Souffle", "Attaque", "Défense", "Equipement", "Capacités"];
 export const HUMANOIDE = "Torse(2), Jambe gauche(12), Jambe droite(14), Bras gauche(16), Bras droit(18), Tête(20)";
 
-// Lignes 2, 3 et 4 de la feuille : deux types et un adversaire, sans défaut.
+// Lignes 2, 3 et 4 de la feuille : deux classes et un adversaire, sans défaut.
 export const SOCLE = [
   ["Type", "Commis", HUMANOIDE, 1, 2, 3, 4, _, "Pas chassé"],
   ["Type", "Rôtisseur", _, _, 5, 4, 5, "Spatule souple, Armure agile", "//, Maîtrise de l'agile[1]"],
@@ -107,23 +109,23 @@ const BOND = [["Bond", 1, 1, _, _, "Bondit.", "Variantes 1 et 3, sans la 2"], ["
 export const FAUTES = [
   {
     code: "E8",
-    cas: "un type cité introuvable ; l'adversaire, sans rien d'hérité, n'est pas en plus dit incomplet",
+    cas: "une classe citée introuvable ; l'adversaire, sans rien d'hérité, n'est pas en plus dit incomplet",
     description: avecAdversaires([["Fantôme", "Spectre"]]),
-    attendues: [["E8", 5, "L'adversaire « Fantôme » cite le type « Spectre », introuvable parmi les types de la feuille Adversaires."]],
+    attendues: [["E8", 5, "L'adversaire « Fantôme » cite la classe « Spectre », introuvable parmi les classes de la feuille Adversaires."]],
   },
   {
     code: "E9",
-    cas: "multiplicateur ailleurs qu'après le dernier type, crochet non fermé, multiplicateur nul, négatif ; un nom de type à barre oblique",
+    cas: "multiplicateur ailleurs qu'après la dernière classe, crochet non fermé, multiplicateur nul, négatif ; un nom de classe à barre oblique",
     description: avecAdversaires([["A", "Commis[2]/Rôtisseur"], ["B", "Commis[2"], ["C", "Commis[0]"], ["D", "Commis[-2]"], ["E", "Commis//Rôtisseur"], ["Type", "Mi/Cuit", "Corps(2)", 1, 1, 1, 1]]),
     attendues: [
-      ["E9", 5, "L'adversaire « A » : la colonne Type, « Commis[2]/Rôtisseur », ne se lit pas : le multiplicateur n'est permis qu'une fois, après le dernier type."],
-      ["E9", 6, "L'adversaire « B » : la colonne Type, « Commis[2 », ne se lit pas : crochet « [ » jamais fermé."],
-      ["E9", 7, "L'adversaire « C » : la colonne Type, « Commis[0] », ne se lit pas : le multiplicateur est nul."],
-      ["E9", 8, "L'adversaire « D » : la colonne Type, « Commis[-2] », ne se lit pas : le multiplicateur « -2 » n'est pas un nombre positif."],
-      ["E9", 9, "L'adversaire « E » : la colonne Type, « Commis//Rôtisseur », ne se lit pas : un nom de type manque."],
-      // Un nom de type à barre oblique : aucun adversaire ne pourrait le citer, et aucun ne l'utilise.
-      ["E9", 10, "Le type « Mi/Cuit » porte « / » ou un crochet dans son nom : la colonne Type d'un adversaire ne pourrait pas le citer."],
-      ["I5", 10, "Le type « Mi/Cuit » n'est utilisé par aucun adversaire."],
+      ["E9", 5, "L'adversaire « A » : la colonne Classe, « Commis[2]/Rôtisseur », ne se lit pas : le multiplicateur n'est permis qu'une fois, après la dernière classe."],
+      ["E9", 6, "L'adversaire « B » : la colonne Classe, « Commis[2 », ne se lit pas : crochet « [ » jamais fermé."],
+      ["E9", 7, "L'adversaire « C » : la colonne Classe, « Commis[0] », ne se lit pas : le multiplicateur est nul."],
+      ["E9", 8, "L'adversaire « D » : la colonne Classe, « Commis[-2] », ne se lit pas : le multiplicateur « -2 » n'est pas un nombre positif."],
+      ["E9", 9, "L'adversaire « E » : la colonne Classe, « Commis//Rôtisseur », ne se lit pas : un nom de classe manque."],
+      // Un nom de classe à barre oblique : aucun adversaire ne pourrait la citer, et aucun ne l'utilise.
+      ["E9", 10, "La classe « Mi/Cuit » porte « / » ou un crochet dans son nom : la colonne Classe d'un adversaire ne pourrait pas la citer."],
+      ["I5", 10, "La classe « Mi/Cuit » n'est utilisée par aucun adversaire."],
     ],
   },
   {
@@ -156,7 +158,7 @@ export const FAUTES = [
     code: "E11",
     cas: "un pack dont aucune pièce n'existe",
     description: avecAdversaires([["Type", "Marmiton", "Corps(2), Tête(18)", 1, 2, 3, 4, "Armure agile", "Coup"], ["Apprenti", "Marmiton"]], { socle: false, base: CLASSEUR_PROPRE }),
-    attendues: [["E11", 2, "Le type « Marmiton » cite le pack « Armure agile », mais aucun bloc de type Armure ne porte l'élément Agile."]],
+    attendues: [["E11", 2, "La classe « Marmiton » cite le pack « Armure agile », mais aucun bloc de type Armure ne porte l'élément Agile."]],
   },
   {
     code: "E12",
@@ -216,60 +218,60 @@ export const FAUTES = [
   },
   {
     code: "E16",
-    cas: "deux types de même nom, deux adversaires de même nom",
+    cas: "deux classes de même nom, deux adversaires de même nom",
     description: avecAdversaires([["Type", "Commis", _, 2], ["Marmiton", "Commis"]]),
     attendues: [
-      ["E16", 5, "Le type « Commis » est déjà défini ligne 2."],
+      ["E16", 5, "La classe « Commis » est déjà définie ligne 2."],
       ["E16", 6, "L'adversaire « Marmiton » est déjà défini ligne 4."],
     ],
   },
   {
     // Un signe invisible s'écrit ici par son code (« \u200B ») : le fichier ne porte jamais le signe lui-même.
     code: "E16",
-    cas: "un adversaire et un type dont le nom ne diffère d'un autre que par un signe invisible, ou par l'espace qu'il cachait",
+    cas: "un adversaire et une classe dont le nom ne diffère d'un autre que par un signe invisible, ou par l'espace qu'il cachait",
     description: avecAdversaires([["Marmiton\u200B", "Commis"], ["Type", "Commis \u2060", _, 2]]),
     attendues: [
       ["E16", 5, "L'adversaire « Marmiton\u200B » est déjà défini ligne 4."],
-      ["E16", 6, "Le type « Commis \u2060 » est déjà défini ligne 2."],
+      ["E16", 6, "La classe « Commis \u2060 » est déjà définie ligne 2."],
     ],
   },
   {
     // La première définition porte le signe : la table des doublons se range sous le nom comparé, comme elle se lit.
     code: "E16",
-    cas: "le signe invisible sur la première définition : la seconde, sans signe, est le doublon (un type, un adversaire)",
+    cas: "le signe invisible sur la première définition : la seconde, sans signe, est le doublon (une classe, un adversaire)",
     description: avecAdversaires([["Type", "Écailler\u200B", _, 2], ["Type", "Écailler", _, 3], ["Sommelier\u2060", "Commis"], ["Sommelier", "Commis"]]),
     attendues: [
-      ["E16", 6, "Le type « Écailler » est déjà défini ligne 5."],
+      ["E16", 6, "La classe « Écailler » est déjà définie ligne 5."],
       ["E16", 8, "L'adversaire « Sommelier » est déjà défini ligne 7."],
-      ["I5", 5, "Le type « Écailler\u200B » n'est utilisé par aucun adversaire."],
+      ["I5", 5, "La classe « Écailler\u200B » n'est utilisée par aucun adversaire."],
     ],
   },
   {
     code: "A1",
-    cas: "un type, un bloc et une capacité cités à la casse ou aux accents près",
+    cas: "une classe, un bloc et une capacité cités à la casse ou aux accents près",
     description: avecAdversaires([["A", "commis/ROTISSEUR", _, _, _, _, _, "//, couteau d'office", "//, pas chasse"]]),
     attendues: [
-      ["A1", 5, "L'adversaire « A » cite « commis » pour le type « Commis » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
-      ["A1", 5, "L'adversaire « A » cite « ROTISSEUR » pour le type « Rôtisseur » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
+      ["A1", 5, "L'adversaire « A » cite « commis » pour la classe « Commis » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
+      ["A1", 5, "L'adversaire « A » cite « ROTISSEUR » pour la classe « Rôtisseur » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
       ["A1", 5, "L'adversaire « A » cite « couteau d'office » pour le bloc « Couteau d'office » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
       ["A1", 5, "L'adversaire « A » cite « pas chasse » pour la capacité « Pas chassé » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
     ],
   },
   {
     code: "A1",
-    cas: "un type, un bloc et une capacité cités à un signe invisible près : résolus, et signalés",
+    cas: "une classe, un bloc et une capacité cités à un signe invisible près : résolus, et signalés",
     description: avecAdversaires([["A", "Commis\u200B", _, _, _, _, _, "//, Couteau d'office\u00AD", "//, Pas\u2060 chassé"]]),
     attendues: [
-      ["A1", 5, "L'adversaire « A » cite « Commis\u200B » pour le type « Commis » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
+      ["A1", 5, "L'adversaire « A » cite « Commis\u200B » pour la classe « Commis » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
       ["A1", 5, "L'adversaire « A » cite « Couteau d'office\u00AD » pour le bloc « Couteau d'office » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
       ["A1", 5, "L'adversaire « A » cite « Pas\u2060 chassé » pour la capacité « Pas chassé » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
     ],
   },
   {
     code: "A11",
-    cas: "une zone reconnue par approximation ; dans un type, elle se dit une fois, à sa ligne",
+    cas: "une zone reconnue par approximation ; dans une classe, elle se dit une fois, à sa ligne",
     description: avecAdversaires([["Type", "Mitron", "Torse(2), Jambre droite(14)", 1, 1, 1, 1], ["A", "Mitron"], ["B", "Mitron"], ["C", "Mitron[2]"]]),
-    attendues: [["A11", 5, "Le type « Mitron » : la zone « Jambre droite » est reconnue par approximation comme « Jambe droite »."]],
+    attendues: [["A11", 5, "La classe « Mitron » : la zone « Jambre droite » est reconnue par approximation comme « Jambe droite »."]],
   },
   {
     code: "A12",
@@ -311,23 +313,23 @@ export const FAUTES = [
   },
   {
     code: "A16",
-    cas: "un adversaire qui porte le nom d'un type",
+    cas: "un adversaire qui porte le nom d'une classe",
     description: avecAdversaires([["Commis", "Commis"]]),
-    attendues: [["A16", 5, "L'adversaire « Commis » porte le nom d'un type, défini ligne 2."]],
+    attendues: [["A16", 5, "L'adversaire « Commis » porte le nom d'une classe, définie ligne 2."]],
   },
   {
     code: "A16",
-    cas: "un adversaire qui porte le nom d'un type, à un signe invisible près",
+    cas: "un adversaire qui porte le nom d'une classe, à un signe invisible près",
     description: avecAdversaires([["Rôtisseur\u200D", "Commis"]]),
-    attendues: [["A16", 5, "L'adversaire « Rôtisseur\u200D » porte le nom d'un type, défini ligne 3."]],
+    attendues: [["A16", 5, "L'adversaire « Rôtisseur\u200D » porte le nom d'une classe, définie ligne 3."]],
   },
   {
     code: "A16",
-    cas: "un adversaire sans signe invisible, face à un type dont le nom en porte un",
+    cas: "un adversaire sans signe invisible, face à une classe dont le nom en porte un",
     description: avecAdversaires([["Type", "Écailler\u200B", _, 2], ["Écailler", "Commis"]]),
     attendues: [
-      ["A16", 6, "L'adversaire « Écailler » porte le nom d'un type, défini ligne 5."],
-      ["I5", 5, "Le type « Écailler\u200B » n'est utilisé par aucun adversaire."],
+      ["A16", 6, "L'adversaire « Écailler » porte le nom d'une classe, définie ligne 5."],
+      ["I5", 5, "La classe « Écailler\u200B » n'est utilisée par aucun adversaire."],
     ],
   },
   {
@@ -338,13 +340,13 @@ export const FAUTES = [
   },
   {
     code: "I5",
-    cas: "un type que rien n'utilise",
+    cas: "une classe que rien n'utilise",
     description: avecAdversaires([["Type", "Plongeur", _, _, 1]]),
-    attendues: [["I5", 5, "Le type « Plongeur » n'est utilisé par aucun adversaire."]],
+    attendues: [["I5", 5, "La classe « Plongeur » n'est utilisée par aucun adversaire."]],
   },
   {
     code: "E2",
-    cas: "une ligne sans nom, un type sans nom",
+    cas: "une ligne sans nom, une classe sans nom",
     description: avecAdversaires([[_, "Commis"], ["Type", _, "Corps(2)"]]),
     attendues: [
       ["E2", 5, "La ligne 5 n'est pas vide mais n'a pas de nom : elle n'entre pas dans la banque."],
@@ -362,7 +364,7 @@ export const FAUTES = [
   },
   {
     code: "I1",
-    cas: "des espaces de bord à un nom d'adversaire, à un nom de type",
+    cas: "des espaces de bord à un nom d'adversaire, à un nom de classe",
     description: avecAdversaires([[" Sommelier ", "Commis"], ["Type", "Saucier ", _, 1], ["Second", "Saucier/Commis"]]),
     attendues: [
       ["I1", 5, "Le nom « Sommelier » portait des espaces au début et à la fin ; ils sont retirés."],

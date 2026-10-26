@@ -170,8 +170,8 @@ test("Aubépine — chaque façon : coût, description, éléments, attaque, dé
   assert.deepEqual([facon("Fournaise").cout, facon("Fournaise").description, facon("Fournaise").degats, facon("Fournaise").portee], [{ souffle: 1, lien: 1 }, "Réchauffe la case.", null, 0]);
   assert.deepEqual(facon("Cendre").cout, { souffle: 2, lien: 1 });
   assert.deepEqual(facon("Pas chassé").cout, { souffle: 0, lien: 0 }, "« N-1 » à la puissance 1");
-  assert.equal(facon("Pas chassé").description, "Se déplace de 1 cases.");
-  assert.deepEqual([facon("Pas de côté").cout, facon("Pas de côté").intervention, facon("Pas de côté").description], [{ souffle: "X", lien: 0 }, true, "Annulez X dégâts reçus."]);
+  assert.equal(facon("Pas chassé").description, "Se déplace de 1 case.");
+  assert.deepEqual([facon("Pas de côté").cout, facon("Pas de côté").intervention, facon("Pas de côté").description], [{ souffle: "X", lien: 0 }, true, "Annulez X dégât(s) reçu(s)."]);
   assert.equal(facon("Se couvrir").description, "Reportez les dommages sur les 8 points du couvercle.");
   // Passif et Intervention se lisent sur la variante jouée ; une attaque n'est ni l'un ni l'autre.
   const passives = v.capacites.filter((c) => c.facons.some((f) => f.passif)).map((c) => c.nom);
@@ -505,7 +505,7 @@ test("le Chef de partie et le Marmiton de corvée — leurs valeurs de départ s
       [2, null, null, { souffle: 1, lien: 0 }, false, null, 0, false, null],
     ]],
   ]);
-  assert.deepEqual(laCapacite(chef, "Pas chassé").facons.map((f) => f.description), ["Se déplace de 1 cases.", "Se déplace de 2 cases."]);
+  assert.deepEqual(laCapacite(chef, "Pas chassé").facons.map((f) => f.description), ["Se déplace de 1 case.", "Se déplace de 2 cases."]);
   assert.equal(laCapacite(chef, "Frappe").facons[0].description, "Une attaque qui inflige 6/12/19.");
 
   const marmiton = valeursDe(adv(DEMO, "Marmiton de corvée"));
@@ -1206,7 +1206,7 @@ test("capacitesA — sur chaque adversaire de la démonstration, au rang, la ré
   const chef = DEMO.adversaires.adversaires.get("Chef de partie");
   const pas = DEMO.adversaires.resoudre(chef).capacites.findIndex((capacite) => capacite.nom === "Pas chassé");
   const un = DEMO.adversaires.capacitesA(chef, 1)[pas];
-  assert.deepEqual([un.rang, un.cout, un.descriptions], [2, { souffle: "0", lien: "0" }, [{ source: null, texte: "Se déplace de 1 cases." }]]);
+  assert.deepEqual([un.rang, un.cout, un.descriptions], [2, { souffle: "0", lien: "0" }, [{ source: null, texte: "Se déplace de 1 case." }]]);
 });
 
 test("les puissances d'un adversaire — par puissance, puis par arme ; une puissance sans variante est sautée ; aucune ne se lit : son rang seul", async () => {

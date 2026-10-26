@@ -411,7 +411,7 @@ test("démonstration — la banque se déchiffre avec le mot de passe public et 
   assert.deepEqual(["Intervention", "Passif"].map((nom) => banque.elements.find((e) => e.nom === nom)?.description), ["Se joue pendant le tour adverse.", "Agit sans action."]);
   assert.deepEqual(banque.blocs.find((b) => b.nom === "Gestes de cuisine").capacites.map((c) => c.nom), ["Pas chassé", "Goûter", "Taloche", "Pas de côté", "Guetter"]);
   const variante = (nom) => banque.capacites.find((c) => c.nom === nom)?.variantes[0];
-  assert.deepEqual([variante("Pas de côté")?.cout_souffle, variante("Pas de côté")?.elements, variante("Pas de côté")?.description], ["X", [{ nom: "Intervention" }], "Annulez [X] dégâts reçus."]);
+  assert.deepEqual([variante("Pas de côté")?.cout_souffle, variante("Pas de côté")?.elements, variante("Pas de côté")?.description], ["X", [{ nom: "Intervention" }], "Annulez [X] dégât(s) reçu(s)."]);
   assert.equal(variante("Guetter")?.description, "Après un déplacement, ou pour finir son tour : une de vos capacités se joue en intervention jusqu'au prochain tour de votre camp.");
   assert.equal((await ouvrirAvecMotDePasse(enveloppe, "un autre mot de passe de table")).code, "mot_de_passe");
 });

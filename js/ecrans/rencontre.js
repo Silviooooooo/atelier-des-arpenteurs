@@ -266,7 +266,7 @@ export function oublier() {
 }
 
 // Un doublon (E16) ne compte qu'une fois : la rencontre prend le premier de
-// son nom, comme l'héritage prend le premier type.
+// son nom, comme l'héritage prend la première classe.
 function resoudre(contexte, nom) {
   if (!resolus.has(nom)) {
     const resolution = contexte.etat.index.adversaires();
@@ -402,7 +402,7 @@ export function afficher(contexte, services = {}) {
     const noeud = el(
       "li",
       { classe: "ligne-rencontre" },
-      el("span", { classe: "nom-rencontre" }, el("a", { href: adresseFiche("adversaires", nom) }, nom), " ", el("span", { classe: "detail" }, texteDe(types) || "sans type")),
+      el("span", { classe: "nom-rencontre" }, el("a", { href: adresseFiche("adversaires", nom) }, nom), " ", el("span", { classe: "detail" }, texteDe(types) || "sans classe")),
       el("div", { classe: "pas-a-pas" }, moins, valeur, plus),
     );
     lignes.set(nom, { noeud, valeur, moins, plus });
@@ -415,7 +415,7 @@ export function afficher(contexte, services = {}) {
     autocomplete: "off",
     autocapitalize: "none",
     spellcheck: "false",
-    placeholder: "Nom, type, équipement ou capacité",
+    placeholder: "Nom, classe, équipement ou capacité",
   });
   // Les lignes se gardent, avec leurs boutons : la recherche ne fait que
   // choisir celles qu'elle montre.

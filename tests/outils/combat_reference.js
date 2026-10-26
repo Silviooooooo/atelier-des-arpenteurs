@@ -88,6 +88,11 @@ export const casesDOffice = ["A1", "J1", "J2", "J2"];
 // Trente-six lignes, comparées mot pour mot. Le texte ne porte aucune espace
 // insécable (« n° 1 » s'écrit avec une espace ordinaire), et son signe moins
 // est U+2212, cinq fois, jamais le trait d'union.
+//
+// Au lot 5, le livret du 25/10/2026 a changé deux choses, et la mission a
+// redonné ces lignes mot pour mot : « endurance » au lieu de « résistance »
+// (lignes 12, 13, 17, 31 et 35), et l'ordre des caractéristiques, qui range
+// celles d'un dé au choix (ligne 20, « Savoir sauvage + Sens »).
 export const journalAttendu = [
   "Combat lancé : 1 personnage contre 3 adversaires. Les PJ commencent.",
   "— Tour 1 · camp des PJ —",
@@ -100,15 +105,15 @@ export const journalAttendu = [
   "Marmiton n° 2 : Frappe contre Aubépine. Son avantage (Solo du chef) et son désavantage (types d'armure mêlés) s'annulent. Aubépine lance sa défense, d8+1 contre 4 → 4 ✓, 8 ✓, 6 ✓ : 3 réussites, aucun dégât.",
   "Fin du tour des adversaires : ils retrouvent leurs actions.",
   "— Tour 2 · camp des PJ —",
-  "Aubépine : Émincer (4 souffle) contre Marmiton n° 1. Son avantage (Solo du chef) et son désavantage (Émincer hors maîtrise) s'annulent. d10+1 contre 5 → 5 ✓, 9 ✓, 4 ✗ : 2 réussites, B = 8, ajusté à 20 (Émincer), +2 contre l'armure (Réduction). Localisation d20 → 20 : tête. Armure 5 → 0, résistance 5 → 0, corps 10 → 0. Marmiton n° 1 meurt.",
-  "Aubépine : Taloche [1] contre Marmiton n° 2. d8+1 (Force + Agilité) contre 5, 1 avantage → 8 ✓, 4 ✗, relancé 6 ✓, 9 ✓ : 3 réussites, C = 8, +3 contre l'armure (Réduction). Localisation d20 → 14 : jambe droite. Résistance 5 → 0, corps 10 → 7. Blessure (jambe droite), sans effet calculé.",
+  "Aubépine : Émincer (4 souffle) contre Marmiton n° 1. Son avantage (Solo du chef) et son désavantage (Émincer hors maîtrise) s'annulent. d10+1 contre 5 → 5 ✓, 9 ✓, 4 ✗ : 2 réussites, B = 8, ajusté à 20 (Émincer), +2 contre l'armure (Réduction). Localisation d20 → 20 : tête. Armure 5 → 0, endurance 5 → 0, corps 10 → 0. Marmiton n° 1 meurt.",
+  "Aubépine : Taloche [1] contre Marmiton n° 2. d8+1 (Force + Agilité) contre 5, 1 avantage → 8 ✓, 4 ✗, relancé 6 ✓, 9 ✓ : 3 réussites, C = 8, +3 contre l'armure (Réduction). Localisation d20 → 14 : jambe droite. Endurance 5 → 0, corps 10 → 7. Blessure (jambe droite), sans effet calculé.",
   "Fin du tour des PJ : ils retrouvent leurs actions.",
   "— Tour 2 · camp des adversaires —",
   "Chef : Frappe contre Aubépine. Son avantage (Solo du chef) et son désavantage (types d'armure mêlés) s'annulent. Aubépine lance sa défense, d8+1 contre 5 → 5 ✓, 4 ✗ : 1 réussite, Aubépine reçoit B = 12. Localisation d20 → 17 : bras gauche. Aubépine intervient : Pas de côté (1 action, 3 souffle), 12 → 9. Armure 10 → 1.",
-  "Marmiton n° 2 : Moulinet farineux [1] (5 souffle) contre Aubépine. Ses 2 avantages (Solo du chef, Moulinet farineux hors maîtrise de Marmiton n° 2) et son désavantage (types d'armure mêlés) laissent 1 avantage. Aubépine lance sa défense, d8+1 contre 4, 1 avantage → 7 ✓, 3 ✗, relancé 5 ✓, 2 ✗ : 2 réussites, Aubépine reçoit A = 5. Localisation d20 → 12 : jambe gauche. Résistance 5 → 0. Blessure (jambe gauche) : −1 à ses jets.",
+  "Marmiton n° 2 : Moulinet farineux [1] (5 souffle) contre Aubépine. Ses 2 avantages (Solo du chef, Moulinet farineux hors maîtrise de Marmiton n° 2) et son désavantage (types d'armure mêlés) laissent 1 avantage. Aubépine lance sa défense, d8+1 contre 4, 1 avantage → 7 ✓, 3 ✗, relancé 5 ✓, 2 ✗ : 2 réussites, Aubépine reçoit A = 5. Localisation d20 → 12 : jambe gauche. Endurance 5 → 0. Blessure (jambe gauche) : −1 à ses jets.",
   "Fin du tour des adversaires : ils retrouvent leurs actions.",
   "— Tour 3 · camp des PJ —",
-  "Aubépine : Goûter, d6−1 (Sens + Savoir sauvage) contre 6 (compliqué) → 5 explose, + 6 = 11 ✓, 5 explose, + 2 = 7 ✓, 2 ✗ : 2 réussites.",
+  "Aubépine : Goûter, d6−1 (Savoir sauvage + Sens) contre 6 (compliqué) → 5 explose, + 6 = 11 ✓, 5 explose, + 2 = 7 ✓, 2 ✗ : 2 réussites.",
   "Fin du tour des PJ : ils retrouvent leurs actions.",
   "— Tour 3 · camp des adversaires —",
   "Chef : Moulinet farineux [1] (5 souffle) contre Aubépine. Son avantage (Solo du chef) et son désavantage (types d'armure mêlés) s'annulent. Aubépine lance sa défense, d8 contre 5 → 4 ✗ : aucune réussite, Aubépine reçoit C = 19. Localisation d20 → 20 : contre-attaque, l'attaque est annulée.",
@@ -119,11 +124,11 @@ export const journalAttendu = [
   "Aubépine : Frappe contre Chef. Son avantage (Solo du chef) et son désavantage (Frappe hors maîtrise) s'annulent. d10 contre 7 → 6 ✗ : aucune réussite, manqué.",
   "Fin du tour des PJ : ils retrouvent leurs actions.",
   "— Tour 4 · camp des adversaires —",
-  "Chef : Frappe contre Aubépine. Son avantage (Solo du chef) et son désavantage (types d'armure mêlés) s'annulent. Aubépine lance sa défense, d8 contre 5 → 6 ✓, 4 ✗ : 1 réussite, Aubépine reçoit B = 12. Localisation d20 → 16 : bras gauche. Armure 1 → 0, résistance 5 → 0, corps 10 → 4. Blessure (bras gauche) : −2 à ses jets.",
+  "Chef : Frappe contre Aubépine. Son avantage (Solo du chef) et son désavantage (types d'armure mêlés) s'annulent. Aubépine lance sa défense, d8 contre 5 → 6 ✓, 4 ✗ : 1 réussite, Aubépine reçoit B = 12. Localisation d20 → 16 : bras gauche. Armure 1 → 0, endurance 5 → 0, corps 10 → 4. Blessure (bras gauche) : −2 à ses jets.",
   "Fin du tour des adversaires : ils retrouvent leurs actions.",
   "— Tour 5 · camp des PJ —",
   "Aubépine : Frappe contre Marmiton n° 2. Son avantage (Solo du chef) et son désavantage (Frappe hors maîtrise) s'annulent. d10−1 contre 5 → 5 ✓, 8 ✓, 4 ✗ : 2 réussites, B = 8, +2 contre l'armure (Réduction). Localisation d20 → 15 : jambe droite. Corps 7 → 0. Marmiton n° 2 meurt.",
-  "Aubépine : Frappe contre Chef. Son avantage (Solo du chef) et son désavantage (Frappe hors maîtrise) s'annulent. d10−1 contre 7 → 7 ✓, 9 ✓, 8 ✓ : 3 réussites, C = 20, +3 contre l'armure (Réduction). Localisation d20 → 13 : jambe gauche. Résistance 5 → 0, corps 10 → 0. Chef meurt.",
+  "Aubépine : Frappe contre Chef. Son avantage (Solo du chef) et son désavantage (Frappe hors maîtrise) s'annulent. d10−1 contre 7 → 7 ✓, 9 ✓, 8 ✓ : 3 réussites, C = 20, +3 contre l'armure (Réduction). Localisation d20 → 13 : jambe gauche. Endurance 5 → 0, corps 10 → 0. Chef meurt.",
   "Combat terminé : victoire des PJ.",
 ];
 
@@ -139,7 +144,7 @@ export const journalAttendu = [
 // non plus.
 //
 // `zones` porte chaque zone dont l'état arrêté donne les valeurs. Toute zone
-// qui n'y figure pas est intacte : armure et résistance à leur maximum.
+// qui n'y figure pas est intacte : armure et endurance à leur maximum.
 //
 // Aubépine garde 0 action sur 2 : le combat finit pendant son tour, sans « Fin
 // du tour », et personne ne retrouve ses actions.

@@ -81,7 +81,7 @@ const BONUS = [
 /**
  * Ce qui s'ajoute à chaque dé d'un jet que lance ce protagoniste, hors de
  * tout réglage à la main : ses bonus câblés, puis ses blessures (−1 par zone
- * dont la résistance est à 0). « genre » est celui du jet (« attaque »,
+ * dont l'endurance est à 0). « genre » est celui du jet (« attaque »,
  * « defense », « caracteristique ») ; « mobilisees », les caractéristiques
  * qui font son dé. Un nombre nul n'entre pas dans la liste.
  *

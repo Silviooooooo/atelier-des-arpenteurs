@@ -128,11 +128,11 @@ export function lecture(fiche) {
     ),
 
     section(
-      "Armure et résistance",
+      "Armure et endurance",
       el(
         "table",
         { classe: "lecture-zones" },
-        el("thead", {}, el("tr", {}, el("th", { scope: "col" }, "Zone"), el("th", { scope: "col" }, "d20"), el("th", { scope: "col" }, "Armure"), el("th", { scope: "col" }, "Résistance"))),
+        el("thead", {}, el("tr", {}, el("th", { scope: "col" }, "Zone"), el("th", { scope: "col" }, "d20"), el("th", { scope: "col" }, "Armure"), el("th", { scope: "col" }, "Endurance"))),
         el(
           "tbody",
           {},

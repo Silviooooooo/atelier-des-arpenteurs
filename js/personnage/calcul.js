@@ -21,6 +21,7 @@
 // retenu reste le défaut proposé. typesDuBloc dit les poids d'un bloc, dont
 // la photographie tire la cause d'un désavantage de maîtrise.
 
+import { accorder } from "../banque/accord.js";
 import { cle, repertoire } from "../banque/noms.js";
 import { typeDe } from "../banque/types.js";
 import { entierInferieur, evaluer, fraction, lireNombre, rangs } from "./expressions.js";
@@ -296,7 +297,8 @@ export function valeursCrochet(expression, variables, caracteristiques, niveau) 
 
 /**
  * La description d'une capacité, ses « [expression] » et ses « {nom} »
- * remplacés par leur valeur (livret, « Paramètre » ; lisez_moi, « Syntaxe »).
+ * remplacés par leur valeur (livret, « Paramètre » ; lisez_moi, « Syntaxe »),
+ * puis ses « (s) » et « (x) » accordés (js/banque/accord.js, lot 5).
  * Ce qui ne se calcule pas reste tel qu'écrit, avec un avertissement.
  */
 export function decrire(texte, variables, caracteristiques, niveau) {
@@ -322,7 +324,9 @@ export function decrire(texte, variables, caracteristiques, niveau) {
     avertissements.push(`« ${tout} » n'a pas de valeur ici`);
     return tout;
   });
-  return { texte: sortie, avertissements };
+  // Les nombres calculés, chaque « (s) » ou « (x) » s'accorde au dernier de
+  // sa phrase (§ 6.2) : « [N] case(s) » donne « 1 case », « 2 cases ».
+  return { texte: accorder(sortie), avertissements };
 }
 
 /**

@@ -1,6 +1,6 @@
-// La fiche d'un type d'adversaire (SPECIFICATION.md, § 16.6).
+// La fiche d'une classe d'adversaire (SPECIFICATION.md, § 16.6).
 //
-// Un type ne se joue pas : il donne ses valeurs aux adversaires qui le
+// Une classe ne se joue pas : elle donne ses valeurs aux adversaires qui la
 // citent (§ 16.2). La fiche montre sa ligne telle que la résolution la lit
 // (js/adversaire/resolution.js), cellule par cellule : une cellule vide est
 // dite « hérite », et « // » en tête d'une liste se dit en clair. Puis les
@@ -84,17 +84,17 @@ export function afficher(contexte, nom) {
     .adversaires()
     .utilisateurs(nom)
     .map((adversaire) => el("a", { href: adresseFiche("adversaires", adversaire) }, adversaire));
-  // Un doublon de types du même nom écrit : l'héritage prend le premier
-  // (§ 16.2). Quand un signe invisible en distingue un (§ 6.3), chacun garde
-  // les adversaires qui écrivent son nom : « le premier » de la page serait
-  // faux sous l'un des deux noms.
-  const heritage = types.every((type) => type.nom === nom) ? "Les adversaires héritent du premier." : "Chaque adversaire hérite du premier dont il écrit le nom exact.";
+  // Un doublon de classes du même nom écrit : l'héritage prend la première
+  // (§ 16.2). Quand un signe invisible en distingue une (§ 6.3), chacune
+  // garde les adversaires qui écrivent son nom : « la première » de la page
+  // serait fausse sous l'un des deux noms.
+  const heritage = types.every((type) => type.nom === nom) ? "Les adversaires héritent de la première." : "Chaque adversaire hérite de la première dont il écrit le nom exact.";
   return el(
     "article",
     { classe: "fiche" },
     titre(nom),
-    el("p", { classe: "secondaire-texte" }, "Type d'adversaires. Une cellule vide hérite : la valeur vient d'un type appliqué avant lui, ou de la ligne de l'adversaire."),
-    types.length > 1 ? el("p", { classe: "message" }, `Ce nom désigne ${types.length} types : c'est un doublon (E16), ils se suivent ci-dessous. ${heritage}`) : null,
+    el("p", { classe: "secondaire-texte" }, "Classe d'adversaires. Une cellule vide hérite : la valeur vient d'une classe appliquée avant elle, ou de la ligne de l'adversaire."),
+    types.length > 1 ? el("p", { classe: "message" }, `Ce nom désigne ${types.length} classes : c'est un doublon (E16), elles se suivent ci-dessous. ${heritage}`) : null,
     types.map((type) => corps(index, type)),
     section("Adversaires qui l'utilisent", liste(utilisateurs), "Aucun adversaire ne l'utilise."),
   );

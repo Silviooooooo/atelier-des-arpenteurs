@@ -104,11 +104,11 @@ test("carte — l'en-tête : « Adversaire », le nom, et le numéro d'exemplair
   assert.deepEqual([...seule.querySelectorAll(".carte-tete [aria-hidden=true]")].map((n) => n.className), ["carte-losange", "carte-filet", "carte-losange"]);
 });
 
-test("carte — la bande du d20 : vingt faces, la contre-attaque, chaque zone à sa place sur les rangées Armure et Résistance, le corps", () => {
+test("carte — la bande du d20 : vingt faces, la contre-attaque, chaque zone à sa place sur les rangées Armure et Endurance, le corps", () => {
   const chef = carteDe(demo("Chef de partie"));
   assert.deepEqual(textes(chef, ".carte-face"), Array.from({ length: 20 }, (_, i) => String(i + 1)));
   assert.deepEqual(textes(chef, ".carte-contre"), ["Contre-attaque"]);
-  assert.deepEqual(textes(chef, ".carte-etiquette"), ["Armure", "Résistance", "Corps"]);
+  assert.deepEqual(textes(chef, ".carte-etiquette"), ["Armure", "Endurance", "Corps"]);
   assert.deepEqual([...chef.querySelectorAll(".carte-etiquette")].map((n) => n.className), ["carte-etiquette rangee-armure", "carte-etiquette rangee-resistance", "carte-etiquette rangee-corps"]);
   const rangee = (noeud, nom) => [...noeud.querySelectorAll(`.carte-zone.rangee-${nom}`)].map((z) => [z.className.replace(`carte-zone rangee-${nom} `, ""), texteDe(z.querySelector(".carte-nom-zone")), texteDe(z.querySelector(".carte-valeur"))]);
   assert.deepEqual(rangee(chef, "armure"), [
@@ -159,17 +159,17 @@ test("carte — une zone de deux faces au plus s'abrège en initiales si son nom
   );
 });
 
-test("carte — la première ligne : les types et le multiplicateur, les maîtrises et leur rang, l'équipement, sa qualité, les pièces d'un pack ; un segment absent s'omet", () => {
+test("carte — la première ligne : les classes et le multiplicateur, les maîtrises et leur rang, l'équipement, sa qualité, les pièces d'un pack ; un segment absent s'omet", () => {
   assert.equal(ecrireMultiplicateur("1,4"), "×1,4");
   const chef = carteDe(demo("Chef de partie"));
   assert.equal(texteDe(chef.querySelector(".carte-titre")), "Capacités");
-  assert.equal(texteDe(chef.querySelector(".carte-resume")), "Types Commis, Rôtisseur ×1,4 — Maîtrises Maîtrise de l'agile [3] — Équipement Spatule souple [2,8] · Armure agile [2,8] (3 pièces)");
-  assert.deepEqual(textes(chef, ".carte-resume .carte-libelle"), ["Types", "Maîtrises", "Équipement"]);
+  assert.equal(texteDe(chef.querySelector(".carte-resume")), "Classes Commis, Rôtisseur ×1,4 — Maîtrises Maîtrise de l'agile [3] — Équipement Spatule souple [2,8] · Armure agile [2,8] (3 pièces)");
+  assert.deepEqual(textes(chef, ".carte-resume .carte-libelle"), ["Classes", "Maîtrises", "Équipement"]);
   assert.deepEqual(textes(chef, ".carte-resume .carte-separateur"), ["—", "—"]);
-  assert.equal(texteDe(carteDe(demo("Marmiton de corvée")).querySelector(".carte-resume")), "Types Commis, Rôtisseur — Maîtrises Maîtrise de l'agile [1] — Équipement Spatule souple [2] · Armure agile [2] (3 pièces)");
-  assert.equal(texteDe(carteDe(demo("Plongeur")).querySelector(".carte-resume")), "Types Commis, Rôtisseur — Maîtrises Maîtrise de l'agile [1]");
+  assert.equal(texteDe(carteDe(demo("Marmiton de corvée")).querySelector(".carte-resume")), "Classes Commis, Rôtisseur — Maîtrises Maîtrise de l'agile [1] — Équipement Spatule souple [2] · Armure agile [2] (3 pièces)");
+  assert.equal(texteDe(carteDe(demo("Plongeur")).querySelector(".carte-resume")), "Classes Commis, Rôtisseur — Maîtrises Maîtrise de l'agile [1]");
   assert.equal(texteDe(carteDe(demo("Homard furieux")).querySelector(".carte-resume")), "Équipement Carapace épaisse [2] · Toque renforcée [3] · Pinces de homard [2] · Couteau d'office [2]");
-  // Ni type, ni maîtrise, ni équipement : pas de première ligne.
+  // Ni classe, ni maîtrise, ni équipement : pas de première ligne.
   assert.equal(carteDe(demo("Mouette chapardeuse")).querySelectorAll(".carte-resume").length, 0);
   const fabriquee = carteDe(
     resoluEssai((r) => {
@@ -185,7 +185,7 @@ test("carte — la première ligne : les types et le multiplicateur, les maîtri
       ];
     }),
   );
-  assert.equal(texteDe(fabriquee.querySelector(".carte-resume")), "Types Bête ×2 — Maîtrises Maîtrise du combat lourd [2], Maîtrise du combat précis [1] — Équipement Armure lourde [4] (1 pièce) · Fourchette magique (introuvable)");
+  assert.equal(texteDe(fabriquee.querySelector(".carte-resume")), "Classes Bête ×2 — Maîtrises Maîtrise du combat lourd [2], Maîtrise du combat précis [1] — Équipement Armure lourde [4] (1 pièce) · Fourchette magique (introuvable)");
 });
 
 test("carte — une ligne par capacité : le rang si elle évolue, les dégâts et la portée, le coût, le désavantage, la description ; jamais les maîtrises", () => {
@@ -207,7 +207,7 @@ test("carte — une ligne par capacité : le rang si elle évolue, les dégâts 
   assert.equal(chef.querySelectorAll(".carte-desavantage").length, 0);
   // Sans la maîtrise au rang voulu, le désavantage ; entier, il ne nomme aucun bloc.
   const marmiton = carteDe(demo("Marmiton de corvée"));
-  assert.deepEqual(lignes(marmiton).slice(1), ["Frappe (5/10/15) — Une attaque qui inflige 5/10/15.", "Moulinet farineux [1] (5/10/15) 5 souffle désavantage — Tourbillonne 1 fois.", "Pas chassé [1] — Se déplace de 1 cases.", ""]);
+  assert.deepEqual(lignes(marmiton).slice(1), ["Frappe (5/10/15) — Une attaque qui inflige 5/10/15.", "Moulinet farineux [1] (5/10/15) 5 souffle désavantage — Tourbillonne 1 fois.", "Pas chassé [1] — Se déplace de 1 case.", ""]);
   assert.deepEqual(textes(marmiton, ".carte-desavantage"), ["désavantage"]);
   assert.equal(marmiton.querySelectorAll(".carte-ligne .carte-precision").length, 1, "la seule précision est celle du pack");
   for (const noeud of [chef, marmiton]) assert.ok(!lignes(noeud).slice(1).some((l) => l.includes("Maîtrise")), "les maîtrises ne sont que sur la première ligne");
@@ -258,7 +258,7 @@ test("carte — quatre lignes de capacités au moins, et autant qu'il en faut ; 
   assert.deepEqual(compter(avec(7)), [7, 0]);
   assert.equal(lignes(avec(7)).at(-1), "Capacité 7 [1] — Effet de Capacité 7.");
   // Les lignes vides suivent les capacités, et ne portent rien.
-  assert.deepEqual(lignes(carteDe(demo("Plongeur"))).slice(1), ["Pas chassé [1] — Se déplace de 1 cases.", "", "", ""]);
+  assert.deepEqual(lignes(carteDe(demo("Plongeur"))).slice(1), ["Pas chassé [1] — Se déplace de 1 case.", "", "", ""]);
   const absente = carteDe(resoluEssai((r) => (r.capacites = [{ nom: "Coup de pied retourné", absente: true, rang: null, armes: [], degats: "", cout: null, desavantage: [], descriptions: [], origines: [PROPRE] }])));
   assert.equal(lignes(absente)[0], "Coup de pied retourné introuvable dans Capacites");
   assert.equal(texteDe(absente.querySelector(".carte-absente")), "introuvable dans Capacites");
@@ -275,7 +275,7 @@ test("carte — la colonne de droite : le nombre d'actions, le souffle, l'attaqu
   assert.doesNotMatch(texteDe(chef), /Dégâts/, "l'ancienne case « Dégâts » n'existe pas");
   // Ce que la vue lecture dit à l'écran, la carte ne le dit pas.
   assert.doesNotMatch(texteDe(chef), /\bde (?:Commis|Rôtisseur|Spatule souple|Armure agile)\b/);
-  assert.equal(texteDe(chef).split("×1,4").length - 1, 1, "le multiplicateur n'est écrit qu'après les types");
+  assert.equal(texteDe(chef).split("×1,4").length - 1, 1, "le multiplicateur n'est écrit qu'après les classes");
   // Un souffle nul s'écrit ; un souffle que rien ne donne laisse sa place.
   assert.equal(texteDe(carteDe(demo("Plongeur")).querySelector(".carte-souffle")), "Souffle : 0");
   const mouette = carteDe(demo("Mouette chapardeuse"));
@@ -304,7 +304,7 @@ test("carte — un nom qui contient du HTML reste du texte ; une zone hors de la
   );
   assert.equal(texteDe(noeud.querySelector(".carte-nom")), `${hostile} n° <u>3</u>`);
   assert.equal(texteDe(noeud.querySelector(".carte-nom-zone")), "<i>Zone</i>");
-  assert.equal(texteDe(noeud.querySelector(".carte-resume")), "Types <b>Type</b> — Équipement <script>x</script> [2]");
+  assert.equal(texteDe(noeud.querySelector(".carte-resume")), "Classes <b>Type</b> — Équipement <script>x</script> [2]");
   assert.equal(lignes(noeud)[1], "<a href=javascript:alert(1)>Lien</a> [1] — <svg onload=alert(1)>");
   for (const balise of ["img", "b", "i", "u", "a", "script", "svg"]) assert.equal(noeud.querySelectorAll(balise).length, 0, balise);
   for (const element of [noeud, ...noeud.querySelectorAll("div"), ...noeud.querySelectorAll("span")]) {
@@ -337,7 +337,7 @@ test("carte — un signe qui commande le sens de l'écriture, laissé dans un no
   );
   assert.equal(texteDe(noeud.querySelector(".carte-nom")), "Chef n° 12");
   assert.equal(texteDe(noeud.querySelector(".carte-nom-zone")), "Corps");
-  assert.equal(texteDe(noeud.querySelector(".carte-resume")), "Types Saucier — Équipement Rapière fine [4]");
+  assert.equal(texteDe(noeud.querySelector(".carte-resume")), "Classes Saucier — Équipement Rapière fine [4]");
   assert.equal(lignes(noeud)[1], "Estoc vif [1] — Inflige 13/26/41.");
   for (const signe of signes) assert.equal(texteDe(noeud).includes(signe), false, `U+${signe.codePointAt(0).toString(16)}`);
   // Les accents, les ligatures et les émojis ne sont pas des signes de sens : ils restent.

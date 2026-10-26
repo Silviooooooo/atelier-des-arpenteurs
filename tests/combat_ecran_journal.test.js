@@ -131,7 +131,7 @@ const EMINCER = ligne(
       ],
     ],
     ["localisation", [texte("Localisation d20 → 20 : tête.")]],
-    ["degats", [texte("Armure 5 → 0, résistance 5 → 0, corps 10 → 0.")]],
+    ["degats", [texte("Armure 5 → 0, endurance 5 → 0, corps 10 → 0.")]],
     ["mort", [mort("Marmiton n° 1 meurt.")]],
   ],
 );
@@ -150,7 +150,7 @@ const TALOCHE = ligne("geste", [
   ["ouverture", [acteur("Aubépine", "pj"), texte(" : "), capacite("Taloche [1]"), texte(" contre "), cible("Marmiton n° 2", "adv"), texte(".")]],
   ["jet", [texte("d8+1 (Force + Agilité) contre 5, 1 avantage → "), de(0, "8", true), entre(), de(1, "4", false), entre(", relancé "), de(2, "6", true), entre(), de(3, "9", true), texte(" : 3 réussites, "), lettre("C = 8"), texte(", +3 contre l'armure (Réduction).")]],
   ["localisation", [texte("Localisation d20 → 14 : jambe droite.")]],
-  ["degats", [texte("Résistance 5 → 0, corps 10 → 7.")]],
+  ["degats", [texte("Endurance 5 → 0, corps 10 → 7.")]],
   ["blessures", [texte("Blessure (jambe droite), sans effet calculé.")]],
 ]);
 
@@ -170,7 +170,7 @@ const GOUTER = ligne("geste", [
       acteur("Aubépine", "pj"),
       texte(" : "),
       capacite("Goûter"),
-      texte(", d6−1 (Sens + Savoir sauvage) contre 6 (compliqué) → "),
+      texte(", d6−1 (Savoir sauvage + Sens) contre 6 (compliqué) → "),
       de(0, "5 explose, + 6 = 11", true),
       entre(),
       de(1, "5 explose, + 2 = 7", true),
@@ -195,7 +195,7 @@ const TALOCHE_EN_COURS = ligne(
 // La ligne en cours du Goûter : un dé qui attend d'exploser, sans signe ni somme.
 const GOUTER_EN_COURS = ligne(
   "geste",
-  [["jet", [acteur("Aubépine", "pj"), texte(" : "), capacite("Goûter"), texte(", d6−1 (Sens + Savoir sauvage) contre 6 (compliqué) → "), de(0, "5 explose, + 6", null)]]],
+  [["jet", [acteur("Aubépine", "pj"), texte(" : "), capacite("Goûter"), texte(", d6−1 (Savoir sauvage + Sens) contre 6 (compliqué) → "), de(0, "5 explose, + 6", null)]]],
   { enCours: true },
 );
 
@@ -310,7 +310,7 @@ test("chaque segment et sa classe, et rien d'autre de coloré ; le texte des nœ
     // Les sources, la zone, le bilan et le nom répété dans la mort restent
     // du texte : un nœud texte, hors de tout span.
     const textes = emincer.childNodes.filter((enfant) => !enfant.tagName).map((enfant) => enfant.textContent);
-    for (const reste of ["Son avantage (Solo du chef) et son désavantage (Émincer hors maîtrise) s'annulent.", "Localisation d20 → 20 : tête.", "Armure 5 → 0, résistance 5 → 0, corps 10 → 0.", " (4 souffle) contre ", " : 2 réussites, "]) {
+    for (const reste of ["Son avantage (Solo du chef) et son désavantage (Émincer hors maîtrise) s'annulent.", "Localisation d20 → 20 : tête.", "Armure 5 → 0, endurance 5 → 0, corps 10 → 0.", " (4 souffle) contre ", " : 2 réussites, "]) {
       assert.ok(textes.includes(reste), reste);
     }
 
@@ -616,11 +616,11 @@ test("le bandeau : caché avant le lancement, ni bouton ni région, son étiquet
 // ─── e) La coupe ────────────────────────────────────────────────────────────
 
 test("la coupe à six phrases : la première et le jet d'abord, puis la fin, de la dernière vers le jet", () => {
-  // Les longueurs : 52, 82, 107, 29, 45 et 20 signes ; 340 en tout.
+  // Les longueurs : 52, 82, 107, 29, 44 et 20 signes ; 339 en tout.
   const essaiDe = (budget) => couperSous(EMINCER, budget).morceaux;
-  assert.deepEqual(essaiDe(340), [P(0), P(1), P(2), P(3), P(4), P(5)], "tout tient");
-  assert.deepEqual(essaiDe(339), [P(0), C, P(2), P(3), P(4), P(5)], "les sources ôtées seules");
-  assert.deepEqual(essaiDe(260), [P(0), C, P(2), C, P(4), P(5)]);
+  assert.deepEqual(essaiDe(339), [P(0), P(1), P(2), P(3), P(4), P(5)], "tout tient");
+  assert.deepEqual(essaiDe(338), [P(0), C, P(2), P(3), P(4), P(5)], "les sources ôtées seules");
+  assert.deepEqual(essaiDe(259), [P(0), C, P(2), C, P(4), P(5)]);
   assert.deepEqual(essaiDe(200), [P(0), C, P(2), C, P(5)], "la mort, phrase finale, avant les dégâts");
   assert.deepEqual(essaiDe(170), [P(0), C, P(2), C], "la première et le jet, seuls");
 
@@ -712,7 +712,7 @@ test("le bandeau coupé à 2, 3 et 6 phrases : « […] » entouré d'une espace
 
     // Le jet de caractéristique : le deuxième dé ne tient pas, il part entier.
     const gouter = montrer(GOUTER, 100);
-    assert.equal(gouter.textContent, `Aubépine : Goûter, d6−1 (Sens + Savoir sauvage) contre 6 (compliqué) → 5 explose, + 6 = 11 ✓, ${SUITE}`);
+    assert.equal(gouter.textContent, `Aubépine : Goûter, d6−1 (Savoir sauvage + Sens) contre 6 (compliqué) → 5 explose, + 6 = 11 ✓, ${SUITE}`);
     assert.deepEqual([...gouter.querySelectorAll(".combat-de-insecable")].map((noeud) => noeud.textContent), ["5 explose, + 6 = 11 ✓"]);
 
     // La ligne en cours : son « … » reste en dernier, après la coupe.

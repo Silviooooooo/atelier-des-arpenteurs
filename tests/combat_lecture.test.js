@@ -716,7 +716,7 @@ test("bulle : Aubépine, sans geste (vue 1) : son nom, son en-tête, « Fermer �
   assert.deepEqual(vue.passifs[0].survol, {
     titre: "Réduction",
     origine: "Saucier",
-    description: "Retire 1 points d'armure par réussite.",
+    description: "Retire 1 point d'armure par réussite.",
     portee: null,
     causes: [],
     cout: "Passif : ne se joue pas",
@@ -933,7 +933,7 @@ test("survol : Frappe, Émincer, Pas chassé [2], une capacité sans jet, Goûte
     hachures: casesAutour("D4", 1, 2),
   });
   assert.equal(survol("Pas chassé [2]").hachures.includes("D4"), false, "un déplacement ne hachure pas sa case");
-  assert.equal(survol("Pas chassé [1]").description, "Se déplace de 1 cases.", "la description à la puissance de la ligne");
+  assert.equal(survol("Pas chassé [1]").description, "Se déplace de 1 case.", "la description à la puissance de la ligne");
   assert.deepEqual(survol("Fournaise [1]"), {
     titre: "Fournaise",
     origine: "Grand Four",
@@ -999,7 +999,7 @@ test("survol : les causes qui ne dépendent pas de la cible : « en meute » ave
 // ─── Les causes du jet ──────────────────────────────────────────────────────
 
 test("causes : chaque phrase, dans l'ordre du jet ; la citation d'un passif ; le compte seulement quand les deux sortes sont là", () => {
-  const SOLO = { texte: "Solo du chef [1] : aucun allié de son camp sur sa case (D4) ; 1 avantage.", citation: "« Seul sur sa case : 1 avantages. »", sens: "avantage" };
+  const SOLO = { texte: "Solo du chef [1] : aucun allié de son camp sur sa case (D4) ; 1 avantage.", citation: "« Seul sur sa case : 1 avantage. »", sens: "avantage" };
 
   // La Taloche d'Aubépine (vue 2 bis) : un avantage seul, sans compte.
   assert.deepEqual(vuePanneau(reference({ geste: 7, des: 2 }), null).geste.contexte.causes, { nombre: "1 avantage", nom: "1 avantage : voir la cause", phrases: [SOLO], compte: null });
@@ -1280,7 +1280,7 @@ test("bulle : une attaque d'un PJ, étape par étape, jusqu'au détail des dég�
     natures: [
       { libelle: "Dégâts normaux", choisie: true, commande: { evenement: { type: "degats", base: "lettre", operations: [], nature: "normaux" } } },
       {
-        libelle: "Directs, à la résistance",
+        libelle: "Directs, à l'endurance",
         choisie: false,
         commande: { evenement: { type: "degats", base: "lettre", operations: [{ op: "ajuster", valeur: 5, raison: "Frappe" }], nature: "resistance" } },
       },
@@ -1312,7 +1312,7 @@ test("bulle : une attaque d'un PJ, étape par étape, jusqu'au détail des dég�
     },
   ]);
   assert.deepEqual([vue.geste.degats, vue.geste.esquive, vue.geste.aLancer], [null, null, null]);
-  assert.deepEqual(vue.geste.detail, [{ zone: "Jambe gauche", texte: "armure 10 → 0, résistance 5 → 3" }], "12 dégâts : l'armure, puis 2 à la résistance");
+  assert.deepEqual(vue.geste.detail, [{ zone: "Jambe gauche", texte: "armure 10 → 0, endurance 5 → 3" }], "12 dégâts : l'armure, puis 2 à l'endurance");
   assert.deepEqual(vue.geste.appliquer, { libelle: "Appliquer", commande: { evenement: { type: "appliquer" } } });
   assert.equal(vue.focus, "appliquer");
   assert.equal(etat.protagonistes.adv2.zones[1].armure, 10, "le détail frappe une copie : rien n'est appliqué");
@@ -1453,10 +1453,10 @@ test("bulle : le jet de caractéristique : son étape est en cours dès l'ouvert
       "force/Force/4",
       "agilite/Agilité/4",
       "precision/Précision/4",
-      "sens/Sens/4",
+      "parole/Parole/4",
       "culture_neruvienne/Culture néruvienne/4",
       "savoir_sauvage/Savoir sauvage/4",
-      "parole/Parole/4",
+      "sens/Sens/4",
       "empathie/Empathie/4",
       "creativite/Créativité/4",
     ],
@@ -1472,9 +1472,9 @@ test("bulle : le jet de caractéristique : son étape est en cours dès l'ouvert
   assert.equal(vue.geste.lettres, null, "aucun rang de dégâts");
 
   // Choisies à l'envers : la vue les rend dans l'ordre des neuf, comme le moteur les range.
-  etat = jouer(etat, regler("caracteristiques", ["parole", "sens"]));
+  etat = jouer(etat, regler("caracteristiques", ["sens", "parole"]));
   vue = vuePanneau(etat, null);
-  assert.deepEqual([vue.geste.caracteristiques.choisies, vue.geste.caracteristiques.de], [["sens", "parole"], "d8"]);
+  assert.deepEqual([vue.geste.caracteristiques.choisies, vue.geste.caracteristiques.de], [["parole", "sens"], "d8"]);
   assert.equal(vue.geste.bilan, "Choisissez une difficulté.");
   assert.equal(vue.focus, "difficulte:2");
 
@@ -1483,7 +1483,7 @@ test("bulle : le jet de caractéristique : son étape est en cours dès l'ouvert
   assert.equal(vue.geste.difficultes[4].choisie, true);
   assert.deepEqual(
     [vue.entete.titre, vue.geste.contexte.de, vue.geste.contexte.detail, vue.geste.contexte.difficulte, vue.geste.contexte.causes],
-    ["Goûter", "d8", "Sens 4 + Parole 4", "6, compliqué", null],
+    ["Goûter", "d8", "Parole 4 + Sens 4", "6, compliqué", null],
   );
   assert.deepEqual(vue.geste.aLancer, { faces: 8, combien: 1, libelle: "d8", motif: "chaine" });
   assert.equal(vue.focus, "de");
@@ -1530,7 +1530,7 @@ test("bulle : un déplacement : une ligne par puissance, les cases d'arrivée à
   assert.deepEqual([vue.geste.confirmer.actif, vue.geste.confirmer.raison], [true, null]);
   assert.equal(vue.geste.bilan, null);
   assert.equal(vue.focus, "confirmer");
-  assert.equal(vue.geste.description, "Se déplace de 1 cases.");
+  assert.equal(vue.geste.description, "Se déplace de 1 case.");
   etat = jouer(joue.etat, { type: "confirmer" });
   assert.equal(etat.journal.at(-1).texte, "Aubépine : Pas chassé [1], A1 → B2.");
 
@@ -1783,7 +1783,7 @@ test("bulle : le point de la maquette, dans la démonstration : la Taloche d'Aub
     causes: {
       nombre: "1 avantage",
       nom: "1 avantage : voir la cause",
-      phrases: [{ texte: "Solo du chef [1] : aucun allié de son camp sur sa case (D4) ; 1 avantage.", citation: "« Seul sur sa case : 1 avantages. »", sens: "avantage" }],
+      phrases: [{ texte: "Solo du chef [1] : aucun allié de son camp sur sa case (D4) ; 1 avantage.", citation: "« Seul sur sa case : 1 avantage. »", sens: "avantage" }],
       compte: null,
     },
     defense: null,

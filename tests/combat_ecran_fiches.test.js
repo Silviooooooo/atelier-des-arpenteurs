@@ -328,16 +328,16 @@ test("le souffle et le corps : en cases avec leur nombre, en nombres seuls au-de
   }
 });
 
-test("la table des zones : les faces, le nom abrégé, l'armure signalée dès qu'elle baisse, la résistance en cases, la contre-attaque en pied", () => {
+test("la table des zones : les faces, le nom abrégé, l'armure signalée dès qu'elle baisse, l'endurance en cases, la contre-attaque en pied", () => {
   const { partie, retirer } = monter();
   try {
     const fiche = ficheDe(partie, "pj1");
     const table = fiche.querySelector("table");
     assert.equal(table.className, "combat-zones");
-    assert.deepEqual(textes(table, "thead th"), ["d20", "Zone", "Armure", "Résistance"]);
+    assert.deepEqual(textes(table, "thead th"), ["d20", "Zone", "Armure", "Endurance"]);
     for (const titre of table.querySelectorAll("thead th")) assert.equal(titre.getAttribute("scope"), "col");
     const lignes = [...table.querySelectorAll("tbody tr")];
-    // Le nom de la zone est l'en-tête de sa ligne : un lecteur d'écran le dit avec l'armure et la résistance.
+    // Le nom de la zone est l'en-tête de sa ligne : un lecteur d'écran le dit avec l'armure et l'endurance.
     for (const ligne of lignes) {
       assert.deepEqual(ligne.children.map((cellule) => cellule.tagName), ["TD", "TH", "TD", "TD"]);
       assert.equal(ligne.children[1].getAttribute("scope"), "row");
@@ -363,7 +363,7 @@ test("la table des zones : les faces, le nom abrégé, l'armure signalée dès q
     assert.equal(lignes[0].querySelectorAll("abbr").length, 0);
     assert.equal(lignes[1].querySelectorAll("abbr").length, 0);
 
-    // La résistance : cinq cases, et leur compte pour qui ne les voit pas.
+    // L'endurance : cinq cases, et leur compte pour qui ne les voit pas.
     const resistance = lignes.map((ligne) => ligne.children[3]);
     assert.deepEqual(casesDe(resistance[0]), { pleines: 5, vides: 0 });
     assert.deepEqual(casesDe(resistance[3]), { pleines: 2, vides: 3 });

@@ -162,7 +162,7 @@ const PIEGEE = pjEssai((champs) => {
   // Flambage : la [1] passive, la [2] se joue.
   champs.capacites[2].facons[0].passif = true;
   // Pas chassé à la puissance 0 : aucune case à sa portée.
-  Object.assign(champs.capacites[4], { niveau: 0, evolue: false, facons: [faconEssai({ puissance: 0, description: "Se déplace de 0 cases." })] });
+  Object.assign(champs.capacites[4], { niveau: 0, evolue: false, facons: [faconEssai({ puissance: 0, description: "Se déplace de 0 case." })] });
 });
 // Un adversaire à deux armes, qui porte lui aussi une capacité absente et un rôle tenu par le simulateur.
 const ADVERSAIRE_PIEGE = adversaireEssai((champs) => {

@@ -1,7 +1,7 @@
 // Contrôles du contrôle de cohérence (SPECIFICATION.md, § 6.3 et § 11,
 // domaine « Contrôle ») : le classeur d'essai déclenche chaque code, E1, A8,
-// A9, A10 et ceux de la feuille Adversaires sur ses variantes, et un classeur
-// propre n'en déclenche aucun. Les codes de la feuille Adversaires se
+// A9, A10, I6 et ceux de la feuille Adversaires sur ses variantes, et un
+// classeur propre n'en déclenche aucun. Les codes de la feuille Adversaires se
 // vérifient un à un dans tests/adversaires.test.js.
 
 import { test } from "node:test";
@@ -73,19 +73,40 @@ const ARMURES_SUPERPOSEES = variante((feuilles) => {
   feuilles[1].lignes.push(["Brassière de cuir", "Armure, Agile", null, "{armure:10/0/0/15/0/0}, {qualite:X}", "A10 : torse et bras gauche déjà couverts par le pack agile", "Armure"]);
 });
 
-test("contrôle — les trente-six codes du § 6.3 : dix-sept sur le classeur d'essai, les autres sur ses variantes", async () => {
+// I6 (lot 5) : le classeur d'essai écrit « (s) » ou « (x) » partout où une
+// expression précède un nom au pluriel, et n'en porte donc aucune. Une
+// variante rend leur pluriel sans marque à quelques descriptions : crochets
+// et accolades, un mot en « x », deux pluriels dans une même cellule ; et,
+// sans I6, un mot déjà marqué, des mots exclus, un retour à la ligne.
+const PLURIELS_SANS_MARQUE = variante((feuilles) => {
+  const ecrire = (lignes, colonne, textes) => {
+    for (const [nom, texte] of Object.entries(textes)) lignes.find((ligne) => ligne?.[0] === nom)[colonne] = texte;
+  };
+  ecrire(feuilles[2].lignes, 2, { Portée: "Atteint {portee} cases." });
+  ecrire(feuilles[3].lignes, 5, {
+    "Pas chassé": "Se déplace de [N] cases.",
+    Glaçage: "Fige [N] cibles pendant [N] tours.",
+    Braise: "Rallume [N] feux.",
+    Feuilletage: "Pare [N] coups(s) par tour.",
+    Bouillonnement: "Bout [N] fois, [N] sans couvercle, puis recule de [N] pas, [N] aux trois vents.",
+    Réduction: "Retire [N]\npoints d'armure par réussite.",
+  });
+});
+
+test("contrôle — les trente-sept codes du § 6.3 : dix-sept sur le classeur d'essai, les autres sur ses variantes", async () => {
   const essai = await importer();
   // Quinze codes d'avant le lot 3, plus A11 et A15 sur la feuille Adversaires.
   assert.equal(new Set(essai.anomalies.map((a) => a.code)).size, 17);
   const sansFeuille = await importer(variante((feuilles) => feuilles.splice(2, 1)));
   const types = await importer(TYPES_FAUTIFS);
   const armures = await importer(ARMURES_SUPERPOSEES);
+  const pluriels = await importer(PLURIELS_SANS_MARQUE);
   // La feuille Adversaires : un cas par code (tests/outils/adversaires_essai.js).
   const adversaires = [];
   for (const faute of FAUTES) adversaires.push(...(await importer(faute.description)).anomalies);
-  const codes = new Set([...essai.anomalies, ...sansFeuille.anomalies, ...types.anomalies, ...armures.anomalies, ...adversaires].map((a) => a.code));
+  const codes = new Set([...essai.anomalies, ...sansFeuille.anomalies, ...types.anomalies, ...armures.anomalies, ...pluriels.anomalies, ...adversaires].map((a) => a.code));
   assert.deepEqual([...codes].sort(), Object.keys(GRAVITES).sort());
-  assert.equal(Object.keys(GRAVITES).length, 36);
+  assert.equal(Object.keys(GRAVITES).length, 37);
 });
 
 test("A8, A9 — un bloc sans type, un bloc d'un type inconnu ; les types se comparent sans casse, accents ni espaces", async () => {
@@ -131,6 +152,22 @@ test("A10 — deux pièces d'armure d'un même type sur une même zone : le pack
   assert.equal((await importer(zero)).anomalies.filter((a) => a.code === "A10").length, 0);
 });
 
+test("I6 — une expression suivie d'un nom au pluriel sans « (s) » ni « (x) » : une information, une fois par cellule, Capacites et Eléments", async () => {
+  const { anomalies } = await importer(PLURIELS_SANS_MARQUE);
+  const i6 = anomalies.filter((a) => a.code === "I6");
+  assert.ok(i6.every((a) => a.gravite === "information"));
+  assert.deepEqual(i6.map((a) => [a.feuille, a.ligne, a.message]), [
+    ["Eléments", 19, "La description de « Portée » écrit « {portee} cases » : avec un 1, elle s'affichera « 1 cases ». Écrivez « case(s) » pour l'accorder."],
+    ["Capacites", 21, "La description de « Pas chassé » écrit « [N] cases » : avec un 1, elle s'affichera « 1 cases ». Écrivez « case(s) » pour l'accorder."],
+    ["Capacites", 32, "La description de « Glaçage » écrit « [N] cibles » : avec un 1, elle s'affichera « 1 cibles ». Écrivez « cible(s) » pour l'accorder."],
+    ["Capacites", 45, "La description de « Braise » écrit « [N] feux » : avec un 1, elle s'affichera « 1 feux ». Écrivez « feu(x) » pour l'accorder."],
+  ]);
+  // Rien d'autre ne change : les autres anomalies sont celles du classeur d'essai, qui ne porte aucune I6.
+  const essai = (await importer()).anomalies;
+  assert.deepEqual(anomalies.filter((a) => a.code !== "I6"), essai);
+  assert.equal(essai.filter((a) => a.code === "I6").length, 0);
+});
+
 test("E1 — la colonne « Type » est un en-tête attendu", async () => {
   const { banque, anomalies } = await importer(variante((feuilles) => (feuilles[1].lignes[0][5] = "Genre")));
   assert.equal(banque, null);
@@ -169,8 +206,9 @@ test("contrôle — un classeur propre ne déclenche aucune anomalie", async () 
 
 test("contrôle — gravité de chaque code, tri par gravité puis feuille puis ligne", async () => {
   const gravites = gravitesDeLaSpecification();
-  assert.equal(Object.keys(gravites).length, 36);
+  assert.equal(Object.keys(gravites).length, 37);
   assert.equal(gravites.A10, "avertissement");
+  assert.equal(gravites.I6, "information");
   assert.deepEqual([gravites.E8, gravites.E16, gravites.A11, gravites.A16, gravites.I4, gravites.I5], ["erreur", "erreur", "avertissement", "avertissement", "information", "information"]);
   assert.deepEqual({ ...GRAVITES }, gravites);
   const { anomalies } = await importer();

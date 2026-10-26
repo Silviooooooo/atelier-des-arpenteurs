@@ -3,7 +3,7 @@
 //
 // Une fiche par protagoniste, dans la liste de son camp : un volet que son
 // nom déplie, avec ce qui change pendant le combat (actions, souffle, corps,
-// armure et résistance de chaque zone, lien, passifs câblés) et les boutons
+// armure et endurance de chaque zone, lien, passifs câblés) et les boutons
 // « Jouer » et « Fiche complète ». Avant le lancement, le champ « Case » et
 // « Retirer » suivent le volet, hors de lui : ils s'atteignent sans le
 // déplier, à toute largeur. C'est l'une des quatre parties de l'écran
@@ -79,7 +79,7 @@ function ligneDeZone(zone) {
     {},
     el("td", {}, zone.faces),
     // Le nom de la zone est l'en-tête de sa ligne : un lecteur d'écran le dit
-    // avec l'armure et la résistance.
+    // avec l'armure et l'endurance.
     el("th", { scope: "row" }, nomDeZone(zone)),
     el("td", { classe: etat }, ecrireArmure(zone.armure)),
     el(
@@ -97,7 +97,7 @@ function tableDesZones(zones, nom) {
   return el(
     "table",
     { classe: "combat-zones", "aria-label": `Zones : ${sansSensForce(nom)}` },
-    el("thead", {}, el("tr", {}, ["d20", "Zone", "Armure", "Résistance"].map((titre) => el("th", { scope: "col" }, titre)))),
+    el("thead", {}, el("tr", {}, ["d20", "Zone", "Armure", "Endurance"].map((titre) => el("th", { scope: "col" }, titre)))),
     el("tbody", {}, zones.map(ligneDeZone)),
   );
 }

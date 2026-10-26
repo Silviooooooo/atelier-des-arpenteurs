@@ -4,7 +4,7 @@
 // zone, dégrossir, les dégâts directs, l'esquive, la blessure et la mort.
 //
 // Chaque règle est vue dans les deux sens, à un point près : l'armure qui
-// tient et celle qui cède, la résistance à 1 et à 0, le corps à 1 et à 0, le
+// tient et celle qui cède, l'endurance à 1 et à 0, le corps à 1 et à 0, le
 // dé brut qui annule et le dé décalé qui n'annule pas, dégrossir qui
 // s'applique et les quatre cas où il ne s'applique pas.
 //
@@ -150,7 +150,7 @@ function victime({ armure = 10, resistance = 5, corps = 10 } = {}) {
 
 // Un seul coup, sur la première zone.
 const unCoup = (courant, degats, { zone = 0, surplus = 0, nature = "normaux" } = {}) => frapper(courant, [{ zone, degats, surplus, nature }]);
-// Ce que la première zone et le corps sont devenus : [armure, résistance, corps].
+// Ce que la première zone et le corps sont devenus : [armure, endurance, corps].
 const apres = (rendu, zone = 0) => [rendu.courant.zones[zone].armure, rendu.courant.zones[zone].resistance, rendu.courant.corps];
 
 function estGeleEnProfondeur(valeur) {
@@ -503,7 +503,7 @@ test("plusieurs d20 : les dégâts s'appliquent en entier à chaque zone, même 
   const torse = zoneDe(etat, "adv2", "torse");
   assert.deepEqual(coupsDuGeste(etat, memeZone).map((coup) => coup.zone), [torse, torse, torse]);
   assert.equal(appliquer(etat, memeZone).courant.zones[torse].armure, 0, "armure 10, trois fois 5");
-  assert.equal(appliquer(etat, memeZone).courant.zones[torse].resistance, 0, "le troisième coup passe à la résistance");
+  assert.equal(appliquer(etat, memeZone).courant.zones[torse].resistance, 0, "le troisième coup passe à l'endurance");
 });
 
 test("coupsDuGeste : chaque d20 se lit sur la grille de la cible, décalage compris", () => {
@@ -551,28 +551,28 @@ test("zone par zone : l'armure perd les dégâts, et tient tant qu'elle les couv
   assert.deepEqual(rendu.coups, [{ zone: 0, armure: [15, 7], resistance: [5, 5], corps: [10, 10], blessure: false, blessures: 0 }]);
   assert.equal(rendu.mort, false);
   assert.deepEqual(apres(unCoup(victime({ armure: 15 }), 15)), [0, 5, 10], "juste couverte : rien ne passe");
-  assert.deepEqual(apres(unCoup(victime({ armure: 15 }), 16)), [0, 4, 10], "un point de plus passe à la résistance");
+  assert.deepEqual(apres(unCoup(victime({ armure: 15 }), 16)), [0, 4, 10], "un point de plus passe à l'endurance");
 });
 
-test("zone par zone : le reste passe à la résistance, puis au corps", () => {
-  assert.deepEqual(apres(unCoup(victime({ armure: 5 }), 7)), [0, 3, 10], "5 à l'armure, 2 à la résistance");
-  assert.deepEqual(apres(unCoup(victime({ armure: 5 }), 10)), [0, 0, 10], "juste couvert par l'armure et la résistance");
+test("zone par zone : le reste passe à l'endurance, puis au corps", () => {
+  assert.deepEqual(apres(unCoup(victime({ armure: 5 }), 7)), [0, 3, 10], "5 à l'armure, 2 à l'endurance");
+  assert.deepEqual(apres(unCoup(victime({ armure: 5 }), 10)), [0, 0, 10], "juste couvert par l'armure et l'endurance");
   assert.deepEqual(apres(unCoup(victime({ armure: 5 }), 11)), [0, 0, 9], "un point de plus passe au corps");
   assert.deepEqual(apres(unCoup(victime({ armure: 5 }), 12)), [0, 0, 8]);
   const rendu = unCoup(victime({ armure: 5 }), 12);
   assert.deepEqual(rendu.coups[0], { zone: 0, armure: [5, 0], resistance: [5, 0], corps: [10, 8], blessure: true, blessures: 1 });
 });
 
-test("zone par zone : une armure déjà nulle laisse tout passer à la résistance", () => {
+test("zone par zone : une armure déjà nulle laisse tout passer à l'endurance", () => {
   const rendu = unCoup(victime({ armure: 0 }), 3);
-  assert.deepEqual(apres(rendu), [0, 2, 10], "Résistance 5 → 2.");
+  assert.deepEqual(apres(rendu), [0, 2, 10], "Endurance 5 → 2.");
   assert.deepEqual(rendu.coups[0].armure, [0, 0]);
-  assert.deepEqual(apres(unCoup(victime({ armure: 0, resistance: 0 }), 3)), [0, 0, 7], "sans armure ni résistance : au corps");
+  assert.deepEqual(apres(unCoup(victime({ armure: 0, resistance: 0 }), 3)), [0, 0, 7], "sans armure ni endurance : au corps");
 });
 
 test("zone par zone : seule la zone touchée change, le corps est commun", () => {
   const rendu = unCoup(victime({ armure: 5 }), 12, { zone: 1 });
-  assert.deepEqual(apres(rendu, 0), [5, 5, 8], "la zone voisine garde son armure et sa résistance");
+  assert.deepEqual(apres(rendu, 0), [5, 5, 8], "la zone voisine garde son armure et son endurance");
   assert.deepEqual(apres(rendu, 1), [0, 0, 8]);
   assert.deepEqual(apres(rendu, 2), [5, 5, 8]);
 });
@@ -608,7 +608,7 @@ test("deux dés sur la même zone se suivent : le second part de ce qu'a laissé
   assert.deepEqual(apres(rendu), [0, 0, 9]);
 });
 
-test("deux dés sur deux zones : chacune son armure et sa résistance, un seul corps", () => {
+test("deux dés sur deux zones : chacune son armure et son endurance, un seul corps", () => {
   const rendu = frapper(victime({ armure: 2 }), [
     { zone: 0, degats: 10, surplus: 0, nature: "normaux" },
     { zone: 2, degats: 10, surplus: 0, nature: "normaux" },
@@ -630,14 +630,14 @@ test("dégrossir, les exemples de la mission : armure 15, dégâts 13, +3, l'arm
   assert.deepEqual(apres(unCoup(victime({ armure: 10 }), 9)), [1, 5, 10], "Armure 10 → 1.");
 });
 
-test("dégrossir : ce qui passe à la résistance reste « les dégâts moins l'armure d'avant le coup »", () => {
+test("dégrossir : ce qui passe à l'endurance reste « les dégâts moins l'armure d'avant le coup »", () => {
   const rendu = unCoup(victime({ armure: 5 }), 22, { surplus: 2 });
-  assert.deepEqual(rendu.coups, [{ zone: 0, armure: [5, 0], resistance: [5, 0], corps: [10, 0], blessure: true, blessures: 1 }], "Armure 5 → 0, résistance 5 → 0, corps 10 → 0.");
+  assert.deepEqual(rendu.coups, [{ zone: 0, armure: [5, 0], resistance: [5, 0], corps: [10, 0], blessure: true, blessures: 1 }], "Armure 5 → 0, endurance 5 → 0, corps 10 → 0.");
   assert.equal(rendu.mort, true);
 
   assert.deepEqual(apres(unCoup(victime({ armure: 10 }), 12, { surplus: 3 })), [0, 3, 10], "12 − 10 = 2 passent, pas 5");
-  assert.deepEqual(apres(unCoup(victime({ armure: 10 }), 12)), [0, 3, 10], "la résistance reçoit la même chose sans dégrossir");
-  assert.deepEqual(apres(unCoup(victime({ armure: 0 }), 8, { surplus: 3 })), [0, 0, 7], "sans armure, le surplus ne sert à rien : Résistance 5 → 0, corps 10 → 7.");
+  assert.deepEqual(apres(unCoup(victime({ armure: 10 }), 12)), [0, 3, 10], "l'endurance reçoit la même chose sans dégrossir");
+  assert.deepEqual(apres(unCoup(victime({ armure: 0 }), 8, { surplus: 3 })), [0, 0, 7], "sans armure, le surplus ne sert à rien : Endurance 5 → 0, corps 10 → 7.");
 });
 
 test("dégrossir, chez un PJ : N points de plus contre l'armure par réussite, N étant le niveau de la capacité", () => {
@@ -733,16 +733,16 @@ test("dégrossir ne s'applique pas à un coup que l'esquive a annulé", () => {
 
 // ─── Les dégâts directs ─────────────────────────────────────────────────────
 
-test("dégâts directs à la résistance : la zone touchée, puis le corps, sans toucher l'armure", () => {
+test("dégâts directs à l'endurance : la zone touchée, puis le corps, sans toucher l'armure", () => {
   const rendu = unCoup(victime({ armure: 10 }), 3, { nature: "resistance" });
   assert.deepEqual(rendu.coups, [{ zone: 0, armure: [10, 10], resistance: [5, 2], corps: [10, 10], blessure: false, blessures: 0 }]);
-  assert.deepEqual(apres(unCoup(victime({ armure: 10 }), 5, { nature: "resistance" })), [10, 0, 10], "juste la résistance");
+  assert.deepEqual(apres(unCoup(victime({ armure: 10 }), 5, { nature: "resistance" })), [10, 0, 10], "juste l'endurance");
   assert.deepEqual(apres(unCoup(victime({ armure: 10 }), 8, { nature: "resistance" })), [10, 0, 7], "le reste passe au corps");
   assert.deepEqual(apres(unCoup(victime({ armure: 10 }), 3)), [7, 5, 10], "les mêmes, en dégâts normaux, s'arrêtent à l'armure");
   assert.equal(unCoup(victime({ armure: 10 }), 5, { nature: "resistance" }).coups[0].blessure, true, "la blessure vaut aussi en dégâts directs");
 });
 
-test("dégâts directs au corps : ni l'armure ni la résistance", () => {
+test("dégâts directs au corps : ni l'armure ni l'endurance", () => {
   const rendu = unCoup(victime({ armure: 10 }), 4, { nature: "corps" });
   assert.deepEqual(rendu.coups, [{ zone: 0, armure: [10, 10], resistance: [5, 5], corps: [10, 6], blessure: false, blessures: 0 }]);
   assert.equal(rendu.mort, false);
@@ -811,7 +811,7 @@ test("degatsFixes : l'esquive laisse « avant » et le total, et retire ses poin
 
 // ─── La blessure ────────────────────────────────────────────────────────────
 
-test("la blessure : la résistance d'une zone tombe à 0 ; à 1, ce n'en est pas une", () => {
+test("la blessure : l'endurance d'une zone tombe à 0 ; à 1, ce n'en est pas une", () => {
   const blessee = unCoup(victime({ armure: 0 }), 5);
   assert.equal(blessee.coups[0].blessure, true);
   assert.equal(blessee.coups[0].blessures, 1);
@@ -823,7 +823,7 @@ test("la blessure : la résistance d'une zone tombe à 0 ; à 1, ce n'en est pas
 
 test("la blessure ne se compte qu'une fois par zone, et le compte suit les zones à 0", () => {
   const dejaBlessee = unCoup(victime({ armure: 0, resistance: 0 }), 2);
-  assert.equal(dejaBlessee.coups[0].blessure, false, "la résistance était déjà à 0 : ce coup ne blesse pas");
+  assert.equal(dejaBlessee.coups[0].blessure, false, "l'endurance était déjà à 0 : ce coup ne blesse pas");
   assert.equal(dejaBlessee.coups[0].blessures, 3, "les trois zones de cette victime sont à 0");
 
   const rendu = frapper(victime({ armure: 0 }), [
@@ -841,7 +841,7 @@ test("le compte des blessures d'un coup est celui que lit le jet suivant", () =>
   const geste = frappeDeLAdversaire(etat, 0, { localisation: d20(13) });
   const rendu = appliquer(etat, geste);
   const jambe = zoneDe(etat, "pj1", "jambe_gauche");
-  assert.deepEqual(rendu.coups, [{ zone: jambe, armure: [10, 0], resistance: [5, 0], corps: [10, 10], blessure: true, blessures: 1 }], "C = 15 : armure 10, résistance 5");
+  assert.deepEqual(rendu.coups, [{ zone: jambe, armure: [10, 0], resistance: [5, 0], corps: [10, 10], blessure: true, blessures: 1 }], "C = 15 : armure 10, endurance 5");
   const ensuite = { ...etat, protagonistes: { ...etat.protagonistes, pj1: rendu.courant } };
   assert.equal(blessuresDe(etat, "pj1"), 0);
   assert.equal(blessuresDe(ensuite, "pj1"), rendu.coups[0].blessures);
@@ -958,13 +958,13 @@ test("référence, étape 4 : « Aubépine reçoit B = 10. Localisation d20 → 
   verifier(etat, geste, { lettre: "B", deBase: 10, surplus: 0, zone: "jambe_gauche", coup: { armure: [10, 0], resistance: [5, 5], corps: [10, 10], blessure: false, blessures: 0 }, mort: false });
 });
 
-test("référence, étape 8 : « B = 8, ajusté à 20 (Émincer), +2 contre l'armure (Réduction). […] tête. Armure 5 → 0, résistance 5 → 0, corps 10 → 0. » : il meurt", () => {
+test("référence, étape 8 : « B = 8, ajusté à 20 (Émincer), +2 contre l'armure (Réduction). […] tête. Armure 5 → 0, endurance 5 → 0, corps 10 → 0. » : il meurt", () => {
   const etat = reference();
   const geste = coupDeReference(etat, { qui: "pj1", joue: "Émincer", contre: "adv3", reussites: 2, des: [20], degats: normaux("lettre", ajuster(20)) });
   verifier(etat, geste, { lettre: "B", deBase: 8, valeur: 20, surplus: 2, zone: "tete", coup: { armure: [5, 0], resistance: [5, 0], corps: [10, 0], blessure: true, blessures: 1 }, mort: true });
 });
 
-test("référence, étape 9 : Taloche, « C = 8, +3 contre l'armure (Réduction). […] jambe droite. Résistance 5 → 0, corps 10 → 7. », une blessure", () => {
+test("référence, étape 9 : Taloche, « C = 8, +3 contre l'armure (Réduction). […] jambe droite. Endurance 5 → 0, corps 10 → 7. », une blessure", () => {
   const etat = reference();
   const geste = gesteEssai({ acteur: "pj1", capacite: indiceDe(etat, "pj1", "Taloche"), cible: "adv4", caracteristiques: ["force", "agilite"], jet: jetA("attaque", 3), degats: normaux("lettre"), localisation: d20(14) });
   // Les jambes d'un Marmiton de corvée n'ont pas d'armure : le surplus ne change rien.
@@ -981,7 +981,7 @@ test("référence, étape 11 : « Aubépine reçoit B = 12. […] bras gauche. A
   verifier(etat, geste, { lettre: "B", deBase: 12, surplus: 0, zone: "bras_gauche", coup: { armure: [10, 1], resistance: [5, 5], corps: [10, 10], blessure: false, blessures: 0 }, mort: false });
 });
 
-test("référence, étape 12 : « Aubépine reçoit A = 5. […] jambe gauche. Résistance 5 → 0. Blessure (jambe gauche) : −1 à ses jets. »", () => {
+test("référence, étape 12 : « Aubépine reçoit A = 5. […] jambe gauche. Endurance 5 → 0. Blessure (jambe gauche) : −1 à ses jets. »", () => {
   const etat = reference((courant) => { courant.protagonistes.pj1.zones[2].armure = 0; });
   const geste = coupDeReference(etat, { qui: "adv4", joue: "Moulinet farineux", contre: "pj1", reussites: 2, des: [12] });
   verifier(etat, geste, { lettre: "A", deBase: 5, surplus: 0, zone: "jambe_gauche", coup: { armure: [0, 0], resistance: [5, 0], corps: [10, 10], blessure: true, blessures: 1 }, mort: false });
@@ -1008,7 +1008,7 @@ test("référence, étape 19 : Fournaise avec le jet du couteau, « touché. Loc
   assert.equal(rendu.courant, courantDe(etat, "adv2"), "le torse du Chef reste à 38 sur 38");
 });
 
-test("référence, étape 22 : « Aubépine reçoit B = 12. […] bras gauche. Armure 1 → 0, résistance 5 → 0, corps 10 → 4. Blessure (bras gauche) : −2 à ses jets. »", () => {
+test("référence, étape 22 : « Aubépine reçoit B = 12. […] bras gauche. Armure 1 → 0, endurance 5 → 0, corps 10 → 4. Blessure (bras gauche) : −2 à ses jets. »", () => {
   const etat = reference((courant) => {
     const { zones } = courant.protagonistes.pj1;
     zones[2].armure = 0;
@@ -1028,13 +1028,13 @@ test("référence, étape 24 : « B = 8, +2 contre l'armure (Réduction). […] 
   verifier(etat, geste, { lettre: "B", deBase: 8, surplus: 2, zone: "jambe_droite", coup: { armure: [0, 0], resistance: [0, 0], corps: [7, 0], blessure: false, blessures: 1 }, mort: true });
 });
 
-test("référence, étape 25 : « C = 20, +3 contre l'armure (Réduction). […] jambe gauche. Résistance 5 → 0, corps 10 → 0. » : le Chef meurt", () => {
+test("référence, étape 25 : « C = 20, +3 contre l'armure (Réduction). […] jambe gauche. Endurance 5 → 0, corps 10 → 0. » : le Chef meurt", () => {
   const etat = reference();
   const geste = coupDeReference(etat, { qui: "pj1", joue: "Frappe", contre: "adv2", reussites: 3, des: [13] });
   verifier(etat, geste, { lettre: "C", deBase: 20, surplus: 3, zone: "jambe_gauche", coup: { armure: [0, 0], resistance: [5, 0], corps: [10, 0], blessure: true, blessures: 1 }, mort: true });
 });
 
-test("annexe A de la mission, étape 2, dans la démonstration : « B = 8, ajusté à 22 (Émincer), +2 contre l'armure (Réduction). […] Armure 5 → 0, résistance 5 → 0, corps 10 → 0. »", () => {
+test("annexe A de la mission, étape 2, dans la démonstration : « B = 8, ajusté à 22 (Émincer), +2 contre l'armure (Réduction). […] Armure 5 → 0, endurance 5 → 0, corps 10 → 0. »", () => {
   const etat = reference();
   const geste = coupDeReference(etat, { qui: "pj1", joue: "Émincer", contre: "adv4", reussites: 2, des: [20], degats: normaux("lettre", ajuster(22)) });
   verifier(etat, geste, { lettre: "B", deBase: 8, valeur: 22, surplus: 2, zone: "tete", coup: { armure: [5, 0], resistance: [5, 0], corps: [10, 0], blessure: true, blessures: 1 }, mort: true });

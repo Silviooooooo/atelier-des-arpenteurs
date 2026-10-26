@@ -3,12 +3,12 @@
 // Il ne lit rien lui-même : il résout chaque adversaire avec le module de
 // la page (resolution.js) et range ses constats en anomalies. Ce que le
 // rapport annonce est donc ce que l'écran montrera. Il y ajoute ce qui ne
-// se voit qu'entre les lignes : deux types ou deux adversaires de même nom
-// (E16), un type et un adversaire de même nom (A16), un type que rien
+// se voit qu'entre les lignes : deux classes ou deux adversaires de même nom
+// (E16), une classe et un adversaire de même nom (A16), une classe que rien
 // n'utilise (I5). L'import, lui, relève la feuille absente (I4), les lignes
 // sans nom (E2) et les espaces de bord (I1).
 //
-// Un constat d'un type se range à la ligne du type, une seule fois, même
+// Un constat d'une classe se range à la ligne de la classe, une seule fois, même
 // quand dix adversaires en héritent ; ce qui ne se voit qu'une fois
 // l'héritage appliqué (E12, E15, A12, A15) se range à la ligne de
 // l'adversaire.
@@ -38,11 +38,11 @@ export function constatsDesAdversaires(banque) {
   const typesVus = new Map();
   for (const type of types) {
     const premier = typesVus.get(nomCompare(type.nom));
-    if (premier) constats.push({ code: "E16", ligne: ligneDe(type), message: `Le type « ${citer(type.nom)} » est déjà défini ligne ${ligneDe(premier)}.` });
+    if (premier) constats.push({ code: "E16", ligne: ligneDe(type), message: `La classe « ${citer(type.nom)} » est déjà définie ligne ${ligneDe(premier)}.` });
     else typesVus.set(nomCompare(type.nom), type);
     garder(index.analyser(type, "type").constats);
     if (!premier && index.utilisateurs(type.nom).length === 0) {
-      constats.push({ code: "I5", ligne: ligneDe(type), message: `Le type « ${citer(type.nom)} » n'est utilisé par aucun adversaire.` });
+      constats.push({ code: "I5", ligne: ligneDe(type), message: `La classe « ${citer(type.nom)} » n'est utilisée par aucun adversaire.` });
     }
   }
 
@@ -53,7 +53,7 @@ export function constatsDesAdversaires(banque) {
     else adversairesVus.set(nomCompare(adversaire.nom), adversaire);
     const homonyme = typesVus.get(nomCompare(adversaire.nom));
     if (homonyme) {
-      constats.push({ code: "A16", ligne: ligneDe(adversaire), message: `L'adversaire « ${citer(adversaire.nom)} » porte le nom d'un type, défini ligne ${ligneDe(homonyme)}.` });
+      constats.push({ code: "A16", ligne: ligneDe(adversaire), message: `L'adversaire « ${citer(adversaire.nom)} » porte le nom d'une classe, définie ligne ${ligneDe(homonyme)}.` });
     }
     garder(index.analyser(adversaire, "adversaire").constats);
     garder(index.resoudre(adversaire).constatsDeResolution);

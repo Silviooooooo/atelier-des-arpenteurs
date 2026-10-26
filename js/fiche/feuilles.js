@@ -228,7 +228,7 @@ function silhouette() {
 function armure(fiche) {
   return rubrique(
     "rubrique-armure",
-    "Armure & résistance",
+    "Armure & endurance",
     `${fiche.ressources.resistance} / zone`,
     silhouette(),
     el(

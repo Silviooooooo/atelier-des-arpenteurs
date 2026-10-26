@@ -146,7 +146,7 @@
 /* ─── La bande du d20 ────────────────────────────────────────────────────── */
 
 /* Vingt et une colonnes : l'étiquette de la rangée, puis les vingt faces.
-   Quatre rangées : les faces, l'armure, la résistance, le corps ; elles
+   Quatre rangées : les faces, l'armure, l'endurance, le corps ; elles
    gardent leur hauteur quand l'adversaire n'a aucune zone. */
 .carte-adversaire .carte-bande {
   display: grid;

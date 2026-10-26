@@ -65,19 +65,19 @@ test("notation — la colonne Type : des types séparés par « / », le multipl
   assert.deepEqual(lireTypes("Hachoir/Saucier[2]"), { types: ["Hachoir", "Saucier"], multiplicateur: { ecrit: "2", valeur: fraction(2) } });
   assert.deepEqual(lireTypes("  Commis /  Rôtisseur  des  bois [ 1,4 ] "), { types: ["Commis", "Rôtisseur des bois"], multiplicateur: { ecrit: "1,4", valeur: fraction(7, 5) } });
   const defauts = {
-    "Hachoir[2]/Saucier": /qu'une fois, après le dernier type/,
-    "Hachoir[2]/Saucier[3]": /qu'une fois, après le dernier type/,
+    "Hachoir[2]/Saucier": /qu'une fois, après la dernière classe/,
+    "Hachoir[2]/Saucier[3]": /qu'une fois, après la dernière classe/,
     "Hachoir[2": /« \[ » jamais fermé/,
     "Hachoir2]": /« \] » sans « \[ »/,
-    "Hachoir]2[": /qu'une fois, après le dernier type/,
+    "Hachoir]2[": /qu'une fois, après la dernière classe/,
     "Hachoir[0]": /le multiplicateur est nul/,
     "Hachoir[0,0]": /le multiplicateur est nul/,
     "Hachoir[-1]": /« -1 » n'est pas un nombre positif/,
     "Hachoir[deux]": /« deux » n'est pas un nombre positif/,
     "Hachoir[]": /le multiplicateur est vide/,
-    "Hachoir//Saucier": /un nom de type manque/,
-    "/Hachoir": /un nom de type manque/,
-    "[2]": /un nom de type manque/,
+    "Hachoir//Saucier": /un nom de classe manque/,
+    "/Hachoir": /un nom de classe manque/,
+    "[2]": /un nom de classe manque/,
   };
   for (const [ecrit, motif] of Object.entries(defauts)) {
     const lu = lireTypes(ecrit);
@@ -1004,8 +1004,8 @@ test("contrôle — la feuille du classeur d'essai ne porte que les trois anomal
   assert.deepEqual(
     BANQUE.anomalies.filter((a) => a.feuille === "Adversaires").map((a) => [a.code, a.ligne, a.message]),
     [
-      ["A11", 2, "Le type « Commis » : la zone « Jambre droite » est reconnue par approximation comme « Jambe droite »."],
-      ["A1", 3, "Le type « Rôtisseur » cite « Maitrise de l'agile » pour la capacité « Maîtrise de l'agile » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
+      ["A11", 2, "La classe « Commis » : la zone « Jambre droite » est reconnue par approximation comme « Jambe droite »."],
+      ["A1", 3, "La classe « Rôtisseur » cite « Maitrise de l'agile » pour la capacité « Maîtrise de l'agile » : seuls la casse, les accents, les espaces ou un signe invisible diffèrent."],
       ["A15", 8, "L'adversaire « Mouette chapardeuse » a la capacité « Frappe », qui invoque {degats}, sans arme pour lui donner ses dégâts."],
     ],
   );
@@ -1042,10 +1042,10 @@ test("contrôle — E16 et A16 comparent exactement : la casse, un accent ou une
   assert.deepEqual(noms(banque.types_adversaires), ["Commis", "Rôtisseur", "commis", "Rotisseur", "Rôtis seur"]);
   assert.deepEqual(anomalies, [
     // « Rotisseur », l'adversaire, porte exactement le nom d'un type : A16, et lui seul.
-    ["A16", 11, "L'adversaire « Rotisseur » porte le nom d'un type, défini ligne 8."],
-    ["I5", 7, "Le type « commis » n'est utilisé par aucun adversaire."],
-    ["I5", 8, "Le type « Rotisseur » n'est utilisé par aucun adversaire."],
-    ["I5", 9, "Le type « Rôtis seur » n'est utilisé par aucun adversaire."],
+    ["A16", 11, "L'adversaire « Rotisseur » porte le nom d'une classe, définie ligne 8."],
+    ["I5", 7, "La classe « commis » n'est utilisée par aucun adversaire."],
+    ["I5", 8, "La classe « Rotisseur » n'est utilisée par aucun adversaire."],
+    ["I5", 9, "La classe « Rôtis seur » n'est utilisée par aucun adversaire."],
   ]);
 });
 
@@ -1217,7 +1217,7 @@ test("résolution — une cellule démesurée : cent trente mille objets sans d�
   // Le type, le nombre d'actions, la qualité, l'objet, la capacité, le rang ; puis la zone approchée du type Commis.
   assert.deepEqual(constats.map((c) => c.code), ["E8", "E14", "E14", "E11", "E13", "E14", "A11"]);
   for (const constat of constats) assert.ok(constat.message.length < 500, `${constat.code} : ${constat.message.length} signes`);
-  assert.match(constats[0].message, /^L'adversaire « (Géant){16}… » cite le type « (Géant){16}… », introuvable/);
+  assert.match(constats[0].message, /^L'adversaire « (Géant){16}… » cite la classe « (Géant){16}… », introuvable/);
 });
 
 // ─── Les types de bloc naturels, et les banques d'avant le lot 3 ────────────

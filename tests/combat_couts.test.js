@@ -688,7 +688,7 @@ test("la case d'arrivée : une puissance qu'on ne peut pas payer ne se joue pas,
     champs.souffle = 1;
     const pasChasse = champs.capacites[4];
     pasChasse.facons[0].cout = { souffle: 2, lien: 0 };
-    pasChasse.facons.push(faconEssai({ puissance: 1, arme: 0, libelle: "Couteau d'office", description: "Se déplace de 1 cases." }));
+    pasChasse.facons.push(faconEssai({ puissance: 1, arme: 0, libelle: "Couteau d'office", description: "Se déplace de 1 case." }));
   };
   const depart = contre(pjEssai(retouche));
   assert.deepEqual(
@@ -721,7 +721,7 @@ test("la case d'arrivée : une puissance qu'on ne peut pas payer ne se joue pas,
 test("un déplacement à la puissance 0 n'offre aucune case : son bouton est inactif, et dit pourquoi", () => {
   const surPlace = (champs) => {
     const pas = champs.capacites.find((une) => une.role === "deplacement");
-    Object.assign(pas, { niveau: 0, evolue: false, facons: [faconEssai({ puissance: 0, description: "Se déplace de 0 cases." })] });
+    Object.assign(pas, { niveau: 0, evolue: false, facons: [faconEssai({ puissance: 0, description: "Se déplace de 0 case." })] });
   };
   const depart = combat(surD4(pjEssai(surPlace), MARMITON, CIBOULETTE));
   const pas = indiceDe(depart, "pj1", "Pas chassé");

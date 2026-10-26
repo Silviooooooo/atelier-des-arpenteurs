@@ -153,11 +153,11 @@ const dit = (valeur) => valeur !== null && valeur !== undefined;
  * - liens : [{ nom, points, max }], dans l'ordre des jauges ; nul : non dit ;
  * - mort : null pour un vivant, { tour } pour un mort (un tour nul : non dit) ;
  *   absent : non dit ;
- * - blessures : le nombre de zones dont la résistance est à 0 ;
+ * - blessures : le nombre de zones dont l'endurance est à 0 ;
  * - zones : [{ code, armure, armureMax, resistance, resistanceMax }], chacune
  *   retrouvée par son code (ou par « nom », pour une zone que la banque ne
  *   reconnaît pas). Toute zone qui n'y figure pas doit être intacte : armure
- *   et résistance à leur maximum.
+ *   et endurance à leur maximum.
  */
 export function ecartsDeLEtat(etat, attendus) {
   const ecarts = [];
@@ -210,14 +210,14 @@ export function ecartsDeLEtat(etat, attendus) {
       const ou = `${qui}, ${zone.nom.toLowerCase()}`;
       if (dite === undefined) {
         if (armure !== armureMax || resistance !== resistanceMax) {
-          ecarts.push(`${ou} : armure ${armure}/${armureMax}, résistance ${resistance}/${resistanceMax}, attendue intacte.`);
+          ecarts.push(`${ou} : armure ${armure}/${armureMax}, endurance ${resistance}/${resistanceMax}, attendue intacte.`);
         }
         return;
       }
       retrouvees.add(dite);
       if (armure !== dite.armure || armureMax !== dite.armureMax) ecarts.push(`${ou} : armure ${armure}/${armureMax}, attendu ${dite.armure}/${dite.armureMax}.`);
       if (resistance !== dite.resistance || resistanceMax !== dite.resistanceMax) {
-        ecarts.push(`${ou} : résistance ${resistance}/${resistanceMax}, attendu ${dite.resistance}/${dite.resistanceMax}.`);
+        ecarts.push(`${ou} : endurance ${resistance}/${resistanceMax}, attendu ${dite.resistance}/${dite.resistanceMax}.`);
       }
     });
     for (const dite of dites) {
@@ -509,7 +509,7 @@ function ecrireEtat(etat) {
     const touchees = etat.photos[id].zones
       .map((zone, indice) => ({ nom: zone.nom.toLowerCase(), ...courant.zones[indice] }))
       .filter((zone) => zone.armure !== zone.armureMax || zone.resistance !== zone.resistanceMax)
-      .map((zone) => `${zone.nom} : armure ${zone.armure}/${zone.armureMax}${zone.resistance !== zone.resistanceMax ? `, résistance ${zone.resistance}/${zone.resistanceMax}` : ""}`);
+      .map((zone) => `${zone.nom} : armure ${zone.armure}/${zone.armureMax}${zone.resistance !== zone.resistanceMax ? `, endurance ${zone.resistance}/${zone.resistanceMax}` : ""}`);
     lignes.push([
       etat.noms[id].court,
       courant.case,

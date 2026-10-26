@@ -1,5 +1,5 @@
 // Les dégâts d'un geste : la lettre que valent ses réussites, la zone que
-// touche chaque d20, ce que perdent l'armure, la résistance et le corps,
+// touche chaque d20, ce que perdent l'armure, l'endurance et le corps,
 // dégrossir, l'esquive, la blessure et la mort (SPECIFICATION.md, § 17 « Le
 // simulateur de combat (lot 4) »).
 //
@@ -13,13 +13,13 @@
 // victime est un paramètre de frapper(), jamais la cible du geste.
 //
 // Ce qu'il applique (livret, « Jets d'attaque », « Jets de défense », « Jets
-// de localisation », « Armure, résistance et corps », « Ressources ») :
+// de localisation », « Armure, endurance et corps », « Ressources ») :
 // - en attaque, une réussite vaut A, deux B, trois C ; en défense, aucune
 //   réussite laisse passer C, une B, deux A, et trois rien ;
 // - sur chaque zone touchée, l'armure perd les dégâts, le reste passe à la
-//   résistance, puis au corps, qui n'est pas localisé ; ce qui dépasse 0 de
+//   endurance, puis au corps, qui n'est pas localisé ; ce qui dépasse 0 de
 //   corps se perd ;
-// - une zone dont la résistance tombe à 0 est une blessure ; à 0 de corps, on
+// - une zone dont l'endurance tombe à 0 est une blessure ; à 0 de corps, on
 //   meurt.
 //
 // Et les conventions provisoires (§ 12, « Pour le lot 4 ») :
@@ -27,11 +27,11 @@
 //   adversaire) : un décalage ne la crée ni ne l'efface, et elle annule toute
 //   l'attaque, même parmi plusieurs dés ; la face décalée reste sur une zone ;
 // - dégrossir : l'armure perd N points de plus par réussite de l'attaque,
-//   mais ce qui passe à la résistance reste « les dégâts moins l'armure
+//   mais ce qui passe à l'endurance reste « les dégâts moins l'armure
 //   d'avant le coup » ; chez un adversaire, ses réussites valent 3 moins
 //   celles de la défense du PJ ; jamais sans dégâts, ni en dégâts directs, ni
 //   sur un coup que l'esquive a annulé ;
-// - les dégâts directs vont à la résistance de la zone (le reste au corps) ou
+// - les dégâts directs vont à l'endurance de la zone (le reste au corps) ou
 //   droit au corps, sans toucher l'armure ;
 // - l'esquive annule ses points zone après zone, dans l'ordre des dés.
 
@@ -235,9 +235,9 @@ const blessees = (zones) => zones.filter((zone) => zone.resistance <= 0).length;
  *
  * Chaque coup est { zone, degats, surplus, nature } :
  * - nature « normaux » : l'armure de la zone perd les dégâts et le surplus de
- *   dégrossir ; ce qui passe à la résistance est « les dégâts moins l'armure
+ *   dégrossir ; ce qui passe à l'endurance est « les dégâts moins l'armure
  *   d'avant le coup », puis le reste passe au corps ;
- * - nature « resistance » : la résistance de la zone, puis le corps ;
+ * - nature « resistance » : l'endurance de la zone, puis le corps ;
  * - nature « corps » : le corps seul ;
  * - des dégâts de 0 ou moins n'enlèvent rien, pas même le surplus.
  * Deux coups sur la même zone se suivent : le second part de ce qu'a laissé
@@ -245,8 +245,8 @@ const blessees = (zones) => zones.filter((zone) => zone.resistance <= 0).length;
  *
  * Chaque coup rendu dit ce qui a changé : { zone, armure: [avant, après],
  * resistance: [avant, après], corps: [avant, après], blessure, blessures }.
- * « blessure » : ce coup fait tomber la résistance de la zone à 0 ;
- * « blessures » : le nombre de zones à 0 de résistance après lui. « mort » :
+ * « blessure » : ce coup fait tomber l'endurance de la zone à 0 ;
+ * « blessures » : le nombre de zones à 0 d'endurance après lui. « mort » :
  * le corps est à 0.
  *
  * Le courant rendu est neuf et gelé, et partage les zones qui n'ont pas
@@ -269,7 +269,7 @@ export function frapper(courant, coups) {
         let passe = degats;
         if (nature !== "resistance") {
           arrivee.armure = Math.max(0, depart.armure - (degats + surplus));
-          // Le surplus de dégrossir ne passe jamais à la résistance : elle
+          // Le surplus de dégrossir ne passe jamais à l'endurance : elle
           // reçoit les dégâts moins l'armure d'avant le coup.
           passe = Math.max(0, degats - depart.armure);
         }

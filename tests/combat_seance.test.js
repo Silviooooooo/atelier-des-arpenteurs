@@ -743,11 +743,11 @@ test("ouvrir, reprendre : une ouverture que remplace une autre rend « abandonne
   assert.deepEqual(await autre.seance.ouvrir(), { issue: "repris" });
 });
 
-partout("la version des règles est 2 : un combat de la version 1 se dit « commencé avec une autre version du simulateur », et ne se reprend pas", async (lieu) => {
-  assert.equal(REGLES, 2);
+partout("la version des règles est 3 : un combat de la version 2, d'avant le lot 5, se dit « commencé avec une autre version du simulateur », et ne se reprend pas", async (lieu) => {
+  assert.equal(REGLES, 3);
   assert.equal(PHRASES_DE_GARDE.autre_version, "Ce combat a été commencé avec une autre version du simulateur : il ne se reprend pas.");
   const { contenu } = contenuDePasses(5);
-  await poserEnBase(lieu, JSON.stringify({ ...contenu, regles: 1 }));
+  await poserEnBase(lieu, JSON.stringify({ ...contenu, regles: 2 }));
   const { seance, gardien } = await monter(lieu);
   assert.deepEqual(await seance.ouvrir(), { issue: "autre_version" });
   assert.equal(seance.bloque(), "autre_version");
