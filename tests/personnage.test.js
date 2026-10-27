@@ -166,7 +166,8 @@ test("qualité — 1/3 + q/3, en fractions exactes, arrondi inférieur une fois 
   // (relecture du lot 3 : la table des rangs rendait la fonction « Object » pour « constructor »).
   assert.deepEqual(valeursParametre("constructor", "4"), { valeurs: [4] });
   assert.deepEqual(valeursParametre("__proto__", "5"), { valeurs: [5] });
-  assert.deepEqual(valeursParametre("toString", "6/2"), { valeurs: [3] });
+  // Hors de RANGS, une barre sépare des valeurs (lot 4.3) : « 6/2 » en est deux.
+  assert.deepEqual(valeursParametre("toString", "6/2"), { valeurs: [6, 2] });
   // Sans paramètre qualite, pas de qualité.
   assert.equal(qualiteDe(INDEX.bloc("Bouillon revigorant"), "2").applicable, false);
   const f = fiche();
@@ -229,11 +230,14 @@ test("points — coûts 1, 3 et 6 ; plafond de 10 ; reliquat ; niveau 0 et capac
   const f = fiche();
   // Base 2 (Pas chassé, Taloche), Marmiton 1 (Vif), Saucier 4 (Réduction,
   // Flambage, Solo du chef, Maîtrise de l'agile), Fournaise 1 ; Flambage
-  // monté au niveau 2 : 3 au lieu de 1.
-  assert.deepEqual(f.points, { depenses: 10, recus: 8, plafond: 10, reliquat: 0, depasse: false });
+  // monté au niveau 2 : 3 au lieu de 1. Fournaise, du seul Grand Four, part
+  // au niveau 0 (format 3) : acquise au niveau 1, son point est dépensé, non
+  // reçu.
+  assert.deepEqual(f.points, { depenses: 10, recus: 7, plafond: 10, reliquat: 0, depasse: false });
   for (const nom of ["Nez fin", "Dressage minute", "Cendre", "Goûter", "Frappe"]) assert.equal(capacite(f, nom).niveau, 0, nom);
+  // Sans montée : Flambage au niveau 1, Fournaise offerte, non acquise.
   const sansMontee = fiche((p) => (p.niveaux = []));
-  assert.deepEqual([sansMontee.points.depenses, sansMontee.points.reliquat], [8, 2]);
+  assert.deepEqual([sansMontee.points.depenses, sansMontee.points.reliquat], [7, 3]);
   // Monter Flambage au niveau 3 coûterait 6 : 13 > 10, refusé.
   assert.deepEqual(niveauxPermis(sansMontee, capacite(sansMontee, "Flambage")), [1, 2]);
   assert.deepEqual(niveauxPermis(sansMontee, capacite(sansMontee, "Nez fin")), [0]);
@@ -282,22 +286,25 @@ test("démonstration — Aubépine a les deux capacités nouvelles du bloc de ba
   });
   // Le style reste un style, et rien ne s'ajoute au décompte ni aux avertissements.
   assert.equal(capacite(f, "Solo du chef").groupe, "style");
-  assert.deepEqual(f.points, { depenses: 10, recus: 8, plafond: 10, reliquat: 0, depasse: false });
+  assert.deepEqual(f.points, { depenses: 10, recus: 7, plafond: 10, reliquat: 0, depasse: false });
   assert.deepEqual(f.avertissements.map((a) => a.genre), ["a_venir"]);
   assert.deepEqual(manques(BANQUE, personnageEssai(), { index: INDEX })[9], []);
 });
 
 test("points — des capacités reçues au-delà de 10 : aucune montée possible, et le total réel", () => {
-  // Braise (N) au lieu de Cendre, la constellation du Chaudron (Bouillonnement,
-  // N), la spatule (Moulinet farineux, N) : 8 − 0 + 1 + 1 + 1 = 11.
+  // La constellation du Chaudron (Bouillonnement, N), la spatule (Moulinet
+  // farineux, N), la marmite hurlante (Sauce piquante, 1 à 3 ; Marmitage, N) :
+  // 7 + 1 + 1 + 2 = 11. Braise et Fournaise, du seul Grand Four, partent au
+  // niveau 0 (format 3) : elles ne comptent pas, et ne s'acquièrent pas.
   const f = fiche((p) => {
     p.primordial.choix = ["Braise"];
     p.constellation.nom = "Constellation du Chaudron";
-    p.equipement.push({ nom: "Spatule souple", choix: [], qualite: null, place: "sac" });
+    p.equipement.push({ nom: "Spatule souple", choix: [], qualite: null, place: "sac" }, { nom: "Marmite hurlante", choix: [], qualite: null, place: "sac" });
     p.niveaux = [];
   });
   assert.deepEqual([f.points.recus, f.points.depenses, f.points.reliquat], [11, 11, 0]);
   for (const c of f.capacites) assert.ok(niveauxPermis(f, c).length <= 1, `${c.nom} ne peut pas monter`);
+  assert.deepEqual(f.offertes.map((o) => [o.nom, niveauxPermis(f, o)]), [["Fournaise", [0]], ["Braise", [0]]]);
 });
 
 test("capacité reçue deux fois : une seule capacité, comptée une fois ; ses deux origines dites", () => {
@@ -308,7 +315,7 @@ test("capacité reçue deux fois : une seule capacité, comptée une fois ; ses 
   const moulinets = f.capacites.filter((c) => c.nom === "Moulinet farineux");
   assert.equal(moulinets.length, 1);
   assert.deepEqual(moulinets[0].origines, ["Spatule souple", "Louche d'acier"]);
-  assert.equal(f.points.depenses, 9, "8, et une seule fois le Moulinet");
+  assert.equal(f.points.depenses, 8, "7 (Fournaise offerte, non acquise), et une seule fois le Moulinet");
   const frappes = f.capacites.filter((c) => c.nom === "Frappe");
   assert.equal(frappes.length, 1);
   assert.deepEqual(frappes[0].descriptions.map((d) => d.texte), ["Une attaque qui inflige 3/8/20.", "Une attaque qui inflige 8/11/13.", "Une attaque qui inflige 5/10/15."]);
@@ -365,9 +372,9 @@ test("points de lien — la puissance investie dans les capacités du primordial
   assert.deepEqual(fiche().liens.map((l) => [l.nom, l.points]), [["Grand Four", 1]], "Fournaise 1, Cendre 0");
   const braise = fiche((p) => {
     p.primordial.choix = ["Braise"];
-    p.niveaux = [{ capacite: "Fournaise", niveau: 2 }];
+    p.niveaux = [{ capacite: "Fournaise", niveau: 2 }, { capacite: "Braise", niveau: 1 }];
   });
-  assert.equal(braise.liens[0].points, 3, "Fournaise 2 + Braise 1");
+  assert.equal(braise.liens[0].points, 3, "Fournaise 2 + Braise 1, acquise");
   const givre = fiche((p) => (p.primordial = { nom: "Givre éternel", choix: [] }));
   assert.deepEqual([givre.liens[0].points, givre.liens[0].pouvoirs.length, givre.primordial.aVenir], [0, 0, true]);
 });
@@ -445,11 +452,15 @@ test("relecture — mains nues : les dégâts de la capacité à sa puissance, c
 
 test("relecture — une montée orpheline ne bloque pas l'enregistrement ; un paramètre incalculable se signale ; « capacités à venir »", () => {
   // Flambage monté, puis l'archétype change : la montée ne vise plus rien.
+  // Les capacités reçues passent 10 (base 2, Vif 1, Pâtissier 4, Chaudron 1,
+  // spatule 1, marmite 2) ; celles du seul Grand Four, non acquises, n'y
+  // comptent pas (format 3).
   const orpheline = personnageEssai((p) => {
     p.archetype = { nom: "Pâtissier", choix: ["Brigade", "Maîtrise de l'agile"] };
     p.primordial.choix = ["Braise"];
     p.constellation.nom = "Constellation du Chaudron";
-    p.equipement.push({ nom: "Spatule souple", choix: [], qualite: null, place: "sac" });
+    p.equipement.push({ nom: "Spatule souple", choix: [], qualite: null, place: "sac" }, { nom: "Marmite hurlante", choix: [], qualite: null, place: "sac" });
+    p.niveaux = [{ capacite: "Flambage", niveau: 2 }];
   });
   const f = calculerFiche(BANQUE, orpheline, { index: INDEX });
   assert.equal(f.points.depasse, true);

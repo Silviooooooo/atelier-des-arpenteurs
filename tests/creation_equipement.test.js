@@ -100,16 +100,17 @@ test("étape 7 — en tête, la ligne des maîtrises du personnage ; « aucune �
   }
 });
 
-test("étape 7 — l'arme tenue en vignettes radio : « Mains nues » d'abord, puis chaque arme de la banque, sans les armes naturelles ; ni liste ni catalogue", async () => {
+test("étape 7 — l'arme tenue en vignettes radio : « Mains nues » d'abord, puis chaque arme de la banque, sans désavantage d'abord (lot 4.3), sans les armes naturelles ; ni liste ni catalogue", async () => {
   const retirer = installerDom();
   try {
     const { ecran } = await etape7(personnageEssai());
     const armes = vignettesDe(ecran, "arme");
     const index = indexerCreation(BANQUE);
-    assert.deepEqual(
-      armes.map((v) => texteDe(v.querySelector("label")).replace(/ (lourde|agile|précise)$/, "")),
-      ["Mains nues", ...index.blocsDeType("arme").map((b) => b.nom)],
-    );
+    const noms = armes.map((v) => texteDe(v.querySelector("label")).replace(/ (lourde|agile|précise)$/, ""));
+    // Sans désavantage, puis la maîtrise partielle (la spatule), puis non
+    // maîtrisé (le couteau, le rouleau) ; dans un même état, l'ordre de la banque.
+    assert.deepEqual(noms, ["Mains nues", "Hachoir", "Louche d'acier", "Poêle en fonte", "Rouleau à pâtisserie", "Spatule souple", "Couteau d'office", "Rouleau de fonte"]);
+    assert.deepEqual(noms.slice(1).sort(), index.blocsDeType("arme").map((b) => b.nom).sort(), "chaque arme de la banque, une fois");
     assert.ok(!armes.some((v) => nomDe(v).startsWith("Pinces de homard")), "une arme naturelle n'est pas une arme tenue");
     assert.ok(armes.every((v) => classes(v).includes("vignette") && v.querySelector("input").getAttribute("type") === "radio"));
     assert.equal(ecran.querySelector("select#arme"), null);
@@ -294,9 +295,10 @@ test("étape 7 — les packs en vignettes : « Aucun pack », puis un par type, 
   try {
     const { ecran } = await etape7(personnageEssai());
     const packs = vignettesDe(ecran, "pack");
-    assert.deepEqual(packs.map(nomDe), ["Aucun pack", "Pack lourd", "Pack agile", "Pack précis"]);
-    assert.deepEqual(packs.map((v) => v.querySelector("input").id), ["pack-aucun", "pack-lourde", "pack-agile", "pack-precise"]);
-    const [aucun, lourd, agile, precis] = packs;
+    // Le pack maîtrisé (agile) d'abord, puis les autres (lot 4.3), chacun sous l'identifiant de son type.
+    assert.deepEqual(packs.map(nomDe), ["Aucun pack", "Pack agile", "Pack lourd", "Pack précis"]);
+    assert.deepEqual(packs.map((v) => v.querySelector("input").id), ["pack-aucun", "pack-agile", "pack-lourde", "pack-precise"]);
+    const [aucun, agile, lourd, precis] = packs;
     assert.equal(aucun.querySelector(".mention-maitrise"), null);
     assert.deepEqual([...agile.querySelectorAll(".pieces-pack li")].map(texteDe), ["Maniques bras gauche 15, bras droit 15", "Tablier de cuir torse 30", "Toque renforcée tête 5"]);
     assert.deepEqual([...lourd.querySelectorAll(".pieces-pack li")].map(texteDe), ["Plastron de fonte torse 40"]);

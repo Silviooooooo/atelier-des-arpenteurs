@@ -273,6 +273,13 @@
   box-shadow: inset 0 0 0 var(--trait) var(--accent);
 }
 
+/* Non acquise (lot 4.3) : une capacité du primordial au niveau 0, que le
+   personnage ne possède pas encore ; son nom à la couleur secondaire, sur
+   le fond de la vignette (--texte-2 sur --fond-2, mesuré par les thèmes). */
+.vignette-capacite.non-acquise .capacite-nom {
+  color: var(--texte-2);
+}
+
 .vignette-capacite-tete {
   display: flex;
   flex-wrap: wrap;
@@ -504,19 +511,35 @@ html:has(.volet-niveau:not([hidden])) {
   margin: 0;
 }
 
+/* Les paramètres d'une vignette (lot 4.3) : chaque paire, une rangée
+   souple. Le nom garde la coupe de la vignette, entre ses mots ; la valeur
+   reste à côté du nom quand la paire tient, sinon elle passe à la ligne,
+   alignée en fin, et ne se coupe qu'après une barre (un wbr suit chacune).
+   Une grille donnait toute la largeur aux noms : « 7/10/14 » tombait à la
+   verticale, un signe par ligne, au téléphone. */
 .vignette-parametres {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 0 var(--espace-2);
   margin: 0;
 }
 
+.vignette-parametres .parametre {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--espace-2);
+}
+
 .vignette-parametres dt {
+  flex: 1 1 auto;
+  min-width: 0;
   color: var(--texte-2);
 }
 
 .vignette-parametres dd {
+  flex: 0 1 auto;
+  max-width: 100%;
   margin: 0;
+  margin-left: auto;
+  text-align: end;
+  overflow-wrap: break-word;
 }
 
 .vignette-capacites,

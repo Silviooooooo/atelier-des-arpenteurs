@@ -1,7 +1,8 @@
 // Contrôles de la notation (SPECIFICATION.md, § 6.2 et § 11, domaine
 // « Notation ») : chaque ligne du tableau du § 6.2, dont les accolades
 // imbriquées et la virgule décimale ; une notation cassée donne E6 et garde
-// le brut. Les exemples sont ceux de la spécification.
+// le brut. Les exemples suivent ceux de la spécification, aux noms de la
+// démonstration (aucun nom du vrai classeur, mission du lot 4.3, § 9.1).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -18,26 +19,26 @@ const sansAnomalie = (valeurs) => ({ valeurs, anomalies: [] });
 
 test("capacites — liste séparée par des virgules", () => {
   assert.deepEqual(
-    lireCapacites("Attaque de base, choc, visée"),
+    lireCapacites("Attaque de base, vif, pincée"),
     sansAnomalie([
       { forme: "simple", nom: "Attaque de base" },
-      { forme: "simple", nom: "choc" },
-      { forme: "simple", nom: "visée" },
+      { forme: "simple", nom: "vif" },
+      { forme: "simple", nom: "pincée" },
     ]),
   );
 });
 
 test("capacites — choix obligatoire ( a | b )", () => {
   assert.deepEqual(
-    lireCapacites("(Loup solitaire | Attaque de meute)"),
-    sansAnomalie([{ forme: "choix", options: ["Loup solitaire", "Attaque de meute"] }]),
+    lireCapacites("(Solo du chef | Recette de grand-mère)"),
+    sansAnomalie([{ forme: "choix", options: ["Solo du chef", "Recette de grand-mère"] }]),
   );
 });
 
 test("capacites — ensemble facultatif [ a | b ]", () => {
   assert.deepEqual(
-    lireCapacites("[Cheville foulée | Doigt coupé]"),
-    sansAnomalie([{ forme: "facultatif", options: ["Cheville foulée", "Doigt coupé"] }]),
+    lireCapacites("[Cheville tordue | Main brûlée]"),
+    sansAnomalie([{ forme: "facultatif", options: ["Cheville tordue", "Main brûlée"] }]),
   );
 });
 
@@ -57,8 +58,8 @@ test("capacites — formes relevées : espaces intérieurs, choix d'une option, 
 
 test("éléments — liste, cible éventuelle entre parenthèses", () => {
   assert.deepEqual(
-    lireElements("Arme, Dégâts(Attaque à mains nues)"),
-    sansAnomalie([{ nom: "Arme" }, { nom: "Dégâts", cible: "Attaque à mains nues" }]),
+    lireElements("Arme, Dégâts(Coup de louche)"),
+    sansAnomalie([{ nom: "Arme" }, { nom: "Dégâts", cible: "Coup de louche" }]),
   );
 });
 
@@ -88,9 +89,9 @@ test("paramètres — accolades imbriquées et virgule décimale", () => {
 
 test("paramètres — cible entre parenthèses après l'accolade", () => {
   assert.deepEqual(
-    lireParametres("{degats:{force}*0,5/{force}/{force}*2}(Attaque à mains nues), {portee:1}(Attaque de base)"),
+    lireParametres("{degats:{force}*0,5/{force}/{force}*2}(Coup de louche), {portee:1}(Attaque de base)"),
     sansAnomalie([
-      { nom: "degats", valeur: "{force}*0,5/{force}/{force}*2", cible: "Attaque à mains nues" },
+      { nom: "degats", valeur: "{force}*0,5/{force}/{force}*2", cible: "Coup de louche" },
       { nom: "portee", valeur: "1", cible: "Attaque de base" },
     ]),
   );
@@ -143,8 +144,8 @@ test("E6 — autres notations illisibles, toujours gardées", () => {
 });
 
 test("A7 — choix écrit dans la colonne des paramètres : lu, gardé tel quel, signalé", () => {
-  const resultat = lireParametres("(Loup solitaire|Attaque de meute)");
-  assert.deepEqual(resultat.valeurs, [{ brut: "(Loup solitaire|Attaque de meute)" }]);
+  const resultat = lireParametres("(Solo du chef|Recette de grand-mère)");
+  assert.deepEqual(resultat.valeurs, [{ brut: "(Solo du chef|Recette de grand-mère)" }]);
   assert.deepEqual(resultat.anomalies.map((anomalie) => anomalie.code), ["A7"]);
   assert.deepEqual(lireElements("[a | b]").anomalies.map((anomalie) => anomalie.code), ["A7"]);
 });

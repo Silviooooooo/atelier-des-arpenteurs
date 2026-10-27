@@ -11,6 +11,10 @@ import { ORDRE_FICHE_ZONES, SOMME_CARACTERISTIQUES, SOUFFLE_CREATION, TYPES_OBJE
 
 const ZONE = Object.fromEntries(ZONES.map((z) => [z.code, z]));
 
+// Un primordial sans capacité acquise (lot 4.3, mission § 8.3) : celles qu'il
+// offre attendent l'étape 8 ; s'il n'en offre aucune, elles sont à venir.
+const sansPouvoir = (fiche, lien) => ((fiche.offertes ?? []).some((o) => o.origines.includes(lien.nom)) ? "Aucune capacité acquise." : "Capacités à venir.");
+
 /** Le coût d'une capacité en une ligne : « 5 souffle », « 1 souffle · 1 lien ». */
 export function coutEcrit(cout) {
   if (!cout) return "";
@@ -183,7 +187,7 @@ export function lecture(fiche) {
               ["Primordial", lien.nom],
               ["Points de lien", lien.points],
             ]),
-            lien.pouvoirs.length ? el("ul", { classe: "lecture-capacites" }, lien.pouvoirs.map(ligneCapacite)) : el("p", {}, "Capacités à venir."),
+            lien.pouvoirs.length ? el("ul", { classe: "lecture-capacites" }, lien.pouvoirs.map(ligneCapacite)) : el("p", {}, sansPouvoir(fiche, lien)),
           ])
         : el("p", { classe: "secondaire-texte" }, "Aucun primordial lié."),
     ),

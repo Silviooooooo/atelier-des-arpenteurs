@@ -343,10 +343,12 @@ test("écran de la fiche — un personnage qui n'est pas sur l'appareil s'ouvre 
 test("étagère — un personnage du format 1 gardé sur l'appareil (lot 2) se lit encore, converti au format 2", async () => {
   const magasin = magasinPersonnagesMemoire();
   const etagere = creerEtagere(magasin, "demo");
-  const { equipement, constellation, ...reste } = personnageEssai();
+  const { equipement, constellation, niveaux, ...reste } = personnageEssai();
   await magasin.ecrire("demo", {
     ...reste,
     format: 1,
+    // Les montées du lot 2 ont le sens de celles du format 2 (lot 4.3) : de 2 à 3.
+    niveaux: niveaux.filter((m) => m.niveau >= 2),
     constellation: { nom: constellation.nom, choix: [], obtention: "tirage" },
     equipement: equipement.map(({ place, ...o }) => ({ ...o, porte: place === "equipe" && o.nom !== "Couvercle de marmite" })),
     arme_principale: 0,

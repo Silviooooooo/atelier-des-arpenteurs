@@ -17,10 +17,18 @@
 // principale et du bouclier ; la constellation compte ses tirages. Un
 // personnage au format 1 (fichier, lien ou appareil) se lit encore : il est
 // converti à la lecture (migrer), et s'écrit ensuite au format 2.
+//
+// Le format 3 (lot 4.3, mission § 8.3) garde les champs du format 2 ; seul
+// le sens d'une montée change. Une capacité que le personnage ne tient que
+// de son primordial, et qui peut évoluer, part au niveau 0 : une montée au
+// niveau 1 l'acquiert. Une montée vaut donc de 1 à 3 au format 3, de 2 à 3
+// au format 2. Un personnage au format 2 se lit encore, tel quel : le calcul
+// le convertit en mémoire (calcul.js, versFormat3), et seul le créateur
+// l'enregistre converti. Un personnage neuf naît au format 3.
 
 import { CARACTERISTIQUES, CARACTERISTIQUE_MAX, CARACTERISTIQUE_MIN, NIVEAU_MAX, SOMME_CARACTERISTIQUES } from "./regles.js";
 
-export const FORMAT = 2;
+export const FORMAT = 3;
 // Les places d'un objet : « arme », l'arme tenue (une au plus, livret,
 // « Objet ») ; « pack », une pièce du pack d'armure ; « equipe », une pièce
 // d'armure portée seule ou un bouclier tenu ; « sac », rangé.
@@ -162,7 +170,9 @@ export function migrer(donnees) {
     constellation = { ...constellation, tirages: constellation.obtention === "tirage" ? 1 : 0 };
   }
   const { arme_principale: _arme, bouclier: _bouclier, ...reste } = donnees;
-  return { ...reste, format: FORMAT, constellation, equipement };
+  // Au format 2, que le calcul convertit ensuite (versFormat3) : les montées
+  // du format 1 ont le sens de celles du format 2.
+  return { ...reste, format: 2, constellation, equipement };
 }
 
 /** Un personnage lu d'ailleurs (fichier, lien, appareil) : converti s'il le faut, puis vérifié. */
@@ -179,7 +189,7 @@ export function verifier(personnage) {
     "format", "id", "mode", "etat", "etape", "cree_le", "modifie_le", "enregistre_le", "banque", "identite", "caracteristiques",
     "archetype", "espece", "constellation", "primordial", "equipement", "niveaux", "empreintes",
   ]);
-  if (personnage.format !== FORMAT) {
+  if (personnage.format !== 2 && personnage.format !== FORMAT) {
     if (Number.isInteger(personnage.format) && personnage.format > FORMAT) refuser("Ce personnage vient d'une version plus récente de l'Atelier : rechargez la page.");
     refuser("Ce fichier n'est pas un personnage de l'Atelier (format inconnu).");
   }
@@ -222,7 +232,7 @@ export function verifier(personnage) {
   personnage.niveaux.forEach((montee, i) => {
     champs(montee, `La montée ${i + 1}`, ["capacite", "niveau"]);
     texte(montee.capacite, `La montée ${i + 1}, capacité`, BORNES.nom, { vide: false });
-    entier(montee.niveau, `La montée ${i + 1}, niveau`, 2, NIVEAU_MAX);
+    entier(montee.niveau, `La montée ${i + 1}, niveau`, personnage.format === 2 ? 2 : 1, NIVEAU_MAX);
   });
   liste(personnage.empreintes, "Les empreintes", BORNES.empreintes);
   personnage.empreintes.forEach((e, i) => {

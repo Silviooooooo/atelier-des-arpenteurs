@@ -240,9 +240,9 @@ js/
   personnage/               le créateur de personnage (§ 15)
     regles.js               les règles chiffrées, chacune avec sa section du livret
     expressions.js          les expressions du classeur, en fractions exactes
-    calcul.js               la fiche d'un personnage, recalculée avec la banque du jour ; donneAuCombat, ce qu'une source donne au combat, pour la photographie et l'étape 7 (§ 15.3)
+    calcul.js               la fiche d'un personnage, recalculée avec la banque du jour ; donneAuCombat, ce qu'une source donne au combat, pour la photographie et l'étape 7 (§ 15.3) ; les capacités offertes du primordial, et versFormat3, la conversion du format 2 (§ 15.1, § 15.2)
     parcours.js             ce qui manque à chaque étape, montées permises, tirage
-    format.js               le fichier *.arpenteur.json, sa vérification, le lien
+    format.js               le fichier *.arpenteur.json (format 3 ; le 2 se lit encore), sa vérification, le lien
     suivi.js                les choix modifiés ou disparus depuis l'enregistrement
     stockage.js             les personnages de l'appareil (IndexedDB), réel et démonstration séparés, et leurs notes
     packs.js                les packs d'armure, partagés par le créateur et le contrôle (A10)
@@ -602,6 +602,13 @@ signale** (E6), il ne l'avale pas.
 | Eléments · paramètres reçus | liste de noms entre accolades | `{portee}` | paramètre reçu `portee` |
 | Descriptions | `[N]`, `[N*{degats}]`, `{portee}` | — | gardées telles quelles au lot 1 ; les `{nom}` sont les paramètres invoqués (A5) |
 | | un mot suivi de `(s)` ou de `(x)` (lot 5) | — | gardé tel quel dans la banque, accordé à l'affichage (plus bas) |
+
+Une valeur composée par `/` reste une chaîne dans la banque : c'est le
+calcul qui la lit, en rangs pour `degats` et `armure`, en suite de valeurs
+pour tout autre paramètre (lot 4.3 ; § 15.2 ; § 12, point 57). **Les
+exemples de ce tableau** sont réels, non confidentiels ; depuis le lot 4.3,
+`tests/notation.test.js` reprend chaque forme sous des noms de la
+démonstration (§ 10.3).
 
 **Une ligne de la feuille ne se découpe jamais sur une virgule située entre
 accolades, crochets ou parenthèses** : `{force}*0,5` contient une virgule
@@ -1827,12 +1834,34 @@ Toute dépendance future est justifiée ici, avant son arrivée.
   (`git config user.email`, sans `--global`) est l'adresse privée fournie
   par GitHub (`…@users.noreply.github.com`), jamais une adresse personnelle.
   Un contrôle vérifie que l'historique n'en contient pas d'autre.
+- **Aucun nom du vrai classeur dans les contrôles** (lot 4.3, mission
+  § 9.1 ; compte rendu du lot 5, point 3, accord de l'auteur) : les deux
+  derniers qui en portaient, `tests/notation.test.js` et
+  `tests/carte.test.js`, prennent des noms de la démonstration, ou des noms
+  inventés absents du vrai classeur (« Crustacé », une classe ; « Pince »,
+  une zone), aux mêmes formes et aux mêmes assertions ; les mots du livret
+  et du `lisez_moi` (Arme, Armure, Dégâts, Centré…) restent. La preuve, par
+  un script hors dépôt qui n'affiche les noms qu'à la demande : les noms de
+  la copie du classeur (blocs, capacités, éléments, classes, adversaires)
+  qui ne sont ni de la démonstration ni des mots du livret, 148 sur 181,
+  cherchés dans ces deux fichiers (avant : 15 noms, 42 occurrences ;
+  après : aucun) et dans les lignes ajoutées depuis `0aa2aaf`,
+  spécification comprise (65 fichiers, 11 567 lignes) : huit mots courants
+  du français, en minuscules ou dans des identifiants, et aucun écrit comme
+  un nom. **L'historique public garde les anciens** : l'en retirer
+  demanderait de le réécrire (décision de l'auteur, pas de réécriture).
 - Sans `.nojekyll`, GitHub Pages passe le dépôt dans Jekyll, qui ignore les
   fichiers commençant par `_` et retarde chaque publication.
 - **Un contrôle avant chaque envoi** (décision de l'auteur, 29/09/2026) : le
   crochet `.githooks/pre-push`, un script `sh` qui fonctionne sous Git pour
-  Windows, lance `node --test` et refuse l'envoi au moindre échec, avec un
-  message en français. Il s'installe une fois par poste, sans `--global` :
+  Windows, lance `node --test --test-concurrency=4` et refuse l'envoi au
+  moindre échec, avec un message en français. Quatre fichiers de contrôles
+  à la fois, et non un par cœur (lot 4.3, contrat, choix 26) : mesuré le
+  27/10/2026 sur le poste de l'auteur (12 cœurs, 15,6 Go), la suite à onze
+  fichiers à la fois poussait la mémoire validée à 21,03 Go et trois
+  contrôles lourds passaient leur délai (8 min 31 s) ; à quatre, ses 2 113
+  contrôles passaient, en 6 min 23 s, sous 20,15 Go : le poste n'écrivait
+  plus sur son disque. Il s'installe une fois par poste, sans `--global` :
   `git config core.hooksPath .githooks`. Il ne se contourne jamais
   (`--no-verify`) : un envoi refusé se corrige. `.gitattributes` l'extrait
   toujours en fins de ligne LF, que `sh` exige. Les contrôles portant sur
@@ -1861,7 +1890,7 @@ Chaque contrôle nouveau se vérifie **armé puis désarmé**.
 | Domaine | Contrôles minimaux |
 |---|---|
 | Lecture | le lecteur XML : entités, CDATA, noms locaux, fins de ligne, XML mal formé et DOCTYPE refusés ; le classeur d'essai donne les feuilles, en-têtes et cellules attendus, dont le texte enrichi, les retours à la ligne et les nombres ; un fichier qui n'est pas un ZIP, une archive tronquée, chiffrée, ZIP64 ou d'une méthode inconnue, un CRC faux, un classeur protégé par mot de passe, un XML abîmé donnent un message, pas une exception ; le classeur suivi correspond à sa description (`tests/outils/`) |
-| Notation | chaque ligne du tableau du § 6.2, dont les accolades imbriquées et la virgule décimale ; une notation cassée donne E6 et garde le brut |
+| Notation | chaque ligne du tableau du § 6.2, dont les accolades imbriquées et la virgule décimale, sous des noms de la démonstration depuis le lot 4.3 (`tests/notation.test.js`, § 10.3) ; une notation cassée donne E6 et garde le brut |
 | Import | la banque du classeur d'essai a le format du § 5.1 ; colonnes retrouvées malgré la casse, les accents et l'ordre des en-têtes ; valeurs en chaînes, telles qu'écrites ; brut et `lisez_moi`, où une colonne nommée `__proto__` ou `constructor` reste ; ligne sans nom exclue ; fichier illisible : un message ; la feuille Adversaires : une entrée par ligne, classe ou adversaire, ses cellules telles qu'écrites, vides comprises, et son brut ; ses en-têtes retrouvés malgré la casse et les espaces (« Nombre  d'actions ») ; « Classe » et « Localisations » aussi sous leurs anciens noms, « Type » et « Localisation », le nom neuf l'emportant quand la feuille porte les deux, et E1, sans l'un ni l'autre, qui dit l'ancien nom (lot 5, § 4.1) ; les ajouts du lot 4 pour le simulateur de combat, mot pour mot (§ 10.3) : les deux éléments et leur texte, les douze capacités qui portent Passif et les trois qui portent Intervention, les deux capacités du bloc de base, cellule par cellule, en fin de feuille et sans anomalie |
 | Contrôle | le classeur d'essai déclenche **chaque** code du § 6.3 (trente-sept ; E1, A8, A9, A10, I6 et quinze des codes de la feuille Adversaires sur ses variantes, § 10.3 ; I6, que le classeur d'essai ne porte pas, sur une variante : une information par cellule, dans Capacites et Eléments, pour des crochets, des accolades, un mot en « x », deux pluriels dans une cellule, et aucune pour un mot déjà marqué, un mot exclu ou un retour à la ligne), et exactement les anomalies qu'il annonce, ligne par ligne ; un classeur propre n'en déclenche aucun ; gravités du § 6.3 (le tableau lu dans la spécification, codes à deux chiffres compris) et tri du § 6.4 ; la colonne « Type » attendue, les types comparés sans casse, accents ni espaces ; E7 : un paramètre ciblé à côté du même sans cible admis, dans les deux ordres ; deux sans cible, ou la même cible deux fois (casse comprise), une erreur ; E4 toujours sur la cible ; A10 : deux pièces d'un même type sur une zone, pas deux types différents, pas une valeur écrite « 0 » ou « 0,0 » ; le signe invisible (lot 4, § 6.3) : chacun des vingt-deux signes retiré de la clé, U+061C compris depuis le groupe 2, aucun autre point de code d'Unicode retiré, les voisins de la liste gardés (dont U+061B, U+061D, U+180E et U+2065), les espaces voisins retirés comme avant ; E3 sur un bloc, un élément (avec l'espace que le signe cachait) et une capacité, de même puissance ou non ; le signe sur la première définition comme sur la seconde, et des variantes dont les lignes s'entrelacent : le doublon est la définition qui commence le plus bas, la ligne citée la plus haute ; « exactement » : ni la casse, ni un accent, ni une espace intérieure ne font un doublon (bloc, élément, capacité de même puissance) ; **E3 élargi** (groupe 2) : deux capacités à un signe près et de puissances différentes restent deux capacités, avec un E3 au message neuf, mot pour mot, et un renvoi approché vers ce nom devenu ambigu (E4), là où il est retrouvé et signalé (A1) sans la seconde ; le contrôle qui fixait la lecture d'avant (« puissances différentes : sans E3 ») est inversé ; trois noms d'un même groupe : deux E3, chacun à la plus basse des lignes de sa capacité, qui citent la première ligne de la première ; une capacité à deux variantes (lignes n et n + 5), qui ne diffère d'une plus haute que par U+061C : son E3 à la ligne n + 5, le message citant la première ligne de l'autre ; deux variantes d'un même nom écrit, de puissances différentes : aucun ; la même puissance d'un même nom écrit garde l'ancien message ; A1 sur une capacité, un élément et un paramètre, mot pour mot ; aucun de ces signes écrit tel quel dans `js/`, `outils/`, `tests/` ni dans ce document, sans exception (§ 10.1) |
 | Chiffrement | aller-retour, au format 2 du § 7.1 : l'empreinte est celle des octets chiffrés, vérifiée avant le déchiffrement, et change à chaque publication ; le format 1 ne se lit plus : il se dit abîmé, avant toute dérivation ; mauvais mot de passe refusé proprement ; fichier abîmé ou inconnu, ou en-tête hors des bornes du § 7.1 (itérations, sel, IV, données), ou dérivation refusée : un message ; une clé sous le plancher ne chiffre pas ; IV différent à chaque chiffrement ; sel inchangé tant que le mot de passe ne change pas ; la clé gardée déchiffre la publication suivante (§ 7.1), et un sel renouvelé la rend inutilisable ; normalisation du mot de passe : NFC, espaces de bord, **minuscules** (« İ » compris), la même clé quelle que soit la casse ; une banque chiffrée sous la forme exacte reste lisible avec le mot de passe tel qu'il se saisissait, et la clé rendue republie sous la même forme ; 8 signes au moins, sans autre exigence ; coffre : seule une clé AES-GCM non extractible, clés réelle et de démonstration séparées, jeton à part (§ 7.2) |
@@ -1874,10 +1903,10 @@ Chaque contrôle nouveau se vérifie **armé puis désarmé**.
 | Automate | lancé hors de GitHub, sur une simulation de l'API et de vrais dépôts git jetables : un ticket « creer » conforme rangé (fichier qui se déchiffre, index, commit du robot aux deux seuls chemins, message sans nom, ticket fermé et verrouillé, Pages demandée) ; « remplacer », ticket repassé sans effet (même deux tickets rejoués, déjà rangés : aucun commit), « supprimer », suppression d'un absent, passage sans ticket ; tickets non conformes (JSON illisible, autre titre, identifiant hostile ou en forme de jeton, trop gros, base64 faux, contenu en clair, sel périmé, corps vide, champ en plus, commandes de shell et chemins) fermés avec leur raison, sans rien recopier, écrire ni exécuter ; collision de casse ; inconnu (autre login, ou même login d'un autre compte) fermé et verrouillé sans commentaire, même quand la partie git s'arrête ; avalanche d'inconnus au-delà de la limite de pages : les plus anciens fermés, les autres au passage suivant, les tickets du propriétaire lus à part et rangés ; demande de fusion ignorée ; envoi refusé puis réussi, tickets rejugés sur la banque republiée ; cinq refus : aucun ticket du propriétaire fermé ; fichier illisible, intrus, ou `.gitignore` qui cache les fichiers rangés : arrêt sans commit ni fermeture ; chemin hors de `personnages/` : arrêt avant l'envoi ; la variable du jeton ôtée de toute commande git, le jeton à la seule commande d'envoi, jamais sur le disque ; Pages refusée ; lancé à la main, l'automate redemande Pages ; l'API et l'environnement de GitHub Actions. Aucun nom en clair nulle part |
 | Routes et fiches | décodage des adresses de fiche (`#/capacite/Attaque%20de%20base`) et aller-retour des noms difficiles ; la fiche et la liste des blocs montrent leur type ; adresses abîmées, dont les noms d'`Object.prototype` ; un nom introuvable n'est jamais le titre ; recherche sans casse ni accents, sur les noms et les descriptions ; renvois résolus comme au contrôle ; « octroyée par », « porté par », nom affiché ; anomalies d'une ligne ; les adresses des adversaires, des types et de la rencontre, dont un nom forgé qui porte un demi-codet seul ; le lien de la navigation que marque chaque écran ; la recherche d'un adversaire par ce qu'il écrit ; l'index des adversaires et de leurs types, les lignes de la feuille Adversaires ; une banque d'avant le lot 3 indexée sans exception ; les entrées d'un nom comptent ses doublons à un signe invisible près (lot 4), celle du nom écrit d'abord, et aucune sous un nom que rien ne porte exactement ; un nom qui ne diffère d'un autre que par la casse, un accent ou une espace intérieure a ses propres entrées, et n'entre pas dans celles de l'autre ; l'adresse du combat (lot 4) : `#/combat`, et dix adresses abîmées autour d'elle (`#/combat/`, `#/combat/2`, `#/combats`, `#/Combat`…), la rubrique qu'elle marque, son lien après « Rencontre » ; l'adresse de la page Apparence (lot 5) : `#/apparence`, et sept adresses abîmées autour d'elle (`#/apparence/`, `#/apparence/taverne`, `#/Apparence`…), la rubrique qu'elle marque, son lien, le dernier ; et tout lien de la navigation écrit sous la forme que lit le contrôle (un lien écrit autrement manquait à la liste sans bruit) |
 | Site | politique de sécurité du `<meta>`, avant scripts et styles, toute la table des directives et rien d'autre ; zoom permis ; ni script, ni style, ni gestionnaire en ligne ; chaque fichier appelé existe ; le graphe des modules se résout et atteint les dix-sept écrans (le combat est le seizième ; seize de ses modules y sont nommés, dont la bulle et le journal de son écran depuis le groupe 2, avec la rencontre gardée ; la page Apparence, le dix-septième, depuis le lot 5), et tout module de `js/` y est, hors les deux scripts classiques que la page appelle (la veille et le thème du premier affichage, le premier appel après la politique) : le catalogue des thèmes y entre par la page Apparence ; manifeste, couleurs des jetons, icônes aux tailles dites, telles que les dessine leur outil ; contrastes, dont ceux des quinze couleurs du combat en clair et en sombre, le texte à 4,5:1 (✓, ✗ et les chiffres dans le cadre d'un jet compris), les ronds et les traits (la hachure, son bord, le bord du cadre) à 3:1 sur le fond des cases, ces quinze-là déclarées dans le bloc sombre, chacune avec sa valeur sombre, sauf le bord du cadre, exempté par son nom, dont le gris tient en clair et en sombre (§ 17.7) ; l'unique écriture de style du code (`tests/echelle.test.js`, déplacé là au groupe 2) : dans tout `js/`, les écritures sont dans `echelle.js` seul, quatre propriétés, `--echelle`, puis les trois de la bulle dans `placerBulle` et nulle part ailleurs, un alias du style refusé ; le calcul de la place (chaque côté, aucun, une ancre hors de la fenêtre, la flèche bornée, des pixels entiers), l'écouteur de changement de taille, un seul, retiré quand la bulle a quitté la page, aucun écouteur de défilement ; valeurs de `ecran.css`, de `personnage.css` et de `combat.css` tirées des jetons, hors les largeurs des `@media`, aucune police téléchargée par l'interface ; la banque de démonstration, au format 2, se déchiffre et vient du classeur d'essai, avec ce qu'y lit le simulateur de combat (lot 4 : ses comptes, les deux éléments, les deux capacités du bloc de base, mot pour mot) ; le mot de passe de démonstration, déjà en minuscules, saisi en majuscules, ouvre la banque, et la clé gardée la rouvre ; le format 1 ne s'ouvre plus ; au téléchargement, une empreinte de format 2 fausse et un format plus récent donnent leur message ; le diagnostic dit le format ; chargement : absente, présente, abîmée, `?v=`, clé gardée, mot de passe requis ou changé, stockage durable ; l'attente du mot de passe ne dépend pas de la peinture de la fenêtre ; le déverrouillage n'attend pas la réponse sur le stockage durable ; sans IndexedDB, la phrase au lieu de la case ; une erreur inattendue : un message. Dans un document simulé : le bouton « Publier » existe dans chaque état de l'espace auteur, et sa raison s'affiche ; la barre de publication reste collée au bas de l'écran ; « Oublier le mot de passe » ne laisse ni clé ni différences, même pendant une comparaison ; « Oublier la clé GitHub » annule la publication en attente ; « Se souvenir » décide de garder la clé ; la veille de 15 secondes, et rien sur une page chargée ; l'aide dit d'ajouter l'Atelier depuis son accueil ; `dom.js` refuse gestionnaires en texte, `style`, `srcdoc` et adresses étrangères, et n'affiche pas les signes qui commandent le sens de l'écriture, que les attributs gardent ; le document simulé refuse d'ajouter null ou undefined, que le navigateur afficherait, et son `querySelectorAll` rend, comme le navigateur, une liste qui se parcourt mais n'a ni `filter` ni `map`. L'espace auteur (lot 2 bis) : la section de la clé de dépôt (aide, état, saisie vérifiée ; la clé jamais à l'écran, dans un attribut ou un champ, ni gardée ; retirer, garder ; oubliée avec le mot de passe, et après une publication réussie ; la clé GitHub de l'auteur refusée ; une phrase en démonstration) ; le mot de passe : 7 signes refusés, 8 acceptés, deux saisies qui ne diffèrent que par la casse acceptées ; le changement compte les personnages avant l'envoi, puis écrit un seul commit ; s'il en laisse sous une autre clé, la section « Personnages en ligne » les montre aussitôt, avec la reprise ; une avance sans réponse : « Publiée » si la branche a avancé, sinon l'incertitude dite, et l'ancienne clé reste ; la vérification n'écrit rien, la reprise rechiffre. Le serveur local : la seule machine, les seuls fichiers du site, dont les polices, le personnage de démonstration et `personnages/` sous ses deux seules formes, casse comprise |
-| Thèmes | le lot 5 (§ 10.1, § 10.2). **La feuille** : `css/themes.css` est celle qu'engendre `outils/themes_css.js`, comparées fins de ligne ramenées en LF ; les dix-neuf `@font-face` au niveau supérieur, tout le reste dans un seul `@media screen` ; trente-six blocs `[data-theme]`, sans `:root` ni Atelier, puis les deux classes des pastilles ; chaque bloc écrit ses vingt-cinq couleurs, ses polices et `color-scheme` en toutes lettres, sans `var()`. **Le catalogue** : trente-huit entrées pour trente-sept thèmes, codes uniques, sept familles dans l'ordre ; chaque entrée complète (mode, nom, description, vingt-huit couleurs, polices connues) ; les piles de polices, celles du système et de la chasse fixe égales à `jetons.css` ; `--police-journal`, la police de texte dans quatre familles, la chasse fixe ailleurs ; dix-neuf polices hébergées, chacune dans `polices/`. **Les contrastes des trente-huit entrées** : les paires du contrôle qui a validé le catalogue (celles de `tests/site.test.js` pour le site et le combat, plus les jetons neufs ; 4,5:1 pour un texte, 3:1 pour un trait, un rond ou un bord) et le texte sur chaque fond orné : 2 576 mesures, aucun échec, le compte par seuil fixé ; la formule (21:1, les gris qui bordent les seuils) ; un échec fabriqué vu au plus près des seuils. **`css/jetons.css` égal à Atelier** : ses couleurs, claires puis sombres, sont celles d'`atelier-clair` et d'`atelier-sombre` ; une couleur changée dans un bloc ou dans l'autre, retirée ou ajoutée se voit. **Le script du premier affichage**, exécuté tel quel dans un contexte à part, sur un faux stockage et les balises `theme-color` d'`index.html` : sa table, le fond des trente-six thèmes, code pour code, dans l'ordre du catalogue ; un code connu pose `data-theme` et son fond dans les deux balises ; une valeur absente, inconnue ou illisible, ou un stockage refusé, laisse « Atelier » ; un script classique, sans import ni export, qui ne laisse aucun nom dans la page ; sa place dans `index.html`, sans `defer`, `async` ni `type="module"`. Les contrôles d'avant suivent : le journal et le bandeau en `--police-journal`, le nom en tête de la bulle habillé en titre. **Les ornements** (`tests/ornements.test.js`) : la feuille dans un seul `@media screen`, sans `@font-face`, `@import` ni `url()` ; chaque sélecteur part de `:root[data-theme="<code>"]`, un thème du catalogue ; aucun ornement de titre sur la fiche ni sur la carte ; le filet des panneaux laisse leur cadre aux vignettes choisies ou améliorées, aux fiches qui jouent ou sont ciblées ; sous Contraste élevé, la seule règle qui nomme les vignettes d'Apparence leur rend le `--trait` de `jetons.css` ; exactement les vingt-sept thèmes ornés. **L'ordre des feuilles** (`tests/carte.test.js`) : `css/ornements.css` liée une fois, la dernière, après `css/combat.css`, l'ordre des autres inchangé. **La vignette « Non maîtrisé »** (`tests/themes_contrastes.test.js`) : le nom, la mention, « (désavantage) » et le lien vers une anomalie sur la plaque `--fond-2`, que mesurent les paires |
+| Thèmes | le lot 5 (§ 10.1, § 10.2). **La feuille** : `css/themes.css` est celle qu'engendre `outils/themes_css.js`, comparées fins de ligne ramenées en LF ; les dix-neuf `@font-face` au niveau supérieur, tout le reste dans un seul `@media screen` ; trente-six blocs `[data-theme]`, sans `:root` ni Atelier, puis les deux classes des pastilles ; chaque bloc écrit ses vingt-cinq couleurs, ses polices et `color-scheme` en toutes lettres, sans `var()`. **Le catalogue** : trente-huit entrées pour trente-sept thèmes, codes uniques, sept familles dans l'ordre ; chaque entrée complète (mode, nom, description, vingt-huit couleurs, polices connues) ; les piles de polices, celles du système et de la chasse fixe égales à `jetons.css` ; `--police-journal`, la police de texte dans quatre familles, la chasse fixe ailleurs ; dix-neuf polices hébergées, chacune dans `polices/`. **Les contrastes des trente-huit entrées** : les paires du contrôle qui a validé le catalogue (celles de `tests/site.test.js` pour le site et le combat, plus les jetons neufs ; 4,5:1 pour un texte, 3:1 pour un trait, un rond ou un bord) et le texte sur chaque fond orné : 2 576 mesures, aucun échec, le compte par seuil fixé ; la formule (21:1, les gris qui bordent les seuils) ; un échec fabriqué vu au plus près des seuils. **`css/jetons.css` égal à Atelier** : ses couleurs, claires puis sombres, sont celles d'`atelier-clair` et d'`atelier-sombre` ; une couleur changée dans un bloc ou dans l'autre, retirée ou ajoutée se voit. **Le script du premier affichage**, exécuté tel quel dans un contexte à part, sur un faux stockage et les balises `theme-color` d'`index.html` : sa table, le fond des trente-six thèmes, code pour code, dans l'ordre du catalogue ; un code connu pose `data-theme` et son fond dans les deux balises ; une valeur absente, inconnue ou illisible, ou un stockage refusé, laisse « Atelier » ; un script classique, sans import ni export, qui ne laisse aucun nom dans la page ; sa place dans `index.html`, sans `defer`, `async` ni `type="module"`. Les contrôles d'avant suivent : le journal et le bandeau en `--police-journal`, le nom en tête de la bulle habillé en titre. **Les ornements** (`tests/ornements.test.js`) : la feuille dans un seul `@media screen`, sans `@font-face`, `@import` ni `url()` ; chaque sélecteur part de `:root[data-theme="<code>"]`, un thème du catalogue ; aucun ornement de titre sur la fiche ni sur la carte ; le filet des panneaux laisse leur cadre aux vignettes choisies ou améliorées, aux fiches qui jouent ou sont ciblées ; sous Contraste élevé, la seule règle qui nomme les vignettes d'Apparence leur rend le `--trait` de `jetons.css` ; exactement les vingt-sept thèmes ornés. **L'ordre des feuilles** (`tests/carte.test.js`) : `css/ornements.css` liée une fois, la dernière, après `css/combat.css`, l'ordre des autres inchangé. **Le bord de la feuille** (`tests/carte.test.js`, lot 4.3, § 15.4) : dans `css/fiche.css`, une seule règle `@media screen` sur `.feuille`, exactement `outline: 1px solid var(--bordure)` et `outline-offset: -1px`, le jeton déclaré dans `jetons.css` ; aucune autre règle de `.feuille`, à l'impression ni ailleurs, ne pose de bordure, de contour ni d'ombre. **La vignette « Non maîtrisé »** (`tests/themes_contrastes.test.js`) : le nom, la mention, « (désavantage) » et le lien vers une anomalie sur la plaque `--fond-2`, que mesurent les paires |
 | Apparence | la page du lot 5 (§ 9), `tests/apparence.test.js`, dans le document simulé, avec les deux balises `theme-color` d'`index.html` et un faux stockage qui garde des valeurs brutes : le titre, l'aide mot pour mot, les sept familles dans l'ordre et leur nombre de thèmes, une seule région polie, muette avant un clic ; trente-sept vignettes, `data-theme` sur trente-six dans l'ordre de la page et pas sur « Atelier », le nom, les pastilles décoratives (deux jeux pour « Atelier »), le mode, la description en `title` et en description accessible, un nom accessible fait du nom et du mode ; le thème actuel lu sur `<html>`, `aria-pressed` en chaînes, « Atelier » sans attribut ou pour un code inconnu ; un clic sur Taverne, sur un deuxième thème, puis sur « Atelier » : l'attribut posé puis retiré, la clé brute écrite puis retirée, les autres souvenirs intacts, aucune lecture du stockage, `aria-pressed`, les mêmes nœuds (rien n'est redessiné), la même région et son annonce, les deux `theme-color` ; un stockage qui lève, à l'accès ou à l'écriture, ou absent, ne casse rien : le thème vaut pour la visite ; `application.js` l'importe et l'affiche juste après l'espace auteur, avant d'attendre la banque ; l'écran n'écrit ni JSON, ni par les souvenirs d'`application.js`, ni HTML, ni style ; sa feuille : deux vignettes par ligne, six à partir de 56rem, le nom dans la police, la couleur et la graisse de titre du thème, les quatre pastilles, l'ajustement de taille de son thème, le contour épais du thème actuel. **De bout en bout** : `js/apparence/theme_initial.js`, joué tel quel dans `node:vm` sur le stockage que l'écran a rempli et un faux document, retrouve après chaque clic l'attribut et les deux balises que l'écran a posés, « Atelier » compris (sans attribut, les balises d'`index.html`), et Taverne nommément. Les contrôles d'avant suivent : le site (dix-sept écrans, le catalogue dans le graphe des modules), les routes (l'adresse et le lien du menu) |
-| Personnage | chaque règle du § 15.2 : la table des dés, bornes comprises ; les paires d'attaque et de défense ; les types mêlés et le cas sans armure ; l'ordre des zones, la grille et le maximum par zone, et l'interdiction du livret ; la qualité (X, 1, 2, 3, 1,5) et l'arrondi une fois l'opération faite, dont un cas où la virgule flottante se tromperait ; les expressions et leurs refus ; l'expression de mains nues et son dé vide ; le coût à la puissance ; les coûts 1, 3 et 6, le plafond de 10, le reliquat, les capacités reçues au-delà de 10 ; la capacité reçue deux fois ; le niveau 0 et les capacités à venir hors décompte ; les groupes ( ) et [ ], un choix disparu ; le style de combat ; le tirage (chaque constellation atteignable, rejet des valeurs biaisées) ; les points de lien ; la banque sans types ; les choix modifiés ou disparus ; ce qui manque à chaque étape, un bloc d'un autre type. Le format : aller-retour du fichier, champ inconnu ou manquant, `__proto__`, chaque champ et ses bornes, 64 Ko, JSON illisible, mode inversé, nom de fichier sûr ; le lien : aller-retour dans le fragment, lien abîmé, forgé, bombe de décompression, UTF-8 invalide, mode inversé. L'étagère : modes séparés, ordre, illisibles comptés, un personnage du format 1 converti, les notes ; une base bloquée par un autre onglet : l'étagère en mémoire et la raison, sans attendre. Le format 2 (lot 2 bis) : les places d'un objet, une seule arme tenue, les tirages ; le format 1 converti (arme principale, bouclier, armures portées, tirage) ou refusé s'il est abîmé ; un personnage neuf à 2 partout. Les places dans le calcul : pièces du pack portées, bouclier équipé (un seul), rangés sans effet ; le parcours signale une place fautive. Les adresses des écrans du personnage. Le recto et le verso de la spécification 1.7 dans un document simulé : l'ordre et la présence des rubriques, les notes ôtées ; l'en-tête (titre, XP vide) ; les lignes ARME, ARMURE et BOUCLIER (portée, mains nues, brouillon, aucune armure, types mêlés, pièce sans type) ; le style par la colonne « origine », au calcul, au créateur et au combat ; le déplacement par son rôle, par nom et par empreinte, et l'avis quand il manque ; une capacité définie (cases, coût, éléments notables, description de la source, à venir) et la syntaxe des réussites, sur la fiche et dans la vue lecture ; la silhouette (le dessin par son empreinte, les six carrés) ; la ceinture et ses regroupements, le sac ; le domaine et les cases de lien ; le contexte vide, la constellation ; la mesure (les définitions resserrées, les vignettes retirées, ce qui déborde nommé, rien qui reste d'une mesure à l'autre, aucun style écrit) ; un nom en HTML qui reste du texte ; aucune classe de la fiche prise par une autre feuille ; `svg()` et son élément `text` ; l'impression (deux pages A4 sans marge, couleurs, barre non imprimée) ; les jetons noir et blanc ; les polices hébergées, vingt-six fichiers et vingt-deux licences : les trois du papier (Marcellus, Alegreya Sans, EB Garamond), appelées par `fiche.css` et `adversaire.css`, et les dix-neuf des thèmes, par `css/themes.css` seule ; aucune autre feuille ne déclare de police ; le personnage de démonstration, fabriqué par son outil et complet, qui suit ses dix-neuf capacités ; Aubépine et les ajouts du lot 4 (§ 15.7) : les deux capacités nouvelles du bloc de base, leur coût, leur description, Passif et Intervention sur les siennes, les mêmes points. Les écrans : liste, parcours, réception, fiche (vues, impression, banque sans types). Le parcours du lot 2 bis : les descriptions, dépliées sur grand écran et repliées sur téléphone ; les boutons + et − des caractéristiques (de 2 à 6, « + » arrêté à 36, le focus qui passe au voisin) ; le tirage refait et compté, la saisie ; l'arme tenue remplacée, les packs (un seul à la fois, la pièce portée seule renvoyée au sac), un pack non proposé (A10) avec sa raison, tous les objets au sac, qualité 2, la pièce refusée sur une zone couverte, un seul bouclier, l'arme prise en main ; l'étape 8 : une vignette par capacité hors « à venir », + et − dans les bornes, la raison d'un « + » inactif, le focus gardé sur le bouton actionné ; les descriptions gardent leur état quand l'étape se redessine ; les vignettes des étapes 3 à 6 (lot 4, groupe 2) : le résumé d'un bloc, mot pour mot, sur le classeur d'essai et un bloc fabriqué, des boutons radio natifs sous l'habit de vignette, des cases à cocher pour un groupe facultatif, la coche cachée aux lecteurs d'écran, la description et les choix du bloc choisi dessous, ouverts sur téléphone aussi, comme l'effet des vignettes de l'étape 8 (lot 5), les choix d'un bloc quitté perdus, le focus gardé après le rendu, la constellation choisie en vignette « saisie à la main » avec le compte des tirages, la vignette déjà choisie qui ne change rien, des identifiants uniques, la feuille (44 px, la grille dans et hors du `@media`, le résumé sur deux lignes) ; le personnage de démonstration lu par une fonction partagée avec le combat (`tests/personnage_demonstration.test.js` : sans cache, un 404, une levée, un fichier illisible, un bon fichier, la phrase du personnage gardé, la question du doublon posée sans défiler) ; l'objet décrit avant d'être ajouté, un refus dit près de l'objet et le focus sur lui ; « Modifier » : la copie de travail, reprise, « Enregistrer » à la place de l'original, « Enregistrer sous un autre nom » (un autre nom exigé) ; l'enregistrement dépose (« creer », « remplacer »). La liste en ligne : les rubriques, l'attente, « Réessayer », « Supprimer » pour tous, « Modifier » d'un personnage en ligne, la phrase de la démonstration ; le mot de passe changé pendant la visite, une suppression dont le personnage ne se lit plus, une copie plus ancienne (« Envoyer quand même », « Retirer de l'appareil »), une base bloquée. La fiche : la qualité des objets (saisie fautive refusée, redépôt, panneau resté ouvert, focus sur la confirmation, deux objets de même nom distingués), « Modifier », un personnage ouvert depuis le site, ou dont la lecture échoue (« Réessayer »), « tirée N fois ». **Le créateur du lot 5** (§ 15.3) : la comparaison mot à mot (`tests/difference.test.js` : Fournaise, du niveau 1 au 2 et du 2 au 3, où « case » et « cases » sont deux mots ; un mot ajouté ou retiré, au milieu comme à la fin ; un mot répété ; la plus longue sous-suite commune ; la casse et l'accent ; les mots au sens Unicode, l'apostrophe qui sépare ; les signes et les espaces gardés, jamais marqués ; des textes vides ou égaux ; chaque fois, les morceaux recollés qui redonnent le texte ; la borne, juste sous elle et juste au-dessus) ; la maîtrise (`tests/maitrise.test.js` : Aubépine et sa ligne ; `donneAuCombat`, source par source ; seule compte la Maîtrise qu'une source donne au combat, comme dans la photographie ; le poids d'après les éléments ; la position de chaque capacité, comme au combat ; les quatre états, une Maîtrise plus haute ou d'un autre poids, les positions seules ; un objet à deux poids ; la maîtrise d'un pack, au niveau 1 au moins ; sans Maîtrise ; « d' » et « de ») ; l'étape 7 (`tests/creation_equipement.test.js` : la ligne des maîtrises, « aucune » ; « Mains nues » puis chaque arme, sans les armes naturelles, ni liste ni catalogue ; le poids en étiquettes, les paramètres à la qualité 2 ; « (désavantage) » et les cinq états en mots ; les packs, leurs pièces, leurs zones, leur armure et leur maîtrise ; le pack non proposé (A10), inactif, sans état ; « ✓ tenue », « ✓ porté », le choix toujours permis ; arme par arme, l'état égal aux désavantages de la photographie, l'arme en main ; le lien vers une anomalie ; des identifiants uniques, chaque `aria-describedby` résolu ; la feuille : les tirets, les hachures, la plaque, les couleurs des états, quatre colonnes) ; l'étape 8 (`tests/creation_capacites.test.js` : l'en-tête, sa jauge, l'aide, « Survolez » sous la souris seulement ; une vignette par capacité, son origine, sa ligne de niveau, son effet, les quatre raisons mot pour mot, « amélioré » ; l'infobulle au survol et au focus de « + », désignée après la raison, fermée par la vignette quittée, le focus perdu ou Échap ; « Niveau suivant ▸ », une divulgation même quand « + » est inactif, nommée « Niveau suivant », sans sa flèche, absente au niveau maximal et sans évolution ; le volet du téléphone, `dialog` titré, le focus à l'aller et au retour, « Fermer », Échap, « Passer au niveau 2 » ; le volet fermé quand le focus part vers un élément hors de lui, le focus laissé où il est allé, ouvert quand il reste dedans ou ne va nulle part ; la comparaison de Fournaise, du niveau 1 au 2 ; la feuille : une colonne puis trois, l'infobulle placée par la feuille, `--difference` en graisse forte, `hidden` qui l'emporte, aucune écriture de style). La mise en page se mesure dans un vrai navigateur (§ 15.4) |
-| Combat | le simulateur de combat (lot 4, § 17). **Le moteur, sans page, règle par règle** (§ 17.3 à § 17.6) : la forme d'un événement, d'une photographie et d'un contenu, chaque borne vue des deux côtés (dont cent tirages par dé, six cents façons par photographie et vingt de déplacement, 200 000 signes et 64 étages pour la source d'un adversaire, le compteur des identifiants), une grille de localisation à trou refusée, un contenu d'une autre version des règles reconnu comme tel et non dit abîmé ; les cases, la distance, les cases à portée, la pose d'office ; les noms courts, les jetons, les initiales, leurs collisions, un nom épuisé, un nom sans lettre, un nom qui finit par un chiffre et ne prend ni les initiales ni le jeton d'un exemplaire ; la chaîne et ses bornes, k désavantages, k relances, relancer et garder, le dé explosif (son seuil, l'enchaînement, sous désavantage, après une relance, le modificateur compté une fois, « exploser » seule suite), chaque transition refusée hors de son attente ; les plafonds de la préparation et leurs raisons, égaux à ceux de la rencontre, un personnage une seule fois, « Retirer » qui renumérote, la source de dés sans biais ; les sept modificateurs et les dix sources d'avantage et de désavantage, un par un et dans leur ordre, l'inversion dans les deux sens, un bonus au niveau 2 qui donne d10+2, le jet prêté sans désavantage de maîtrise, ce qui ne s'applique pas à un adversaire, chaque passif câblé actif et inactif avec sa raison, au niveau 0 compris ; les deux grilles, plusieurs dés de localisation, la face de contre-attaque que le décalage ne crée ni n'efface, les bornes du décalage, les dégâts zone par zone, dégrossir (chez un personnage, chez un adversaire, jamais sans dégâts ni en dégâts directs, pas sur un coup annulé), les dégâts directs, l'esquive et son imputation, deux dés sur la même zone, la blessure et son compte, la mort, ce qui dépasse et se perd ; quel événement est accepté à quel moment d'un geste, chaque code de refus, un refus qui rend l'état reçu, l'objet même, une capacité sans dégâts qui touche et se localise, la face de contre-attaque qui clôt le geste et arrête les dés, l'événement de trop au-delà de la borne du combat ; les tours, l'alternance, passer, la fin automatique, « Fin de tour », les actions retrouvées et celles qui manquent après une esquive, deux fins d'affilée au plus, un camp qui commence sans pouvoir agir, la fin du combat sans « Fin du tour » ; le paiement au premier dé et à la confirmation, « Revenir » qui ne dépense rien, une entrée par façon jouable (une ligne par puissance, pour un personnage comme pour un adversaire), la plus petite puissance payable qui atteint une case d'arrivée, X, le lien sur un personnage à deux jauges, l'adversaire qui ne paie pas le lien, chaque raison d'un bouton inactif, dont un déplacement qui n'offre aucune case, la portée et les cibles, le jet prêté. **Le journal** (§ 17.9) : chaque gabarit, mot pour mot, sur des gestes écrits à la main, ceux que la mission ne donne pas compris ; une valeur de dé passée sous zéro, écrite avec le moins du journal, sans aucun trait d'union ; ce que dit la région d'annonce après un dé, une esquive, une face décalée, et le bilan, en une phrase ; l'en-tête, le nom du fichier, les deux fins de ligne, aucune espace insécable ; les trente-six lignes du combat de référence refaites à la main. **Les vues** : chacune, ses titres, ses étapes, ses boutons et leurs raisons, ses saisies et leurs bornes, les annonces ; la cible choisie, gardée seule et inactive pendant le jet ; le dé écrit nu dans le contexte, et le bilan d'une relance ; la seule phrase de la mort, par son segment ; et la concordance : à chaque pas d'un combat joué, tout événement que porte un élément actif d'une vue est accepté par le moteur, tout événement que porte un élément inactif est refusé, et l'événement réellement joué ensuite est de ceux que les vues portaient. **Les rôles câblés** (§ 17.6) : chaque rôle de la démonstration reconnu par son nom, aucun reconnu en mode réel par un nom de démonstration, la ligne des absents, des empreintes de 64 signes hexadécimaux dont aucune n'est celle d'un nom de démonstration, et leur condensat commun, calculé hors dépôt d'après le tableau de la mission ; la reconnaissance par empreinte du mode réel, vue sur un tableau d'essai aux noms fictifs condensés à l'exécution, qui ne se mémorise pas. **Les photographies** (§ 17.2) : Aubépine et les cinq adversaires de la démonstration, champ par champ ; qui ne s'ajoute pas ; le sac ; l'ordre des groupes ; sur des banques fabriquées en mémoire, plusieurs dés de localisation, des dégâts propres, un coût négatif, un coût illisible, une capacité à venir, un souffle absent, deux armes de même nom, un adversaire à passifs câblés, chacun à son rôle et au rang que sa ligne écrit, une maîtrise que seule une arme rangée au sac donnerait, et qui ne lève rien ; toute photographie rendue est gelée, passe par JSON à l'identique, et passe la validation qui la relira ; un nom à retour de ligne devient une seule ligne, une description au-delà de sa borne est un refus d'ajout ; un demi-codet isolé devient une espace, dans un nom comme dans une description, un signe astral entier reste, et un nom fait seulement de demi-codets est un refus d'ajout ; les personnages disponibles, lus sans rien écrire, face au vrai rapprochement de l'écran Personnages. **L'enregistrement** (§ 17.8) : l'aller-retour, le mode à part, la révision entre deux onglets, le mot de passe changé, la donnée abîmée, l'absence d'IndexedDB, « Oublier » pendant une lecture lente, rien en clair ni dans la base ni dans `localStorage` ; la file à une place, jamais deux écritures à la fois, la clé relue à chaque écriture ; une enveloppe d'un format plus récent, que rien n'écrase ; une donnée abîmée jusque dans sa révision, que « Nouveau combat » remplace ; une enveloppe de plusieurs mégaoctets, ou piégée, qui se dit illisible sans rien faire lever, une date d'enveloppe qui n'a pas la forme de `toISOString` (dix millions de signes que `Date.parse` lirait, des mots, sans ses millièmes, une forme juste que `Date.parse` ne lit pas) qui la dit abîmée, la borne du chiffré à l'octet près, une écriture qui refuse ce qui ne se relirait pas, la révision bornée et son retour à 1, rien de lourd dans le tour de la demande ; chaque propriété de l'IndexedDB simulée. **La séance** : l'ouverture cas par cas (contenu refusé, révision discordante, rejeu refusé, autre version des règles), un rechargement en plein geste qui retrouve le moment sans attendre un dé déjà lancé, un combat dont une description tient sur deux lignes gardé puis repris, « Nouveau combat », le blocage, et, sur les deux magasins, une enveloppe longue, une révision démesurée, des identifiants épuisés. **Le rejeu**, sur le combat de référence : chaque préfixe rejoué égale l'état tenu un événement à la fois, journal compris ; l'état passe par JSON à l'identique ; tout ce que rend le moteur est gelé ; ni heure ni hasard (l'horloge et les générateurs remplacés par des fonctions qui lèvent) ; ni banque (les sources des photographies ôtées) ; le graphe des imports du noyau, clos et sans cycle, et son texte sans rien qui dépende de l'appareil ; des événements au hasard, à graine écrite, bien et mal formés, qui ne font jamais lever le moteur ; un dé jamais relancé : en plein geste, l'offre est la même après rejeu ; une ligne de plus au journal ne fait regarder aucune de celles qui la précèdent, `appliquer` ne recopie la liste qu'une fois par événement qui écrit, et le rejeu de N événements la recopie un nombre de fois qui ne croît pas avec N (100 et 1 000 passes, 50 et 500 paires « geste, annuler » : au plus une, armé dans le contrôle même par `appliquer` pas à pas) ; le rejeu rend ce qu'`appliquer` fait pas à pas, plages des maillons comprises (le combat de référence, le même suivi d'autant d'« annuler » qu'il a de maillons, 2 000 passes, 1 000 paires), son journal et chaque ligne gelés, chaque autre champ gelé en profondeur ; et le combat le plus long, 15 000 événements, se rejoue en entier, d'une traite comme par tranches de 1 000. **Le combat de référence fictif** (§ 17.10) : les cases d'office des ajouts, l'état final, lien compris, et les trente-six lignes du journal, mot pour mot, l'écart dit au signe près ; le suivi des ressources après chaque geste et le compte des événements, transcrits du calcul à la main ; le départ que dit le banc, chaque zone avec ses faces et son armure. **L'écran**, dans un document simulé (§ 17.7) : chacune de ses six parties sur des vues écrites à la main (ce qu'elle montre, la commande que porte chaque bouton et son origine, un bouton inactif qui ne fait rien, les nœuds gardés d'un rendu à l'autre quand la vue n'a pas changé, refaits quand elle a changé ; et, depuis la relecture de fin de groupe : l'ordre des blocs du jet, chaque rangée de choix en groupe que son intitulé nomme, une saisie refusée qui ne part pas et dit pourquoi, un réglage qui garde le focus, le libellé d'une face décalée, un nom accessible sans signe de sens, la table des zones nommée et ses en-têtes de ligne, « Case » et « Retirer » hors du volet, la carte qui n'offre rien quand on ne joue pas) ; l'écran entier : la préparation, la rencontre placée, un tour, la mort, le journal copié (accepté, puis refusé par le navigateur) et téléchargé (nom et contenu), l'annonce après chaque dé et une seule région qui change de texte, dans la page dès l'ouverture, le focus, un nom hostile qui reste du texte, « Nouveau combat » et son menu refermé, l'oubli, un rechargement, une cible « choisie sur la carte » ou « choisie ici », un état de garde qui prévient dit une fois, la dernière ligne du journal visible en revenant sur l'écran, les morts en dernier dans la liste d'une case, « Fiche complète » calculée du personnage photographié, la clé de table relue à chaque écriture et changée pendant la visite ; sa feuille lue comme un texte : des jetons seulement, trois `@media`, à 56rem, à 80rem, puis sous une souris, chaque règle partant d'une classe « combat », hors la seule racine qui porte la marge de défilement du volet, aucune classe hors de `combat-`, des classes d'état du contrat d'écriture et des deux classes communes du site (§ 17.7), aucun nom en « carte », les quinze couleurs en clair et en sombre, les quinze longueurs du groupe 2 et `--fleche-bulle` égale à la flèche du placement, le nom court d'un jeton mesuré sur sa case et son plancher, un bouton du site inactif qui n'a pas l'aspect d'un bouton actif, une saisie refusée qui se voit, le dé relancé qui garde le rouge de son échec, sa valeur barrée par un trait de fond et non par `text-decoration`, la seule phrase de la mort au journal, la préparation, la barre, les réglages à la main et les fiches rangés comme le dit le § 17.7. Avec eux, dans les domaines voisins : les trois fonctions de maîtrise et les champs neufs de la résolution (Adversaires), les sources et les éléments d'une capacité (Personnage), la rencontre préparée lue par les noms, sans rien vider, le câblage d'`application.js` lu dans son texte (l'écran après la banque, un seul appel, l'oubli du combat puis celui de la rencontre à leur place, aucun enregistrement ouvert hors de l'écran). **Le groupe 2** (complément, § 9), chaque contrôle neuf vu armé puis désarmé (§ 17.11) : **l'annulation** (`tests/combat_annulation.test.js`) : chaque genre de geste défait, l'état d'avant revenu hors du journal, du pas, de l'annonce et de la pile ; la mort, la fin du combat, une et deux fins automatiques défaites avec leur geste, jamais seules ; geste après geste jusqu'au lancement, qui ne se défait pas, puis « Rien à annuler depuis le lancement. » ; les trois raisons, dans leur ordre ; la pile chaînée, gelée, qui partage les objets de son état ; « annuler » compté pour le plafond ; le rejeu des annulations, et le contenu qui passe par JSON sans la pile ; **l'offre allégée** (`tests/combat_offre_allegee.test.js`) : à chaque état du combat de référence, et sur des photographies piégées, le verdict du groupe 1, objet pour objet ; **le plafond** : 15 000 et sa phrase, l'alerte à 13 499 et à 13 500, le rejeu qui cède toutes les 1 000 événements, une recopie du journal par événement qui écrit, aucune d'un événement rejoué à l'autre, un rejeu dépassé par « Nouveau combat » qui n'installe rien ; **la version des règles 2** : un combat du groupe 1 se dit « commencé avec une autre version du simulateur » ; **les règles** : une façon par puissance jouable d'un adversaire, sa résolution à une puissance, identique au rang sur les adversaires de la démonstration et du classeur d'essai ; la défense au choix à égalité, son réglage refusé après le premier dé, son retour au défaut avec la cible ; la cause de maîtrise d'une façon ; **les initiales** du § 17.2 ; **le journal en segments** (`tests/combat_segments.test.js`) : la concaténation des segments égale au texte, gabarit par gabarit et sur les trente-six lignes du combat de référence ; deux noms piégés (« → », « ✓ », « contre », « Annulé : », « […] »…) ; les cadres et les dés insécables, ni U+00A0 ni U+202F ; la ligne en cours à chaque moment d'un geste et, à chaque événement du combat de référence, début exact de la ligne qui s'écrira ; les trois lignes « Annulé » et leur plage ; **les vues** : la bulle d'Aubépine et celle du Chef, les survols, les hachures de portée 0, 1 et 2, d'un déplacement, et l'absence de hachure, chaque phrase de cause, le compte, la main, l'inversion, l'en-tête du jet, la barre (trois raisons, quatre questions, la limite), le journal barré, le bandeau, le lien de la rencontre, et la concordance, commandes à deux événements et « annuler » comprises ; **l'écran** : la bulle (`tests/combat_ecran_bulle.test.js` : son ouverture par le jeton, « Qui joue ? », « Jouer » et « +k », son contenu, « Fermer », « Réduire » et l'onglet, le geste fini, Échap en deux temps, Maj+Tab, le clic au-dehors, sa place aux seuls moments dits, l'infobulle et ses 300 ms de grâce, ses hachures, l'aperçu au doigt) ; le contenu d'une action et la zone sous la carte, le volet et le jet sous la carte sur un téléphone ; le journal et le bandeau (`tests/combat_ecran_journal.test.js` : chaque segment et sa classe, rien d'autre de coloré, les cadres, les lignes barrées, la coupe à 2, 3 et 6 phrases par une mesure donnée, « Journal ↓ » et le clic à la souris, jamais au doigt) ; le plateau (la hachure, la légende, la raison d'un jeton inactif) ; la préparation (le personnage de démonstration, liste vide ou non, absent en mode réel ; le lien vers l'écran Rencontre) ; l'écran assemblé (le combat de référence joué par la bulle, mot pour mot ; l'annulation de bout en bout ; 13 500 dit une fois par combat ; le personnage de démonstration ajouté sans rien changer au combat ; la rencontre composée après l'ouverture du combat, une banque republiée, une composition déjà gardée : le bouton actif) ; **aucun défilement** (`tests/combat_ecran_defilement.test.js`) : dans les modules de l'écran et `echelle.js`, lus dans leur texte, tout `focus` porte `preventScroll`, un seul `scrollIntoView`, celui de `montrerLeJournal()`, ni `scrollTo` ni `scrollBy`, deux écritures de `scrollTop` : celle de la liste du journal et, dans la bulle, celle de son propre défilement, dans `montrerDansLaBulle` seule ; le contrôle voit chaque faute sur dix-huit sources fautives, dont un second `scrollTop` de la bulle hors de cette fonction et une `montrerDansLaBulle` qui ferait défiler la page ; **la feuille** : la bulle et le volet, les lignes de la bulle (`data-ligne`) à 36 px sous une souris, pour elles seules, la hachure avant `.active` et `.possible`, le bandeau, les segments et le cadre, ni `transform` ni `filter` sur `.combat` et `.combat-cadre`, la liste close des classes neuves et l'état `portee`. **Depuis la relecture de fin du groupe 2** (§ 14), chaque contrôle neuf vu armé puis désarmé : **l'écran** : « Annuler le dernier geste », montré inactif pendant un geste non payé, ne demande rien, même quand le clic au-dehors, qui ferme la bulle, le rend actif, et le focus reste sur lui ; ouverte par un appui du doigt sur le jeton, la bulle ne laisse le focus de sa première ligne ouvrir ni infobulle ni hachure, sur un téléphone comme au-delà de 56rem, et l'ouvre au clavier (un `focus()` fidèle du document simulé, qui déclenche `blur` et `focus`) ; ce qui défile dans la bulle repart du haut à chaque ouverture et quand l'onglet la rouvre, pas à un dé, et le focus posé comme l'aperçu qui s'ouvre y sont amenés dans la partie vue ; Échap ferme l'infobulle d'une ligne survolée le focus hors de la bulle, sans le bouger, et les seules hachures de « Jet d'attaque » au premier Échap ; dans la liste d'une case, Maj+Tab depuis son premier jeton mène au « +k » qui l'a ouverte, d'où Échap la ferme, et sans protagoniste ni case l'appui n'est pas pris ; l'aperçu ouvert au doigt porte `aria-expanded` et `aria-controls` sur sa ligne, ôtés à sa fermeture, rien sur un passif ; pendant la reprise, une seule région polie ; rouverte au rechargement en plein jet, ou à 13 500 événements, la bulle se place après le bandeau et la zone d'avis du même rendu, sa flèche au milieu de la case, entière dans la fenêtre, et un dé ne la replace pas ; les vues écrites à la main des contrôles de l'écran (la liste, le jet payé, l'attaque du Chef) ont, sur deux niveaux, les clés de `vuePanneau` au même moment du combat de référence ; **le bandeau** : quand même le minimum ne tient pas, la première phrase garde le nom de qui agit, entier, suivi de « … » (l'attaque, la défense, la passe, le jet de caractéristique, la ligne en cours), et une ligne sans lui garde la règle première ; **la feuille** : la flèche de la bulle (aucune règle ne repose une couleur de bord après la première règle de côté), une plaque du fond sous les jetons et le « +k » d'une case hachurée, hors de qui joue, où `--texte` tient 4,5:1 en clair et en sombre, `data-ligne` porté par les seules lignes (lu dans `combat_action.js`), « Passer son tour », les rangées du jet et les passifs à 44 px, les lignes et « Passer son tour » en rangées plates, l'inactive en trait discontinu, le passif souligné en pointillé sous son nom et sans bord, la marge de défilement du volet tant qu'il est montré et aucune à 56rem, ni `content-visibility` ni `contain-intrinsic-size` nulle part dans la feuille ; **le noyau** : l'origine d'une capacité à mains nues, le titre de son groupe ; « Jouer » d'une fiche qui suit le choix des jetons ; une raison sans demi-codet isolé, un signe astral entier comptant deux unités sur les 80 ; la raison proposée d'un nom coupé au milieu d'un signe astral, de 80 unités au plus, acceptée par le moteur partout où elle est proposée ; une photographie qui porte un demi-codet isolé, refusée à l'ajout comme à la relecture. La mise en page ne se contrôle pas ici : elle se mesure dans un vrai navigateur (§ 17.11 : les mesures du 12/10/2026 et du 25/10/2026, leurs réserves, et ce qui n'est pas fait) |
+| Personnage | chaque règle du § 15.2 : la table des dés, bornes comprises ; les paires d'attaque et de défense ; les types mêlés et le cas sans armure ; l'ordre des zones, la grille et le maximum par zone, et l'interdiction du livret ; la qualité (X, 1, 2, 3, 1,5) et l'arrondi une fois l'opération faite, dont un cas où la virgule flottante se tromperait ; les expressions et leurs refus ; l'expression de mains nues et son dé vide ; le coût à la puissance ; les coûts 1, 3 et 6, le plafond de 10, le reliquat, les capacités reçues au-delà de 10 ; la capacité reçue deux fois ; le niveau 0 et les capacités à venir hors décompte ; les groupes ( ) et [ ], un choix disparu ; le style de combat ; le tirage (chaque constellation atteignable, rejet des valeurs biaisées) ; les points de lien ; la banque sans types ; les choix modifiés ou disparus ; ce qui manque à chaque étape, un bloc d'un autre type. Le format : aller-retour du fichier, champ inconnu ou manquant, `__proto__`, chaque champ et ses bornes, 64 Ko, JSON illisible, mode inversé, nom de fichier sûr ; le lien : aller-retour dans le fragment, lien abîmé, forgé, bombe de décompression, UTF-8 invalide, mode inversé. L'étagère : modes séparés, ordre, illisibles comptés, un personnage du format 1 converti, les notes ; une base bloquée par un autre onglet : l'étagère en mémoire et la raison, sans attendre. Le format 2 (lot 2 bis) : les places d'un objet, une seule arme tenue, les tirages ; le format 1 converti (arme principale, bouclier, armures portées, tirage) ou refusé s'il est abîmé ; un personnage neuf à 2 partout. Le format 3 et le niveau 0 du primordial (lot 4.3, `tests/primordial_niveau_0.test.js`) : `FORMAT` à 3, un personnage neuf au format 3, `migrer` au format 2 ; `verifier` aux formats 1, 2, 3 et 4 (une montée de 2 à 3 au format 2, de 1 à 3 au format 3 ; le 4 fait recharger la page) ; un format 2 calculé converti en mémoire, qui garde ses capacités, leurs niveaux, ses points dépensés et son reliquat, seuls ses points reçus baissant ; `versFormat3` pure, tout autre format rendu tel quel ; un format 1 par `migrer`, puis par la conversion ; le fichier, le lien, le dépôt en ligne et la qualité des objets qui gardent le format lu ; Fournaise offerte au niveau 0, absente de `capacites`, de la fiche, de la vue lecture et de la photographie du combat, puis acquise au niveau 1 (1 point), au niveau 2 (3 points), et revenue à 0, les points et le reliquat ; une capacité qui vient aussi de l'espèce ou d'un objet, reçue ; Cendre (puissance 0) au niveau 0 ; une capacité à venir, ni offerte ni acquise ; une capacité à seule variante 1, offerte, puis acquise, jamais au niveau 2 ; une offerte qui compte comme présente, et « Aucune capacité acquise. » dans la vue lecture. Les barres d'un paramètre (`tests/parametre_barres.test.js`) : hors de `RANGS`, une suite de valeurs, chacune une expression, sans la qualité ; une barre hors du premier niveau, qui ne coupe rien ; une valeur sans barre, et les rangs des dégâts et de l'armure, inchangés ; « Brûlant 5/10/15 » sur la Louche d'acier, au calcul, dans la description et à l'étape 7 ; la chaleur du Rouleau à pâtisserie, trois valeurs à la Force du personnage. Les places dans le calcul : pièces du pack portées, bouclier équipé (un seul), rangés sans effet ; le parcours signale une place fautive. Les adresses des écrans du personnage. Le recto et le verso de la spécification 1.7 dans un document simulé : l'ordre et la présence des rubriques, les notes ôtées ; l'en-tête (titre, XP vide) ; les lignes ARME, ARMURE et BOUCLIER (portée, mains nues, brouillon, aucune armure, types mêlés, pièce sans type) ; le style par la colonne « origine », au calcul, au créateur et au combat ; le déplacement par son rôle, par nom et par empreinte, et l'avis quand il manque ; une capacité définie (cases, coût, éléments notables, description de la source, à venir) et la syntaxe des réussites, sur la fiche et dans la vue lecture ; la silhouette (le dessin par son empreinte, les six carrés) ; la ceinture et ses regroupements, le sac ; le domaine et les cases de lien ; le contexte vide, la constellation ; la mesure (les définitions resserrées, les vignettes retirées, ce qui déborde nommé, rien qui reste d'une mesure à l'autre, aucun style écrit) ; un nom en HTML qui reste du texte ; aucune classe de la fiche prise par une autre feuille ; `svg()` et son élément `text` ; l'impression (deux pages A4 sans marge, couleurs, barre non imprimée) ; les jetons noir et blanc ; les polices hébergées, vingt-six fichiers et vingt-deux licences : les trois du papier (Marcellus, Alegreya Sans, EB Garamond), appelées par `fiche.css` et `adversaire.css`, et les dix-neuf des thèmes, par `css/themes.css` seule ; aucune autre feuille ne déclare de police ; le personnage de démonstration, fabriqué par son outil et complet, qui suit ses dix-neuf capacités ; Aubépine et les ajouts du lot 4 (§ 15.7) : les deux capacités nouvelles du bloc de base, leur coût, leur description, Passif et Intervention sur les siennes, les mêmes points. Les écrans : liste, parcours, réception, fiche (vues, impression, banque sans types). Le parcours du lot 2 bis : les descriptions, dépliées sur grand écran et repliées sur téléphone ; les boutons + et − des caractéristiques (de 2 à 6, « + » arrêté à 36, le focus qui passe au voisin) ; le tirage refait et compté, la saisie ; l'arme tenue remplacée, les packs (un seul à la fois, la pièce portée seule renvoyée au sac), un pack non proposé (A10) avec sa raison, tous les objets au sac, qualité 2, la pièce refusée sur une zone couverte, un seul bouclier, l'arme prise en main ; l'étape 8 : une vignette par capacité hors « à venir », + et − dans les bornes, la raison d'un « + » inactif, le focus gardé sur le bouton actionné ; les descriptions gardent leur état quand l'étape se redessine ; les vignettes des étapes 3 à 6 (lot 4, groupe 2) : le résumé d'un bloc, mot pour mot, sur le classeur d'essai et un bloc fabriqué, des boutons radio natifs sous l'habit de vignette, des cases à cocher pour un groupe facultatif, la coche cachée aux lecteurs d'écran, la description et les choix du bloc choisi dessous, ouverts sur téléphone aussi, comme l'effet des vignettes de l'étape 8 (lot 5), les choix d'un bloc quitté perdus, le focus gardé après le rendu, la constellation choisie en vignette « saisie à la main » avec le compte des tirages, la vignette déjà choisie qui ne change rien, des identifiants uniques, la feuille (44 px, la grille dans et hors du `@media`, le résumé sur deux lignes) ; le personnage de démonstration lu par une fonction partagée avec le combat (`tests/personnage_demonstration.test.js` : sans cache, un 404, une levée, un fichier illisible, un bon fichier, la phrase du personnage gardé, la question du doublon posée sans défiler) ; l'objet décrit avant d'être ajouté, un refus dit près de l'objet et le focus sur lui ; « Modifier » : la copie de travail, reprise, « Enregistrer » à la place de l'original, « Enregistrer sous un autre nom » (un autre nom exigé) ; l'enregistrement dépose (« creer », « remplacer »). La liste en ligne : les rubriques, l'attente, « Réessayer », « Supprimer » pour tous, « Modifier » d'un personnage en ligne, la phrase de la démonstration ; le mot de passe changé pendant la visite, une suppression dont le personnage ne se lit plus, une copie plus ancienne (« Envoyer quand même », « Retirer de l'appareil »), une base bloquée. La fiche : la qualité des objets (saisie fautive refusée, redépôt, panneau resté ouvert, focus sur la confirmation, deux objets de même nom distingués), « Modifier », un personnage ouvert depuis le site, ou dont la lecture échoue (« Réessayer »), « tirée N fois ». **Le créateur du lot 5** (§ 15.3) : la comparaison mot à mot (`tests/difference.test.js` : Fournaise, du niveau 1 au 2 et du 2 au 3, où « case » et « cases » sont deux mots ; un mot ajouté ou retiré, au milieu comme à la fin ; un mot répété ; la plus longue sous-suite commune ; la casse et l'accent ; les mots au sens Unicode, l'apostrophe qui sépare ; les signes et les espaces gardés, jamais marqués ; des textes vides ou égaux ; chaque fois, les morceaux recollés qui redonnent le texte ; la borne, juste sous elle et juste au-dessus) ; la maîtrise (`tests/maitrise.test.js` : Aubépine et sa ligne ; `donneAuCombat`, source par source ; seule compte la Maîtrise qu'une source donne au combat, comme dans la photographie ; le poids d'après les éléments ; la position de chaque capacité, comme au combat ; les quatre états, une Maîtrise plus haute ou d'un autre poids, les positions seules ; un objet à deux poids ; la maîtrise d'un pack, au niveau 1 au moins ; sans Maîtrise ; « d' » et « de ») ; l'étape 7 (`tests/creation_equipement.test.js` : la ligne des maîtrises, « aucune » ; « Mains nues » puis chaque arme, sans les armes naturelles, ni liste ni catalogue ; le poids en étiquettes, les paramètres à la qualité 2 ; « (désavantage) » et les cinq états en mots ; les packs, leurs pièces, leurs zones, leur armure et leur maîtrise ; le pack non proposé (A10), inactif, sans état ; « ✓ tenue », « ✓ porté », le choix toujours permis ; arme par arme, l'état égal aux désavantages de la photographie, l'arme en main ; le lien vers une anomalie ; des identifiants uniques, chaque `aria-describedby` résolu ; la feuille : les tirets, les hachures, la plaque, les couleurs des états, quatre colonnes) ; l'étape 8 (`tests/creation_capacites.test.js` : l'en-tête, sa jauge, l'aide, « Survolez » sous la souris seulement ; une vignette par capacité, son origine, sa ligne de niveau, son effet, les quatre raisons mot pour mot, « amélioré » ; l'infobulle au survol et au focus de « + », désignée après la raison, fermée par la vignette quittée, le focus perdu ou Échap ; « Niveau suivant ▸ », une divulgation même quand « + » est inactif, nommée « Niveau suivant », sans sa flèche, absente au niveau maximal et sans évolution ; le volet du téléphone, `dialog` titré, le focus à l'aller et au retour, « Fermer », Échap, « Passer au niveau 2 » ; le volet fermé quand le focus part vers un élément hors de lui, le focus laissé où il est allé, ouvert quand il reste dedans ou ne va nulle part ; la comparaison de Fournaise, du niveau 1 au 2 ; la feuille : une colonne puis trois, l'infobulle placée par la feuille, `--difference` en graisse forte, `hidden` qui l'emporte, aucune écriture de style). **Les retouches du lot 4.3** (§ 15.3, `tests/creation_g3.test.js`) : à l'étape 7, chaque paire de paramètres dans un `div.parametre`, un `wbr` après chaque « / », et la feuille en rangées souples ; une arme non maîtrisée qui précède une arme maîtrisée dans la banque rendue après elle, aux mêmes identifiants ; l'ordre qui suit l'état à chaque rendu, le focus revenu à la même vignette ; les packs, maîtrisés, autres, non proposés ; « Tous les objets » dans l'ordre des vignettes ; à l'étape 6, la ligne du niveau 0, mot pour mot, à l'étape 6 seulement ; à l'étape 8, Fournaise offerte (niveau 0, non acquise, « + », la raison mot pour mot, ni coût, ni effet, ni « amélioré »), après les capacités de son groupe, ou à la place du primordial quand aucune n'est acquise, une offerte qui est un style de combat après le groupe « style », « il manque N point(s) » accordé, « Acquérir au niveau 1 » sans rouge ni barré, « + » jusqu'au niveau 2 puis « − » jusqu'au niveau 0 et la montée effacée, le focus qui suit la vignette ; une capacité à seule variante 1 ; une capacité de l'espèce et du primordial, reçue ; la montée qui ne monte plus rien, effacée ; la classe `non-acquise`, mesurée à 4,5:1 au moins dans les 38 thèmes ; un brouillon au format 2 ouvert dans le créateur et la copie de travail de « Modifier », passés au format 3, l'original restant au format 2 jusqu'à l'enregistrement ; un personnage neuf au format 3. La mise en page se mesure dans un vrai navigateur (§ 15.4) |
+| Combat | le simulateur de combat (lot 4, § 17). **Le moteur, sans page, règle par règle** (§ 17.3 à § 17.6) : la forme d'un événement, d'une photographie et d'un contenu, chaque borne vue des deux côtés (dont cent tirages par dé, six cents façons par photographie et vingt de déplacement, 200 000 signes et 64 étages pour la source d'un adversaire, le compteur des identifiants), une grille de localisation à trou refusée, un contenu d'une autre version des règles reconnu comme tel et non dit abîmé ; les cases, la distance, les cases à portée, la pose d'office ; les noms courts, les jetons, les initiales, leurs collisions, un nom épuisé, un nom sans lettre, un nom qui finit par un chiffre et ne prend ni les initiales ni le jeton d'un exemplaire ; la chaîne et ses bornes, k désavantages, k relances, relancer et garder, le dé explosif (son seuil, l'enchaînement, sous désavantage, après une relance, le modificateur compté une fois, « exploser » seule suite), chaque transition refusée hors de son attente ; les plafonds de la préparation et leurs raisons, égaux à ceux de la rencontre, un personnage une seule fois, « Retirer » qui renumérote, la source de dés sans biais ; les sept modificateurs et les dix sources d'avantage et de désavantage, un par un et dans leur ordre, l'inversion dans les deux sens, un bonus au niveau 2 qui donne d10+2, le jet prêté sans désavantage de maîtrise, ce qui ne s'applique pas à un adversaire, chaque passif câblé actif et inactif avec sa raison, au niveau 0 compris ; les deux grilles, plusieurs dés de localisation, la face de contre-attaque que le décalage ne crée ni n'efface, les bornes du décalage, les dégâts zone par zone, dégrossir (chez un personnage, chez un adversaire, jamais sans dégâts ni en dégâts directs, pas sur un coup annulé), les dégâts directs, l'esquive et son imputation, deux dés sur la même zone, la blessure et son compte, la mort, ce qui dépasse et se perd ; quel événement est accepté à quel moment d'un geste, chaque code de refus, un refus qui rend l'état reçu, l'objet même, une capacité sans dégâts qui touche et se localise, la face de contre-attaque qui clôt le geste et arrête les dés, l'événement de trop au-delà de la borne du combat ; les tours, l'alternance, passer, la fin automatique, « Fin de tour », les actions retrouvées et celles qui manquent après une esquive, deux fins d'affilée au plus, un camp qui commence sans pouvoir agir, la fin du combat sans « Fin du tour » ; le paiement au premier dé et à la confirmation, « Revenir » qui ne dépense rien, une entrée par façon jouable (une ligne par puissance, pour un personnage comme pour un adversaire), la plus petite puissance payable qui atteint une case d'arrivée, X, le lien sur un personnage à deux jauges, l'adversaire qui ne paie pas le lien, chaque raison d'un bouton inactif, dont un déplacement qui n'offre aucune case, la portée et les cibles, le jet prêté. **Le journal** (§ 17.9) : chaque gabarit, mot pour mot, sur des gestes écrits à la main, ceux que la mission ne donne pas compris ; une valeur de dé passée sous zéro, écrite avec le moins du journal, sans aucun trait d'union ; ce que dit la région d'annonce après un dé, une esquive, une face décalée, et le bilan, en une phrase ; l'en-tête, le nom du fichier, les deux fins de ligne, aucune espace insécable ; les trente-six lignes du combat de référence refaites à la main. **Les vues** : chacune, ses titres, ses étapes, ses boutons et leurs raisons, ses saisies et leurs bornes, les annonces ; la cible choisie, gardée seule et inactive pendant le jet ; le dé écrit nu dans le contexte, et le bilan d'une relance ; la seule phrase de la mort, par son segment ; et la concordance : à chaque pas d'un combat joué, tout événement que porte un élément actif d'une vue est accepté par le moteur, tout événement que porte un élément inactif est refusé, et l'événement réellement joué ensuite est de ceux que les vues portaient. **Les rôles câblés** (§ 17.6) : chaque rôle de la démonstration reconnu par son nom, aucun reconnu en mode réel par un nom de démonstration, la ligne des absents, des empreintes de 64 signes hexadécimaux dont aucune n'est celle d'un nom de démonstration, et leur condensat commun, calculé hors dépôt d'après le tableau de la mission ; la reconnaissance par empreinte du mode réel, vue sur un tableau d'essai aux noms fictifs condensés à l'exécution, qui ne se mémorise pas. **Les photographies** (§ 17.2) : Aubépine et les cinq adversaires de la démonstration, champ par champ ; qui ne s'ajoute pas ; le sac ; l'ordre des groupes ; sur des banques fabriquées en mémoire, plusieurs dés de localisation, des dégâts propres, un coût négatif, un coût illisible, une capacité à venir, un souffle absent, deux armes de même nom, un adversaire à passifs câblés, chacun à son rôle et au rang que sa ligne écrit, une maîtrise que seule une arme rangée au sac donnerait, et qui ne lève rien ; toute photographie rendue est gelée, passe par JSON à l'identique, et passe la validation qui la relira ; un nom à retour de ligne devient une seule ligne, une description au-delà de sa borne est un refus d'ajout ; un demi-codet isolé devient une espace, dans un nom comme dans une description, un signe astral entier reste, et un nom fait seulement de demi-codets est un refus d'ajout ; les personnages disponibles, lus sans rien écrire, face au vrai rapprochement de l'écran Personnages. **L'enregistrement** (§ 17.8) : l'aller-retour, le mode à part, la révision entre deux onglets, le mot de passe changé, la donnée abîmée, l'absence d'IndexedDB, « Oublier » pendant une lecture lente, rien en clair ni dans la base ni dans `localStorage` ; la file à une place, jamais deux écritures à la fois, la clé relue à chaque écriture ; une enveloppe d'un format plus récent, que rien n'écrase ; une donnée abîmée jusque dans sa révision, que « Nouveau combat » remplace ; une enveloppe de plusieurs mégaoctets, ou piégée, qui se dit illisible sans rien faire lever, une date d'enveloppe qui n'a pas la forme de `toISOString` (dix millions de signes que `Date.parse` lirait, des mots, sans ses millièmes, une forme juste que `Date.parse` ne lit pas) qui la dit abîmée, la borne du chiffré à l'octet près, une écriture qui refuse ce qui ne se relirait pas, la révision bornée et son retour à 1, rien de lourd dans le tour de la demande ; chaque propriété de l'IndexedDB simulée. **La séance** : l'ouverture cas par cas (contenu refusé, révision discordante, rejeu refusé, autre version des règles), un rechargement en plein geste qui retrouve le moment sans attendre un dé déjà lancé, un combat dont une description tient sur deux lignes gardé puis repris, « Nouveau combat », le blocage, et, sur les deux magasins, une enveloppe longue, une révision démesurée, des identifiants épuisés. **Le rejeu**, sur le combat de référence : chaque préfixe rejoué égale l'état tenu un événement à la fois, journal compris ; l'état passe par JSON à l'identique ; tout ce que rend le moteur est gelé ; ni heure ni hasard (l'horloge et les générateurs remplacés par des fonctions qui lèvent) ; ni banque (les sources des photographies ôtées) ; le graphe des imports du noyau, clos et sans cycle, et son texte sans rien qui dépende de l'appareil ; des événements au hasard, à graine écrite, bien et mal formés, qui ne font jamais lever le moteur ; un dé jamais relancé : en plein geste, l'offre est la même après rejeu ; une ligne de plus au journal ne fait regarder aucune de celles qui la précèdent, `appliquer` ne recopie la liste qu'une fois par événement qui écrit, et le rejeu de N événements la recopie un nombre de fois qui ne croît pas avec N (100 et 1 000 passes, 50 et 500 paires « geste, annuler » : au plus une, armé dans le contrôle même par `appliquer` pas à pas) ; le rejeu rend ce qu'`appliquer` fait pas à pas, plages des maillons comprises (le combat de référence, le même suivi d'autant d'« annuler » qu'il a de maillons, 2 000 passes, 1 000 paires), son journal et chaque ligne gelés, chaque autre champ gelé en profondeur ; et le combat le plus long, 15 000 événements, se rejoue en entier, d'une traite comme par tranches de 1 000. **Le combat de référence fictif** (§ 17.10) : les cases d'office des ajouts, l'état final, lien compris, et les trente-six lignes du journal, mot pour mot, l'écart dit au signe près ; le suivi des ressources après chaque geste et le compte des événements, transcrits du calcul à la main ; le départ que dit le banc, chaque zone avec ses faces et son armure. **L'écran**, dans un document simulé (§ 17.7) : chacune de ses six parties sur des vues écrites à la main (ce qu'elle montre, la commande que porte chaque bouton et son origine, un bouton inactif qui ne fait rien, les nœuds gardés d'un rendu à l'autre quand la vue n'a pas changé, refaits quand elle a changé ; et, depuis la relecture de fin de groupe : l'ordre des blocs du jet, chaque rangée de choix en groupe que son intitulé nomme, une saisie refusée qui ne part pas et dit pourquoi, un réglage qui garde le focus, le libellé d'une face décalée, un nom accessible sans signe de sens, la table des zones nommée et ses en-têtes de ligne, « Case » et « Retirer » hors du volet, la carte qui n'offre rien quand on ne joue pas) ; l'écran entier : la préparation, la rencontre placée, un tour, la mort, le journal copié (accepté, puis refusé par le navigateur) et téléchargé (nom et contenu), l'annonce après chaque dé et une seule région qui change de texte, dans la page dès l'ouverture, le focus, un nom hostile qui reste du texte, « Nouveau combat » et son menu refermé, l'oubli, un rechargement, une cible « choisie sur la carte » ou « choisie ici », un état de garde qui prévient dit une fois, la dernière ligne du journal visible en revenant sur l'écran, les morts en dernier dans la liste d'une case, « Fiche complète » calculée du personnage photographié, la clé de table relue à chaque écriture et changée pendant la visite ; sa feuille lue comme un texte : des jetons seulement, trois `@media`, à 56rem, à 80rem, puis sous une souris, chaque règle partant d'une classe « combat », hors la seule racine qui porte la marge de défilement du volet, aucune classe hors de `combat-`, des classes d'état du contrat d'écriture et des deux classes communes du site (§ 17.7), aucun nom en « carte », les quinze couleurs en clair et en sombre, les quinze longueurs du groupe 2 et `--fleche-bulle` égale à la flèche du placement, le nom court d'un jeton mesuré sur sa case et son plancher, un bouton du site inactif qui n'a pas l'aspect d'un bouton actif, une saisie refusée qui se voit, le dé relancé qui garde le rouge de son échec, sa valeur barrée par un trait de fond et non par `text-decoration`, la seule phrase de la mort au journal, la préparation, la barre, les réglages à la main et les fiches rangés comme le dit le § 17.7. Avec eux, dans les domaines voisins : les trois fonctions de maîtrise et les champs neufs de la résolution (Adversaires), les sources et les éléments d'une capacité (Personnage), la rencontre préparée lue par les noms, sans rien vider, le câblage d'`application.js` lu dans son texte (l'écran après la banque, un seul appel, l'oubli du combat puis celui de la rencontre à leur place, aucun enregistrement ouvert hors de l'écran). **Le groupe 2** (complément, § 9), chaque contrôle neuf vu armé puis désarmé (§ 17.11) : **l'annulation** (`tests/combat_annulation.test.js`) : chaque genre de geste défait, l'état d'avant revenu hors du journal, du pas, de l'annonce et de la pile ; la mort, la fin du combat, une et deux fins automatiques défaites avec leur geste, jamais seules ; geste après geste jusqu'au lancement, qui ne se défait pas, puis « Rien à annuler depuis le lancement. » ; les trois raisons, dans leur ordre ; la pile chaînée, gelée, qui partage les objets de son état ; « annuler » compté pour le plafond ; le rejeu des annulations, et le contenu qui passe par JSON sans la pile ; **l'offre allégée** (`tests/combat_offre_allegee.test.js`) : à chaque état du combat de référence, et sur des photographies piégées, le verdict du groupe 1, objet pour objet ; **le plafond** : 15 000 et sa phrase, l'alerte à 13 499 et à 13 500, le rejeu qui cède toutes les 1 000 événements, une recopie du journal par événement qui écrit, aucune d'un événement rejoué à l'autre, un rejeu dépassé par « Nouveau combat » qui n'installe rien ; **la version des règles 2** : un combat du groupe 1 se dit « commencé avec une autre version du simulateur » ; **les règles** : une façon par puissance jouable d'un adversaire, sa résolution à une puissance, identique au rang sur les adversaires de la démonstration et du classeur d'essai ; la défense au choix à égalité, son réglage refusé après le premier dé, son retour au défaut avec la cible ; la cause de maîtrise d'une façon ; **les initiales** du § 17.2 ; **le journal en segments** (`tests/combat_segments.test.js`) : la concaténation des segments égale au texte, gabarit par gabarit et sur les trente-six lignes du combat de référence ; deux noms piégés (« → », « ✓ », « contre », « Annulé : », « […] »…) ; les cadres et les dés insécables, ni U+00A0 ni U+202F ; la ligne en cours à chaque moment d'un geste et, à chaque événement du combat de référence, début exact de la ligne qui s'écrira ; les trois lignes « Annulé » et leur plage ; **les vues** : la bulle d'Aubépine et celle du Chef, les survols, les hachures de portée 0, 1 et 2, d'un déplacement, et l'absence de hachure, chaque phrase de cause, le compte, la main, l'inversion, l'en-tête du jet, la barre (trois raisons, quatre questions, la limite), le journal barré, le bandeau, le lien de la rencontre, et la concordance, commandes à deux événements et « annuler » comprises ; **l'écran** : la bulle (`tests/combat_ecran_bulle.test.js` : son ouverture par le jeton, « Qui joue ? », « Jouer » et « +k », son contenu, « Fermer », « Réduire » et l'onglet, le geste fini, Échap en deux temps, Maj+Tab, le clic au-dehors, sa place aux seuls moments dits, l'infobulle et ses 300 ms de grâce, ses hachures, l'aperçu au doigt) ; le contenu d'une action et la zone sous la carte, le volet et le jet sous la carte sur un téléphone ; le journal et le bandeau (`tests/combat_ecran_journal.test.js` : chaque segment et sa classe, rien d'autre de coloré, les cadres, les lignes barrées, la coupe à 2, 3 et 6 phrases par une mesure donnée, « Journal ↓ » et le clic à la souris, jamais au doigt) ; le plateau (la hachure, la légende, la raison d'un jeton inactif) ; la préparation (le personnage de démonstration, liste vide ou non, absent en mode réel ; le lien vers l'écran Rencontre) ; l'écran assemblé (le combat de référence joué par la bulle, mot pour mot ; l'annulation de bout en bout ; 13 500 dit une fois par combat ; le personnage de démonstration ajouté sans rien changer au combat ; la rencontre composée après l'ouverture du combat, une banque republiée, une composition déjà gardée : le bouton actif) ; **aucun défilement** (`tests/combat_ecran_defilement.test.js`) : dans les modules de l'écran et `echelle.js`, lus dans leur texte, tout `focus` porte `preventScroll`, un seul `scrollIntoView`, celui de `montrerLeJournal()`, ni `scrollTo` ni `scrollBy`, deux écritures de `scrollTop` : celle de la liste du journal et, dans la bulle, celle de son propre défilement, dans `montrerDansLaBulle` seule ; le contrôle voit chaque faute sur dix-huit sources fautives, dont un second `scrollTop` de la bulle hors de cette fonction et une `montrerDansLaBulle` qui ferait défiler la page ; **la feuille** : la bulle et le volet, les lignes de la bulle (`data-ligne`) à 36 px sous une souris, pour elles seules, la hachure avant `.active` et `.possible`, le bandeau, les segments et le cadre, ni `transform` ni `filter` sur `.combat` et `.combat-cadre`, la liste close des classes neuves et l'état `portee`. **Depuis la relecture de fin du groupe 2** (§ 14), chaque contrôle neuf vu armé puis désarmé : **l'écran** : « Annuler le dernier geste », montré inactif pendant un geste non payé, ne demande rien, même quand le clic au-dehors, qui ferme la bulle, le rend actif, et le focus reste sur lui ; ouverte par un appui du doigt sur le jeton, la bulle ne laisse le focus de sa première ligne ouvrir ni infobulle ni hachure, sur un téléphone comme au-delà de 56rem, et l'ouvre au clavier (un `focus()` fidèle du document simulé, qui déclenche `blur` et `focus`) ; ce qui défile dans la bulle repart du haut à chaque ouverture et quand l'onglet la rouvre, pas à un dé, et le focus posé comme l'aperçu qui s'ouvre y sont amenés dans la partie vue ; Échap ferme l'infobulle d'une ligne survolée le focus hors de la bulle, sans le bouger, et les seules hachures de « Jet d'attaque » au premier Échap ; dans la liste d'une case, Maj+Tab depuis son premier jeton mène au « +k » qui l'a ouverte, d'où Échap la ferme, et sans protagoniste ni case l'appui n'est pas pris ; l'aperçu ouvert au doigt porte `aria-expanded` et `aria-controls` sur sa ligne, ôtés à sa fermeture, rien sur un passif ; pendant la reprise, une seule région polie ; rouverte au rechargement en plein jet, ou à 13 500 événements, la bulle se place après le bandeau et la zone d'avis du même rendu, sa flèche au milieu de la case, entière dans la fenêtre, et un dé ne la replace pas ; les vues écrites à la main des contrôles de l'écran (la liste, le jet payé, l'attaque du Chef) ont, sur deux niveaux, les clés de `vuePanneau` au même moment du combat de référence ; **le bandeau** : quand même le minimum ne tient pas, la première phrase garde le nom de qui agit, entier, suivi de « … » (l'attaque, la défense, la passe, le jet de caractéristique, la ligne en cours), et une ligne sans lui garde la règle première ; **la feuille** : la flèche de la bulle (aucune règle ne repose une couleur de bord après la première règle de côté), une plaque du fond sous les jetons et le « +k » d'une case hachurée, hors de qui joue, où `--texte` tient 4,5:1 en clair et en sombre, `data-ligne` porté par les seules lignes (lu dans `combat_action.js`), « Passer son tour », les rangées du jet et les passifs à 44 px, les lignes et « Passer son tour » en rangées plates, l'inactive en trait discontinu, le passif souligné en pointillé sous son nom et sans bord, la marge de défilement du volet tant qu'il est montré et aucune à 56rem, ni `content-visibility` ni `contain-intrinsic-size` nulle part dans la feuille ; **le noyau** : l'origine d'une capacité à mains nues, le titre de son groupe ; « Jouer » d'une fiche qui suit le choix des jetons ; une raison sans demi-codet isolé, un signe astral entier comptant deux unités sur les 80 ; la raison proposée d'un nom coupé au milieu d'un signe astral, de 80 unités au plus, acceptée par le moteur partout où elle est proposée ; une photographie qui porte un demi-codet isolé, refusée à l'ajout comme à la relecture. **Le groupe 3** (mission du lot 4.3 ; contrat du lot 4.3), le noyau à sa première vague, chaque contrôle neuf vu armé puis désarmé par les casses de son agent (§ 17.11) : **la pile** (`tests/combat_g3_pile.test.js`) : l'étape « Interventions », ses options et l'esquive au seul jeté ; une intervention qui s'empile, puis rejoint le geste du dessous sans écrire de ligne ; « Intervenir… » hors d'une attaque, geste racine avec sa ligne et son maillon ; la contre-attaque possible, jouée (trois étages, que l'annulation défait), laissée, impossible pour chaque raison dans son ordre, jamais d'une contre-attaque, Centrée vers l'attaquant seul ; plusieurs cibles d'office ou réglées, un jet par cible, le coût payé une fois, une ligne par cible, une cible morte sautée ; **les règles** (`tests/combat_g3_regles.test.js`, `tests/combat_calcul_g3.test.js`) : le coup critique offert ou non, gardé, tenté, réussi ou raté, la lettre doublée ; le dé inversé, la relance de la palette, « +1 réussite » jamais au-delà de trois ; l'ordre des dégâts, « +N contre l'armure », le report et la grille de la victime, la zone choisie ; un jet qui ne clôt pas le geste, et le moment relu ; la préparation et le prix rendu d'un passif (choix 11), un passif une fois par jet (choix 15) ; l'esquive qui suit la victime ; attendre et la garde jouée ; une attaque en plus ; la blessure d'un personnage et d'un adversaire, sa condition, une étape par zone, la photographie bornée (choix 20) ; ±N chez un adversaire, sans plancher, et chez un personnage ; le retiré, qui n'est plus un vivant ; le rejeu d'un combat qui use de tout cela ; **les effets** (`tests/combat_g3_effets.test.js`) : le moment des dix-neuf genres de la palette, leur source, leur auteur, leur prix et leurs bornes ; ±N chez un adversaire pendant un geste, sa valeur d'avant et d'après ; les gestes du MJ, leurs valeurs sans maximum, l'équipement qui renumérote par le nom (choix 17) ; l'échéance ; les effets d'un mort ou d'un retiré ; **le journal** (`tests/combat_g3_journal.test.js`) : chaque gabarit neuf, dans la ligne du geste qu'il suit ou dans la sienne (l'intervention, attendre, la contre-attaque, le critique, la palette, la blessure, plusieurs cibles, les échéances, le MJ), « Annulé : » d'un geste du MJ ou d'un effet, rien d'un effet posé sur un geste ensuite retiré ; **les formes** (`tests/combat_forme_g3.test.js`) : la version 4 des règles, chaque événement neuf bien formé et rendu gelé, un champ qui manque ou en trop à chaque étage, chaque champ mal typé, chaque borne vue des deux côtés, la capacité figée, l'équipement du MJ, aucune levée sur une donnée piégée, aucune espace insécable. La mise en page ne se contrôle pas ici : elle se mesure dans un vrai navigateur (§ 17.11 : les mesures du 12/10/2026 et du 25/10/2026, leurs réserves, et ce qui n'est pas fait) |
 
 Les contrôles du dépôt portent sur les fichiers suivis et sur ceux que Git
 suivrait, c'est-à-dire non ignorés : une faute se voit avant d'être commitée.
@@ -2476,11 +2505,33 @@ dans le classeur et son `lisez_moi` pour ce qui tient à une cellule.
     l'endurance, le corps (§ 17.5). Section « Armure, endurance et
     corps ».
 56. **Le primordial** (règle de l'auteur du 26/10/2026, mission du lot
-    4.3, § 8.3) ; une capacité du primordial à puissance fixée à 0 se
-    reçoit au niveau 0. La section du livret qui dit le primordial.
-57. **Un paramètre écrit avec des « / »**, hors de `RANGS` : une suite de
-    valeurs (mission du lot 4.3, § 9, point 2). Le `lisez_moi` du
-    classeur.
+    4.3, § 8.3 ; § 15.2) : ses capacités sont au niveau 0, le personnage
+    ne les possède pas, mais peut y mettre 1 point pour la puissance 1, 2
+    de plus pour le niveau 2, 3 de plus pour le niveau 3, dans les 10
+    points de la création. **Le livret du 25/10/2026 dit encore le
+    contraire** (« Création » : le personnage choisit un primordial
+    « duquel il reçoit une ou des capacités ») : à récrire dans le Word,
+    section « Création ». Le site suit la règle, avec ces conventions, à
+    confirmer en l'écrivant : la règle vaut pour une capacité que le
+    personnage ne tient **que** de son primordial ; une capacité qui vient
+    aussi de l'espèce, de l'archétype, de la constellation, du bloc de base
+    ou d'un objet se reçoit comme avant ; une capacité du primordial à
+    puissance fixée à 0 se reçoit au niveau 0, sans coût (elle n'a pas de
+    niveau 1 à acheter) ; une capacité à la seule variante 1 s'acquiert au
+    niveau 1, et pas au-delà ; ses points sont dépensés, non reçus. Un
+    personnage d'avant (format 2) garde ses capacités, leurs niveaux et
+    ses points dépensés (§ 15.1).
+57. **Un paramètre écrit avec des « / »**, hors de `RANGS` (mission du lot
+    4.3, § 9, point 2 ; § 15.2) : une valeur que ses barres de premier
+    niveau, hors des accolades, crochets et parenthèses, coupent en
+    plusieurs morceaux est une suite de valeurs, chacune évaluée comme une
+    expression, et s'affiche jointe par « / » (« Brûlant 5/10/15 » sur la
+    Louche d'acier) ; seuls dégâts, défense et armure prennent la qualité.
+    **Une barre au premier niveau sépare toujours des valeurs** : une
+    division ne s'y écrit plus. À écrire dans le `lisez_moi` du classeur,
+    rubrique Syntaxe. Aucun paramètre du vrai classeur n'est dans ce cas
+    (vérifié le 26/10/2026 : seuls les dégâts et l'armure s'y écrivent
+    ainsi).
 58. **L'inversion**, et la relance de la palette, portent sur le dernier
     dé lancé de la chaîne, avant le dé suivant ; sous désavantage, sur le
     dé gardé ; jamais sur un d20 de localisation. Un dé inversé ne se
@@ -3744,11 +3795,12 @@ porte le personnage dans l'adresse elle-même, sans serveur. Et **en ligne**,
 chiffré, visible par tous les joueurs qui ont le mot de passe (§ 15.8). Le
 code QR est hors lot.
 
-**Le format** (`format.js`, format 2 depuis le lot 2 bis) :
+**Le format** (`format.js`, format 3 depuis le lot 4.3 ; format 2 depuis le
+lot 2 bis) :
 
 ```json
 {
-  "format": 2,
+  "format": 3,
   "id": "22 signes base64url, tirés au hasard",
   "mode": "demo",
   "etat": "enregistre",
@@ -3770,7 +3822,7 @@ code QR est hors lot.
     { "nom": "Couvercle de marmite", "choix": [], "qualite": "2", "place": "equipe" },
     { "nom": "Bouillon revigorant", "choix": [], "qualite": "2", "place": "sac" }
   ],
-  "niveaux": [ { "capacite": "Flambage", "niveau": 2 } ],
+  "niveaux": [ { "capacite": "Flambage", "niveau": 2 }, { "capacite": "Fournaise", "niveau": 1 } ],
   "empreintes": [ { "genre": "bloc", "nom": "Saucier", "empreinte": "0a1b2c3d4e5f60" } ]
 }
 ```
@@ -3783,16 +3835,42 @@ pièce d'armure portée seule, ou un bouclier tenu ; `sac`, rangé. `qualite`
 vaut « 2 » à la création (décision de l'auteur, lot 2 bis), puis le nombre
 que le MJ donne (« 1,5 »), ou `null` pour X. `tirages` compte les tirages
 de la constellation, qui se refont à volonté ; une constellation tirée l'a
-été une fois au moins. `niveaux` ne garde que les montées. `etape` est
-l'étape où reprendre un brouillon. Un personnage neuf a ses neuf
-caractéristiques à 2.
+été une fois au moins. `niveaux` ne garde que les montées : au format 3,
+de 1 à 3, le niveau 1 acquérant une capacité que le primordial offre au
+niveau 0 (Fournaise ci-dessus, § 15.2) ; au format 2, de 2 à 3. `etape`
+est l'étape où reprendre un brouillon. Un personnage neuf naît au format 3,
+ses neuf caractéristiques à 2.
+
+**Le format 3** (lot 4.3, mission § 8.3) garde tous les champs du format 2 ;
+seul le sens d'une montée change, et **trois règles de `format.js`, elles
+seules** : `verifier` accepte les formats 2 et 3 (un format plus grand se
+refuse, « rechargez la page », comme avant ; un format 1 passe d'abord
+par `migrer`, plus bas) ; une montée vaut de 2 à 3 au format 2, de 1 à 3 au format 3 ;
+`migrer` écrit le format 2, et non plus `FORMAT`. **La conversion d'un
+personnage au format 2** est `versFormat3(personnage, index)`, pure, dans
+`calcul.js` (`format.js` ne lit pas la banque) : elle rend un autre objet,
+au format 3, où chaque capacité que le personnage ne tient que de son
+primordial, qui peut évoluer et n'a pas de montée appliquée, reçoit une
+montée au niveau 1 ; une montée que le format 2 n'appliquait pas (au-delà
+du maximum) se garde, et le même avertissement revient. Un personnage d'un
+autre format est rendu tel quel. `calculerFiche` la fait **en mémoire**,
+sans rien écrire : un personnage au format 2 (fichier, lien, appareil, en
+ligne) garde ainsi ses capacités, leurs niveaux, ses points dépensés et son
+reliquat ; seuls ses points reçus baissent, d'un point par capacité
+convertie. **Le créateur seul enregistre la conversion** : un personnage au
+format 2 qu'il ouvre (un brouillon repris, la copie de travail de
+« Modifier ») passe au format 3 (§ 15.3). Les autres écritures (le fichier,
+le lien, le dépôt en ligne, la qualité des objets, l'étagère) gardent le
+format qu'elles ont lu ; seuls `migrer` et `nouveauPersonnage` fixent un
+format (`tests/primordial_niveau_0.test.js`).
 
 **Le format 1** (lot 2) se lit encore, fichier, lien ou appareil, converti à
 la lecture (`migrer`) : l'objet de rang `arme_principale` prend la place
 `arme`, celui de rang `bouclier` et les armures « portées » la place
 `equipe`, le reste le sac ; une constellation tirée l'a été une fois. Un
-format 1 abîmé (rang hors de l'équipement, champ inconnu) est refusé. Tout
-s'écrit ensuite au format 2.
+format 1 abîmé (rang hors de l'équipement, champ inconnu) est refusé. Le
+personnage converti est au format 2, dont ses montées ont le sens ; le
+calcul le convertit ensuite au format 3, comme tout format 2.
 
 **Le lien.** Le fichier du personnage, compressé
 (`CompressionStream("deflate-raw")`), en base64url, **dans le fragment** de
@@ -3822,13 +3900,13 @@ la section du livret ou l'élément du classeur qui la fonde, en commentaire
 | Grille de localisation : tête 1, torse 2-11, jambe gauche 12-13, jambe droite 14-15, bras gauche 16-17, bras droit 18-19, 20 attaque annulée | livret, « Jets de localisation » |
 | Qualité : `{degats}`, `{defense}` et `{armure}` du bloc multipliés par 1/3 + `{qualite}`/3. **2 à la création** (facteur 1 : les valeurs du classeur s'appliquent telles quelles) ; elle se change ensuite sur l'écran du personnage, objet par objet ; vide, elle vaut X : les valeurs brutes et « X » | élément Qualité ; décision de l'auteur, lot 2 bis (§ 12) |
 | Valeurs décimales : l'entier inférieur, une fois l'opération faite. Le calcul se fait **en fractions exactes** : en virgule flottante, 15 × (1/3 + 4/3) vaut 24,999… et donnerait 24 au lieu de 25 (contrôlé) | livret, « Valeurs décimales » |
-| Expressions : nombres à virgule décimale, `{caractéristique}` ou `{paramètre}`, `N`, et + − × ÷, la multiplication et la division d'abord. `X` reste « X ». Toute autre forme (parenthèses, signe seul) s'affiche telle qu'écrite, avec un avertissement dans le rapport du personnage. Un paramètre à rangs (`degats` : 3, `armure` : 6) se découpe sur ses barres ; ailleurs la barre divise | classeur, lisez_moi « Syntaxe » |
-| Descriptions : les `[expression]` et les `{nom}` remplacés par leur valeur ; un paramètre à rangs donne un résultat par rang (`[N*{degats}]` → 2/4/8). Les paramètres d'une capacité : ceux de son bloc sans cible, puis ceux qui la visent, puis ceux de ses éléments propres (`Portée[1]`), qui priment | livret, « Paramètre » ; lisez_moi |
+| Expressions : nombres à virgule décimale, `{caractéristique}` ou `{paramètre}`, `N`, et + − × ÷, la multiplication et la division d'abord. `X` reste « X ». Toute autre forme (parenthèses, signe seul) s'affiche telle qu'écrite, avec un avertissement dans le rapport du personnage. Un paramètre à rangs (`degats` : 3, `armure` : 6) se découpe sur ses barres. Tout autre paramètre dont la valeur se coupe sur ses « / » de premier niveau (hors accolades, crochets et parenthèses) est **une suite de valeurs**, chacune une expression, affichée jointe par « / » : `{chaleur:5/10/15}`, « Brûlant 5/10/15 » sur la Louche d'acier, et non plus « 0 » (lot 4.3) ; une barre de premier niveau n'y divise jamais. Dans une expression entre crochets, la barre divise | classeur, lisez_moi « Syntaxe » ; la suite : convention, § 12, point 57 |
+| Descriptions : les `[expression]` et les `{nom}` remplacés par leur valeur ; un paramètre à rangs, ou une suite de valeurs (lot 4.3), donne un résultat par valeur (`[N*{degats}]` → 2/4/8). Les paramètres d'une capacité : ceux de son bloc sans cible, puis ceux qui la visent, puis ceux de ses éléments propres (`Portée[1]`), qui priment | livret, « Paramètre » ; lisez_moi |
 | Ressources : souffle 10 à la création (+1 par point d'historique, aucun à la création), corps 10, endurance 5 par zone (« résistance » jusqu'au lot 5), armure selon l'équipement | livret, « Ressources » |
 | Points de lien d'un primordial lié : la puissance investie dans ses capacités (la somme de leurs niveaux) | livret, « Ressources » et « Lien » |
-| Création : un archétype (ses capacités et ses groupes, dont style et maîtrise), une espèce, toutes les capacités du bloc de base, une constellation tirée au hasard parmi les blocs de type Constellation (le tirage **se refait à volonté** et se compte : la vue lecture dit « tirée N fois », ou « saisie à la main »), un primordial choisi et ses capacités, l'équipement à volonté | livret, « Création » ; tirage refait : décision de l'auteur, lot 2 bis (§ 12) |
-| Niveau d'une capacité : 1 à la création, sauf si elle ne peut évoluer (puissance « 0 ») : niveau 0. Une puissance N va de 1 à 3 ; une capacité à variantes (1, 2, 3) monte jusqu'à la plus haute | livret, « Création » et « Capacités » ; lisez_moi |
-| 10 points de capacité, hors capacités de niveau 0, au coût de la progression : niveau 1 = 1 point, 2 = 3, 3 = 6. Le joueur monte des capacités (jusqu'au niveau 3) tant que le total ne dépasse pas 10 ; le reliquat (10 − dépensés, jamais négatif) s'inscrit sur la fiche à l'écran (la vue lecture ; la fiche imprimée ne l'écrit plus depuis la spécification 1.7, § 12). Des capacités reçues au-delà de 10 : aucune montée, et le total réel | livret, « Création » et « Progression » |
+| Création : un archétype (ses capacités et ses groupes, dont style et maîtrise), une espèce, toutes les capacités du bloc de base, une constellation tirée au hasard parmi les blocs de type Constellation (le tirage **se refait à volonté** et se compte : la vue lecture dit « tirée N fois », ou « saisie à la main »), un primordial choisi, dont les capacités partent au niveau 0 (plus bas), l'équipement à volonté | livret, « Création » ; tirage refait : décision de l'auteur, lot 2 bis (§ 12) ; le primordial : règle de l'auteur du 26/10/2026 (§ 12, point 56) |
+| Niveau d'une capacité : 1 à la création, sauf si elle ne peut évoluer (puissance « 0 ») : niveau 0 ; et sauf une capacité que le personnage ne tient que de son primordial, qui peut évoluer : niveau 0, **non acquise** (lot 4.3, plus bas). Une puissance N va de 1 à 3 ; une capacité à variantes (1, 2, 3) monte jusqu'à la plus haute | livret, « Création » et « Capacités » ; lisez_moi ; le primordial : § 12, point 56 |
+| 10 points de capacité, hors capacités de niveau 0, au coût de la progression : niveau 1 = 1 point, 2 = 3, 3 = 6. Le joueur monte des capacités (jusqu'au niveau 3) tant que le total ne dépasse pas 10 ; le reliquat (10 − dépensés, jamais négatif) s'inscrit sur la fiche à l'écran (la vue lecture ; la fiche imprimée ne l'écrit plus depuis la spécification 1.7, § 12). Des capacités reçues au-delà de 10 : aucune montée, et le total réel. Une capacité du primordial acquise depuis le niveau 0 : tous ses points sont dépensés (`points.depenses`), aucun n'est reçu (`points.recus`) | livret, « Création » et « Progression » |
 | Une capacité reçue deux fois (deux armes qui donnent « Frappe ») : une seule capacité, comptée une fois, avec ses deux origines | lecture du livret, § 12 |
 | Une capacité absente de `Capacites` : « capacité à venir », hors du décompte | instruction du lot 2 |
 | Groupes : `( a \| b )` exactement une option ; `[ a \| b ]` zéro, une ou plusieurs | lisez_moi, « Syntaxe » |
@@ -3838,6 +3916,50 @@ la section du livret ou l'élément du classeur qui la fonde, en commentaire
 | Bouclier : un objet équipé (place `equipe`) qui transmet un paramètre `defense` ; un seul compte ; la fiche en montre la défense après qualité | convention, § 12 |
 | Domaine d'un primordial lié : la colonne Infos de son bloc, sans ses espaces de bord (`domaine` de chaque lien) ; la fiche l'imprime sous son nom | décision de l'auteur, 26/10/2026 (§ 4.1) |
 | Déplacement : la capacité du bloc de base de rôle « deplacement », reconnue comme au combat par la table des rôles (`js/combat/roles.js` : son empreinte dans le vrai classeur, son nom dans la démonstration ; aucun nom du vrai classeur dans le code) ; c'est la seule du bloc de base que la fiche écrive, au bloc « Capacités » | spécification 1.7, § 15.4 |
+
+**Les capacités du primordial au niveau 0** (lot 4.3, mission § 8.3 ;
+règle de l'auteur du 26/10/2026 : le personnage ne les possède pas, mais
+peut mettre 1 point pour les avoir à la puissance 1, 2 de plus pour le
+niveau 2 ; § 12, point 56). Une capacité **part au niveau 0, non acquise**,
+quand le personnage ne la tient que de son primordial (toutes ses sources
+sont de rôle « primordial »), qu'elle est dans la feuille Capacites et
+qu'elle peut évoluer : sa puissance n'est pas fixée à 0
+(`evolution(c).niveauCreation === 1`), même avec la seule variante 1.
+Elle s'acquiert à l'étape 8, au niveau 1 pour 1 point, au niveau 2 pour 2
+de plus, au niveau 3 pour 3 de plus (`COUT_NIVEAU`), dans les 10 points,
+comme une montée, écrite dans `personnage.niveaux` (`{ capacite, niveau }`) ;
+revenue à 0, sa montée disparaît. Une capacité qui vient aussi d'ailleurs
+(espèce, archétype, constellation, bloc de base, objet) se reçoit comme
+avant ; une capacité du primordial à puissance fixée à 0 (Cendre) se reçoit
+au niveau 0, sans coût ; une capacité absente de la feuille reste à venir,
+ni offerte ni acquise.
+
+- **`calculerFiche`** convertit d'abord un personnage au format 2, en
+  mémoire (`versFormat3`, § 15.1). Une capacité non acquise n'est **pas**
+  dans `capacites` : elle manque à la fiche, à la vue lecture, au combat
+  (la photographie, § 17.2) et à `liens[].pouvoirs`. Elle est dans une
+  liste neuve, **`offertes`**, dans l'ordre de `capacites` : `{ nom,
+  origines: [le primordial], role: "primordial", groupe, niveau: 0,
+  niveauCreation: 0, niveauMax, peutEvoluer: true, cout, texte }`, où
+  `groupe` vaut « style » pour un style de combat, « primordial » sinon, et
+  où `cout` et `texte` sont ceux du niveau 1 (`descriptionA(…, { bloc: le
+  primordial, niveau: 1 })`). Ainsi `niveauxPermis(fiche, offerte)` donne
+  les niveaux permis, de 0 au maximum dans les 10 points. Acquise, elle est
+  dans `capacites`, à son niveau, avec `niveauCreation: 0` et `peutEvoluer`
+  vrai, même la seule variante 1, puisqu'elle peut revenir à 0. Ses points
+  de lien suivent son niveau (0 tant qu'elle n'est pas acquise).
+- **« À venir »** : une capacité offerte compte comme écrite, pour
+  `primordial.aVenir` et pour l'avertissement « capacités à venir ». D'un
+  primordial qui offre des capacités sans en avoir d'acquise, la vue lecture
+  dit « Aucune capacité acquise. » ; d'un primordial qui n'en offre aucune
+  (Givre éternel, sans capacité), « Capacités à venir. », comme avant. La
+  fiche imprimée n'écrit rien sous le domaine d'un tel primordial, comme
+  avant (§ 15.4).
+- **Les points** : une capacité du primordial acquise au niveau N compte
+  `COUT_NIVEAU[N]` dans `points.depenses` et rien dans `points.recus`. Un
+  personnage au format 2 garde ses points dépensés et son reliquat ; ses
+  points reçus baissent d'un point par capacité convertie (Aubépine : 8 → 7,
+  § 15.7), et ce nombre ne s'écrit ni sur la fiche ni dans la vue lecture.
 
 **L'ordre des caractéristiques** (lot 5) est celui du livret du
 25/10/2026, dans `CARACTERISTIQUES` (`js/personnage/regles.js`) : il range
@@ -3849,6 +3971,25 @@ Agilité, Précision, Sens, Culture néruvienne, Savoir sauvage, Parole,
 Empathie, Créativité), se lit par son fichier, son lien et l'appareil, et
 montre les mêmes valeurs à l'étape 2, à la fiche à l'écran et à la feuille
 à imprimer (`tests/caracteristiques_ordre.test.js`).
+
+**Un paramètre écrit avec des « / »** (lot 4.3, mission § 9.2 ; § 12,
+point 57 ; `valeursParametre`). Hors de `RANGS`, la valeur se coupe sur
+ses barres de premier niveau, hors des accolades, crochets et parenthèses,
+comme la notation coupe une cellule : « 5/10/15 » en trois,
+« {force}*0,5/{force}/{force}*2 » en trois, « {a/b} » en un. Chaque
+morceau est une expression, à la Force du personnage s'il le faut, et le
+résultat est `{ valeurs: [5, 10, 15] }`, joint par « / » partout où les
+valeurs s'affichent déjà (l'étape 7, les descriptions). Un morceau vide se
+garde et ne se calcule pas : la valeur entière reste alors telle
+qu'écrite, avec un avertissement. La qualité suit la règle d'avant : seuls
+dégâts, défense et armure la prennent ; une défense écrite avec des barres
+la prendrait sur chaque valeur (aucun bloc des deux classeurs n'est dans ce
+cas ; vérifié dans le vrai classeur le 26/10/2026, seuls les dégâts et
+l'armure s'y écrivent avec des barres). Une valeur sans barre ne change
+pas, ni les rangs des dégâts et de l'armure (`tests/parametre_barres.test.js`).
+Le Rouleau à pâtisserie du classeur d'essai vise Coup de louche de
+« {chaleur:{force}*0,5/{force}/{force}*2} » : sa description, qui disait
+« Frappe pour 0 point. », dit « Frappe pour 2/4/8 points. » à Force 4.
 
 **Mesures.** Chaque règle a ses contrôles, vus échouer puis passer : 62
 mutations des règles, du format et du lien, désarmées une à une, font
@@ -3863,7 +4004,10 @@ d'archétype, d'espèce et de primordial se calculent sans manque ni
 exception ; au banc du 30/09/2026 (lot 2 bis), 1 280 combinaisons, avec
 l'arme et les packs, aucun E7 ni A10, les packs lourd, agile et précis
 proposés (6, 6 et 5 pièces), 108 descriptions évaluées sans crochet
-restant.
+restant. Au lot 4.3, 29 casses du calcul, du format et de la vue lecture
+(le niveau 0, les offertes, la conversion, les trois règles du format,
+les barres), chacune vue échouer, sur une copie hors OneDrive. Les cinq
+adversaires du classeur d'essai, résolus avant et après, sont identiques.
 
 ### 15.3 Le parcours et les écrans
 
@@ -3895,7 +4039,17 @@ neuf étapes, un **brouillon enregistré à chaque changement**, un retour en
 arrière toujours possible, et une zone « Ce qui manque » toujours présente
 (`parcours.js`). Chaque changement se vérifie comme un fichier reçu avant
 d'être gardé ; une montée dont la capacité n'est plus possédée (archétype,
-option ou objet changé) s'efface. Sur un téléphone, la liste des neuf
+option ou objet changé) s'efface, et, depuis le lot 4.3, une montée qui ne
+monte plus rien (Fournaise acquise au niveau 1, puis reçue au niveau 1 d'un
+archétype qui la donne aussi : sinon « ne peut pas être au niveau 1 »
+resterait sur la fiche). **Un personnage au format 2 ouvert dans le
+parcours** (un brouillon repris, la copie de travail de « Modifier ») passe
+au format 3 (`versFormat3`, puis `verifier` ; si la vérification refuse, il
+reste tel quel) : chaque capacité du seul primordial y garde son niveau 1
+par une montée, les points ne changent pas, et le converti se garde
+aussitôt, sans que `modifie_le` bouge. L'original d'une copie de travail
+reste au format 2 jusqu'à « Enregistrer », qui le remplace au format 3. Un
+personnage neuf naît au format 3. Sur un téléphone, la liste des neuf
 étapes vient après le contenu de l'étape : en tête, elle repoussait chaque
 champ sous le pli. **Partout où le joueur choisit, chaque capacité en jeu
 se présente avec sa description**, ses `[N]` et expressions évalués au
@@ -3917,7 +4071,8 @@ la table » (marqué « saisie à la main » sur la fiche), par les vignettes
 des constellations (« Constellation tirée à la table ») : en choisir une
 donne une constellation saisie à la main, et garde le compte des
 tirages ; la tirée ou la saisie porte ✓ ; un clic sur la vignette déjà
-choisie ne change rien. 6. Primordial, comme l'archétype. 7. Équipement, en **trois entrées** :
+choisie ne change rien. 6. Primordial, comme l'archétype, avec, sous les
+vignettes, la ligne du niveau 0 (lot 4.3, plus bas). 7. Équipement, en **trois entrées** :
 « Arme tenue », une seule, tenue d'office (changer d'arme la remplace), et
 « Pack d'armure », un par type, formé de toutes les pièces de ce type,
 portées d'office, un type à deux pièces sur une zone proposé inactif avec
@@ -3929,7 +4084,8 @@ seul), une arme se prend en main à la place de l'arme tenue. Qualité 2
 d'office, sans champ : elle se change sur l'écran du personnage. Chaque objet montre les
 capacités qu'il donne, décrites, et l'objet choisi dans la liste se décrit
 avant d'être ajouté. 8. Capacités : **toutes celles du personnage,
-hors « à venir », en vignettes**, qu'elles puissent évoluer ou non
+hors « à venir », en vignettes**, et, depuis le lot 4.3, celles que le
+primordial offre au niveau 0, qu'elles puissent évoluer ou non
 (décision de l'auteur du 26/10/2026, sur une maquette validée qui remplace
 celle du 30/09/2026, où ne figuraient que celles qui pouvaient évoluer),
 avec des **boutons + et −** dans les bornes (plafond de 10, niveau 3),
@@ -3957,8 +4113,14 @@ bloc.
 - **Au-dessus des vignettes**, une phrase d'aide aux étapes 3, 4 et 6
   (vue 5a) : « Choisissez une vignette : sa description et ses choix
   s'affichent dessous. » (« … : sa description s'affiche dessous. » quand
-  aucun bloc de l'étape n'a de groupe) ; **sous elles**, le bloc choisi,
-  sous son nom : sa
+  aucun bloc de l'étape n'a de groupe) ; à l'étape 6 seulement, **juste
+  sous les vignettes** (lot 4.3, mission § 8.3 ; l'option `sousLesVignettes`
+  d'`etapeBloc`), en texte secondaire, mot pour mot : « Les capacités du
+  primordial partent au niveau 0 : le personnage ne les possède pas
+  encore. Il les acquiert à l'étape 8, pour 1 point au niveau 1. » (le
+  bloc choisi, dessous, décrit encore ses capacités au niveau 1, « niveau
+  1 · 1 souffle · 1 lien » pour Fournaise) ; **sous elles**, le bloc
+  choisi, sous son nom : sa
   description, telle que le parcours l'écrit ailleurs, et ses groupes de
   choix, dont les options sont des vignettes elles aussi (« niveau N ·
   coût », puis la description). Ces descriptions sont ouvertes, sur un
@@ -3983,15 +4145,48 @@ bloc.
   sinon ; chaque capacité de Maîtrise que le personnage tient au combat
   (plus bas), son niveau entre crochets, séparées par des virgules ; « aucune » sans maîtrise.
 - **« Arme tenue »** : des vignettes radio, à l'habit des étapes 3 à 6,
-  « Mains nues » d'abord, puis chaque bloc de type Arme de la banque (pas
-  les armes naturelles) ; elles remplacent la liste déroulante et le
-  catalogue replié. Sous elles, l'arme tenue, décrite, et ses groupes de
-  choix. Une vignette d'arme montre son nom ; son **poids** en étiquettes,
-  « lourde », « agile » ou « précise », d'après ses éléments (deux pour un
-  objet à deux poids, aucune sans) ; ses paramètres à la qualité 2 :
-  Dégâts, Portée, Qualité, puis les autres, sous leur nom affiché (§ 5.2) ;
-  ses capacités, « (désavantage) » après celles que la maîtrise ne couvre
-  pas ; son état de maîtrise.
+  « Mains nues » d'abord (toujours permis), puis chaque bloc de type Arme
+  de la banque (pas les armes naturelles), **sans désavantage d'abord**
+  (lot 4.3, mission § 8.2) : « Maîtrisé » et « Sans maîtrise requise »,
+  puis « Maîtrise partielle », puis « Non maîtrisé » ; dans un même état,
+  l'ordre de la banque (`blocsDeType`, alphabétique ; le tri est stable).
+  L'ordre suit l'état à chaque rendu (une arme tenue peut donner une
+  Maîtrise) ; **l'identifiant d'une vignette ne change pas** (`arme-{i}`,
+  son indice dans la banque), et le focus revient à la même vignette après
+  un changement. Les armes se jugent une fois par rendu (`armesJugees`),
+  pour leurs vignettes et pour « Tous les objets ». Elles remplacent la
+  liste déroulante et le catalogue replié. Sous elles, l'arme tenue,
+  décrite, et ses groupes de choix. Une vignette d'arme montre son nom ;
+  son **poids** en étiquettes, « lourde », « agile » ou « précise »,
+  d'après ses éléments (deux pour un objet à deux poids, aucune sans) ;
+  ses paramètres à la qualité 2 : Dégâts, Portée, Qualité, puis les autres,
+  sous leur nom affiché (§ 5.2) ; ses capacités, « (désavantage) » après
+  celles que la maîtrise ne couvre pas ; son état de maîtrise. Dans le
+  classeur d'essai, avec la Maîtrise de l'agile au niveau 1 : Hachoir,
+  Louche d'acier, Poêle en fonte et Rouleau à pâtisserie (sans maîtrise
+  requise), Spatule souple (partielle), puis Couteau d'office et Rouleau de
+  fonte (non maîtrisés) ; l'ordre était alphabétique.
+- **Les paramètres d'une vignette** (lot 4.3, mission § 8.1). Le défaut
+  (capture de l'auteur, au téléphone) : « Dégâts 7/10/14 » s'écrivait à la
+  verticale, un signe par ligne, quand une autre étiquette de la vignette
+  était longue (« Localisation multiple ») ; la grille `auto minmax(0, 1fr)`
+  donnait toute la largeur à la colonne des noms, et la valeur se coupait
+  n'importe où (`overflow-wrap: anywhere`, hérité). Désormais
+  `listeDeParametres` range chaque paire dans un `div` de classe
+  `parametre` (`dl > div.parametre > dt + dd`, que permet HTML), et place
+  un `wbr` après chaque « / » de la valeur. `.vignette-parametres` n'est
+  plus une grille : chaque `.parametre` est une rangée souple (`display:
+  flex; flex-wrap: wrap; column-gap: var(--espace-2)`). Le nom (`flex: 1 1
+  auto; min-width: 0`) garde la coupe de la vignette, entre ses mots, un mot
+  plus large que la vignette se coupant encore ; la valeur (`flex: 0 1
+  auto; margin-left: auto; max-width: 100%; text-align: end;
+  overflow-wrap: break-word`) reste à côté du nom quand la paire tient,
+  sinon passe à la ligne, alignée en fin, et ne se coupe qu'après une
+  barre. Un contrôle tient le `div` et le `wbr`
+  (`tests/creation_g3.test.js`) ; la preuve à l'œil, l'étape 7 à 320, 360
+  et 390 px sur la démonstration et sur quatre armes fabriquées, se fait
+  dans un vrai navigateur (vague 4 du lot 4.3 ; sélecteurs
+  `.vignette-parametres .parametre`, `dt`, `dd`).
 - **L'état de maîtrise**, en mots, pour `n` capacités montrées dont `k`
   couvertes : « Maîtrisé » (`k = n`) ; « Maîtrise partielle : k
   capacité(s) sur n », accordé (§ 6.2) ; « Non maîtrisé » (`k = 0`) ;
@@ -4017,7 +4212,18 @@ bloc.
   un pack non proposé (A10) a une vignette inactive, avec sa raison, sans
   état. Sa maîtrise est une **convention d'affichage** (§ 12) :
   « Maîtrisé » avec la Maîtrise de son poids au niveau 1 au moins, « Non
-  maîtrisé » sinon.
+  maîtrisé » sinon. Depuis le lot 4.3 (mission § 8.2) : « Aucun pack »,
+  puis les packs maîtrisés, puis les autres, puis ceux que la banque ne
+  propose pas, inactifs ; chaque vignette garde l'identifiant de son type
+  (classeur d'essai, Maîtrise de l'agile : Aucun, agile, lourd, précis).
+- **« Tous les objets »** (la liste) : depuis le lot 4.3, dans la rubrique
+  Armes, les armes dans l'ordre de leurs vignettes (une arme jugée tenue) ;
+  dans la rubrique Pièces d'armure, les pièces maîtrisées d'abord, comme
+  un pack (la Maîtrise de son poids, de chacun pour une pièce à deux
+  poids, comme au combat ; une pièce sans poids va avec les maîtrisées),
+  puis les autres ; les autres rubriques dans l'ordre de la banque
+  (classeur d'essai : Maniques, Tablier de cuir, Toque renforcée, puis
+  Guêtres de toile et Plastron de fonte).
 - **L'habit** : « Non maîtrisé », un bord en tirets de `--combat-alerte`,
   un fond hachuré léger (`--hachure-alerte`, `--hachure-large`), le nom,
   la mention, « (désavantage) » et le lien vers une anomalie sur une
@@ -4029,7 +4235,8 @@ bloc.
   « ✓ porté ». **Le choix reste permis** dans tous les cas. Quatre
   vignettes par ligne à partir de 56rem, deux au téléphone. Un objet que
   la banque signale d'une anomalie garde sa vignette, avec le lien vers
-  elle. « Tous les objets » ne change pas.
+  elle. « Tous les objets » garde son habit ; seul l'ordre de deux de ses
+  rubriques change (lot 4.3, plus haut).
 
 **L'étape 8 en vignettes** (lot 5 ; décision de l'auteur du 26/10/2026).
 
@@ -4054,7 +4261,36 @@ bloc.
   « Niveau 0 : cette capacité n'évolue pas. », sans ligne de niveau, pour
   une capacité de niveau 0. Une capacité **améliorée** (au-dessus du
   niveau que lui donnent les blocs) a un bord d'accent, que le filet d'un
-  thème orné ne remplace pas (§ 10.1), et la mention « amélioré ».
+  thème orné ne remplace pas (§ 10.1), et la mention « amélioré ». Une
+  capacité évolue quand `peutEvoluer` est vrai (depuis le lot 4.3 : la
+  condition « niveau de création 1 au moins » cachait les « − » et « + »
+  d'une capacité offerte, ou acquise depuis le niveau 0).
+- **Les capacités offertes** (lot 4.3, mission § 8.3 ; `offertes`,
+  § 15.2) ont chacune leur vignette, **après les capacités de leur
+  groupe** (« style » pour un style de combat, « primordial » sinon), ou,
+  si la fiche n'a pas ce groupe, à la place de leur rôle : après l'espèce,
+  l'archétype et la constellation, avant le bloc de base et les objets.
+  Acquise, une capacité reprend sa place dans l'ordre de `capacites` :
+  Fournaise, offerte juste après Cendre, vient avant elle une fois acquise.
+  La vignette d'une offerte prend la classe **`non-acquise`** : son nom à
+  la couleur secondaire, `--texte-2` sur le `--fond-2` de la vignette
+  (4,5:1 au moins, mesuré dans les 38 thèmes, `tests/creation_g3.test.js`) ;
+  « − », « niveau 0 », « + », le « − » présent mais inactif ; ni coût ni
+  effet au niveau 0 ; la raison, mot pour mot, « Niveau 0 : pas encore
+  acquise. Niveau 1 : 1 point. », ou « Niveau 0 : pas encore acquise.
+  Niveau 1 : il manque N point(s). », accordé. « + » l'acquiert au
+  niveau 1 ; elle évolue ensuite jusqu'à son maximum, même la seule
+  variante 1 ; le « − » d'une capacité acquise au niveau 1 la rend au
+  niveau 0, et sa montée disparaît de `niveaux`. Acquise au niveau 1, elle
+  est « amélioré » : au-dessus du niveau 0 que lui donnent les blocs. Le
+  personnage d'essai sans montée : « 7 / 10 », reliquat 3, Fournaise juste
+  après Cendre, avec « Niveau 0 : pas encore acquise. Niveau 1 :
+  1 point. ».
+- **L'identifiant d'une vignette** (lot 4.3) : `niveau-{i}`, où `i` est
+  l'indice de la capacité dans la feuille Capacites de la banque, et non
+  plus son rang à l'écran, comme `arme-{i}` à l'étape 7 : une capacité qui
+  s'acquiert, ou revient au niveau 0, change de place, non d'identifiant,
+  et le focus la suit.
 
 **La comparaison avec le niveau suivant** (lot 5 ;
 `js/personnage/difference.js`).
@@ -4090,6 +4326,13 @@ bloc.
   `--difference` vaut `var(--combat-echec)` (orange dans « Couleurs
   adaptées »), en `var(--graisse-forte)` : jamais la couleur seule, le
   trait et la légende la doublent.
+- **D'une capacité offerte** (lot 4.3), sans rien à comparer : le titre
+  « Acquérir au niveau 1 » (celui du volet du téléphone, et son nom de
+  dialogue) ; « après progression · 1 point de plus (reliquat 3 → 2) », ou
+  « … il manque k point(s) » ; « Coût : » et le coût du niveau 1 (« 1
+  souffle · 1 lien » pour Fournaise) ; la description du niveau 1
+  (« Réchauffe la case. ») ; rien en rouge, rien de barré, ni description
+  actuelle ni légende. Au téléphone, sous elle, « Passer au niveau 1 ».
 - **Mot à mot** : chaque texte se découpe en mots (suites de lettres, de
   chiffres et de marques, au sens Unicode) et en ce qui les sépare ; la
   plus longue sous-suite commune des deux suites de mots, comparés tels
@@ -4154,6 +4397,20 @@ chiffres sont alignés (`lining-nums`) : Alegreya Sans les écrit en bas de
 casse. **Aucun style n'est écrit par le code** : une classe, et des nœuds
 retirés.
 
+**À l'écran, un bord** (lot 4.3, mission § 9.4) : sous Abrasia, le blanc
+du papier (#ffffff) et le fond de la page (#f5efe1) n'ont que **1,15:1** de
+contraste (13 thèmes ou modes sur 40 sont sous 1,2:1 ; le thème par
+défaut, en clair, 1,00:1). La feuille porte donc, **dans tous les thèmes et
+à l'écran seulement** (`@media screen`), un trait de 1 pixel au jeton
+`--bordure` du thème : `outline: 1px solid var(--bordure);
+outline-offset: -1px`. Un contour en retrait, et non une bordure : la
+feuille, en `border-box` à 794 × 1123 pixels, garde sa taille et ses
+cadres leur place, la mesure d'une zone qui déborde, faite à l'écran, vaut
+encore pour l'impression, et le cadre défilant (`.cadre-feuilles`) ne
+rogne pas le trait. Le bord d'Abrasia (#8c7b58) fait 3,60:1 sur la page
+et 4,13:1 sur le papier ; 3,45:1 au plus bas, tous thèmes confondus.
+**L'impression n'a pas de bord** (`tests/carte.test.js`).
+
 **Le recto**, de haut en bas :
 
 - **l'en-tête** : la ligne de titre (« Les Arpenteurs d'Abrasia », en
@@ -4204,7 +4461,9 @@ retirés.
   colonnes : le primordial lié, le trait de son nom, « LIEN » et **huit
   cases, les points de lien cochés, aucune grisée** ; son **domaine**, la
   colonne Infos de son bloc, en italique (§ 4.1, § 15.2) ; puis ses
-  capacités. La seconde colonne : un primordial, huit cases et un domaine
+  capacités acquises (`liens[].pouvoirs` : une capacité offerte, au
+  niveau 0, ne s'imprime pas, § 15.2 ; sans capacité acquise, rien sous
+  le domaine). La seconde colonne : un primordial, huit cases et un domaine
   vides, pour un second lien. Plus de légende des huit primordiaux ;
 - au pied, **« Banque du JJ/MM/AAAA »**, en 7,5 pixels, au coin inférieur
   droit, juste à l'intérieur du cadre intérieur (à 24 pixels du bord droit
@@ -4386,7 +4645,9 @@ Crèmebrûlée, Marmitonne Saucière, est fourni prêt à imprimer :
 `essais/personnage_demo.arpenteur.json`, fabriqué par
 `outils/personnage_demo.js` contre la banque de démonstration (à relancer
 après chaque régénération de celle-ci ; un contrôle le vérifie). Il exerce
-chaque règle : une montée, une constellation sans capacité tirée trois
+chaque règle : deux montées (Flambage au niveau 2 ; Fournaise, que le
+Grand Four offre au niveau 0, acquise au niveau 1, depuis le lot 4.3), une
+constellation sans capacité tirée trois
 fois, un primordial à capacité variable, une arme tenue, des armures de
 types mêlés portées seules, un bouclier équipé, des objets dans le sac, des
 qualités X, 1, 2 et 3, neuf objets dont trois au sac, et quatre pièces
@@ -4413,7 +4674,8 @@ combat (§ 10.3) : les éléments Intervention et Passif, et deux capacités de
 plus dans le bloc de base. Aubépine a donc **dix-neuf capacités** : les
 dix-sept d'avant, plus **Pas de côté** (une intervention, au coût en
 souffle X) et **Guetter**, toutes deux du bloc « Gestes de cuisine », au
-niveau 0, sans point à dépenser (10 dépensés, 8 reçus, comme avant). Six
+niveau 0, sans point à dépenser (10 dépensés, et 8 reçus jusqu'au
+lot 4.3, 7 depuis : plus bas). Six
 de ses dix-sept capacités d'avant portent désormais un des deux éléments :
 Passif sur Vif, Nez fin, Réduction, Solo du chef et Maîtrise de l'agile,
 Intervention sur Dressage minute ; avec Pas de côté, sept en tout. Son
@@ -4434,6 +4696,20 @@ avertissements du même genre, que « Remplacer » efface de même. Ses
 valeurs ne changent pas : ses caractéristiques se gardent par code, et
 seul leur ordre d'affichage suit le livret (§ 15.2).
 
+**Au lot 4.3**, Aubépine passe au format 3 (§ 15.1), régénérée par
+`outils/personnage_demo.js` : ses montées sont Flambage au niveau 2 et
+Fournaise au niveau 1, celle-ci acquise et non plus reçue (§ 15.2) ; le
+personnage d'essai des contrôles (`tests/outils/personnage_essai.js`) la
+suit. Sans cette montée, des dizaines de contrôles et le geste 19 du combat
+de référence perdraient Fournaise. Mesuré contre l'état commité : sa fiche
+imprimée (35 589 signes) et sa vue lecture (9 657 signes) sont identiques
+à l'octet ; 10 points dépensés et un reliquat de 0, comme avant ; ses points
+reçus passent de 8 à 7 ; dans la fiche calculée, seul le `niveauCreation`
+de Fournaise change, de 1 à 0. Son fichier d'avant, au format 2, lu par le
+calcul neuf, donne la même fiche que le fichier neuf. La Louche d'acier du
+classeur d'essai montre désormais « Brûlant 5/10/15 », et non plus « 0 »
+(§ 15.2).
+
 ### 15.8 Les personnages en ligne (lot 2 bis)
 
 **Le principe** (option B, décision de l'auteur, 30/09/2026). Le site ne
@@ -4452,7 +4728,11 @@ chiffré en AES-GCM sous la clé de table, IV neuf de 12 octets ; ses données
 associées sont son identifiant (`atelier-des-arpenteurs/personnage/1/<id>`) :
 un chiffré recopié sous un autre identifiant ne se déchiffre pas. Le sel de
 la banque l'accompagne : il dit sous quelle clé il a été fait. Seul un
-personnage enregistré, de la banque réelle, part.
+personnage enregistré, de la banque réelle, part. Il part au format où il
+a été lu, 2 ou 3 (§ 15.1) : le déchiffré passe par `verifier`, qui accepte
+les deux, et l'automate ne lit jamais le personnage chiffré, seulement le
+ticket, le fichier rangé et l'index, dont les formats (`FORMAT_EN_LIGNE`,
+1) ne changent pas au lot 4.3 ; ni l'automate ni son workflow n'y changent.
 
 **Le ticket.** Titre `personnage` ; corps, une ligne de JSON, 64 Ko au plus,
 en ASCII :
@@ -5149,13 +5429,20 @@ trois avertissements de la feuille : A11, A1 et A15.
 **Les ajouts du lot 4** au classeur d'essai (§ 10.3) touchent ce que
 portent des adversaires : Passif sur « Nez fin », que cite la Mouette
 chapardeuse, et sur la maîtrise que citent la classe Rôtisseur et le Chef de
-partie. **Aucune valeur
-d'un adversaire n'en change**, et la feuille garde ses trois
-avertissements. Un contrôle le vérifie : il refabrique le classeur d'avant
-ces ajouts (`sansAjoutsDuCombat()`, dans `tests/outils/adversaires_essai.js`),
+partie ; **au lot 4.3** (§ 17.10), l'élément Centré sur Moulinet farineux,
+que portent le Marmiton de corvée et le Chef de partie, et deux blocs de
+type État, « Blessure » et « Condition », de six capacités. **Aucune valeur
+d'un adversaire n'en change**, hors les éléments de ces capacités, et la
+feuille garde ses trois avertissements. Un contrôle le vérifie : il
+refabrique le classeur d'avant ces ajouts (`sansAjoutsDuCombat()`, dans
+`tests/outils/adversaires_essai.js`, qui ôte aussi ceux du lot 4.3),
 résout les cinq adversaires sur les deux par le même code, et compare tout
-ce que rend la résolution. Ce classeur d'avant, refabriqué, est octet pour
-octet le fichier du lot 3 (mesuré le 12/10/2026, hors des contrôles).
+ce que rend la résolution ; les éléments des capacités, le seul champ que
+les ajouts peuvent changer, se comparent à part : trois écarts, Centré sur
+le Moulinet farineux du Marmiton et du Chef, Passif sur le Nez fin de la
+Mouette (ce dernier seul, jusqu'au lot 4.3). Ce classeur d'avant,
+refabriqué, était octet pour octet le fichier du lot 3 (mesuré le
+12/10/2026, hors des contrôles ; non remesuré depuis le lot 4.3).
 
 ### 16.8 Les mesures
 
@@ -5343,10 +5630,10 @@ aucun fichier ; le groupe 3, un seul, `effets.js`.
 | `circonstances.js` | de quoi ouvrir un jet : qui lance, quel dé, contre quoi, les modificateurs, les avantages et les désavantages, chacun avec sa source (le rôle et la capacité d'un passif compris, et, depuis le groupe 3, les effets de la palette), dans un ordre écrit ; la défense choisie à égalité ; les causes qu'une ligne montre avant toute cible ; les passifs câblés d'une fiche |
 | `degats.js` | la lettre que valent des réussites, la zone que touche un d20, ce que perdent l'armure, l'endurance et le corps, « dégrossir », l'esquive, la blessure, la mort (§ 17.5) ; depuis le groupe 3, l'ordre des dégâts (le critique, l'ajustement à la main, les opérations de la palette), la victime d'un report, la zone choisie, et les zones blessées qu'un personnage doit encore choisir |
 | `offre.js` | **la seule porte** : ce qui est permis à cet instant, et pourquoi le reste ne l'est pas ; une entrée par façon jouable, le mode d'un geste à son ouverture, la façon que joue une case d'arrivée, l'annulation et ses trois raisons ; depuis le groupe 3, les interventions, la contre-attaque, le critique, la blessure à choisir, les cibles d'une façon Centrée, la garde d'attendre, et, par `effets.js`, la palette et les gestes du MJ |
-| `effets.js` | depuis le groupe 3 : l'événement « effet » (la palette, les passifs non câblés, les états) et l'événement « mj » (les gestes du MJ), leur juge et leur application, et les effets durables, leur échéance comprise (§ 17.6) ; pur comme le moteur, il ne gèle rien et n'écrit pas au journal : l'offre et le moteur l'appellent, pour qu'un effet n'ait qu'un juge |
+| `effets.js` | depuis le groupe 3 : l'événement « effet » (la palette, les passifs non câblés, les états) et l'événement « mj » (les gestes du MJ), leur juge et leur application, et les effets durables, leur échéance comprise (§ 17.6) ; pur comme le moteur, il ne gèle rien et n'écrit pas au journal : l'offre et le moteur l'appellent, pour qu'un effet n'ait qu'un juge. Outre ce juge et cette application, il exporte ce que d'autres modules lisent : le prix d'un passif payant (`prixDuPassif`), et celui qu'on rend quand un geste s'en va sans être payé (`rendrePrixDesPassifs`, contrat du lot 4.3, choix 11), la phrase du jet contre un allié ou contre soi (`JET_CONTRE_UN_ALLIE`, choix 10), la borne d'une photographie qui grandit, partagée par la blessure et l'équipement du MJ (`horsDesBornesDeLaPhoto`, choix 20), la raison d'une blessure refusée (`refusDeLaBlessure`, que lisent l'offre et `lecture.js`), et la garde jouable d'une ligne (`gardeJouable`) |
 | `moteur.js` | le réducteur : d'un état et d'un événement, l'état suivant ; la pile des gestes, trois étages au plus depuis le groupe 3 (§ 17.3) ; la pile d'annulation ; le rejeu d'un combat gardé, linéaire, d'une traite ou par tranches |
 | `journal.js` | chaque ligne du journal, ses segments typés et ses phrases, la ligne en cours d'un geste, la ligne « Annulé », le nom d'un geste, son en-tête, le nom du fichier, et ce que la région d'annonce dit après chaque dé (§ 17.9) ; depuis le groupe 3, les phrases des gestes emboîtés, de la palette, des états, de la blessure, de chaque cible, et les lignes d'une échéance, d'un geste du MJ et d'un effet hors d'un geste (mission du lot 4.3, § 7) |
-| `lecture.js` | les vues que l'écran affiche : la barre (avec « Annuler le dernier geste », sa question, et l'alerte des 13 500 événements), la carte, une fiche, la bulle (le panneau du groupe 1, déplacé), la préparation, le journal et le bandeau ; toute phrase qui dépend de l'état y est écrite, sans page (§ 17.7) |
+| `lecture.js` | les vues que l'écran affiche : la barre (avec « Annuler le dernier geste », sa question, et l'alerte des 13 500 événements), la carte, une fiche, la bulle (le panneau du groupe 1, déplacé), la préparation, le journal et le bandeau ; toute phrase qui dépend de l'état y est écrite, sans page (§ 17.7) ; depuis le groupe 3, les étapes neuves que l'écran tient déjà (le critique, la contre-attaque laissée, la blessure, la garde, les cibles d'une façon Centrée). Elle importe aussi `effets.js`, pour la raison d'une blessure refusée (`refusDeLaBlessure`) : un import sans boucle, que la table du contrôle du graphe permet |
 
 **Cinq règles tiennent le noyau** (ce que les contrôles en tiennent :
 § 11, § 17.11) :
@@ -5627,9 +5914,12 @@ photographie.
   description ni coût lisible. `validerCapaciteFigee` (`js/combat/forme.js`)
   la juge comme une capacité de photographie, et refuse en plus un rôle,
   « inactive », une arme ou une jauge : une capacité forgée de rôle câblé
-  n'entre pas dans une photographie par une blessure. Reste connu : un nom
-  de plus de 200 signes, ou une description de plus de 4 000, donnerait une
-  capacité figée que la forme refuse ; `etatsDeLaBanque` ne l'écarte pas.
+  n'entre pas dans une photographie par une blessure. **`etatsDeLaBanque`
+  écarte toute capacité figée que `validerCapaciteFigee` refuse** (un nom
+  de plus de 200 signes, une description de plus de 4 000, ou toute autre
+  borne de la forme) : elle n'est pas rendue, si bien qu'aucune vue
+  n'offre une blessure que le moteur refuserait à sa forme. Elle ne
+  l'écartait pas au début du groupe 3.
 
 **La photographie peut changer en combat**, depuis le groupe 3, par deux
 événements seulement, qui portent ce qu'ils posent : **la blessure d'un
@@ -5766,9 +6056,10 @@ sans rien dépenser.
 - **Un jet ne clôt jamais le geste de lui-même** (contrat du lot 4.3,
   choix 1) : une attaque manquée (une attaque sans réussite, une défense à
   trois réussites) et un jet de caractéristique mènent aux suites, et le
-  geste attend « Appliquer » (pour une attaque manquée,
-  après l'étape « Interventions » s'il y en a une), qui le finit sans
-  dégâts. Jusqu'au groupe 2, ces gestes finissaient avec leur dernier dé :
+  geste attend `appliquer` (« Terminer » à l'écran, § 17.7 ; pour une
+  attaque manquée, après l'étape « Interventions » s'il y en a une), qui
+  le finit sans dégâts. Jusqu'au groupe 2, ces gestes finissaient avec
+  leur dernier dé :
   la palette n'aurait pas pu inverser ce dé, le relancer, ni ajouter une
   réussite (§ 17.4).
 - **Le moment se relit d'après le jet**, au bilan, et aux suites tant
@@ -5947,6 +6238,14 @@ lot 4.3, § 4.3 ; contrat du lot 4.3, § 6.4 ; § 12, points 12 et 49).
   Une liste vide n'est pas prête : « Choisissez une cible. » Elle compte de
   1 à 72 cibles distinctes, le plafond des protagonistes d'un combat
   (contrat du lot 4.3, choix 13).
+- **Le réglage `cibles`** que rend l'offre porte `vivants`, les vivants de
+  la case, chacun actif ou non, avec sa raison (ce que l'étape « Cible »
+  montre) ; `options`, ceux qui se cochent, les adversaires de l'auteur ;
+  `dOffice`, ceux qu'elle coche d'office, aujourd'hui les mêmes ; et
+  `valeur`, la liste réglée. Dans une liste, le premier qui ne se coche pas
+  est refusé : en « interdit », avec la phrase du jet contre un allié, si
+  c'est un allié ou l'auteur ; sinon en « hors_bornes » (« Ce protagoniste
+  n'est pas un vivant de la case de l'auteur. »).
 - **Les cibles se figent au premier dé**. Une seule : une attaque
   ordinaire, sans liste. Plusieurs : **un jet par cible**, dans l'ordre ;
   le coût se paie une fois ; chaque cible a son étape « Interventions »,
@@ -5956,7 +6255,13 @@ lot 4.3, § 4.3 ; contrat du lot 4.3, § 6.4 ; § 12, points 12 et 49).
   retirée entre-temps est sautée (contrat du lot 4.3, choix 2).
 - **« Toute la case »**, un effet de la palette, fait d'une attaque à une
   cible une attaque à plusieurs, une fois les dégâts de la première
-  calculés (§ 17.5).
+  calculés (§ 17.5). Ses cibles se jugent dans cet ordre, en
+  « hors_bornes » : la première est celle du geste (« La première cible
+  est celle du geste. ») ; il en faut une autre au moins (« Choisissez au
+  moins une autre cible. ») ; chacune est un vivant de la case de la
+  première (« Chaque cible est un vivant de la case de la première. »).
+  Puis **un allié ou l'auteur y est refusé en « interdit »**, avec la même
+  phrase que pour une façon Centrée (contrat du lot 4.3, choix 10).
 
 **Le MJ** (groupe 3 ; mission du lot 4.3, § 4.8 ; contrat du lot 4.3,
 § 6.3). L'événement `mj` a cinq genres. Chacun se joue **entre deux gestes
@@ -5968,10 +6273,11 @@ la fin de ce geste, et la fin du combat se juge.
   0 à 999, chacune une fois : attaque et défense (d'un adversaire), souffle
   et son maximum, actions et leur maximum, le lien d'une jauge (d'un
   personnage), corps, armure et endurance d'une zone, défense du bouclier
-  (de qui en porte un). Elles ne sont pas bornées par leur maximum : le MJ
-  décide (contrat du lot 4.3, choix 16) ; un maximum posé sous la valeur
-  courante l'entraîne. Aucune valeur qui change : « Aucune valeur ne
-  change. »
+  (de qui en porte un). Elles ne sont pas bornées par leur maximum, **le
+  lien compris**, que seule borne la forme (999) : le MJ décide (contrat du
+  lot 4.3, choix 16) ; un maximum posé sous la valeur courante l'entraîne.
+  Seul « rendre », un effet de la palette, s'arrête au maximum (« Déjà au
+  maximum. »). Aucune valeur qui change : « Aucune valeur ne change. »
 - **`equipement`** (« Changer l'équipement… ») : l'événement porte les
   valeurs d'une photographie recalculée (§ 17.2) du même protagoniste,
   avec autant de zones, jugées comme celles d'un ajout, et les changements
@@ -5980,9 +6286,19 @@ la fin de ce geste, et la fin du combat se juge.
   reçus ; l'endurance, le corps, le souffle, les actions et les liens
   restent ; l'attaque, la défense et le bouclier suivent la photographie.
   Les capacités qu'une blessure a ajoutées se remettent au bout de la
-  nouvelle liste ; les effets durables et les gardes suivent leur capacité
-  par son nom, et s'en vont, sans ligne, si elle a disparu (contrat du lot
-  4.3, choix 17).
+  nouvelle liste, dans leur ordre ; au-delà de 200 capacités ou de 600
+  façons, le geste est refusé en « interdit », avec la même raison qu'une
+  blessure (contrat du lot 4.3, choix 20). **Les effets durables et les
+  gardes suivent leur capacité par son nom** (contrat du lot 4.3,
+  choix 17) : chaque capacité de l'ancienne photographie retrouve, dans la
+  neuve, la première de ce nom qui n'est pas déjà prise ; une façon
+  gardée, celle de la même puissance et d'une arme du même nom. Un effet
+  dont la source est une capacité de ce protagoniste, et une garde,
+  prennent le nouvel indice ; si la capacité, ou la façon gardée, a
+  disparu, ils s'en vont, sans ligne. Un effet dont la source nomme un
+  autre protagoniste reste le même objet. Reste connu : une capacité de
+  blessure dont le MJ a retiré l'état ne se remet pas au bout, et se perd
+  si la photographie neuve n'en porte pas une du même nom.
 - **`etat`** : ajouter un état (une capacité figée ou un état libre),
   jusqu'au prochain tour du camp qui joue ou jusqu'à la fin du combat, de
   source MJ ; ou retirer un état qu'il porte, une blessure comprise.
@@ -6009,15 +6325,35 @@ d'interface, non du jeu.
   appliqués pendant lui, toutes ses cibles ; la plage de ses lignes court de
   sa première ligne (la première cible) à la fin du journal. Une échéance ne
   se défait pas seule : elle suit la fin de tour qui l'a causée.
-- **Pendant la préparation d'un geste** (rien de payé), la palette n'offre
-  que les effets « pour ce jet » (avantages, désavantages, ±N « pour ce
-  jet »), d'une source capacité jouée ou d'un passif, et seulement à un
-  geste qui a un jet ; les autres genres y sont inactifs : « Le geste n'est
-  pas encore payé. » Le prix d'un passif payé pendant la préparation se
-  rend quand le geste est retiré (« Revenir », une autre capacité, la
-  passe, la fin de tour) : « Revenir » l'efface (mission du lot 4.3, § 4.6),
-  et le journal n'écrit rien d'un geste retiré, ni de ses effets (contrat
-  du lot 4.3, choix 11).
+- **Pendant la préparation d'un geste** (rien de payé ; contrat du lot
+  4.3, choix 11), la palette n'offre que les effets « pour ce jet » :
+  avantages, désavantages, ±N et un état de durée « pour ce jet » (un état
+  « pour ce jet » ne s'applique qu'avant tout dé, donc là seulement), d'une
+  source capacité jouée ou passif non câblé, et seulement à un geste qui
+  lance un dé (une attaque, un jet prêté, un jet de caractéristique). Les
+  raisons, telles que l'offre les dit :
+  - tout autre genre, et ±N ou un état de durée « tour » ou « combat » :
+    « Le geste n'est pas encore payé. » (relancer, inverser, la zone et les
+    dégâts compris, qui disaient avant « Aucun dé lancé. » ou « Aucuns
+    dégâts calculés. ») ;
+  - un genre « pour ce jet » sur un geste sans dé (sans jet, déplacement,
+    attendre) : « Ce geste ne lance aucun dé. » ;
+  - une autre source (le MJ, même en Mode MJ, un état porté, une autre
+    capacité, un passif câblé), refusée en « interdit » : « Avant le
+    paiement, la source est la capacité jouée ou un passif. » Le MJ agit
+    dès le premier dé.
+
+  **Le prix d'un passif payé pendant la préparation se rend** quand le
+  geste est retiré (« Revenir », sur un geste racine ou emboîté, une autre
+  capacité, la passe, la fin de tour) : le souffle et le lien reviennent
+  sur leur jauge, à leur valeur exacte d'avant, sans borne
+  (`rendrePrixDesPassifs`, `js/combat/effets.js`). « Revenir » l'efface
+  (mission du lot 4.3, § 4.6) : un geste racine retiré sans être payé ne
+  laisse rien dans l'annulation, qui redevient celle d'avant lui, et le
+  journal n'écrit rien d'un geste retiré, ni de ses effets. Reste connu :
+  un effet « pour ce jet » payé par un passif reste payé si un réglage ôte
+  ensuite le jet du geste (le jet prêté décoché, puis le geste confirmé) :
+  le geste n'est pas retiré, et rien n'est rendu.
 - **Ce qu'il ne défait pas** : le journal, qui ne recule pas, et le compte
   des événements. Les lignes que le geste a écrites restent, barrées à
   l'écran, et une ligne « Annulé : … » s'ajoute à la fin (§ 17.9). Les dés
@@ -7081,8 +7417,9 @@ bulle devient le volet (plus bas, « Le téléphone »).
   bulle en **un onglet**, un bouton accroché au jeton (« Taloche [1] :
   rouvrir »), qui la rouvre, le focus sur la commande qui attend. Les
   autres jetons du camp sont alors inactifs (« Une action est en
-  cours. »). **Le geste fini** (« Appliquer », « Confirmer », « Passer son
-  tour ») : si le protagoniste peut encore agir, la bulle revient à sa
+  cours. »). **Le geste fini** (« Appliquer » ou « Terminer »,
+  « Confirmer », « Passer son tour ») : si le protagoniste peut encore
+  agir, la bulle revient à sa
   liste, le focus sur la première ligne active ; sinon elle se ferme, le
   focus va à son jeton, et la zone sous la carte montre « Qui joue ? ». Il
   en va de même pour la bulle d'un adversaire. Cachée ou réduite, la bulle
@@ -7275,7 +7612,10 @@ cet ordre :
   attaque) › Localisation › Interventions › Dégâts ; chacune faite, en
   cours, ou à venir. Une capacité sans jet : Capacité › Cible ; un
   déplacement : Capacité › Arrivée ; un jet de caractéristique : Capacité
-  › Jet de caractéristique ;
+  › Jet de caractéristique ; depuis le groupe 3, attendre : Capacité ›
+  Garde. Les moments neufs se rangent sous les étapes d'aujourd'hui : le
+  critique sous le jet, la contre-attaque sous « Localisation », la
+  blessure sous « Dégâts » ;
 - **les rangées de choix** : « Jet d'attaque » (lié aux hachures de
   l'arme prêtée), « Arme : », « Cible : », « Arrivée : », les
   caractéristiques, « Difficulté : », X, « Lien payé sur : ». La cible
@@ -7317,6 +7657,68 @@ focus ; une phrase liée aux champs de la saisie dit ce qui est attendu :
 « Un nombre entier de −20 à 20 est attendu. », aux bornes de la saisie
 (sans bornes : « Un nombre entier est attendu. »), ou « Une raison est
 demandée. ».
+
+**Ce que l'écran tient du groupe 3, à sa première vague** (contrat du lot
+4.3, § 13 : le noyau d'abord, l'écran ensuite). C'est le minimum qui fait
+jouer jusqu'au bout, dans la bulle, chaque moment neuf du noyau ; le
+reste n'a pas encore de vue (plus bas).
+
+- **« Terminer » et « Appliquer ».** Un geste qui attend `appliquer` sans
+  lettre de dégâts, un manqué ou un jet de caractéristique (§ 17.3),
+  montre « Terminer » ; un touché garde « Appliquer ». Un manqué n'écrit
+  donc sa ligne au journal qu'à ce clic.
+- **Le critique** (mission du lot 4.3, § 4.4) : deux boutons parmi les
+  choix du moment, « Garder {lettre} = {valeur} » (« Garder C = 8 » ; pour
+  un jet sans lettre, « Garder 3 réussites »), la lettre et sa valeur
+  lues sur les dégâts fixés, puis « Tenter le critique ». Le focus va à
+  « Garder … ».
+- **La contre-attaque** : « Laisser passer » seul (mission du lot 4.3,
+  § 4.3) ; les lignes de ses options n'ont pas encore de vue. Un geste
+  emboîté ne s'ouvre pas encore depuis l'écran ; s'il l'est, l'écran le
+  montre comme un autre : il se règle, se lance, ou « Revenir » ; sa
+  cible, posée à l'empilement, est un bouton inactif : « La cible de ce
+  geste est déjà posée. »
+- **La blessure** (mission du lot 4.3, § 4.10) : le titre « Blessure :
+  {nom court}, {zone} » (« Blessure : Aubépine, bras gauche ») ; une
+  option par capacité du bloc de blessure, avec son texte, active ou non
+  avec sa raison (une photographie pleine, § 17.2) ; sans bloc, « La
+  banque n'a pas de bloc de blessure. » ; puis « Une autre… », un champ
+  d'un nom de 40 signes au plus et son bouton « Choisir », qui émet
+  l'événement complété de ce nom. Un nom vide ou trop long ne part pas,
+  et le dit comme une saisie refusée : « Un nom de 1 à 40 signes est
+  attendu. » Les capacités viennent de la banque par `etatsDeLaBanque`
+  (§ 17.2) : `js/ecrans/combat.js` les lit une seule fois, et seulement
+  quand un geste attend sa blessure ; une banque qui ne se lit pas n'en
+  donne aucune, et l'état libre reste. Le focus va à la première capacité
+  active, sinon au champ. Ce que le coup a fait n'y est pas encore écrit.
+- **Attendre** : sa ligne paraît (§ 17.6) ; une rangée « Garder : » porte
+  un bouton par ligne qu'il peut garder, le focus sur le premier ;
+  « Confirmer » le joue.
+- **Les cibles d'une façon Centrée** : la rangée « Cible : » montre les
+  vivants de la case, ceux qu'elle coche d'office enfoncés tant que rien
+  n'est réglé ; un appui coche ou décoche (le réglage `cibles`) ; un allié
+  ou l'auteur est inactif, avec sa raison (§ 17.3) ; la dernière cochée
+  ne se décoche pas, une liste vide n'étant pas un réglage. Le contexte du
+  jet est celui de la première cible cochée, que le moteur pose déjà.
+- **Un geste engagé** est un geste payé, ou un geste emboîté sur lui,
+  même en préparation : pendant ce temps, les lignes de la bulle sont
+  inactives, ✕ devient « – » (« Réduire »), et personne ne se choisit sur
+  la carte ni sur les fiches.
+- **La saisie des dégâts montre la valeur d'avant la palette** :
+  l'ajustée, sinon la calculée, critique compris, avec la nature fixée à
+  la main. En dégâts normaux, « ajusté à » la valeur calculée n'émet rien
+  (§ 17.5), ou, s'il y avait un ajustement, des dégâts sans opération, qui
+  le défont.
+- **Le journal** : les segments `echeance` et `mj` (§ 17.9) prennent la
+  classe de « Fin du tour… », `combat-seg-fin` ; le nom de qui intervient
+  ou contre-attaque, au milieu d'une ligne, est dans la couleur de son
+  camp, comme un nom de tête. Les options de la blessure prennent la
+  classe des choix (`combat-choix`), et la feuille ne change pas.
+
+**Sans vue encore** : intervenir et « Intervenir… », les lignes de la
+contre-attaque, la palette, le menu du MJ, les états sur les fiches et
+les jetons. Les textes d'écran neufs sont dits plus bas (« Les phrases
+d'écran du groupe 3 »).
 
 **La zone sous la carte** ne porte plus que : « Qui joue ? » et un bouton
 par protagoniste du camp qui peut encore agir, quand personne n'est
@@ -7461,7 +7863,9 @@ sont inactifs avant le lancement : le journal est vide.
   qui agit et celui de la cible dans la couleur de leur camp, en gras ; la
   capacité jouée à l'accent ; ✓ et ✗ en vert et en rouge ; la lettre et sa
   valeur, et le nombre saisi après « ajusté à », en ambre, en gras ;
-  « Fin du tour… » en italique ; « — Tour… — » à l'accent ; **la phrase de
+  « Fin du tour… » en italique, et, depuis le groupe 3, la ligne « Fin
+  de … » d'une échéance et le « MJ : » d'un geste du MJ ; « — Tour… — » à
+  l'accent ; **la phrase de
   la mort**, seule, en rouge et en gras ; les dés d'un même jet dans un
   cadre fin. Les lignes d'un geste annulé sont barrées.
 - **La dernière ligne reste visible en revenant sur l'écran**, le combat
@@ -7621,7 +8025,8 @@ sont inactifs avant le lancement : le journal est vide.
 - **Aux groupes 1 et 2**, il n'y a ni palette, ni « Intervenir… », ni menu
   du clic droit : à leur place, les réglages à la main (§ 17.4, § 17.5).
   Le groupe 3 dira leur place dans la bulle. La capacité d'attente
-  n'apparaît pas.
+  n'apparaissait pas ; depuis le groupe 3, elle a sa ligne (plus haut,
+  « Ce que l'écran tient du groupe 3 »).
 - **Le journal** suit les gabarits du § 17.9, et sa hauteur est limitée.
   Une ligne s'écrit quand le geste est fini : la ligne « relance en
   cours… » de la maquette n'existe pas ; c'est le bandeau qui montre la
@@ -7724,6 +8129,17 @@ rien n'en va au livret. Celles du complément (ses § 4.1 à § 4.6, § 4.10,
     après sa dernière ligne : la lecture du contrat, gardée ; à trancher
     par l'auteur (plus haut, « Pour le clavier »).
 
+**Les phrases d'écran du groupe 3, à sa première vague.** La mission du
+lot 4.3 donne « Garder {lettre} = {valeur} », « Garder 3 réussites »,
+« Tenter le critique », « Laisser passer », le titre « Blessure : {nom
+court}, {zone} », « Une autre… » et « La banque n'a pas de bloc de
+blessure. ». Les autres sont **à confirmer par l'auteur** : « Terminer »
+pour un geste qui attend sans lettre de dégâts (contrat du lot 4.3,
+choix 1 ; la mission ne le dit que du volet du téléphone) ; la rangée
+« Garder : » et l'étape « Garde » ; « La cible de ce geste est déjà
+posée. » ; le bouton « Choisir » d'un état libre ; « Un nom de 1 à 40
+signes est attendu. ».
+
 ### 17.8 L'enregistrement
 
 **Chiffré par la clé de table** (`js/combat/enregistrement.js`), comme les
@@ -7749,6 +8165,32 @@ banque, qui ne s'écrit jamais en clair sur un appareil.
   relecture, pour sa forme ; si un combat passait encore la borne, le
   gardien refuserait l'écriture, la barre dirait « Ce navigateur ne garde
   pas le combat », rien ne lèverait et rien ne se perdrait en mémoire.
+- **Depuis le groupe 3, ce pire contenu n'est plus une borne** (contrat du
+  lot 4.3, choix 23) : un geste « Changer l'équipement… » du MJ porte une
+  photographie entière, un état ou une blessure une capacité figée.
+  Mesuré sous Node, chaque événement en JSON tel qu'il entre au contenu,
+  contre les 8 Mo du clair (8 388 608 octets) :
+  - l'équipement qui porte la photographie d'Aubépine : 9 987 signes,
+    10 032 octets avec sa virgule ; 836 tiennent ;
+  - le plus gros que permettent les bornes d'une photographie (§ 17.2 :
+    200 capacités, 600 façons de 4 000 signes de description et de 40
+    éléments de 200 signes, 40 armes, 19 zones, 20 liens, 200 passifs
+    câblés), avec 40 changements de 40 noms : rempli de « a »,
+    8 156 361 octets, un seul tient, et laisse 232 247 octets à tout le
+    reste ; rempli de
+    « € », trois octets par signe, le pire, 23 893 161 octets, 2,85 fois
+    la borne : aucun ne tient, et la forme l'accepte ;
+  - un effet « etat » qui porte la plus grosse capacité figée (20
+    façons) : 256 627 octets en « a », 32 tiennent ; 753 427 octets en
+    « € », 11 tiennent ; avec Étourdi, de la démonstration, 531 octets :
+    15 797 tiendraient, plus que les 15 000 événements permis.
+
+  Rien de neuf pour autant : au-delà de 8 Mo, le gardien refuse
+  l'écriture, la barre dit « Ce navigateur ne garde pas le combat », rien
+  ne lève et rien ne se perd en mémoire ; le combat se joue toujours, en
+  mémoire. La même photographie posée dans la mise en place rendrait le
+  combat impossible à garder dès son ouverture (non mesuré à part : les
+  mêmes valeurs, le même ordre de grandeur).
 - **L'enveloppe est une donnée venue d'ailleurs** : n'importe quel script
   du site a pu la poser dans la base, sans la clé. Chaque champ est donc
   borné avant d'être examiné. `enregistre_le` a la forme qu'écrit
@@ -7851,7 +8293,7 @@ banque, qui ne s'écrit jamais en clair sur un appareil.
   se rejoue pas, et se dit. **Elle vaut 4 depuis le groupe 3 du lot 4**
   (lot 4.3) : sept événements neufs, des moments neufs (le critique, la
   contre-attaque, la blessure), un manqué et un jet de caractéristique qui
-  attendent « Appliquer », et la fin du −1 des blessures, qui change les
+  attendent `appliquer`, et la fin du −1 des blessures, qui change les
   nombres d'un combat : un combat d'avant ne se rejouerait pas à
   l'identique. **Un combat gardé en version 1, 2 ou 3** se dit « commencé
   avec une autre version du simulateur » et ne se reprend pas : sur chaque
@@ -7952,7 +8394,12 @@ le comparent mot pour mot, au signe près.
 - Rien ne vient de l'appareil : ni heure, ni langue, ni hasard.
 - Les signes (→, ✓, ✗, −, —, ·) sont donnés par leur code dans le code,
   pour qu'aucun éditeur ne remplace l'un par son voisin ; **toute espace
-  est une espace ordinaire**, « n° 1 » et « 21 h 30 » compris.
+  est une espace ordinaire**, « n° 1 » et « 21 h 30 » compris. Depuis le
+  groupe 3, le signe × de « ×2 » et les guillemets d'un état libre
+  (« « Tablier roussi » ») aussi, entourés d'espaces ordinaires. **Le
+  journal du combat de référence ne porte plus aucun signe moins**
+  (§ 17.10) : un contrôle le tient, et vérifie que le moins, le signe fois
+  et les guillemets des gabarits neufs sont écrits par leur code.
 - Les noms (protagonistes, capacités, zones, armes, raisons) sont des
   données hostiles, écrites telles quelles ; c'est l'écran qui en ôte les
   signes qui commandent le sens de l'écriture (§ 10.1), sur le texte
@@ -7973,17 +8420,27 @@ Un segment porte son type (le nom de qui agit, en tête de ligne, la
 capacité jouée, avec sa puissance, et le nom de la cible, chacun des deux
 noms avec son camp ; ✓ et ✗ ; la lettre et sa valeur ; le nombre saisi
 après « ajusté à » ; la phrase de la mort ; « Fin du tour… » ;
-« — Tour… — » ; le reste en texte), le numéro de sa phrase, et, dans un
+« — Tour… — » ; depuis le groupe 3, la ligne « Fin de … » d'une échéance,
+`echeance`, et le « MJ : » qui ouvre chaque phrase d'un geste du MJ,
+`mj` ; le reste en texte), le numéro de sa phrase, et, dans un
 jet, son cadre et son dé. Une ligne connaît aussi le genre de chacune de
 ses phrases (le lancement, le tour, l'ouverture, les sources, le jet, la
 localisation, l'intervention, les dégâts, les blessures, la mort,
-l'annulation… ; depuis le groupe 3, la contre-attaque, le critique,
-l'effet, l'état, l'échéance et le MJ), que le bandeau lit pour se couper
+l'annulation… ; depuis le groupe 3, la contre-attaque, sa phrase de tête
+ou celle qui dit qu'elle n'est pas jouée, l'effet (rendre, ±N, déplacer),
+l'état, l'échéance et le MJ ; la phrase de tête d'un geste emboîté prend
+le genre de ce geste, intervention ou contre-attaque, et ses autres
+phrases gardent les leurs ; la blessure garde le genre des blessures, et
+le critique reste dans la phrase du jet), que le bandeau lit pour se couper
 (§ 17.7). **L'écran ne
 relit jamais le texte** pour y chercher un nom : un nom est une donnée
 hostile. Les couleurs, les cadres, la coupe du bandeau et les lignes
 barrées se lisent dans les segments et dans les plages des lignes
-« Annulé ».
+« Annulé ». Le moteur écrit par dix fabriques de lignes : le lancement,
+le tour, la fin d'un tour, la fin, la passe, le geste, l'annulation, et,
+depuis le groupe 3, l'échéance, le geste du MJ et l'effet hors d'un
+geste. Une ligne porte « mort » quand l'un de ses gestes, emboîtés
+compris, tue.
 
 - **Ce qui se colore, et rien d'autre**, à l'écran seulement (la liste du
   journal et le bandeau) :
@@ -7997,7 +8454,7 @@ barrées se lisent dans les segments et dans les plages des lignes
   | ✗ | `--combat-echec` |
   | la lettre et sa valeur (« B = 8 »), et le nombre saisi après « ajusté à » | `--combat-alerte`, gras |
   | la phrase de la mort | `--combat-echec`, gras |
-  | « Fin du tour… » | italique, couleur secondaire |
+  | « Fin du tour… » ; depuis le groupe 3, la ligne « Fin de … » d'une échéance et le « MJ : » d'un geste du MJ | italique, couleur secondaire |
   | « — Tour… — » | l'accent, comme au groupe 1 |
 
   Un nom répété plus loin, les sources entre parenthèses, les raisons, la
@@ -8040,6 +8497,27 @@ attend d'exploser s'écrit sans signe ni somme (« 5 » ; « 6 explose,
 + 6 ») ; un dé qui attend une relance garde son « ✗ ». Le bandeau la
 montre (§ 17.7) ; le journal n'écrit toujours sa ligne qu'à la fin du
 geste.
+
+**Depuis le groupe 3, elle suit la pile** : les phrases du geste racine,
+jusqu'aux gestes emboîtés déjà joints, puis celles du geste au sommet ;
+elle est nulle quand le geste racine n'est pas payé, ou n'a pas de jet.
+Aux moments neufs : au choix du critique, le cadre seul ; aux suites d'un
+manqué ou d'un jet de caractéristique, les réussites seules ; à l'étape de
+la contre-attaque, jusqu'à la localisation qui annule ; au choix d'une
+blessure, jusqu'aux dégâts appliqués. **Elle garde les réussites au bilan
+et aux suites d'un manqué**, même si la palette peut encore en changer le
+compte (contrat du lot 4.3, choix 21) : elle est le début exact de la
+ligne que le geste écrirait si rien ne changeait plus. Quand ce qui est
+déjà écrit change, elle se réécrit, et cesse alors de débuter la ligne
+qu'elle annonçait : « +1 réussite » au bilan ou aux suites d'un manqué
+(« 2 réussites » devient « 3 réussites (dont 1 par Émincer) ») ; un geste
+emboîté qui fait des dégâts avant ceux du geste racine (son bilan, nommé,
+peut ne pas débuter la ligne finale) ; une intervention ou une
+contre-attaque jouée après un manqué, où elle peut égaler la ligne finale
+entière. S'arrêter au cadre tant que le jet se relit l'éviterait, mais le
+bandeau perdrait le compte des réussites dans le cas ordinaire, sans
+palette. Le combat de référence, sans palette ni aucun de ces cas, garde
+le contrôle « début exact » à chaque événement (§ 17.10).
 
 **Les gabarits de la mission**, illustrés par la démonstration.
 
@@ -8184,7 +8662,9 @@ Seuls les principes sont redits ici :
 
 - **Dans la ligne du geste qu'elles suivent**, comme l'esquive : une
   intervention (« Aubépine intervient : … »), la capacité gardée jouée (sa
-  parenthèse dit « gardée par Guetter »), la contre-attaque jouée,
+  parenthèse dit « gardée par Guetter » : la source de l'effet de garde,
+  ou, s'il n'est plus là, la capacité d'attente de qui la joue), la
+  contre-attaque jouée,
   laissée ou impossible (« Aubépine ne contre-attaque pas. »), après la
   phrase de la localisation, ou après le bilan sans localisation, et
   avant les dégâts appliqués ; la blessure garde sa place, après eux.
@@ -8203,10 +8683,13 @@ Seuls les principes sont redits ici :
   choisie se dit dans la localisation (« zone choisie (Minutie) : torse »).
 - **Les phrases d'effet** (rendre, ±N, un état, déplacer) appliquées
   pendant un geste viennent après la phrase des sources si elles précèdent
-  le premier dé, sinon après les dégâts et la blessure, avant la mort ;
-  plusieurs, dans l'ordre où elles s'appliquent. Chaque phrase de dégâts
-  appliqués commence par le nom de qui les reçoit dès qu'une ligne en
-  porte deux bilans ; une zone ne prend pas d'article.
+  le premier dé (seuls les effets « pour ce jet » le peuvent : contrat du
+  lot 4.3, choix 11), sinon après les dégâts et la blessure, avant la
+  mort ; plusieurs, dans l'ordre où elles s'appliquent. Chaque phrase de
+  dégâts appliqués commence par le nom de qui les reçoit dès qu'une ligne
+  en porte deux bilans ; la phrase de la blessure ne se nomme pas ; une
+  zone ne prend pas d'article. Un effet appliqué pendant la préparation
+  d'un geste ensuite retiré ne s'écrit nulle part.
 - **Leur propre ligne** : « Intervenir… » hors d'une attaque, attendre
   (« Aubépine : Guetter, garde Taloche [1] jusqu'au prochain tour des
   PJ. »), chaque cible d'un geste à plusieurs cibles (« cible 1 sur 2 »,
@@ -8218,8 +8701,58 @@ Seuls les principes sont redits ici :
 - **Les segments neufs** suivent les règles plus haut : le nom de qui
   intervient ou contre-attaque, en tête de sa phrase, est un nom de tête ;
   la capacité qui le suit, l'accent ; le 4e dé et « inversé » entrent dans
-  le cadre du jet ; « Fin de … » s'écrit comme « Fin du tour… » ; « MJ : »
-  en italique, couleur secondaire.
+  le cadre du jet ; « Fin de … », la ligne entière (le type `echeance`),
+  et « MJ : » (le type `mj`) s'écrivent comme « Fin du tour… », en
+  italique, couleur secondaire.
+- **Les parenthèses.** Celle de l'ouverture dit l'action d'une
+  intervention ou d'une contre-attaque d'abord, puis le souffle et le
+  lien, puis la garde (« (1 action, 1 souffle, gardée par Guetter) ») ;
+  après « ; », le coût en lien non payé, puis « attaque en plus : … ». Un
+  geste à plusieurs cibles ne dit son coût et son attaque en plus que sur
+  la ligne de la première. Dans toute parenthèse d'effet, le prix d'un
+  passif payant suit sa source : « (Nez fin, 1 souffle) ».
+- **Le bilan**, dans cet ordre : la lettre, « doublés », « ajusté à », les
+  opérations de la palette dans l'ordre où elles s'appliquent,
+  « dégrossir », chaque « +N contre l'armure » de la palette, puis chaque
+  report. Plusieurs « +1 réussite » : « (dont 1 par Émincer, 1 par MJ) » ;
+  deux de la même source : « (dont 2 par MJ) ».
+- **L'élision** : tout « de {nom} » neuf s'élide devant une voyelle,
+  accentuée ou non (« défense d'Aubépine », « attaque de Marmiton
+  n° 3 ») ; un h reste entier, faute de savoir s'il est muet, comme à la
+  lecture d'un adversaire (`js/adversaire/lecture.js`).
+- **Le MJ** : chaque phrase s'ouvre par « MJ : », une par chose changée ;
+  une valeur inchangée ne s'écrit pas ; un maximum qui entraîne sa valeur
+  (le souffle, les actions) lui donne sa phrase, juste après la sienne.
+  Une valeur de zone : « MJ : Aubépine, torse : armure 10 → 4. » ; un
+  lien : « MJ : lien de Grand Four d'Aubépine : 1 → 0. » ; le bouclier :
+  « défense du bouclier d'… ». « Annulé : » d'un geste du MJ nomme sa
+  valeur s'il n'en porte qu'une (« Annulé : MJ — défense de Marmiton
+  n° 2. », « Annulé : MJ — Aubépine, torse : armure. »), sinon « valeurs
+  de … » : le compte est celui des valeurs de l'événement.
+- **±N chez un adversaire** dit sa valeur d'avant et d'après (« Défense de
+  Marmiton : 5 → 3 (Minutie), pour ce jet. ») :
+  - hors d'un geste, elles se lisent sur l'état d'avant et d'après
+    l'effet ;
+  - pendant un geste, l'effet appliqué les porte (`avant` et `apres`, que
+    pose `js/combat/effets.js`) : pour ce jet, la valeur
+    d'avant se lit avec le geste, après son paiement, ses ±N « pour ce
+    jet » déjà appliqués, si bien qu'un second ±N « pour ce jet » part de
+    la valeur que le premier a écartée (5 → 3, puis 3 → 2) ; pour un
+    durable (« tour », « combat »), elle se lit sans eux, comme son
+    échéance la rendra : sur une défense de 5 écartée à 3 pour ce jet, un
+    −1 durable dit « 5 → 4 », et son échéance « 4 → 5 » (contrat du
+    lot 4.3, choix 24, contrôle dans `combat_g3_effets`) ; celle d'après est l'avant plus N, sans
+    plancher (§ 17.4). L'effet durable posé ne les porte pas. Faute de
+    ces valeurs, la phrase écrirait « ? → ? », jamais une valeur
+    recalculée : un contrôle joué par le moteur tient qu'elle ne l'écrit
+    plus ;
+  - à son échéance, sur l'état qui porte encore l'effet, sans ceux qui
+    partent avant lui à la même échéance (le même camp, la durée « tour »,
+    plus tôt dans la liste des effets) : deux −2 sur une attaque de 4
+    disent « 0 → 2 », puis « 2 → 4 ».
+
+  Chez un personnage, ±N reste un modificateur de ses dés (« Défense
+  d'Aubépine : −1 à chaque dé (…), … »), sans valeur d'avant ni d'après.
 
 **Là où la mission permettait deux lectures**, le combat de référence
 (§ 17.10) en retient une, à confirmer par l'auteur :
@@ -8260,7 +8793,8 @@ Seuls les principes sont redits ici :
 **Les gabarits que la mission ne donne pas.** Un seul texte par cas ; ils
 ont été écrits avec le journal, un contrôle les tient, et **ils restent à
 confirmer par l'auteur**. Le combat de référence n'emploie que les deux
-premiers.
+premiers. Ceux du groupe 3, à la fin du tableau, sont aussi listés dans
+l'en-tête de `js/combat/journal.js`.
 
 | Cas | Texte |
 |---|---|
@@ -8286,6 +8820,14 @@ premiers.
 | la face de contre-attaque avant le dernier dé | « Localisation 3 d20 → 6 : torse ; 20 : contre-attaque, l'attaque est annulée. » : le nombre est celui des dés du geste, les dés écrits sont ceux qui ont été lancés |
 | deux armes de même nom chez un adversaire | « Spatule souple », « Spatule souple (2) » |
 | l'heure avant dix heures | « à 9 h 05 » ; le fichier : `combat-2026-10-12-09h05.txt` |
+| la fin d'une attaque en plus restée inutilisée (groupe 3) | « Fin de Flambage pour Aubépine : plus d'attaque en plus. » |
+| une échéance ou une annulation dont la source est le MJ (groupe 3) | « Fin de MJ pour Aubépine : plus de −1 à chaque dé de défense. » ; « Annulé : effet de MJ sur Marmiton n° 2. » |
+| la fin d'un état libre (groupe 3) | « Fin de l'état « Tablier roussi » pour Aubépine. » |
+| une arme, une qualité ou une cellule Équipement que le MJ vide (groupe 3) | « MJ : Marmiton n° 2 ne tient aucune arme. » ; « MJ : qualité de Couvercle de marmite d'Aubépine : 2 → aucune. » ; « MJ : équipement de Marmiton n° 2 : aucun. » |
+| l'annulation d'une valeur de zone (groupe 3) | « Annulé : MJ — Aubépine, torse : armure. » |
+| plusieurs sources de « +1 réussite » (groupe 3) | « 3 réussites (dont 1 par Émincer, 1 par MJ) » ; deux de la même : « (dont 2 par MJ) » |
+| la garde à côté d'un coût (groupe 3) | « (1 action, 1 souffle, gardée par Guetter) » |
+| l'ordre de l'armure et du report dans le bilan (groupe 3) | après « dégrossir », chaque « +N contre l'armure » de la palette, puis chaque report |
 
 Les phrases que dit la région d'annonce (§ 17.7) et quelques textes des
 vues (le bilan pendant la chaîne, les libellés des dégâts à fixer, les
@@ -8408,7 +8950,17 @@ pendant fictif du combat de la maquette.
 - **Son état final** : Aubépine en D4, 0 action sur 2, 2 de souffle sur
   10, 0 de lien sur 1, 4 de corps sur 10, **une blessure, Main brûlée, au
   bras gauche, jusqu'à la fin du combat** (au groupe 2 : deux zones
-  blessées) ; les trois adversaires morts, aux tours 2, 5 et 5.
+  blessées) ; les trois adversaires morts, aux tours 2, 5 et 5. L'état
+  attendu dit les blessures **en liste**, chacune `{ nom, zone, duree }`
+  (le nom de la capacité du bloc de blessure, ou de l'état libre ; le code
+  de la zone ; la durée), dans l'ordre où elles sont venues ; il en disait
+  le nombre, celui des zones sans endurance. **Le suivi des ressources**,
+  relu après chaque geste du scénario (le tour, le camp, les actions, le
+  souffle et le lien d'Aubépine, ses blessures, le souffle de deux
+  adversaires), compte les blessures portées, non plus les zones sans
+  endurance : aucune jusqu'au geste 22 (le Moulinet du geste 12 laisse à
+  Aubépine la jambe gauche sans endurance, sans lui ôter de corps), puis
+  une.
 - **Un lecteur de scénario** (`tests/outils/scenario.js`) le traduit en
   événements : un scénario s'écrit avec des noms et des dés tels qu'ils
   tombent ; tous les dés d'une liste sont lancés, et aucun autre ; un dé de
@@ -8442,7 +8994,11 @@ pendant fictif du combat de la maquette.
   main) ; à la fin de chaque geste, « annuler » rend l'état d'avant, et le
   geste rejoué refait le même état et les mêmes lignes, puis tous les
   gestes se défont jusqu'au lancement ; à chaque état, l'offre allégée
-  rend le verdict du groupe 1 (§ 17.1).
+  rend le verdict du groupe 1 (§ 17.1). Depuis le groupe 3, les mêmes
+  contrôles passent sur le combat refait ; la ligne en cours y a deux
+  moments neufs, la contre-attaque qui s'offre (geste 16) et la blessure
+  à choisir (geste 22), et n'a plus ceux d'un dé qui explose, tenus à la
+  main (§ 17.9).
 
 **Le banc sur le vrai classeur** : `node tests/banc_combat_reel.js
 <classeur> <scénario>`, hors de `node --test`, comme le banc du § 6.3.
@@ -8470,6 +9026,15 @@ pendant fictif du combat de la maquette.
   chiffré, et le temps de son rejeu (§ 17.8, § 17.11). Ses fonctions
   d'écart sont exportées : le contrôle du combat de référence les voit se
   taire sur la démonstration, puis dire l'écart qu'on leur forge.
+  **Depuis le groupe 3**, il compare les blessures en liste, dans l'ordre,
+  `{ nom, zone, duree }`, la zone par son code, ou par son nom pour une
+  zone que la banque ne reconnaît pas ; un nombre, la forme d'un scénario
+  d'avant le lot 4.3, donne un écart qui le dit (« blessures attendues en
+  nombre (2) ; depuis le lot 4.3, l'état attendu les dit en liste, chacune
+  { nom, zone, duree }. ») ; le tableau de son état final gagne une
+  colonne « blessures » (« Main brûlée (bras gauche, combat) ») ; et il
+  joue le scénario avec la banque du classeur, où une blessure nommée se
+  prend, figée, dans son bloc de blessure.
 - **Un écart n'est pas un échec** : l'auteur a pu modifier son classeur
   depuis que le scénario a été écrit. Le banc dit chaque écart, et les
   valeurs de départ qui aident à l'expliquer ; il ne corrige rien. Il rend
@@ -8486,10 +9051,79 @@ pendant fictif du combat de la maquette.
 
 ### 17.11 Les mesures
 
-Les mesures du groupe 2, du 25/10/2026, viennent d'abord ; celles du
-groupe 1, du 12/10/2026, suivent, telles qu'elles ont été prises. Toutes
+Les mesures du groupe 3, à sa première vague (27/10/2026), viennent
+d'abord ; puis celles du groupe 2, du 25/10/2026, et celles du groupe 1,
+du 12/10/2026, telles qu'elles ont été prises. Toutes
 sont prises sur le poste de l'auteur. Chacune dit son outil, sa méthode et
 sa réserve ; ce qui n'est pas mesuré est dit à la fin de chaque série.
+
+**Le groupe 3, à sa première vague, le 27/10/2026** (le noyau, commit
+`b59f7f5`, puis ses dernières retouches). Sous Node, sur un poste que les
+agents et le lanceur des mises à l'épreuve chargeaient : des nombres
+indicatifs, chacun avec sa méthode.
+
+- **Le rejeu de 15 000 événements à l'ouverture** (mission du lot 4.3,
+  § 12 : lire, valider, rejouer, comme au groupe 2), contre le commit de
+  départ, `0aa2aaf`, cloné hors du dépôt, la mémoire validée de 18,9 à
+  19,4 Go. Trois tours alternés par arbre, trois ouvertures par contenu,
+  médianes de neuf : 15 000 passes, 2,68 s contre 2,03 s ;
+  61 protagonistes qui passent, 9,05 contre 5,78 s ; des paires « passe,
+  annuler », 2,19 contre 1,39 s ; le combat long, 3,94 contre 2,97 s
+  (deux combats différents, de 7 529 et 8 173 lignes). Ces écarts ne
+  tiennent pas quand la charge pèse pareil sur les deux : en processus
+  neufs alternés (le rejeu seul, cinq chacun), 2,72 contre 2,64 s, 7,26
+  contre 6,40 s, 2,03 contre 1,75 s ; dans un même processus, les deux
+  moteurs alternés sur huit tours, le rapport du groupe 3 au départ vaut
+  1,00 pour les passes, 0,92 pour les paires, 0,94 pour les
+  61 protagonistes. **Pas de régression au-delà du bruit.** Le profil des
+  paires a les mêmes fonctions en tête ; la fin d'un tour pèse un peu
+  plus, par les échéances. La mesure se refait, hors dépôt, par
+  `plans/lot4_travail/groupe3/mesure_rejeu_ouverture.essai.mjs`.
+- **Le contrôle des 5 000 événements au hasard** du rejeu : 18,5 s, contre
+  23,5 s au départ ; `combat_segments`, seul, de 1,4 à 1,7 s.
+- **Les lenteurs de l'enregistrement** (`tests/combat_enregistrement.test.js`,
+  le fichier lancé seul) : la borne de 8 Mo, 3,1 s (3,5 s au départ) ;
+  l'enveloppe longue, 10,9 s (16,4 s) ; la borne d'un chiffré plus lourd,
+  9,6 s (15,9 s) ; le fichier entier, 41,6 s (62,2 s). Le noyau ne les a
+  pas ralenties : elles viennent de la mesure même, qui chiffre et
+  déchiffre plusieurs Mo. Elles ne passaient les 30 s d'un contrôle que
+  dans la suite complète, où les fichiers tournent ensemble : dans celle
+  du 27/10, la mémoire validée à 20,4 Go (2,2 Go libres), trois contrôles
+  de l'enregistrement ont passé leurs 30 s, et « une cellule démesurée »
+  (`tests/adversaires.test.js`, lot 3) a résolu en 12,1 s pour une borne
+  de 5 s. Seul, ce contrôle passait sur le code du groupe 3 (11,5 s en
+  tout), et échouait au départ (« résolue en 5 260 ms »), sans que
+  `js/adversaire/` ait changé.
+- **Les délais** (contrat du lot 4.3, choix 22) : un contrôle de durée ne
+  doit pas dépendre de la mémoire du poste. Les trois contrôles lourds de
+  l'enregistrement prennent un délai de 120 s ; les autres gardent 30 s,
+  le garde-fou d'une attente sans fin. La borne de la cellule passe de 5
+  à 30 s : ce qu'elle garde, l'absence de débordement de pile et d'un coût
+  quadratique, se voit toujours, un coût quadratique sur cent trente mille
+  objets se comptant en minutes. Remesuré ensuite, le lanceur tournant en
+  même temps : la borne de 8 Mo, de 4,48 à 6,06 s seule, 3,62 s dans son
+  fichier ; l'enveloppe longue, de 20,47 à 35,25 s seule, 43,72 s dans son
+  fichier ; le chiffré plus lourd, de 21,31 à 29,64 s seul, 32,75 s dans
+  son fichier, où ces deux-là passent les 30 s d'avant ; le fichier
+  entier,
+  106,2 s ; la cellule démesurée, de 8,38 à 12,11 s seule, 10,37 s dans
+  son fichier (23,3 s en tout), et sa résolution, mesurée à part, de 3,7 à
+  4,3 s, près de l'ancienne borne.
+- **Le banc, sur le classeur d'essai** et un scénario fait du combat de
+  référence : les 36 lignes mot pour mot, l'état final et l'arrêt sans
+  écart ; le combat gardé (104 événements, 43 Ko) rejoué à l'identique ;
+  11 913 verdicts de l'offre allégée identiques à ceux du groupe 1 ; le
+  pire contenu que le banc fabrique (§ 17.10), 4,92 Mo, gardé ; « Bilan :
+  sans écart ».
+- **Le pire contenu d'un événement du groupe 3** : § 17.8.
+- **La mémoire du poste**, veillée : de 18,9 à 19,5 Go validés pendant les
+  mesures ; 20,4 Go dans la suite complète du 27/10.
+
+**Ce qui n'est pas relevé ici** : le passage complet des mises à
+l'épreuve sur le code commité (chaque agent a vu armées puis désarmées
+les casses de sa logique neuve, sur une copie du dépôt hors OneDrive) ;
+le banc sur le classeur réel ; l'écran du groupe 3 dans un vrai
+navigateur.
 
 **Le groupe 2, le 25/10/2026.**
 
@@ -9481,7 +10115,11 @@ commander tout cela, dans la bulle et sur un téléphone : l'étape
 passifs, les états sur les jetons et les fiches, le menu du MJ et le Mode
 MJ, l'étape « Cible » d'un geste à plusieurs cibles, et l'étape « La
 blessure ». Le noyau tient déjà, pour chacune, ce que l'offre permet et
-pourquoi le reste ne l'est pas.
+pourquoi le reste ne l'est pas. L'écran en tient déjà, depuis la première
+vague, le minimum qui fait jouer chaque moment neuf jusqu'au bout :
+« Terminer », le critique, « Laisser passer », la garde d'attendre, les
+cibles cochées d'une façon Centrée et l'étape « La blessure » (§ 17.7,
+« Ce que l'écran tient du groupe 3 »).
 
 **Les groupes 1 et 2 tenaient ses points d'accroche**, et le noyau du
 groupe 3 s'y est branché sans en changer le principe : le geste en cours

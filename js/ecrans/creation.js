@@ -28,6 +28,11 @@
 // choisissent en vignettes, chacune avec ce que l'objet donne et son état
 // de maîtrise (maitrise.js) ; le choix reste permis dans tous les cas.
 //
+// Le lot 4.3 (mission, § 8) : à l'étape 7, les paramètres en rangées
+// souples, et les objets sans désavantage d'abord, aux mêmes identifiants ;
+// à l'étape 8, les capacités du seul primordial au niveau 0, offertes, que
+// « + » acquiert ; un personnage au format 2 ouvert ici passe au format 3.
+//
 // Aucune règle du jeu n'est écrite ici : ce qui manque, les montées
 // permises, le tirage, l'intitulé d'un groupe et le résumé d'un bloc
 // viennent de parcours.js, la fiche de calcul.js, les packs de packs.js, la
@@ -37,7 +42,7 @@ import { accorder } from "../banque/accord.js";
 import { cle } from "../banque/noms.js";
 import { TYPES, typeDe } from "../banque/types.js";
 import { coutEcrit, lecture } from "../fiche/lecture.js";
-import { calculerFiche, capacitesDuBloc, contexte, degatsDecrits, descriptionA, estBouclier, indexerCreation, qualiteDe, valeursParametre } from "../personnage/calcul.js";
+import { ROLES, calculerFiche, capacitesDuBloc, contexte, degatsDecrits, descriptionA, estBouclier, indexerCreation, qualiteDe, valeursParametre, versFormat3 } from "../personnage/calcul.js";
 import { difference } from "../personnage/difference.js";
 import { ErreurPersonnage, nouvelIdentifiant, verifier } from "../personnage/format.js";
 import { capacitesDeLObjet, ligneDesMaitrises, maitriseDeLObjet, maitriseDuPack, maitrisesDuPersonnage, poidsDe, rangsDuPersonnage } from "../personnage/maitrise.js";
@@ -349,7 +354,11 @@ function etapeCaracteristiques(o) {
 // Archétype, espèce, primordial : un bloc à choisir parmi des vignettes,
 // chacune avec son résumé ; sous elles, le bloc choisi, décrit, et ses
 // groupes de choix. Changer de bloc perd les choix du bloc quitté.
-function etapeBloc(o, role, { intitule, aucun }) {
+// L'étape 6, sous les vignettes (mission du lot 4.3, § 8.3) : la règle de
+// l'auteur du 26/10/2026, que calcul.js applique.
+const LIGNE_PRIMORDIAL = "Les capacités du primordial partent au niveau 0 : le personnage ne les possède pas encore. Il les acquiert à l'étape 8, pour 1 point au niveau 1.";
+
+function etapeBloc(o, role, { intitule, aucun, sousLesVignettes = null }) {
   const blocs = o.index.blocsDeType(role);
   if (!blocs.length) return el("p", { classe: "message" }, aucun);
   const choisi = o.personnage[role];
@@ -374,6 +383,7 @@ function etapeBloc(o, role, { intitule, aucun }) {
         });
       }),
     ),
+    sousLesVignettes ? el("p", { classe: "secondaire-texte petit" }, sousLesVignettes) : null,
     actuel ? blocChoisi(o, actuel, choisi.choix, role, (q, choix) => { q[role].choix = choix; }) : null,
   ];
 }
@@ -540,7 +550,19 @@ function parametresDeLObjet(o, bloc) {
   return [...premiers, ...autres];
 }
 
-const listeDeParametres = (parametres) => (parametres.length ? el("dl", { classe: "vignette-parametres" }, parametres.map(([nom, valeur]) => [el("dt", {}, nom), el("dd", {}, valeur)])) : null);
+// Une valeur de paramètre, un wbr après chaque « / » : au téléphone, elle ne
+// se coupe qu'après une barre (« 7/10/14 », jamais un signe par ligne).
+const valeurCoupable = (valeur) => {
+  const morceaux = String(valeur).split("/");
+  return morceaux.map((morceau, i) => (i < morceaux.length - 1 ? [`${morceau}/`, el("wbr")] : morceau));
+};
+
+// Les paramètres d'une vignette, chaque paire dans un div.parametre (dl >
+// div > dt + dd, que permet HTML) : une rangée souple de la feuille, où la
+// valeur reste à côté du nom quand la paire tient, et passe sinon à la ligne,
+// alignée en fin (mission du lot 4.3, § 8.1).
+const listeDeParametres = (parametres) =>
+  parametres.length ? el("dl", { classe: "vignette-parametres" }, parametres.map(([nom, valeur]) => el("div", { classe: "parametre" }, el("dt", {}, nom), el("dd", {}, valeurCoupable(valeur))))) : null;
 
 // Les capacités d'un objet, sur une ligne : « (désavantage) » après celles
 // que la maîtrise ne couvre pas.
@@ -604,14 +626,46 @@ function rangsAvecLArme(o, nom) {
   return rangsDuPersonnage(calculerFiche(o.banque, { ...o.personnage, equipement }, { index: o.index }), o.index);
 }
 
+// ─── L'ordre des objets (mission du lot 4.3, § 8.2) ─────────────────────────
+
+// Le rang d'un état de maîtrise : sans désavantage d'abord (« maitrise » ou
+// « sans »), puis « partielle », puis « non ».
+const RANG_MAITRISE = { maitrise: 0, sans: 0, partielle: 1, non: 2 };
+
+// Une liste rangée par le rang de chacun, sans toucher à l'ordre d'avant
+// dans un même rang (le tri est stable) : celui de la banque, alphabétique.
+const parRang = (liste, rang) => liste.map((element) => ({ element, r: rang(element) })).sort((a, b) => a.r - b.r).map(({ element }) => element);
+
+/**
+ * Chaque arme de la banque, jugée comme sa vignette : ses capacités (avec
+ * les options de l'arme tenue) et son état de maîtrise, celui qu'elle aurait
+ * en main (les rangs de la fiche pour l'arme tenue, ceux d'une copie qui la
+ * tient pour une autre) ; i, son indice dans la banque, que garde
+ * l'identifiant de sa vignette. Rangées sans désavantage d'abord ; l'ordre
+ * suit l'état à chaque rendu.
+ */
+function armesJugees(o, rangs) {
+  const tenue = o.personnage.equipement.find((objet) => objet.place === "arme") ?? null;
+  const armes = o.index.blocsDeType("arme").map((bloc, i) => {
+    const choisie = Boolean(tenue) && cle(tenue.nom) === cle(bloc.nom);
+    const capacites = capacitesDeLObjet(o.index, bloc, choisie ? tenue.choix : []);
+    return { bloc, i, choisie, capacites, maitrise: maitriseDeLObjet(capacites, poidsDe(bloc), choisie ? rangs : rangsAvecLArme(o, bloc.nom)) };
+  });
+  return parRang(armes, (arme) => RANG_MAITRISE[arme.maitrise.etat]);
+}
+
+// Une pièce d'armure se range comme un pack : maîtrisée quand la Maîtrise de
+// son poids l'est (maitriseDuPack ; de chacun, pour deux poids, comme au
+// combat) ; une pièce sans poids, avec les maîtrisées.
+const pieceMaitrisee = (bloc, rangs) => poidsDe(bloc).every((poids) => maitriseDuPack(poids, rangs) === "maitrise");
+
 // L'entrée « Arme » : une seule arme, tenue d'office (livret, « Objet »).
-// Les mains nues, puis chaque arme de la banque, en vignettes : ce qu'elle
-// donne à la qualité de la création, et son état de maîtrise, celui qu'elle
-// aurait en main (les rangs de la fiche pour l'arme tenue, ceux d'une copie
-// qui la tient pour une autre). Changer d'arme remplace celle-ci ; une arme
-// de rechange se range dans le sac par « Tous les objets ». Sous les
+// Les mains nues, puis chaque arme de la banque, en vignettes, sans
+// désavantage d'abord (armesJugees) : ce qu'elle donne à la qualité de la
+// création, et son état de maîtrise. Changer d'arme remplace celle-ci ; une
+// arme de rechange se range dans le sac par « Tous les objets ». Sous les
 // vignettes, l'arme tenue, décrite, avec ses groupes de choix.
-function entreeArme(o, fiche, rangs) {
+function entreeArme(o, fiche, armes) {
   const p = o.personnage;
   const rangTenue = p.equipement.findIndex((objet) => objet.place === "arme");
   const tenue = rangTenue >= 0 ? p.equipement[rangTenue] : null;
@@ -630,11 +684,8 @@ function entreeArme(o, fiche, rangs) {
     ],
     onchange: () => prendre(null),
   });
-  const vignettesArmes = o.index.blocsDeType("arme").map((bloc, i) => {
-    const choisie = Boolean(tenue) && cle(tenue.nom) === cle(bloc.nom);
-    const capacites = capacitesDeLObjet(o.index, bloc, choisie ? tenue.choix : []);
-    const maitrise = maitriseDeLObjet(capacites, poidsDe(bloc), choisie ? rangs : rangsAvecLArme(o, bloc.nom));
-    return vignette({
+  const vignettesArmes = armes.map(({ bloc, i, choisie, capacites, maitrise }) =>
+    vignette({
       id: `arme-${i}`,
       name: "arme",
       nom: [bloc.nom, etiquettesDePoids(poidsDe(bloc))],
@@ -643,8 +694,8 @@ function entreeArme(o, fiche, rangs) {
       coche: `${COCHE} tenue`,
       contenu: [listeDeParametres(parametresDeLObjet(o, bloc)), capacitesDeLaVignette(o, capacites, maitrise.horsMaitrise), anomaliesDeLObjet(o, bloc), mentionDeMaitrise(maitrise)],
       onchange: () => prendre(bloc.nom),
-    });
-  });
+    }),
+  );
   return [
     el("h3", {}, "Arme"),
     el("p", { classe: "secondaire-texte petit" }, "Une seule arme se tient, équipée d'office (livret, « Objet »). Changer d'arme remplace celle-ci ; une arme de rechange s'ajoute dans « Tous les objets », rangée dans le sac."),
@@ -674,10 +725,12 @@ function piecesDuPack(o, pack) {
 // de ce type, équipées d'office ; un type dont deux pièces couvrent une
 // même zone n'a pas de pack (A10) : sa vignette est inactive, avec la
 // raison. La maîtrise d'un pack se lit sur la Maîtrise de son poids, pour
-// l'affichage seulement (maitriseDuPack).
+// l'affichage seulement (maitriseDuPack). « Aucun pack », puis les packs
+// maîtrisés, les autres, et ceux que la banque ne propose pas (mission du
+// lot 4.3, § 8.2) ; l'identifiant d'une vignette reste celui de son type.
 function entreePack(o, rangs) {
   const p = o.personnage;
-  const packs = packsDArmure(o.index.blocsDeType("armure"));
+  const packs = parRang(packsDArmure(o.index.blocsDeType("armure")), (pack) => (!pack.propose ? 2 : maitriseDuPack(pack.type, rangs) === "maitrise" ? 0 : 1));
   const pieces = p.equipement.filter((objet) => objet.place === "pack");
   const actuel = packs.find((pack) => pieces.length && pack.pieces.length === pieces.length && pack.pieces.every((b) => pieces.some((objet) => cle(objet.nom) === cle(b.nom))));
   const choisir = (pack) =>
@@ -866,9 +919,19 @@ function carteObjet(o, objet, rang, { retirable = true } = {}) {
   );
 }
 
+// Les objets d'une rubrique de « Tous les objets », dans l'ordre des
+// vignettes (mission du lot 4.3, § 8.2) : les armes comme leurs vignettes
+// (armesJugees), les pièces d'armure maîtrisées d'abord, comme les packs ;
+// les autres objets dans l'ordre de la banque.
+function blocsDeLaRubrique(o, type, armes, rangs) {
+  if (type === "arme") return armes.map((arme) => arme.bloc);
+  const blocs = o.index.blocsDeType(type);
+  return type === "armure" ? parRang(blocs, (bloc) => (pieceMaitrisee(bloc, rangs) ? 0 : 1)) : blocs;
+}
+
 // L'entrée « Tous les objets » : armes, pièces d'armure isolées, bouclier,
 // consommables et équipement, rangés dans le sac par défaut.
-function entreeObjets(o) {
+function entreeObjets(o, armes, rangs) {
   const p = o.personnage;
   const apercu = el("div", { classe: "apercu-objet", "aria-live": "polite" });
   const zoneAjout = el("div", {});
@@ -886,7 +949,7 @@ function entreeObjets(o) {
     },
     el("option", { value: "" }, "— choisir un objet —"),
     RUBRIQUES.map(([type, rubrique]) => {
-      const blocs = o.index.blocsDeType(type);
+      const blocs = blocsDeLaRubrique(o, type, armes, rangs);
       return blocs.length ? el("optgroup", { label: rubrique }, blocs.map((b) => el("option", { value: b.nom }, b.nom))) : null;
     }),
   );
@@ -922,15 +985,17 @@ function entreeObjets(o) {
 // En tête, la ligne des maîtrises du personnage ; puis l'arme tenue et le
 // pack d'armure en vignettes, chacune avec son état de maîtrise (les rangs
 // de sa fiche, ceux qu'il tient au combat, maitrise.js ; pour une arme
-// candidate, ceux qu'il aurait en la tenant) ; enfin tous les objets.
+// candidate, ceux qu'il aurait en la tenant) ; enfin tous les objets. Les
+// armes se jugent une fois, pour leurs vignettes et pour la liste.
 function etapeEquipement(o) {
   const fiche = calculerFiche(o.banque, o.personnage, { index: o.index });
   const rangs = rangsDuPersonnage(fiche, o.index);
+  const armes = armesJugees(o, rangs);
   return [
     el("p", { classe: "ligne-maitrises" }, ligneDesMaitrises(o.personnage.identite.nom, maitrisesDuPersonnage(fiche, o.index))),
-    entreeArme(o, fiche, rangs),
+    entreeArme(o, fiche, armes),
     entreePack(o, rangs),
-    entreeObjets(o),
+    entreeObjets(o, armes, rangs),
   ];
 }
 
@@ -1015,26 +1080,40 @@ function capaciteA(o, capacite, niveau) {
  * paramètres au niveau suivant ; sa description, les mots ajoutés en
  * --difference ; la description actuelle, les mots retirés barrés ; la
  * légende. Jamais la couleur seule : la graisse, le trait et la légende.
+ * Une capacité offerte, au niveau 0 (mission du lot 4.3, § 8.3) : « Acquérir
+ * au niveau 1 », le coût et les paramètres du niveau 1, sa description,
+ * rien en rouge ni rien de barré : il n'y a rien à comparer.
  */
-function comparaison(o, capacite, { reliquat, ecart, manque, permis }) {
+function comparaison(o, capacite, { reliquat, ecart, manque, permis, offerte = false }) {
   const suivant = capacite.niveau + 1;
-  const actuel = capaciteA(o, capacite, capacite.niveau);
   const apres = capaciteA(o, capacite, suivant);
+  // « 4 → 2 » d'un seul tenant (la feuille) : au téléphone, la flèche et le
+  // second nombre se séparaient.
+  const sous = el(
+    "p",
+    { classe: "comparaison-sous" },
+    permis
+      ? [accorder(`après progression · ${ecart} point(s) de plus (reliquat `), el("span", { classe: "comparaison-reliquat" }, `${reliquat} → ${reliquat - ecart}`), ")"]
+      : accorder(`après progression · il manque ${manque} point(s)`),
+  );
+  if (offerte) {
+    return {
+      titre: `Acquérir au niveau ${suivant}`,
+      corps: [
+        sous,
+        el("p", { classe: "comparaison-cout" }, "Coût : ", apres.parametres.map((p, i) => [i ? " · " : "", p.tete ?? "", p.valeur, p.suite ?? ""])),
+        el("p", { classe: "comparaison-texte" }, apres.texte),
+      ],
+    };
+  }
+  const actuel = capaciteA(o, capacite, capacite.niveau);
   const changee = (partie) => actuel.parametres.find((p) => p.nature === partie.nature)?.valeur !== partie.valeur;
   const enDifference = (texte) => el("span", { classe: "difference" }, texte);
   const mots = difference(actuel.texte, apres.texte);
   return {
     titre: `${capacite.nom} — niveau ${suivant}`,
     corps: [
-      // « 4 → 2 » d'un seul tenant (la feuille) : au téléphone, la flèche et
-      // le second nombre se séparaient.
-      el(
-        "p",
-        { classe: "comparaison-sous" },
-        permis
-          ? [accorder(`après progression · ${ecart} point(s) de plus (reliquat `), el("span", { classe: "comparaison-reliquat" }, `${reliquat} → ${reliquat - ecart}`), ")"]
-          : accorder(`après progression · il manque ${manque} point(s)`),
-      ),
+      sous,
       el(
         "p",
         { classe: "comparaison-cout" },
@@ -1048,11 +1127,37 @@ function comparaison(o, capacite, { reliquat, ecart, manque, permis }) {
   };
 }
 
+/**
+ * Les capacités de l'étape 8, dans l'ordre de leurs vignettes : celles de la
+ * fiche, hors « à venir », puis chaque capacité offerte (calcul.js, offertes ;
+ * mission du lot 4.3, § 8.3) après celles de son groupe ; un groupe que la
+ * fiche n'a pas, à la place de son rôle (le primordial : avant le bloc de
+ * base et les objets).
+ */
+function capacitesDeLEtape(fiche) {
+  const liste = fiche.capacites.filter((c) => !c.aVenir);
+  for (const offerte of fiche.offertes ?? []) {
+    let apres = liste.findLastIndex((c) => c.groupe === offerte.groupe);
+    if (apres < 0) apres = liste.findLastIndex((c) => ROLES.indexOf(c.role) <= ROLES.indexOf(offerte.role));
+    liste.splice(apres + 1, 0, offerte);
+  }
+  return liste;
+}
+
+// L'identifiant de la vignette d'une capacité : son indice dans la feuille
+// Capacites de la banque, comme arme-{i}. Une capacité qui s'acquiert, ou
+// revient au niveau 0, change de place, non d'identifiant : le focus revient
+// à sa vignette.
+const idDeLaCapacite = (o, nom) => `niveau-${o.banque.capacites.indexOf(o.index.capacite(nom))}`;
+
 // Une vignette par capacité, hors « à venir », qu'elle puisse évoluer ou
 // non (décision de l'auteur, 26/10/2026) : son nom, son origine, la ligne de
 // niveau quand elle évolue, son effet au niveau actuel, la raison de son
 // « + ». Le niveau suivant se compare au niveau actuel : au survol ou au
-// focus de « + » sur un ordinateur, par « Niveau suivant ▸ » partout.
+// focus de « + » sur un ordinateur, par « Niveau suivant ▸ » partout. Une
+// capacité offerte (lot 4.3) y est au niveau 0, non acquise : « + »
+// l'acquiert au niveau 1 ; le « − » d'une capacité acquise au niveau 1 la
+// rend au niveau 0, et sa montée disparaît.
 function etapeCapacites(o) {
   const fiche = calculerFiche(o.banque, o.personnage, { index: o.index });
   const { points } = fiche;
@@ -1142,128 +1247,134 @@ function etapeCapacites(o) {
     else racine()?.removeEventListener?.("keydown", surEchap);
   }
 
-  const vignettes = fiche.capacites
-    .filter((c) => !c.aVenir)
-    .map((capacite, i) => {
-      const id = `niveau-${i}`;
-      const evolue = capacite.peutEvoluer && capacite.niveauCreation >= 1;
-      const suivant = capacite.niveau + 1;
-      const auMaximum = suivant > capacite.niveauMax;
-      const permis = evolue && !auMaximum && niveauxPermis(fiche, capacite).includes(suivant);
-      const ecart = auMaximum ? 0 : COUT_NIVEAU[suivant] - COUT_NIVEAU[capacite.niveau];
-      const manque = auMaximum ? 0 : points.depenses + ecart - POINTS_CREATION;
-      const raison =
-        capacite.niveau === 0
-          ? "Niveau 0 : cette capacité n'évolue pas."
-          : !evolue || auMaximum
-            ? "Niveau maximal atteint."
-            : accorder(permis ? `Niveau ${suivant} : ${ecart} point(s) de plus.` : `Niveau ${suivant} : il manque ${manque} point(s).`);
-      const etat = { reliquat: points.reliquat, ecart, manque, permis };
-      const compare = evolue && !auMaximum;
-      // L'infobulle : sur un ordinateur, pour « + » ; ailleurs qu'au téléphone, pour « Niveau suivant ▸ ».
-      const bulle = compare && (souris || !etroit) ? { noeud: null, bouton: null, survolee: false, focalisee: false, epinglee: false } : null;
-      if (bulle) {
-        const { titre, corps } = comparaison(o, capacite, etat);
-        bulle.noeud = el("div", { id: `${id}-comparaison`, classe: "infobulle-niveau", role: "tooltip", hidden: true }, el("p", { classe: "comparaison-titre" }, titre), corps);
-      }
-      const plusAvecBulle = bulle !== null && souris;
-      const moins = evolue
-        ? el(
+  const offertes = new Set(fiche.offertes ?? []);
+  const vignettes = capacitesDeLEtape(fiche).map((capacite) => {
+    const offerte = offertes.has(capacite);
+    const id = idDeLaCapacite(o, capacite.nom);
+    // Une capacité offerte, ou acquise du niveau 0, évolue jusqu'à son
+    // maximum, même la seule variante 1 (calcul.js, peutEvoluer).
+    const evolue = Boolean(capacite.peutEvoluer);
+    const suivant = capacite.niveau + 1;
+    const auMaximum = suivant > capacite.niveauMax;
+    const permis = evolue && !auMaximum && niveauxPermis(fiche, capacite).includes(suivant);
+    const ecart = auMaximum ? 0 : COUT_NIVEAU[suivant] - COUT_NIVEAU[capacite.niveau];
+    const manque = auMaximum ? 0 : points.depenses + ecart - POINTS_CREATION;
+    const raison = offerte
+      ? `Niveau 0 : pas encore acquise. ${accorder(permis ? `Niveau ${suivant} : ${ecart} point(s).` : `Niveau ${suivant} : il manque ${manque} point(s).`)}`
+      : capacite.niveau === 0
+        ? "Niveau 0 : cette capacité n'évolue pas."
+        : !evolue || auMaximum
+          ? "Niveau maximal atteint."
+          : accorder(permis ? `Niveau ${suivant} : ${ecart} point(s) de plus.` : `Niveau ${suivant} : il manque ${manque} point(s).`);
+    const etat = { reliquat: points.reliquat, ecart, manque, permis, offerte };
+    const compare = evolue && !auMaximum;
+    // L'infobulle : sur un ordinateur, pour « + » ; ailleurs qu'au téléphone, pour « Niveau suivant ▸ ».
+    const bulle = compare && (souris || !etroit) ? { noeud: null, bouton: null, survolee: false, focalisee: false, epinglee: false } : null;
+    if (bulle) {
+      const { titre, corps } = comparaison(o, capacite, etat);
+      bulle.noeud = el("div", { id: `${id}-comparaison`, classe: "infobulle-niveau", role: "tooltip", hidden: true }, el("p", { classe: "comparaison-titre" }, titre), corps);
+    }
+    const plusAvecBulle = bulle !== null && souris;
+    const moins = evolue
+      ? el(
+          "button",
+          { type: "button", id: `${id}-moins`, classe: "bouton secondaire bouton-pas", "aria-label": `Baisser ${capacite.nom}`, disabled: capacite.niveau <= capacite.niveauCreation, onclick: () => changer(capacite, capacite.niveau - 1, [`${id}-moins`, `${id}-plus`]) },
+          "−",
+        )
+      : null;
+    const plus = evolue
+      ? el(
+          "button",
+          {
+            type: "button",
+            id: `${id}-plus`,
+            classe: "bouton secondaire bouton-pas",
+            "aria-label": `Monter ${capacite.nom}`,
+            "aria-describedby": plusAvecBulle ? `${id}-raison ${id}-comparaison` : `${id}-raison`,
+            disabled: !permis,
+            onclick: () => changer(capacite, suivant, [`${id}-plus`, `${id}-moins`]),
+          },
+          "+",
+        )
+      : null;
+    if (plusAvecBulle) {
+      plus.addEventListener("pointerenter", (evenement) => {
+        if (evenement?.pointerType === "touch") return;
+        bulle.survolee = true;
+        revoir(bulle);
+      });
+      plus.addEventListener("focus", () => {
+        bulle.focalisee = true;
+        revoir(bulle);
+      });
+      plus.addEventListener("blur", () => {
+        bulle.focalisee = false;
+        revoir(bulle);
+      });
+    }
+    // « Niveau suivant ▸ » : une divulgation de l'infobulle, ou le volet du téléphone.
+    let suite = null;
+    if (compare) {
+      // Le nom accessible est « Niveau suivant » : la flèche ne se lit pas.
+      suite = el("button", { type: "button", id: `${id}-suivant`, classe: "bouton-suivant" }, "Niveau suivant ", el("span", { "aria-hidden": "true" }, "▸"));
+      if (etroit) {
+        suite.setAttribute("aria-haspopup", "dialog");
+        suite.addEventListener("click", () => {
+          const passer = el(
             "button",
-            { type: "button", id: `${id}-moins`, classe: "bouton secondaire bouton-pas", "aria-label": `Baisser ${capacite.nom}`, disabled: capacite.niveau <= capacite.niveauCreation, onclick: () => changer(capacite, capacite.niveau - 1, [`${id}-moins`, `${id}-plus`]) },
-            "−",
-          )
-        : null;
-      const plus = evolue
+            { type: "button", classe: "bouton", disabled: !permis, "aria-describedby": `${id}-raison`, onclick: () => changer(capacite, suivant, [`${id}-suivant`, `${id}-plus`, `${id}-moins`]) },
+            `Passer au niveau ${suivant}`,
+          );
+          ouvrirVolet(suite, comparaison(o, capacite, etat), passer);
+        });
+      } else {
+        bulle.bouton = suite;
+        suite.setAttribute("aria-expanded", "false");
+        suite.setAttribute("aria-controls", `${id}-comparaison`);
+        suite.addEventListener("click", () => {
+          const fermer = bulle.epinglee;
+          bulle.epinglee = !fermer;
+          if (fermer) cacher(bulle);
+          else revoir(bulle);
+        });
+      }
+    }
+    // Améliorée : au-dessus du niveau que lui donnent les blocs (0 pour une
+    // capacité du primordial acquise). Offerte : non acquise, sans coût ni
+    // effet au niveau 0 ; le niveau 1 se lit par « Niveau suivant ▸ ».
+    const ameliore = capacite.niveau > capacite.niveauCreation;
+    const vignetteDeLaCapacite = el(
+      "li",
+      { classe: ["vignette vignette-capacite", ameliore ? "amelioree" : null, offerte ? "non-acquise" : null].filter(Boolean).join(" ") },
+      el(
+        "p",
+        { classe: "vignette-capacite-tete" },
+        el("span", { classe: "capacite-nom" }, capacite.nom),
+        " ",
+        el("span", { classe: "detail" }, origineEcrite(o, capacite)),
+        ameliore ? [" ", el("span", { classe: "mention-amelioree" }, "amélioré")] : null,
+      ),
+      evolue
         ? el(
-            "button",
-            {
-              type: "button",
-              id: `${id}-plus`,
-              classe: "bouton secondaire bouton-pas",
-              "aria-label": `Monter ${capacite.nom}`,
-              "aria-describedby": plusAvecBulle ? `${id}-raison ${id}-comparaison` : `${id}-raison`,
-              disabled: !permis,
-              onclick: () => changer(capacite, suivant, [`${id}-plus`, `${id}-moins`]),
-            },
-            "+",
+            "div",
+            { classe: "capacite-niveau" },
+            el("div", { classe: "pas-a-pas" }, moins, el("span", { id, classe: "valeur-pas", "aria-live": "polite" }, `niveau ${capacite.niveau}`), plus),
+            offerte ? null : el("span", { classe: "detail cout-capacite" }, `coût : ${coutLisible(capacite.cout)}`),
           )
-        : null;
-      if (plusAvecBulle) {
-        plus.addEventListener("pointerenter", (evenement) => {
-          if (evenement?.pointerType === "touch") return;
-          bulle.survolee = true;
-          revoir(bulle);
-        });
-        plus.addEventListener("focus", () => {
-          bulle.focalisee = true;
-          revoir(bulle);
-        });
-        plus.addEventListener("blur", () => {
-          bulle.focalisee = false;
-          revoir(bulle);
-        });
-      }
-      // « Niveau suivant ▸ » : une divulgation de l'infobulle, ou le volet du téléphone.
-      let suite = null;
-      if (compare) {
-        // Le nom accessible est « Niveau suivant » : la flèche ne se lit pas.
-        suite = el("button", { type: "button", id: `${id}-suivant`, classe: "bouton-suivant" }, "Niveau suivant ", el("span", { "aria-hidden": "true" }, "▸"));
-        if (etroit) {
-          suite.setAttribute("aria-haspopup", "dialog");
-          suite.addEventListener("click", () => {
-            const passer = el(
-              "button",
-              { type: "button", classe: "bouton", disabled: !permis, "aria-describedby": `${id}-raison`, onclick: () => changer(capacite, suivant, [`${id}-suivant`, `${id}-plus`, `${id}-moins`]) },
-              `Passer au niveau ${suivant}`,
-            );
-            ouvrirVolet(suite, comparaison(o, capacite, etat), passer);
-          });
-        } else {
-          bulle.bouton = suite;
-          suite.setAttribute("aria-expanded", "false");
-          suite.setAttribute("aria-controls", `${id}-comparaison`);
-          suite.addEventListener("click", () => {
-            const fermer = bulle.epinglee;
-            bulle.epinglee = !fermer;
-            if (fermer) cacher(bulle);
-            else revoir(bulle);
-          });
-        }
-      }
-      const ameliore = capacite.niveau > capacite.niveauCreation;
-      const vignetteDeLaCapacite = el(
-        "li",
-        { classe: ameliore ? "vignette vignette-capacite amelioree" : "vignette vignette-capacite" },
-        el(
-          "p",
-          { classe: "vignette-capacite-tete" },
-          el("span", { classe: "capacite-nom" }, capacite.nom),
-          " ",
-          el("span", { classe: "detail" }, origineEcrite(o, capacite)),
-          ameliore ? [" ", el("span", { classe: "mention-amelioree" }, "amélioré")] : null,
-        ),
-        evolue
-          ? el(
-              "div",
-              { classe: "capacite-niveau" },
-              el("div", { classe: "pas-a-pas" }, moins, el("span", { id, classe: "valeur-pas", "aria-live": "polite" }, `niveau ${capacite.niveau}`), plus),
-              el("span", { classe: "detail cout-capacite" }, `coût : ${coutLisible(capacite.cout)}`),
-            )
-          : null,
-        el("div", { classe: "vignette-capacite-effet" }, effetsEcrits(capacite)),
-        el("div", { classe: "vignette-capacite-pied" }, el("p", { id: `${id}-raison`, classe: "secondaire-texte petit" }, raison), suite),
-        bulle?.noeud ?? null,
-      );
-      // La souris qui quitte la vignette, et l'infobulle qui en fait partie.
-      if (plusAvecBulle) {
-        vignetteDeLaCapacite.addEventListener("pointerleave", () => {
-          bulle.survolee = false;
-          revoir(bulle);
-        });
-      }
-      return vignetteDeLaCapacite;
-    });
+        : null,
+      offerte ? null : el("div", { classe: "vignette-capacite-effet" }, effetsEcrits(capacite)),
+      el("div", { classe: "vignette-capacite-pied" }, el("p", { id: `${id}-raison`, classe: "secondaire-texte petit" }, raison), suite),
+      bulle?.noeud ?? null,
+    );
+    // La souris qui quitte la vignette, et l'infobulle qui en fait partie.
+    if (plusAvecBulle) {
+      vignetteDeLaCapacite.addEventListener("pointerleave", () => {
+        bulle.survolee = false;
+        revoir(bulle);
+      });
+    }
+    return vignetteDeLaCapacite;
+  });
 
   const jauge = el(
     "span",
@@ -1330,13 +1441,31 @@ const CONSTRUCTEURS = {
   3: (o) => etapeBloc(o, "archetype", { intitule: "Archétype", aucun: "La banque ne contient aucun archétype." }),
   4: (o) => etapeBloc(o, "espece", { intitule: "Espèce", aucun: "La banque ne contient aucune espèce." }),
   5: etapeConstellation,
-  6: (o) => etapeBloc(o, "primordial", { intitule: "Primordial", aucun: "La banque ne contient aucun primordial." }),
+  6: (o) => etapeBloc(o, "primordial", { intitule: "Primordial", aucun: "La banque ne contient aucun primordial.", sousLesVignettes: LIGNE_PRIMORDIAL }),
   7: etapeEquipement,
   8: etapeCapacites,
   9: etapeRecapitulatif,
 };
 
 // ─── Le parcours ────────────────────────────────────────────────────────────
+
+/**
+ * Le personnage lu, au format 3 : un personnage au format 2 converti
+ * (versFormat3 : chaque capacité qu'il ne tient que de son primordial y
+ * garde son niveau 1 par une montée), et vérifié comme un fichier reçu ; un
+ * autre format, ou une conversion refusée, tel quel.
+ */
+function auFormat3(lu, index) {
+  const converti = versFormat3(lu, index);
+  if (converti === lu) return lu;
+  try {
+    verifier(converti);
+    return converti;
+  } catch (erreur) {
+    if (!(erreur instanceof ErreurPersonnage)) throw erreur;
+    return lu;
+  }
+}
 
 function parcours(contexte, n, lu, entete, contenu, { original = null, remplaceId = null, nomOriginal = null } = {}) {
   // Une copie de travail remplace son original par son identifiant, même
@@ -1346,7 +1475,9 @@ function parcours(contexte, n, lu, entete, contenu, { original = null, remplaceI
   const { banque, etagere } = contexte.etat;
   const index = indexerCreation(banque);
   const depot = contexte.etat.depot ?? null;
-  let personnage = lu;
+  // Un personnage au format 2, ouvert pour être modifié, passe au format 3
+  // (mission du lot 4.3, § 8.3) : il se garde converti, et s'enregistre ainsi.
+  let personnage = auFormat3(lu, index);
   let dernier = 0;
   const etapes = el("ol", { classe: "etapes" });
   const zoneManques = el("div", { classe: "manques", role: "status" });
@@ -1419,10 +1550,15 @@ function parcours(contexte, n, lu, entete, contenu, { original = null, remplaceI
     const essai = structuredClone(personnage);
     changer(essai);
     // Une montée dont la capacité n'est plus possédée (archétype, option ou
-    // objet changé) s'efface : l'étape 8 ne pourrait plus la retirer.
+    // objet changé) s'efface : l'étape 8 ne pourrait plus la retirer. De
+    // même une montée qui ne monte plus rien (lot 4.3) : Fournaise acquise au
+    // niveau 1, puis reçue au niveau 1 d'un archétype qui la donne aussi.
     if (essai.niveaux.length) {
-      const possedees = new Set(calculerFiche(banque, essai, { index }).capacites.filter((c) => !c.aVenir).map((c) => cle(c.nom)));
-      essai.niveaux = essai.niveaux.filter((m) => possedees.has(cle(index.capacite(m.capacite)?.nom ?? m.capacite)));
+      const departs = new Map(calculerFiche(banque, essai, { index }).capacites.filter((c) => !c.aVenir).map((c) => [cle(c.nom), c.niveauCreation]));
+      essai.niveaux = essai.niveaux.filter((m) => {
+        const k = cle(index.capacite(m.capacite)?.nom ?? m.capacite);
+        return departs.has(k) && m.niveau > departs.get(k);
+      });
     }
     essai.etape = n;
     essai.modifie_le = new Date().toISOString();
@@ -1530,8 +1666,8 @@ function parcours(contexte, n, lu, entete, contenu, { original = null, remplaceI
   );
   refaire();
   // « Reprendre » rouvre la dernière étape vue ; la date de modification
-  // ne bouge pas pour une simple visite.
-  if (personnage.etape !== n) {
+  // ne bouge pas pour une simple visite, ni pour le passage au format 3.
+  if (personnage !== lu || personnage.etape !== n) {
     personnage = { ...personnage, etape: n };
     enregistrer({ silencieux: true });
   }

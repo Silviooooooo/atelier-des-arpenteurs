@@ -55,7 +55,7 @@ test("format — un champ inconnu, un champ manquant ou « __proto__ » font ref
 
 test("format — chaque champ vérifié : types, bornes, dates, index, qualité, caractères de contrôle", () => {
   const refus = [
-    [(p) => (p.format = 3), /version plus récente de l'Atelier : rechargez la page/],
+    [(p) => (p.format = 4), /version plus récente de l'Atelier : rechargez la page/],
     [(p) => (p.format = "1"), /format inconnu/],
     [(p) => (p.id = "court"), /identifiant/],
     [(p) => (p.mode = "admin"), /mode du personnage est inconnu/],
@@ -83,7 +83,9 @@ test("format — chaque champ vérifié : types, bornes, dates, index, qualité,
     [(p) => (p.equipement[1].place = "arme"), /ne tient qu'une arme à la fois/],
     [(p) => (p.equipement[0].porte = false), /le champ « porte » est inconnu/],
     [(p) => (p.arme_principale = 0), /le champ « arme_principale » est inconnu/],
-    [(p) => (p.niveaux = [{ capacite: "Flambage", niveau: 4 }]), /niveau doit être un entier de 2 à 3/],
+    [(p) => (p.niveaux = [{ capacite: "Flambage", niveau: 4 }]), /La montée 1, niveau doit être un entier de 1 à 3/],
+    // Au format 2, une montée vaut de 2 à 3 : celle de Fournaise au niveau 1 est refusée (lot 4.3).
+    [(p) => (p.format = 2), /La montée 2, niveau doit être un entier de 2 à 3/],
     [(p) => (p.empreintes = [{ genre: "bloc", nom: "Saucier", empreinte: "<script>" }]), /L'empreinte 1 est illisible/],
     [(p) => (p.etat = "enregistre"), /date d'enregistrement/],
   ];
@@ -195,12 +197,15 @@ test("relecture — la plus grosse bombe qu'un lien peut porter est refusée", a
 // Lot 2 bis : le format 2 range chaque objet à sa place ; un personnage du
 // format 1 (lot 2 : fichier, lien, appareil) se lit encore, converti.
 function auFormat1(p = personnageEssai()) {
-  const { equipement, constellation, ...reste } = structuredClone(p);
+  const { equipement, constellation, niveaux, ...reste } = structuredClone(p);
   const arme = equipement.findIndex((o) => o.place === "arme");
   const bouclier = equipement.findIndex((o) => o.nom === "Couvercle de marmite");
   return {
     ...reste,
     format: 1,
+    // Les montées du lot 2 ont le sens de celles du format 2 : Fournaise, reçue
+    // au niveau 1, n'en a pas (lot 4.3).
+    niveaux: niveaux.filter((m) => m.niveau >= 2),
     constellation: { nom: constellation.nom, choix: constellation.choix, obtention: constellation.obtention },
     equipement: equipement.map(({ place, ...o }, i) => ({ ...o, porte: place === "equipe" && i !== bouclier })),
     arme_principale: arme === -1 ? null : arme,
@@ -249,9 +254,9 @@ test("format 1 — un format 1 abîmé est refusé : rang hors de l'équipement,
   }
 });
 
-test("format 2 — un personnage neuf : caractéristiques toutes à 2, aucun objet", () => {
+test("format 3 — un personnage neuf : caractéristiques toutes à 2, aucun objet, au format 3 (lot 4.3)", () => {
   const neuf = nouveauPersonnage("reel");
   assert.deepEqual(Object.values(neuf.caracteristiques), Array(9).fill(2));
   assert.deepEqual(neuf.equipement, []);
-  assert.equal(neuf.format, 2);
+  assert.equal(neuf.format, 3);
 });

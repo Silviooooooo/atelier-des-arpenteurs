@@ -28,6 +28,14 @@
 // À la nouvelle fiche (spécification 1.7) : le style de combat se lit dans
 // la colonne « origine » des capacités (estStyleDeCombat), et chaque lien
 // dit le domaine de son primordial, la colonne Infos de son bloc.
+//
+// Au lot 4.3 (mission, § 8.3 et § 9.2) : une capacité que le personnage ne
+// tient que de son primordial, et qui peut évoluer, part au niveau 0 (règle
+// de l'auteur du 26/10/2026). Non acquise, elle n'est pas dans capacites,
+// mais dans offertes ; acquise par une montée, elle y entre, et ses points
+// sont dépensés, non reçus. Un personnage au format 2 se calcule converti en
+// mémoire (versFormat3). Un paramètre hors de RANGS écrit avec des « / »
+// au premier niveau est une suite de valeurs.
 
 import { accorder } from "../banque/accord.js";
 import { cle, repertoire } from "../banque/noms.js";
@@ -153,16 +161,37 @@ export function qualiteDe(bloc, saisie) {
   return q ? { applicable: true, texte: String(saisie), q, fixee: false } : { applicable: true, texte: "X", q: null, fixee: false };
 }
 
+// Les morceaux d'une valeur coupée par ses « / » de premier niveau, hors des
+// accolades, crochets et parenthèses (comme la notation coupe une cellule,
+// js/banque/notation.js) : « 5/10/15 » en trois, « {force}*0,5/{force} » en
+// deux ; un morceau vide reste, et ne se calculera pas.
+function barresDePremierNiveau(texte) {
+  const morceaux = [""];
+  let profondeur = 0;
+  for (const signe of String(texte)) {
+    if (signe === "(" || signe === "[" || signe === "{") profondeur += 1;
+    else if ((signe === ")" || signe === "]" || signe === "}") && profondeur > 0) profondeur -= 1;
+    else if (signe === "/" && profondeur === 0) {
+      morceaux.push("");
+      continue;
+    }
+    morceaux[morceaux.length - 1] += signe;
+  }
+  return morceaux;
+}
+
 /**
  * Les valeurs d'un paramètre, calculées : un tableau d'entiers (un par
  * rang), ou { erreur, brut }. Les caractéristiques y entrent ; pour dégâts,
  * défense et armure, la qualité les multiplie par 1/3 + q/3, et l'arrondi
  * inférieur se fait une fois l'opération faite (livret, « Valeurs
- * décimales »).
+ * décimales »). Hors de RANGS (lot 4.3, mission § 9.2), une barre de premier
+ * niveau sépare toujours des valeurs, jamais une division : « 5/10/15 » est
+ * une suite de trois valeurs, chacune une expression.
  */
 export function valeursParametre(nom, texte, { caracteristiques = null, qualite = null } = {}) {
   const attendus = Object.hasOwn(RANGS, cle(nom)) ? RANGS[cle(nom)] : 1;
-  const morceaux = rangs(texte, attendus);
+  const morceaux = attendus === 1 ? barresDePremierNiveau(texte) : rangs(texte, attendus);
   if (!morceaux) return { erreur: `${nom} : ${attendus} valeurs attendues dans « ${texte} »`, brut: texte };
   const facteur = qualite?.q && PARAMETRES_QUALIFIES.includes(cle(nom)) ? fraction(qualite.q.n + qualite.q.d, 3 * qualite.q.d) : null;
   const valeurs = [];
@@ -443,34 +472,13 @@ export function estStyleDeCombat(capacite) {
   return Boolean(capacite?.variantes?.some((v) => cle(v.notes) === cle(ORIGINE_STYLE)));
 }
 
-// ─── La fiche ───────────────────────────────────────────────────────────────
-
-/**
- * Calcule la fiche d'un personnage avec une banque. Rend un objet simple,
- * que les écrans affichent sans rien recalculer.
- */
-export function calculerFiche(banque, personnage, { index = indexerCreation(banque) } = {}) {
-  const avertissements = [];
-  const avertir = (genre, texte) => {
-    if (!avertissements.some((a) => a.texte === texte)) avertissements.push({ genre, texte });
-  };
-  const caracteristiques = personnage.caracteristiques ?? {};
-
-  // Les caractéristiques et les dés (livret, « Caractéristiques »).
-  const caracs = CARACTERISTIQUES.map((c) => ({ ...c, valeur: Number.isInteger(caracteristiques[c.code]) ? caracteristiques[c.code] : null }));
-  const somme = caracs.reduce((total, c) => total + (c.valeur ?? 0), 0);
-  const completes = caracs.every((c) => c.valeur !== null && c.valeur >= CARACTERISTIQUE_MIN && c.valeur <= CARACTERISTIQUE_MAX);
-  const deDe = (paire) => (completes ? deDuJet(caracteristiques[paire[0]], caracteristiques[paire[1]]) : null);
-  const des = {
-    attaque: Object.fromEntries(Object.entries(TYPES_OBJET).map(([code, t]) => [code, deDe(t.attaque)])),
-    defense: Object.fromEntries(Object.entries(TYPES_OBJET).map(([code, t]) => [code, deDe(t.defense)])),
-  };
-
-  // Les capacités, rangées par leur première source ; une capacité reçue
-  // deux fois n'en fait qu'une, comptée une fois (§ 12).
-  const blocs = sources(index, personnage, avertissements);
+// Les capacités que donnent les blocs du personnage, rangées par leur
+// première source : une capacité reçue deux fois n'en fait qu'une, comptée
+// une fois (§ 12). Rend une Map clé du nom → { nom, capacite, sources,
+// evolution, niveau } ; les manques et les choix disparus se disent à qui
+// les demande.
+function capacitesTenues(index, blocs, { manques = [], avertir = () => {} } = {}) {
   const possedees = new Map();
-  const manques = [];
   for (const role of ROLES) {
     for (const source of blocs.filter((s) => s.role === role && s.bloc)) {
       const donnees = capacitesDuBloc(source.bloc, source.choix);
@@ -488,8 +496,82 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
       }
     }
   }
+  return possedees;
+}
 
-  // Les montées choisies à la création (livret, « Création »).
+// Vrai si la capacité part au niveau 0 (règle de l'auteur du 26/10/2026,
+// mission du lot 4.3, § 8.3) : le personnage ne la tient que de son
+// primordial, elle est dans la feuille Capacites, et elle peut évoluer (sa
+// puissance n'est pas fixée à 0, même avec la seule variante 1). Une capacité
+// qui vient aussi d'ailleurs, une capacité à puissance fixée à 0 et une
+// capacité à venir se reçoivent comme avant.
+const partAuNiveau0 = (entree) => Boolean(entree.capacite) && entree.evolution.niveauCreation === 1 && entree.sources.every((s) => s.role === "primordial");
+
+/**
+ * Un personnage au format 2 converti au format 3 (mission du lot 4.3,
+ * § 8.3) : chaque capacité qu'il ne tient que de son primordial, qui peut
+ * évoluer et n'a pas de montée appliquée, en reçoit une au niveau 1. Il garde
+ * ainsi ses capacités, leurs niveaux, ses points dépensés et son reliquat ;
+ * seuls ses points reçus baissent. Pure : rend un autre objet, sans toucher
+ * au personnage ; un personnage d'un autre format est rendu tel quel. index :
+ * celui de la banque (indexerCreation).
+ */
+export function versFormat3(personnage, index) {
+  if (personnage?.format !== 2) return personnage;
+  const niveaux = personnage.niveaux ?? [];
+  const ajoutees = [];
+  for (const [k, entree] of capacitesTenues(index, sources(index, personnage, []))) {
+    if (!partAuNiveau0(entree)) continue;
+    // Une montée que le calcul n'appliquait pas (au format 2, de 2 au
+    // maximum de la capacité) la laissait au niveau 1 : il la garde, et le
+    // dit encore.
+    const appliquee = niveaux.some(
+      ({ capacite: nom, niveau }) => cle(index.capacite(nom)?.nom ?? nom) === k && Number.isInteger(niveau) && niveau > 1 && niveau <= entree.evolution.niveauMax,
+    );
+    if (!appliquee) ajoutees.push({ capacite: entree.nom, niveau: 1 });
+  }
+  return { ...personnage, format: 3, niveaux: [...niveaux, ...ajoutees] };
+}
+
+// ─── La fiche ───────────────────────────────────────────────────────────────
+
+/**
+ * Calcule la fiche d'un personnage avec une banque. Rend un objet simple,
+ * que les écrans affichent sans rien recalculer. Un personnage au format 2
+ * se calcule converti (versFormat3), en mémoire : rien ne s'écrit.
+ */
+export function calculerFiche(banque, personnageLu, { index = indexerCreation(banque) } = {}) {
+  const personnage = versFormat3(personnageLu, index);
+  const avertissements = [];
+  const avertir = (genre, texte) => {
+    if (!avertissements.some((a) => a.texte === texte)) avertissements.push({ genre, texte });
+  };
+  const caracteristiques = personnage.caracteristiques ?? {};
+
+  // Les caractéristiques et les dés (livret, « Caractéristiques »).
+  const caracs = CARACTERISTIQUES.map((c) => ({ ...c, valeur: Number.isInteger(caracteristiques[c.code]) ? caracteristiques[c.code] : null }));
+  const somme = caracs.reduce((total, c) => total + (c.valeur ?? 0), 0);
+  const completes = caracs.every((c) => c.valeur !== null && c.valeur >= CARACTERISTIQUE_MIN && c.valeur <= CARACTERISTIQUE_MAX);
+  const deDe = (paire) => (completes ? deDuJet(caracteristiques[paire[0]], caracteristiques[paire[1]]) : null);
+  const des = {
+    attaque: Object.fromEntries(Object.entries(TYPES_OBJET).map(([code, t]) => [code, deDe(t.attaque)])),
+    defense: Object.fromEntries(Object.entries(TYPES_OBJET).map(([code, t]) => [code, deDe(t.defense)])),
+  };
+
+  // Les capacités, rangées par leur première source ; une capacité reçue
+  // deux fois n'en fait qu'une, comptée une fois (§ 12). Celles du seul
+  // primordial partent au niveau 0 (format 3).
+  const blocs = sources(index, personnage, avertissements);
+  const manques = [];
+  const possedees = capacitesTenues(index, blocs, { manques, avertir });
+  for (const entree of possedees.values()) {
+    entree.offerte = partAuNiveau0(entree);
+    entree.depart = entree.offerte ? 0 : (entree.evolution?.niveauCreation ?? null);
+    entree.niveau = entree.depart;
+  }
+
+  // Les montées choisies à la création (livret, « Création ») : au-dessus du
+  // niveau de départ, jusqu'au maximum de la capacité.
   const montees = new Map();
   for (const { capacite: nom, niveau } of personnage.niveaux ?? []) {
     const entree = possedees.get(cle(index.capacite(nom)?.nom ?? nom));
@@ -497,7 +579,7 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
       avertir("banque", `La montée de « ${nom} » vise une capacité que le personnage n'a pas.`);
       continue;
     }
-    if (!Number.isInteger(niveau) || niveau <= entree.evolution.niveauCreation || niveau > entree.evolution.niveauMax) {
+    if (!Number.isInteger(niveau) || niveau <= entree.depart || niveau > entree.evolution.niveauMax) {
       avertir("regle", `« ${entree.nom} » ne peut pas être au niveau ${niveau}.`);
       continue;
     }
@@ -505,15 +587,42 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
     montees.set(cle(entree.nom), niveau);
   }
 
-  const capacites = [...possedees.values()].map((entree) => {
-    const premiere = entree.sources[0];
-    const role = premiere.role;
-    let groupe = null;
-    if (entree.capacite) {
-      // Le style : une capacité du personnage, d'où qu'elle vienne (§ 15.2).
-      if (estStyleDeCombat(entree.capacite)) groupe = "style";
-      else if (role === "espece" || role === "archetype" || role === "constellation" || role === "primordial") groupe = role;
-    } else if (role === "espece" || role === "archetype" || role === "constellation" || role === "primordial") groupe = role;
+  // Le groupe d'une capacité sur la fiche : le style de combat, d'où qu'il
+  // vienne (§ 15.2), sinon le rôle de sa première source.
+  const groupeDe = (entree) => {
+    const role = entree.sources[0].role;
+    if (entree.capacite && estStyleDeCombat(entree.capacite)) return "style";
+    return role === "espece" || role === "archetype" || role === "constellation" || role === "primordial" ? role : null;
+  };
+
+  // Les capacités offertes, non acquises (niveau 0) : hors de la fiche, du
+  // combat et des liens ; l'étape 8 les propose au niveau 1, que décrivent
+  // leur coût et leur texte (comme descriptionA au niveau 1).
+  const offertes = [];
+  const acquises = [];
+  for (const entree of possedees.values()) {
+    if (!entree.offerte || entree.niveau >= 1) {
+      acquises.push(entree);
+      continue;
+    }
+    const decrite = descriptionA(index, personnage, entree.nom, { bloc: entree.sources[0].nom, niveau: 1 });
+    offertes.push({
+      nom: entree.nom,
+      origines: entree.sources.map((s) => s.nom),
+      role: "primordial",
+      groupe: groupeDe(entree),
+      niveau: 0,
+      niveauCreation: 0,
+      niveauMax: entree.evolution.niveauMax,
+      peutEvoluer: true,
+      cout: decrite.cout,
+      texte: decrite.texte,
+    });
+  }
+
+  const capacites = acquises.map((entree) => {
+    const role = entree.sources[0].role;
+    const groupe = groupeDe(entree);
     const cout = entree.capacite ? coutA(entree.capacite, entree.niveau) : null;
     if (cout?.erreur) avertir("expression", cout.erreur);
     const variante = entree.capacite ? varianteA(entree.capacite, entree.niveau) : null;
@@ -540,9 +649,11 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
       // un bloc qui n'en vient pas. Deux objets de même nom se distinguent ainsi.
       sources: entree.sources.map((s) => ({ role: s.role, nom: s.nom, rang: s.rang ?? null })),
       niveau: entree.capacite ? entree.niveau : null,
-      niveauCreation: entree.evolution?.niveauCreation ?? null,
+      // Une capacité du primordial acquise part du niveau 0, et peut revenir
+      // à 0 : elle évolue jusqu'à son maximum, même la seule variante 1.
+      niveauCreation: entree.capacite ? entree.depart : null,
       niveauMax: entree.evolution?.niveauMax ?? null,
-      peutEvoluer: entree.evolution?.peutEvoluer ?? false,
+      peutEvoluer: entree.offerte || (entree.evolution?.peutEvoluer ?? false),
       cout,
       elements: variante ? variante.elements.map((e) => (e.nom ? (e.valeur ? `${e.nom}[${e.valeur}]` : e.nom) : e.brut)) : [],
       descriptions,
@@ -552,7 +663,8 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
   for (const c of capacites.filter((c) => c.aVenir)) avertir("a_venir", `« ${c.nom} » (${c.origines.join(", ")}) : capacité à venir, absente de la feuille Capacites.`);
 
   // Les points de capacité (livret, « Création ») : hors niveau 0 et hors
-  // capacités à venir.
+  // capacités à venir. Une capacité du primordial acquise part du niveau 0 :
+  // tous ses points sont dépensés, aucun n'est reçu.
   const comptees = capacites.filter((c) => !c.aVenir && c.niveau >= 1);
   const points = comptees.reduce((total, c) => total + COUT_NIVEAU[c.niveau], 0);
   const recus = comptees.reduce((total, c) => total + COUT_NIVEAU[c.niveauCreation], 0);
@@ -606,10 +718,11 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
 
   // Un primordial ou une constellation sans capacité encore écrite : la
   // fiche dit « capacités à venir » (instruction du lot 2), au recto comme
-  // au verso.
+  // au verso. Une capacité offerte, non acquise, est écrite (lot 4.3).
+  const ecrites = (nom) => capacites.some((c) => !c.aVenir && c.origines.includes(nom)) || offertes.some((o) => o.origines.includes(nom));
   for (const role of ["constellation", "primordial"]) {
     const source = blocs.find((b) => b.role === role && b.bloc);
-    if (source && !capacites.some((c) => !c.aVenir && c.origines.includes(source.nom))) avertir("a_venir", `« ${source.nom} » : capacités à venir.`);
+    if (source && !ecrites(source.nom)) avertir("a_venir", `« ${source.nom} » : capacités à venir.`);
   }
 
   // Un choix disparu de la banque ou modifié depuis l'enregistrement.
@@ -640,6 +753,7 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
     armure,
     bouclier,
     capacites,
+    offertes,
     groupes: {
       espece: groupe("espece"),
       archetype: groupe("archetype"),
@@ -648,7 +762,7 @@ export function calculerFiche(banque, personnage, { index = indexerCreation(banq
       acquises: [],
     },
     constellation,
-    primordial: primordial ? { nom: primordial.nom, aVenir: !capacites.some((c) => c.origines.includes(primordial.nom) && !c.aVenir) } : null,
+    primordial: primordial ? { nom: primordial.nom, aVenir: !ecrites(primordial.nom) } : null,
     liens,
     points: { depenses: points, recus, plafond: POINTS_CREATION, reliquat: Math.max(0, POINTS_CREATION - points), depasse: points > POINTS_CREATION },
     ressources: { souffle: SOUFFLE_CREATION, corps: CORPS, resistance: RESISTANCE_PAR_ZONE },

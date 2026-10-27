@@ -25,9 +25,14 @@ if [ -n "$(git status --porcelain)" ]; then
   exit 1
 fi
 
-echo "Contrôles avant l'envoi (node --test)…"
+# Quatre fichiers de contrôles à la fois, et non un par cœur : mesuré le
+# 27/10/2026 (lot 4.3), la suite à onze fichiers à la fois poussait la mémoire
+# du poste à 21 Go, et trois contrôles lourds passaient leur délai ; à quatre,
+# elle passait entière, plus vite (6 min 23 s contre 8 min 31 s), sous 20,2 Go
+# (SPECIFICATION.md, § 10.3).
+echo "Contrôles avant l'envoi (node --test, quatre fichiers à la fois)…"
 journal=$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/atelier-pre-push.$$")
-if node --test >"$journal" 2>&1; then
+if node --test --test-concurrency=4 >"$journal" 2>&1; then
   grep -E '^(ℹ|#) (tests|pass|fail) ' "$journal"
   rm -f "$journal"
   exit 0

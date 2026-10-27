@@ -84,6 +84,10 @@ function designesPresents(ecran) {
   }
 }
 
+// Le personnage d'essai sans la montée de Flambage : 8 points dépensés,
+// reliquat 2 ; Fournaise, du seul primordial, acquise au niveau 1 (lot 4.3).
+const seuleFournaise = (p) => (p.niveaux = [{ capacite: "Fournaise", niveau: 1 }]);
+
 // Une copie de la banque : Vif n'a plus que sa puissance 1 (de niveau 1, il
 // n'évolue pas) ; le Saucier donne une capacité absente de la feuille
 // Capacites (à venir).
@@ -98,7 +102,7 @@ function banqueModifiee() {
 test("étape 8 — en tête : « Points dépensés », la jauge d'une case par point du plafond, « reliquat » ; l'aide sans sa dernière phrase ; « Survolez » sous la souris seulement", async () => {
   for (const [matchMedia, survol] of [[undefined, false], [TELEPHONE, false], [A_LA_SOURIS, true]]) {
     await avec(matchMedia, async () => {
-      const ecran = await etape8(contexteDe(), personnageEssai((p) => (p.niveaux = [])));
+      const ecran = await etape8(contexteDe(), personnageEssai(seuleFournaise));
       const compteur = ecran.querySelector(".compteur-points");
       assert.equal(compteur.getAttribute("role"), "status");
       assert.equal(texteDe(compteur), "Points dépensés : 8 / 10 reliquat : 2");
@@ -160,7 +164,7 @@ test("étape 8 — une vignette par capacité hors « à venir » : l'origine et
     assert.deepEqual([...frappe.querySelectorAll(".vignette-capacite-effet p")].map(texteDe), ["Couteau d'office : Une attaque qui inflige 3/8/20.", "Rouleau de fonte : Une attaque qui inflige 8/11/13."]);
 
     // La montée permise : « 2 points de plus », Fournaise au coût de son niveau actuel.
-    ecran = await etape8(contexteDe(), personnageEssai((p) => (p.niveaux = [])));
+    ecran = await etape8(contexteDe(), personnageEssai(seuleFournaise));
     const fournaise = vignetteDe(ecran, "Fournaise");
     assert.equal(texteDe(fournaise.querySelector(".vignette-capacite-tete .detail")), "Grand Four · primordial");
     assert.deepEqual(ligneDeNiveau(fournaise), ["−", "niveau 1", "+", "coût : 1 souffle · 1 lien"]);
@@ -185,7 +189,7 @@ test("étape 8 — sur un ordinateur, l'infobulle du niveau suivant : au survol 
   await avec(
     A_LA_SOURIS,
     async () => {
-      const ecran = await etape8(contexteDe(), personnageEssai((p) => (p.niveaux = [])));
+      const ecran = await etape8(contexteDe(), personnageEssai(seuleFournaise));
       designesPresents(ecran);
       const fournaise = vignetteDe(ecran, "Fournaise");
       const plus = boutonDe(fournaise, "-plus");
@@ -263,7 +267,7 @@ test("étape 8 — au téléphone, le volet du bas : role dialog, titré ; le fo
     TELEPHONE,
     async () => {
       const contexte = contexteDe();
-      const personnage = personnageEssai((p) => (p.niveaux = []));
+      const personnage = personnageEssai(seuleFournaise);
       const ecran = await etape8(contexte, personnage);
       assert.equal(ecran.querySelector("[role=tooltip]"), null, "pas d'infobulle sans souris");
       let fournaise = vignetteDe(ecran, "Fournaise");
@@ -319,7 +323,7 @@ test("étape 8 — au téléphone, le volet ne retient pas le focus : parti vers
   await avec(
     TELEPHONE,
     async () => {
-      const ecran = await etape8(contexteDe(), personnageEssai((p) => (p.niveaux = [])));
+      const ecran = await etape8(contexteDe(), personnageEssai(seuleFournaise));
       const bouton = suivantDe(vignetteDe(ecran, "Fournaise"));
       const ailleurs = suivantDe(vignetteDe(ecran, "Pas chassé"));
       const volet = ecran.querySelector(".volet-niveau");
@@ -359,7 +363,7 @@ test("étape 8 — au téléphone, le volet ne retient pas le focus : parti vers
 
 test("étape 8 — la comparaison de Fournaise, du niveau 1 au niveau 2 : le titre, la montée, le coût et la portée qui changent, les mots ajoutés et retirés, la légende", async () => {
   await avec(A_LA_SOURIS, async () => {
-    let ecran = await etape8(contexteDe(), personnageEssai((p) => (p.niveaux = [])));
+    let ecran = await etape8(contexteDe(), personnageEssai(seuleFournaise));
     const bulle = bulleDe(vignetteDe(ecran, "Fournaise"));
     const textes = (noeud, selecteur) => [...noeud.querySelectorAll(selecteur)].map(texteDe);
     assert.deepEqual([...bulle.children].map(texteDe), [

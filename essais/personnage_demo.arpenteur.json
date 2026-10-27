@@ -1,5 +1,5 @@
 {
-  "format": 2,
+  "format": 3,
   "id": "demo-aubepine-0000000001",
   "mode": "demo",
   "etat": "enregistre",
@@ -111,6 +111,10 @@
     {
       "capacite": "Flambage",
       "niveau": 2
+    },
+    {
+      "capacite": "Fournaise",
+      "niveau": 1
     }
   ],
   "empreintes": [

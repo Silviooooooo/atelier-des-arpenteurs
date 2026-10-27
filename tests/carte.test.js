@@ -152,10 +152,10 @@ test("carte — une zone de deux faces au plus s'abrège en initiales si son nom
   assert.equal(abregerZone("Patte 12", 1), "P. 12");
   assert.equal(new Set(Array.from({ length: 19 }, (_, i) => abregerZone(`Patte ${i + 1}`, 1))).size, 19);
   assert.equal(abregerZone("Patte 2e", 1), "P. 2.", "un mot qui commence par un chiffre n'est pas un nombre");
-  const noeud = carteDe(resoluEssai((r) => (r.zones = [zone("Corps", 2, 16), zone("Queue fourchue", 17, 18), zone("Bec", 19, 19), zone("Œil gauche", 20, 20)])));
+  const noeud = carteDe(resoluEssai((r) => (r.zones = [zone("Corps", 2, 16), zone("Queue fourchue", 17, 18), zone("Pince", 19, 19), zone("Œil gauche", 20, 20)])));
   assert.deepEqual(
     [...noeud.querySelectorAll(".carte-zone.rangee-armure")].map((z) => [texteDe(z.querySelector(".carte-nom-zone")), z.className.split(" ").includes("etroite")]),
-    [["Corps", false], ["Q. f.", false], ["Bec", true], ["Œ. g.", true]],
+    [["Corps", false], ["Q. f.", false], ["Pince", true], ["Œ. g.", true]],
   );
 });
 
@@ -173,11 +173,11 @@ test("carte — la première ligne : les classes et le multiplicateur, les maît
   assert.equal(carteDe(demo("Mouette chapardeuse")).querySelectorAll(".carte-resume").length, 0);
   const fabriquee = carteDe(
     resoluEssai((r) => {
-      r.types = [{ nom: "Bête", absent: false }];
+      r.types = [{ nom: "Crustacé", absent: false }];
       r.multiplicateur = "2";
       r.maitrises = [
-        { nom: "Maîtrise du combat lourd", rang: 2, type: "lourde", origines: [PROPRE] },
-        { nom: "Maîtrise du combat précis", rang: 1, type: "precise", origines: [PROPRE] },
+        { nom: "Maîtrise du lourd", rang: 2, type: "lourde", origines: [PROPRE] },
+        { nom: "Maîtrise du précis", rang: 1, type: "precise", origines: [PROPRE] },
       ];
       r.equipement = [
         { nom: "Armure lourde", ecrit: "armure lourde", genre: "pack", qualite: "4", pieces: ["Plastron"], origine: PROPRE },
@@ -185,7 +185,7 @@ test("carte — la première ligne : les classes et le multiplicateur, les maît
       ];
     }),
   );
-  assert.equal(texteDe(fabriquee.querySelector(".carte-resume")), "Classes Bête ×2 — Maîtrises Maîtrise du combat lourd [2], Maîtrise du combat précis [1] — Équipement Armure lourde [4] (1 pièce) · Fourchette magique (introuvable)");
+  assert.equal(texteDe(fabriquee.querySelector(".carte-resume")), "Classes Crustacé ×2 — Maîtrises Maîtrise du lourd [2], Maîtrise du précis [1] — Équipement Armure lourde [4] (1 pièce) · Fourchette magique (introuvable)");
 });
 
 test("carte — une ligne par capacité : le rang si elle évolue, les dégâts et la portée, le coût, le désavantage, la description ; jamais les maîtrises", () => {
@@ -197,7 +197,7 @@ test("carte — une ligne par capacité : le rang si elle évolue, les dégâts 
   assert.equal(ecrireCout(null), "");
   assert.equal(ecrireDegats([]), "");
   assert.equal(ecrireDegats([{ nom: "Spatule souple", degats: "8/16/25", portee: null }]), "(8/16/25)");
-  assert.equal(ecrireDegats([{ nom: "Arc", degats: "3/8/20", portee: 6 }]), "(3/8/20, portée 6)");
+  assert.equal(ecrireDegats([{ nom: "Hachoir", degats: "3/8/20", portee: 6 }]), "(3/8/20, portée 6)");
   const chef = carteDe(demo("Chef de partie"));
   assert.deepEqual(lignes(chef).slice(1), ["Frappe (6/12/19) — Une attaque qui inflige 6/12/19.", "Moulinet farineux [1] (6/12/19) 5 souffle — Tourbillonne 1 fois.", "Pas chassé [2] 1 souffle — Se déplace de 2 cases.", ""]);
   assert.deepEqual(textes(chef, ".carte-nom-capacite"), ["Frappe", "Moulinet farineux", "Pas chassé"]);
@@ -214,13 +214,13 @@ test("carte — une ligne par capacité : le rang si elle évolue, les dégâts 
   const fabriquee = carteDe(
     resoluEssai((r) => {
       r.capacites = [
-        capacite("Charge", { cout: { souffle: "1", lien: "1" } }),
+        capacite("Taloche", { cout: { souffle: "1", lien: "1" } }),
         capacite("Hurlement", { evolue: false, rang: 0, cout: { souffle: "X", lien: "0" }, descriptions: [] }),
         capacite("Muette", { descriptions: [{ source: null, texte: "" }] }),
       ];
     }),
   );
-  assert.deepEqual(lignes(fabriquee).slice(0, 3), ["Charge [1] 1 souffle · 1 lien — Effet de Charge.", "Hurlement X souffle", "Muette [1]"]);
+  assert.deepEqual(lignes(fabriquee).slice(0, 3), ["Taloche [1] 1 souffle · 1 lien — Effet de Taloche.", "Hurlement X souffle", "Muette [1]"]);
 });
 
 test("carte — une capacité que deux armes donnent : chaque arme devant ses dégâts, le désavantage du seul bloc qui le donne, chaque description précédée de sa source", () => {
@@ -456,10 +456,10 @@ test("adversaire.css — chaque règle commence par la carte ou par son conteneu
   // adversaires de la démonstration, et un adversaire où tout figure.
   const complet = resoluEssai((r) => {
     r.zones = [zone("Corps", 2, 19), zone("Tête", 20, 20)];
-    r.types = [{ nom: "Bête", absent: false }];
+    r.types = [{ nom: "Crustacé", absent: false }];
     r.equipement = [{ nom: "Armure lourde", ecrit: "Armure lourde", genre: "pack", qualite: "2", pieces: ["Plastron"], origine: PROPRE }];
-    r.capacites = [capacite("Charge", { armes: [{ nom: "Défenses", degats: "1/2/3", portee: null, desavantage: true }], cout: { souffle: "2", lien: "0" }, desavantage: ["Défenses"], desavantageEntier: true }), { nom: "Ruade", absente: true, rang: null, armes: [], cout: null, desavantage: [], descriptions: [], origines: [] }];
-    r.maitrises = [{ nom: "Maîtrise du combat lourd", rang: 1, type: "lourde", origines: [PROPRE] }];
+    r.capacites = [capacite("Taloche", { armes: [{ nom: "Défenses", degats: "1/2/3", portee: null, desavantage: true }], cout: { souffle: "2", lien: "0" }, desavantage: ["Défenses"], desavantageEntier: true }), { nom: "Ruade", absente: true, rang: null, armes: [], cout: null, desavantage: [], descriptions: [], origines: [] }];
+    r.maitrises = [{ nom: "Maîtrise du lourd", rang: 1, type: "lourde", origines: [PROPRE] }];
   });
   const rencontre = fabriquer(() => cartes([...[...INDEX.adversaires.keys()].map((nom) => ({ resolu: demo(nom) })), { resolu: complet, numero: 2 }]));
   const posees = new Set([rencontre, ...rencontre.querySelectorAll("[class]")].flatMap((n) => n.className.split(/\s+/)));
@@ -505,7 +505,7 @@ test("adversaire.css — EB Garamond : deux @font-face, la police variable et so
   for (const fichier of ["EBGaramond-Variable.woff2", "EBGaramond-Italic.woff2"]) assert.equal(readFileSync(new URL(`polices/${fichier}`, racine)).subarray(0, 4).toString("latin1"), "wOF2", fichier);
   // Les graisses de la maquette, 400 et 600 : la police variable les couvre.
   assert.deepEqual([...new Set(STYLES.map((r) => declarations(r.corps)["font-weight"]).filter(Boolean))].sort(), ["400", "600"]);
-  // La police n'est nommée que par son jeton, sous la carte : elle ne se charge que pour elle.
+  // La police n'est nommée que par son jeton, sous la carte : elle n'est chargée que pour elle.
   const familles = STYLES.flatMap((r) => (declarations(r.corps)["font-family"] ? [[r.selecteur, declarations(r.corps)["font-family"]]] : []));
   assert.deepEqual(familles, [[".carte-adversaire", "var(--police-carte)"]]);
   const empruntee = /police-carte|EB Garamond/;
@@ -543,6 +543,23 @@ test("adversaire.css — l'impression : une page nommée A4 à marges, 190 mm, 4
   const fiche = lire("css/fiche.css");
   assert.match(fiche, /@page\s*\{\s*size:\s*A4;\s*margin:\s*0;\s*\}/);
   assert.match(fiche.slice(fiche.indexOf("@media print")), /body \{[^}]*background: var\(--fiche-papier\);/);
+});
+
+test("fiche.css, que la carte côtoie — à l'écran seulement, la feuille a un bord de 1 pixel au jeton de bordure du thème ; l'impression n'en a pas (lot 4.3)", () => {
+  const fiche = regles(sansCommentaires(lire("css/fiche.css")));
+  // Une règle vise la feuille elle-même si son dernier sélecteur simple la nomme (.feuille, .feuille.recto…).
+  const surLaFeuille = (r) => r.selecteur.split(/\s*,\s*/).some((s) => /\.feuille(?![-\w])/.test(s.split(/\s+|>/).pop()));
+  const ecran = fiche.filter((r) => r.cadre === "@media screen" && surLaFeuille(r));
+  assert.equal(ecran.length, 1, "une règle de la feuille à l'écran");
+  assert.equal(ecran[0].selecteur, ".feuille");
+  // Un trait de contour en retrait d'un pixel : la feuille garde sa taille, ses cadres leur place.
+  assert.deepEqual(declarations(ecran[0].corps), { outline: "1px solid var(--bordure)", "outline-offset": "-1px" });
+  assert.match(JETONS.slice(0, JETONS.indexOf("@media (prefers-color-scheme: dark)")), /--bordure:\s*#[0-9a-f]{6};/i, "le jeton est déclaré");
+  // Ailleurs (hors de l'écran, impression comprise), ni bord, ni contour, ni ombre sur la feuille.
+  for (const r of fiche.filter((r) => r.cadre !== "@media screen" && surLaFeuille(r))) {
+    assert.deepEqual(Object.keys(declarations(r.corps)).filter((p) => /^(?:border|outline|box-shadow)/.test(p)), [], `${r.cadre} ${r.selecteur}`);
+  }
+  assert.ok(fiche.some((r) => r.cadre === "@media print" && r.selecteur === ".feuille.recto, .feuille.verso"), "les règles de l'impression sont lues");
 });
 
 test("index.html — la feuille de la carte est liée, après celle de la fiche", () => {

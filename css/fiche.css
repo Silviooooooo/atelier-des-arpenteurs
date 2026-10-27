@@ -95,6 +95,20 @@
   --ligne-reference: calc(10.5px * 1.27);
 }
 
+/* À l'écran, un bord de 1 pixel, au jeton de bordure du thème, détache le
+   papier de la page : sous Abrasia, le blanc du papier et le fond de la page
+   (#f5efe1) n'ont que 1,15:1 de contraste (lot 4.3) ; tous les thèmes l'ont.
+   Un trait de contour, en retrait d'un pixel, et non une bordure : la
+   feuille garde ses 794 × 1123 pixels, ses cadres leur place, et la mesure
+   d'une zone qui déborde, faite à l'écran, vaut pour l'impression, qui n'a
+   pas de bord. */
+@media screen {
+  .feuille {
+    outline: 1px solid var(--bordure);
+    outline-offset: -1px;
+  }
+}
+
 /* Le navigateur mesure les traits sans leur bordure ; l'interface, elle,
    compte les bordures dans les hauteurs. Et aucune marge de l'interface
    n'entre dans la feuille : ses propres règles, plus précises, posent les

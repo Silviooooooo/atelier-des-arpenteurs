@@ -34,7 +34,12 @@ export function personnageEssai(modifier = null) {
       { nom: "Couvercle de marmite", choix: [], qualite: "2", place: "equipe" },
       { nom: "Bouillon revigorant", choix: [], qualite: null, place: "sac" },
     ],
-    niveaux: [{ capacite: "Flambage", niveau: 2 }],
+    // Au format 3 (lot 4.3) : Fournaise, du seul Grand Four, part au niveau
+    // 0 ; sa montée au niveau 1 l'acquiert, pour le même point qu'avant.
+    niveaux: [
+      { capacite: "Flambage", niveau: 2 },
+      { capacite: "Fournaise", niveau: 1 },
+    ],
   });
   if (modifier) modifier(p);
   return p;

@@ -859,7 +859,8 @@ test("parcours — étape 8 : une vignette par capacité, + et − pour celles q
   const retirer = installerDom();
   try {
     const contexte = contexteDe();
-    const personnage = await garde(contexte, personnageEssai((p) => (p.niveaux = [])));
+    // Sans la montée de Flambage ; Fournaise, du seul primordial, acquise au niveau 1 (lot 4.3).
+    const personnage = await garde(contexte, personnageEssai((p) => (p.niveaux = [{ capacite: "Fournaise", niveau: 1 }])));
     let ecran = await etape(contexte, personnage.id, 8);
     const fiche = calculerFiche(BANQUE, personnage, { index: INDEX });
     const compteur = () => texteDe(ecran.querySelector(".compteur-points"));
@@ -869,16 +870,21 @@ test("parcours — étape 8 : une vignette par capacité, + et − pour celles q
     const vignettes = [...ecran.querySelectorAll(".vignette-capacite")];
     assert.deepEqual(vignettes.map((v) => texteDe(v.querySelector(".capacite-nom"))), montrees.map((c) => c.nom));
     assert.ok(montrees.some((c) => c.niveau === 0) && montrees.some((c) => c.peutEvoluer), "les deux sortes");
+    // L'identifiant d'une vignette : l'indice de la capacité dans la banque (lot 4.3).
     montrees.forEach((capacite, i) => {
-      const plus = vignettes[i].querySelector(`#niveau-${i}-plus`);
-      const evolue = capacite.peutEvoluer && capacite.niveauCreation >= 1;
+      const id = `niveau-${BANQUE.capacites.indexOf(INDEX.capacite(capacite.nom))}`;
+      const plus = vignettes[i].querySelector(`#${id}-plus`);
+      const evolue = capacite.peutEvoluer;
       assert.equal(plus !== null, evolue, capacite.nom);
-      assert.equal(vignettes[i].querySelector(`#niveau-${i}-moins`) !== null, evolue, capacite.nom);
+      assert.equal(vignettes[i].querySelector(`#${id}-moins`) !== null, evolue, capacite.nom);
       if (!evolue) return;
       assert.equal(plus.disabled, !niveauxPermis(fiche, capacite).includes(capacite.niveau + 1), capacite.nom);
-      assert.equal(vignettes[i].querySelector(`#niveau-${i}-moins`).disabled, true, "au niveau de départ");
-      assert.equal(plus.getAttribute("aria-describedby"), `niveau-${i}-raison`, "sans souris, la raison seule");
+      // Au niveau de départ, « − » est inactif ; Fournaise, acquise, revient au niveau 0.
+      assert.equal(vignettes[i].querySelector(`#${id}-moins`).disabled, capacite.niveau <= capacite.niveauCreation, capacite.nom);
+      assert.equal(plus.getAttribute("aria-describedby"), `${id}-raison`, "sans souris, la raison seule");
     });
+    const moinsDeFournaise = [...vignettes.find((v) => texteDe(v.querySelector(".capacite-nom")) === "Fournaise").querySelectorAll("button")].find((b) => b.id.endsWith("-moins"));
+    assert.equal(moinsDeFournaise.disabled, false, "Fournaise peut revenir au niveau 0");
 
     const capacite = (nom) => [...ecran.querySelectorAll(".vignette-capacite")].find((v) => texteDe(v.querySelector(".capacite-nom")) === nom);
     const bouton = (nom, fin) => [...capacite(nom).querySelectorAll("button")].find((b) => b.id.endsWith(fin));
@@ -886,7 +892,7 @@ test("parcours — étape 8 : une vignette par capacité, + et − pour celles q
     assert.equal(texteDe(capacite("Flambage").querySelector(".vignette-capacite-effet")), "Multiplie les dégâts par 2.");
     bouton("Flambage", "-plus").click();
     await laisserFiler(10);
-    assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).niveaux, [{ capacite: "Flambage", niveau: 2 }]);
+    assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).niveaux, [{ capacite: "Fournaise", niveau: 1 }, { capacite: "Flambage", niveau: 2 }]);
     assert.equal(compteur(), "Points dépensés : 10 / 10 reliquat : 0");
     assert.equal(texteDe(capacite("Flambage").querySelector(".valeur-pas")), "niveau 2");
     assert.equal(texteDe(capacite("Flambage").querySelector(".vignette-capacite-effet")), "Multiplie les dégâts par 3.", "l'effet au niveau choisi");
@@ -898,7 +904,7 @@ test("parcours — étape 8 : une vignette par capacité, + et − pour celles q
     assert.equal(raison("Réduction"), "Niveau 2 : il manque 2 points.");
     bouton("Flambage", "-moins").click();
     await laisserFiler(10);
-    assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).niveaux, []);
+    assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).niveaux, [{ capacite: "Fournaise", niveau: 1 }]);
 
     // Des capacités reçues au-delà de 10 points (un Saucier enrichi, dans une
     // copie de la banque) : les capacités montrées, aucun « + » actif.
@@ -1096,7 +1102,8 @@ test("relecture — changer d'archétype efface la montée d'une capacité perdu
     const patissier = [...ecran.querySelectorAll("input[type=radio][name=archetype]")].find((r) => texteDe(r.parentNode).startsWith("Pâtissier"));
     patissier.declencher("change");
     await laisserFiler(10);
-    assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).niveaux, [], "Flambage n'est plus possédée");
+    // Fournaise, du seul Grand Four, garde sa montée au niveau 1 (lot 4.3).
+    assert.deepEqual((await contexte.etat.etagere.lire(personnage.id)).niveaux, [{ capacite: "Fournaise", niveau: 1 }], "Flambage n'est plus possédée");
   } finally {
     retirer();
   }
