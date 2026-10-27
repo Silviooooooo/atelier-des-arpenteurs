@@ -27,10 +27,11 @@ export const JETONS = [
   "combat-cadre-jet-fond", "combat-a-jouer", "combat-a-jouer-doux", "combat-epuise",
 ];
 
-// Réservés au groupe 3 du lot 4, qui les ajoutera avec leur emploi : le
-// catalogue les garde, et le contrôle de contraste les mesure, mais la
-// feuille des thèmes ne les écrit pas.
-export const JETONS_RESERVES = ["combat-a-jouer", "combat-a-jouer-doux", "combat-epuise"];
+// Les jetons que le catalogue garde sans que la feuille des thèmes les
+// écrive, en attendant leur emploi. Les trois du groupe 3 du lot 4 (qui peut
+// encore agir, son fond doux, qui a tout joué) y étaient ; ils sont entrés
+// avec les vignettes et les fiches du combat (lot 4.3) : la liste est vide.
+export const JETONS_RESERVES = [];
 
 // Les sept familles, dans l'ordre de la page Apparence.
 export const FAMILLES = [

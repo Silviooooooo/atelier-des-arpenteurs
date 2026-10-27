@@ -11,11 +11,17 @@
 // Au groupe 2 (contrat du groupe 2, § 8.5, § 9.9, § 9.11 et § 14, É4) : les
 // actions restantes écrites telles que la vue les dit, et le focus rendu
 // sans faire défiler la page.
+//
+// Au lot 4.3, vague 3 (contrat de la vague, § 3.3, § 4.2, § 5.2 et § 7) : la
+// classe de ce que le protagoniste peut encore faire, les étiquettes des
+// effets durables (nom, source, durée, couleur ; « Appliquer l'effet de… »
+// dans les deux modes, ✕ en Mode MJ seulement, inactif avec sa raison), et
+// « Modifier… » en Mode MJ seulement.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { installerDom, texteDe } from "./outils/dom_simule.js";
+import { boutons, installerDom, texteDe } from "./outils/dom_simule.js";
 
 const { creer } = await import("../js/ecrans/combat_fiches.js");
 const SOURCE = readFileSync(new URL("../js/ecrans/combat_fiches.js", import.meta.url), "utf8");
@@ -68,6 +74,9 @@ function aubepine(retouches = {}) {
     effets: [],
     jouer: null,
     avant: null,
+    jeu: null,
+    pastille: null,
+    menuMj: null,
     ...retouches,
   };
 }
@@ -95,6 +104,9 @@ function adversaire(id, nom, initiales, retouches = {}) {
     effets: [],
     jouer: null,
     avant: null,
+    jeu: null,
+    pastille: null,
+    menuMj: null,
     ...retouches,
   };
 }
@@ -127,6 +139,8 @@ function actionsEspionnes() {
       lancer: noter("lancer"),
       ouvrirFiche: noter("ouvrirFiche"),
       ouvrirCase: noter("ouvrirCase"),
+      ouvrirPalette: noter("ouvrirPalette"),
+      ouvrirMenuMj: noter("ouvrirMenuMj"),
     },
   };
 }
@@ -457,14 +471,183 @@ test("un passif câblé s'affiche actif, ou inactif avec sa raison écrite ; il 
   }
 });
 
-test("les effets en cours viennent avant les passifs, dans la même liste", () => {
+// ─── La vague 3 du lot 4.3 : les étiquettes, « Modifier… », la couleur ──────
+
+const ACTION_EN_COURS = "Le geste en cours se finit d'abord.";
+
+/** Une étiquette à la forme de vueFiche(…).effets (contrat de la vague 3, § 3.3). */
+function etiquette(id, genre, nom, couleur, retouches = {}) {
+  const unEtat = genre === "etat";
+  return {
+    id,
+    genre,
+    nom,
+    source: "MJ",
+    duree: "jusqu'au prochain tour des PJ",
+    couleur,
+    texte: unEtat ? "Perd sa prochaine action." : null,
+    retirer: unEtat
+      ? { libelle: `Retirer l'état ${nom}`, actif: true, raison: null, commande: { evenement: { type: "mj", genre: "etat", qui: "adv2", retrait: id } }, mj: true }
+      : null,
+    appliquer: unEtat ? { libelle: `Appliquer l'effet d'${nom}…`, source: { genre: "etat", effet: id } } : null,
+    ...retouches,
+  };
+}
+
+const ETOURDI = etiquette(12, "etat", "Étourdi", "alerte");
+const MAIN_BRULEE = etiquette(88, "etat", "Main brûlée", "blessure", {
+  source: "Blessure",
+  duree: "jusqu'à la fin du combat",
+  texte: "Désavantage avec une arme précise.",
+  appliquer: { libelle: "Appliquer l'effet de Main brûlée…", source: { genre: "etat", effet: 88 } },
+});
+const DEFENSE_PLUS_UN = etiquette(20, "modif", "Défense +1", "favorable", { source: "Nez fin" });
+const ATTAQUE_MOINS_DEUX = etiquette(21, "modif", "Attaque −2", "alerte", { source: "Choc sourd" });
+const EN_GUET = etiquette(30, "guet", "en guet : Frappe", "favorable", { source: "Guetter", texte: "Une attaque qui inflige 3/8/20." });
+const EN_PLUS = etiquette(31, "attaque_en_plus", "attaque en plus", "alerte", { source: "Flambage", duree: "jusqu'au prochain tour d'Aubépine" });
+const MODIFIER = { libelle: "Modifier…", actif: true, raison: null, mj: true };
+
+test("les effets en cours : une étiquette par effet, dans l'ordre de la vue, son nom, sa source et sa durée, la classe de sa couleur ; avant les passifs", () => {
   const { partie, retirer } = monter({
-    pj: [aubepine({ effets: [{ texte: "Défense 4 (5 − 1)", actif: true, raison: null }], passifs: [{ texte: "Vif : +1 en agilité", actif: true, raison: null }] })],
-    adv: [chef({ effets: ["Étourdi"] })],
+    pj: [aubepine({ effets: [MAIN_BRULEE, DEFENSE_PLUS_UN, EN_GUET], passifs: [{ texte: "Vif : +1 en agilité", actif: true, raison: null }] })],
+    adv: [chef({ effets: [ETOURDI, ATTAQUE_MOINS_DEUX, EN_PLUS, { ...ETOURDI, id: 13, couleur: "inconnue" }] })],
   });
   try {
-    assert.deepEqual(textes(ficheDe(partie, "pj1"), ".combat-effets li"), ["Défense 4 (5 − 1)", "Vif : +1 en agilité"]);
-    assert.deepEqual(textes(ficheDe(partie, "adv2"), ".combat-effets li"), ["Étourdi"]);
+    const pj = ficheDe(partie, "pj1");
+    assert.deepEqual(textes(pj, ".combat-etiquette summary"), ["Main brûlée · Blessure · jusqu'à la fin du combat", "en guet : Frappe · Guetter · jusqu'au prochain tour des PJ"]);
+    assert.deepEqual(
+      [...pj.querySelectorAll(".combat-etiquette")].map((noeud) => noeud.className),
+      ["combat-etiquette blessure", "combat-etiquette favorable", "combat-etiquette favorable"],
+    );
+    // Sans texte ni « Appliquer », une étiquette ne se déplie pas : son texte seul.
+    assert.equal(texteDe(pj.querySelectorAll(".combat-etiquette")[1]), "Défense +1 · Nez fin · jusqu'au prochain tour des PJ");
+    assert.equal(pj.querySelectorAll(".combat-etiquette")[1].querySelector("details"), null);
+    assert.equal(pj.querySelector(".combat-etiquettes").getAttribute("aria-label"), "Effets en cours : Aubépine Crèmebrûlée");
+    // Les étiquettes viennent avant les passifs, dans une autre liste.
+    const corps = [...pj.querySelector(`.${"combat-fiche"}-corps`).children].map((enfant) => enfant.className);
+    assert.ok(corps.indexOf("combat-etiquettes") < corps.indexOf("combat-effets"), corps.join(", "));
+    assert.deepEqual(textes(pj, ".combat-effets li"), ["Vif : +1 en agilité"]);
+    // Les quatre genres, trois couleurs ; une couleur inconnue ne devient pas une classe.
+    const chefNoeud = ficheDe(partie, "adv2");
+    assert.deepEqual(
+      [...chefNoeud.querySelectorAll(".combat-etiquette")].map((noeud) => noeud.className),
+      ["combat-etiquette alerte", "combat-etiquette alerte", "combat-etiquette alerte", "combat-etiquette"],
+    );
+    assert.deepEqual(
+      [...chefNoeud.querySelectorAll(".combat-etiquette")].map((noeud) => texteDe(noeud.querySelector("summary") ?? noeud)),
+      ["Étourdi · MJ · jusqu'au prochain tour des PJ", "Attaque −2 · Choc sourd · jusqu'au prochain tour des PJ", "attaque en plus · Flambage · jusqu'au prochain tour d'Aubépine", "Étourdi · MJ · jusqu'au prochain tour des PJ"],
+    );
+  } finally {
+    retirer();
+  }
+});
+
+test("une étiquette se déplie sur son texte et « Appliquer l'effet de… », dans les deux modes : la palette s'ouvre à son nom, près du bouton", () => {
+  for (const modeMj of [false, true]) {
+    const { partie, appels, retirer } = monter({ pj: [aubepine({ effets: [MAIN_BRULEE] })], adv: [chef({ effets: [ETOURDI] })] }, { etroit: false, modeMj });
+    try {
+      const deplie = ficheDe(partie, "adv2").querySelector(".combat-etiquette details");
+      assert.ok(deplie, `Mode MJ ${modeMj} : l'étiquette se déplie`);
+      assert.equal(texteDe(deplie.querySelector("p")), "Perd sa prochaine action.");
+      const appliquer = deplie.querySelector("button");
+      assert.equal(texteDe(appliquer), "Appliquer l'effet d'Étourdi…");
+      // Rien ne s'actionne dans la ligne qui déplie l'étiquette.
+      assert.equal(deplie.querySelector("summary").querySelectorAll("button").length, 0);
+      appliquer.click();
+      assert.equal(appels.at(-1)[0], "ouvrirPalette");
+      assert.deepEqual(appels.at(-1)[1], { genre: "etat", effet: 12 });
+      assert.ok(appels.at(-1)[2] === appliquer, "l'ancre est le bouton");
+      ficheDe(partie, "pj1").querySelector(".combat-etiquette details button").click();
+      assert.deepEqual(appels.at(-1).slice(0, 2), ["ouvrirPalette", { genre: "etat", effet: 88 }]);
+    } finally {
+      retirer();
+    }
+  }
+});
+
+test("✕ ne paraît qu'en Mode MJ, sur un état seul ; il émet sa commande ; inactif pendant un geste, il le dit et ne fait rien", () => {
+  const vue = { pj: [aubepine({ effets: [DEFENSE_PLUS_UN, EN_GUET] })], adv: [chef({ effets: [ETOURDI, EN_PLUS] })] };
+  const eteint = monter(vue, { etroit: false, modeMj: false });
+  try {
+    assert.deepEqual(boutons(eteint.partie.noeud, "✕"), [], "hors Mode MJ, aucun ✕");
+    assert.equal([...eteint.partie.noeud.querySelectorAll("button")].some((bouton) => (bouton.getAttribute("aria-label") ?? "").startsWith("Retirer l'état")), false);
+  } finally {
+    eteint.retirer();
+  }
+  const { partie, appels, retirer } = monter(vue, { etroit: false, modeMj: true });
+  try {
+    const croix = boutons(partie.noeud, "✕");
+    assert.equal(croix.length, 1, "un seul état porté : un seul ✕ ; ni un ±N, ni une garde, ni une attaque en plus");
+    assert.equal(croix[0].getAttribute("aria-label"), "Retirer l'état Étourdi");
+    assert.equal(croix[0].getAttribute("aria-disabled"), null);
+    croix[0].click();
+    assert.deepEqual(appels.at(-1), ["executer", { evenement: { type: "mj", genre: "etat", qui: "adv2", retrait: 12 } }, "panneau"]);
+
+    // Pendant un geste : inactif, sa raison le suit, et un appui ne fait rien.
+    const avant = appels.length;
+    partie.rendre({ pj: vue.pj, adv: [chef({ effets: [{ ...ETOURDI, retirer: { ...ETOURDI.retirer, actif: false, raison: ACTION_EN_COURS } }, EN_PLUS] })] }, { etroit: false, modeMj: true });
+    const inactif = boutons(partie.noeud, "✕")[0];
+    assert.equal(inactif.getAttribute("aria-disabled"), "true");
+    assert.equal(inactif.hasAttribute("disabled") || inactif.disabled === true, false, "jamais éteint");
+    const raison = partie.noeud.querySelector(`#${inactif.getAttribute("aria-describedby")}`);
+    assert.equal(texteDe(raison), ACTION_EN_COURS);
+    assert.equal(raison.className, "combat-raison");
+    inactif.click();
+    assert.equal(appels.length, avant, "un ✕ inactif n'émet rien");
+  } finally {
+    retirer();
+  }
+});
+
+test("« Modifier… » : en Mode MJ seulement ; il ouvre le menu du MJ près du bouton ; inactif pendant un geste, avec sa raison ; jamais pour un mort", () => {
+  const vue = (menuMj) => ({ pj: [aubepine({ menuMj })], adv: [chef({ menuMj }), marmiton1({ menuMj: null, marques: ["morte"] })] });
+  const eteint = monter(vue(MODIFIER), { etroit: false, modeMj: false });
+  try {
+    assert.deepEqual(boutons(eteint.partie.noeud, "Modifier"), [], "hors Mode MJ, « Modifier… » ne paraît pas");
+  } finally {
+    eteint.retirer();
+  }
+  const { partie, appels, retirer } = monter(vue(MODIFIER), { etroit: false, modeMj: true });
+  try {
+    const modifier = repere(ficheDe(partie, "adv2"), "modifier");
+    assert.equal(texteDe(modifier), "Modifier…");
+    assert.equal(modifier.className, "bouton secondaire combat-modifier");
+    assert.equal(modifier.getAttribute("aria-label"), "Modifier… : Chef de partie");
+    assert.equal(repere(ficheDe(partie, "adv3"), "modifier"), null, "un mort n'a pas de menu du MJ");
+    // Il suit « Fiche complète », dans la même rangée.
+    assert.deepEqual(modifier.parentNode.children.map((enfant) => enfant.getAttribute("data-repere")), ["fiche-complete", "modifier"]);
+    modifier.click();
+    assert.deepEqual(appels.at(-1).slice(0, 2), ["ouvrirMenuMj", "adv2"]);
+    assert.ok(appels.at(-1)[2] === modifier, "l'ancre est le bouton");
+
+    // Pendant un geste : la rangée seule est refaite ; le bouton dit sa raison et ne fait rien.
+    const corps = ficheDe(partie, "adv2").querySelector(".combat-fiche-corps").children[0];
+    const avant = appels.length;
+    partie.rendre(vue({ ...MODIFIER, actif: false, raison: ACTION_EN_COURS }), { etroit: false, modeMj: true });
+    assert.ok(ficheDe(partie, "adv2").querySelector(".combat-fiche-corps").children[0] === corps, "le corps garde ses nœuds");
+    const inactif = repere(ficheDe(partie, "adv2"), "modifier");
+    assert.equal(inactif.getAttribute("aria-disabled"), "true");
+    assert.equal(texteDe(partie.noeud.querySelector(`#${inactif.getAttribute("aria-describedby")}`)), ACTION_EN_COURS);
+    inactif.click();
+    assert.equal(appels.length, avant);
+    // Le Mode MJ éteint : le bouton s'en va.
+    partie.rendre(vue(MODIFIER), { etroit: false, modeMj: false });
+    assert.equal(repere(ficheDe(partie, "adv2"), "modifier"), null);
+  } finally {
+    retirer();
+  }
+});
+
+test("la fiche du camp qui joue prend la classe de ce qu'il peut encore faire : « a-jouer », « epuise » ; aucune hors du camp qui joue", () => {
+  const { partie, retirer } = monter({ pj: [aubepine({ jeu: "peut_agir", marques: ["joue"] })], adv: [chef({ jeu: null }), marmiton1({ jeu: "inconnu" })] });
+  try {
+    assert.equal(ficheDe(partie, "pj1").className, "combat-fiche joue a-jouer");
+    assert.equal(ficheDe(partie, "adv2").className, "combat-fiche");
+    assert.equal(ficheDe(partie, "adv3").className, "combat-fiche", "un jeu inconnu ne devient pas une classe");
+    const corps = ficheDe(partie, "pj1").querySelector(".combat-fiche-corps").children[0];
+    partie.rendre({ pj: [aubepine({ jeu: "epuise" })], adv: [chef(), marmiton1()] }, { etroit: false });
+    assert.equal(ficheDe(partie, "pj1").className, "combat-fiche epuise");
+    assert.ok(ficheDe(partie, "pj1").querySelector(".combat-fiche-corps").children[0] === corps, "la couleur change sans refaire le corps");
   } finally {
     retirer();
   }

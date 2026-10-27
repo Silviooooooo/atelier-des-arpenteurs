@@ -17,12 +17,15 @@
 // Ce qu'il fait :
 // - ligneEnNoeuds(ligne) : les nœuds d'une ligne (une LigneVue de
 //   js/combat/lecture.js) ; leur texte est celui de la ligne ;
-// - creerListe({ vueJournal }) : la liste du journal, qui ne pose que les
-//   lignes neuves, barre celles d'un geste annulé, et se repose en entier
-//   pour un autre journal ;
+// - creerListe({ vueJournal, parPage }) : la liste du journal, par pages
+//   (lot 4.3) : les 500 dernières lignes, puis 500 de plus au-dessus à
+//   chaque « Lignes précédentes » (precedentes()), la ligne lue gardée à sa
+//   place ; elle ne pose que les lignes neuves, barre celles d'un geste
+//   annulé, et se repose en entier pour un autre journal ;
 // - creerBandeau({ montrerLeJournal, tient, surveiller }) : le bandeau, au
 //   plus trois lignes, coupé par couperLaLigne(ligne, essayer), qui ne sait
-//   rien de la page : essayer(morceaux) dit si des morceaux tiennent.
+//   rien de la page : essayer(morceaux) dit si des morceaux tiennent. Un
+//   appui, au doigt comme à la souris, mène au journal.
 //
 // La mesure vient de l'écran (tient : la hauteur du texte contre trois fois
 // son interligne ; dans les contrôles, un budget de signes) ; la coupe se
@@ -32,6 +35,9 @@
 import { el, sansSensForce } from "./dom.js";
 
 const ETIQUETTE = "Dernier événement";
+// Une page du journal : les lignes montrées d'abord, puis celles que chaque
+// « Lignes précédentes » ajoute (mission du lot 4.3, § 6, point 1).
+const PAR_PAGE = 500;
 // Les signes s'écrivent par leur code : « ↓ », « … ».
 const VERS_LE_JOURNAL = `Journal ${String.fromCodePoint(0x2193)}`;
 // « … » : la fin coupée de la première phrase ; « […] » : une suite de
@@ -142,57 +148,96 @@ function ajouterLaClasse(noeud, classe) {
 
 const classesDeLaLigne = (ligne) => [ligne.genre === "tour" ? "tour" : null, ligne.barree === true ? "combat-annulee" : null].filter((classe) => classe !== null).join(" ") || null;
 
+// Le li d'une ligne, et ce que la liste en garde : son genre.
+const poser = (ligne) => ({ li: el("li", { classe: classesDeLaLigne(ligne) }, ligneEnNoeuds(ligne)), genre: ligne.genre });
+
 /**
- * La liste du journal, ol.combat-lignes. rendre(etat) pose les lignes neuves
- * (vueJournal(etat, lignes déjà posées)), barre les lignes déjà posées
- * qu'une ligne « Annulé » neuve couvre de sa plage [début, fin), puis montre
- * la dernière ligne ; un autre journal (son premier ou son dernier objet posé
- * a changé) se repose en entier. Rend { ajoutees, reposee }.
+ * La liste du journal, ol.combat-lignes, par pages de « parPage » lignes
+ * (500). Elle montre une suite de lignes du journal, du rang « debut » à la
+ * fin : d'abord les parPage dernières.
+ *
+ * rendre(etat) pose les lignes neuves (vueJournal(etat, fin de ce qui est
+ * posé)), barre les lignes déjà posées qu'une ligne « Annulé » neuve couvre
+ * de sa plage [début, fin), puis montre la dernière ligne ; un autre journal
+ * (son premier objet, ou le dernier objet posé, a changé) se repose en
+ * entier, à sa dernière page. Rend { ajoutees, reposee, restantes }, où
+ * « restantes » compte les lignes qui précèdent celles montrées.
+ *
+ * precedentes() pose au-dessus les parPage lignes qui précèdent, barrées
+ * comme la vue les barre (une ligne « Annulé » déjà montrée couvre aussi
+ * celles qui arrivent), et garde à sa place la ligne lue : la liste descend
+ * de la hauteur posée au-dessus. Rend { ajoutees, restantes }.
  */
-export function creerListe({ vueJournal }) {
+export function creerListe({ vueJournal, parPage = PAR_PAGE }) {
   const noeud = el("ol", { classe: "combat-lignes", tabindex: "0", "aria-label": "Journal du combat" });
-  // Les lignes posées, dans l'ordre : leur li et leur genre ; puis le premier
-  // et le dernier objet du journal qu'elles montrent.
+  const page = Number.isInteger(parPage) && parPage > 0 ? parPage : PAR_PAGE;
+  // Les lignes posées, dans l'ordre : leur li et leur genre ; le rang de la
+  // première dans le journal ; le premier objet du journal et le dernier
+  // objet posé ; l'état rendu, que « Lignes précédentes » relit.
   let posees = [];
+  let debut = 0;
   let premiere = null;
   let derniere = null;
+  let rendu = null;
 
+  // Une ligne « Annulé » neuve barre les lignes déjà posées de sa plage, et
+  // celles-là seules (rangs du journal).
   function barrer(barre, depuis) {
     if (!Array.isArray(barre)) return;
-    for (let rang = Math.max(0, barre[0]); rang < Math.min(barre[1], depuis); rang += 1) {
-      if (posees[rang] && posees[rang].genre !== "annule") ajouterLaClasse(posees[rang].li, "combat-annulee");
+    for (let rang = Math.max(debut, barre[0]); rang < Math.min(barre[1], depuis); rang += 1) {
+      const posee = posees[rang - debut];
+      if (posee && posee.genre !== "annule") ajouterLaClasse(posee.li, "combat-annulee");
     }
   }
 
   function rendre(etat) {
+    rendu = etat ?? null;
     const journal = etat?.journal ?? [];
-    const combien = posees.length;
-    const suite = journal.length >= combien && (combien === 0 || (journal[0] === premiere && journal[combien - 1] === derniere));
+    const fin = debut + posees.length;
+    const suite = journal.length >= fin && (posees.length === 0 || (journal[0] === premiere && journal[fin - 1] === derniere));
     if (!suite) {
       noeud.replaceChildren();
       posees = [];
     }
-    const depuis = posees.length;
+    // Rien de posé : la dernière page.
+    if (posees.length === 0) debut = Math.max(0, journal.length - page);
+    const depuis = debut + posees.length;
     let ajoutees = 0;
     if (journal.length > depuis) {
       const { lignes } = vueJournal(etat, depuis);
       for (const ligne of lignes) {
-        const li = el("li", { classe: classesDeLaLigne(ligne) }, ligneEnNoeuds(ligne));
-        noeud.append(li);
-        posees.push({ li, genre: ligne.genre });
+        const posee = poser(ligne);
+        noeud.append(posee.li);
+        posees.push(posee);
         ajoutees += 1;
       }
       for (const ligne of lignes) barrer(ligne.barre, depuis);
     }
     premiere = journal[0] ?? null;
-    derniere = journal[posees.length - 1] ?? null;
+    derniere = journal[debut + posees.length - 1] ?? null;
     // La dernière ligne reste visible : la liste défile en elle-même, jamais
     // la page.
     if (ajoutees > 0 || !suite) noeud.scrollTop = noeud.scrollHeight;
-    return { ajoutees, reposee: !suite };
+    return { ajoutees, reposee: !suite, restantes: debut };
   }
 
-  return { noeud, rendre };
+  function precedentes() {
+    if (rendu === null || posees.length === 0 || debut === 0) return { ajoutees: 0, restantes: debut };
+    const avant = Math.max(0, debut - page);
+    // La vue relit le journal depuis la page neuve : ses lignes sont barrées
+    // par toutes les lignes « Annulé » qui les suivent, montrées ou non.
+    const neuves = vueJournal(rendu, avant).lignes.slice(0, debut - avant).map(poser);
+    const hauteur = noeud.scrollHeight;
+    noeud.replaceChildren(...neuves.map((posee) => posee.li), ...posees.map((posee) => posee.li));
+    posees = [...neuves, ...posees];
+    debut = avant;
+    // La ligne lue reste à sa place : la liste descend de ce qui s'est posé
+    // au-dessus.
+    noeud.scrollTop += noeud.scrollHeight - hauteur;
+    return { ajoutees: neuves.length, restantes: debut };
+  }
+
+  return { noeud, rendre, precedentes };
 }
 
 // ─── La coupe ───────────────────────────────────────────────────────────────
@@ -374,31 +419,27 @@ const largeurDe = (noeud) => noeud.getBoundingClientRect().width;
  * une région d'annonce ; son titre porte la ligne entière.
  *
  * rendre(vue) : la vue de vueBandeau ; null le cache. Une vue inchangée ne
- * refait rien. « Journal ↓ », ou un clic à la souris sur le reste du
- * bandeau (jamais au doigt), appellent montrerLeJournal(). tient(noeud) dit
- * si le texte tient en trois lignes ; surveiller(noeud, rappel) prévient
- * quand sa taille change : la coupe se refait si sa largeur a changé.
+ * refait rien. « Journal ↓ », ou un appui sur le reste du bandeau, au doigt
+ * comme à la souris (lot 4.3 : sur un téléphone, la page ne défile plus, et
+ * un doigt qui la balaie ne passe plus par le bandeau), appellent
+ * montrerLeJournal(). tient(noeud) dit si le texte tient en trois lignes ;
+ * surveiller(noeud, rappel) prévient quand sa taille change : la coupe se
+ * refait si sa largeur a changé.
  */
 export function creerBandeau({ montrerLeJournal, tient, surveiller }) {
   const bouton = el("button", { type: "button", classe: "bouton secondaire combat-bandeau-journal", onclick: () => montrerLeJournal() }, VERS_LE_JOURNAL);
   const texte = el("div", { classe: "combat-bandeau-texte", "aria-hidden": "true" });
   const entier = el("span", { classe: "combat-bandeau-entier" });
-  // L'appui du dernier pointerdown : seul un clic à la souris mène au
-  // journal, un doigt qui balaie la page ne doit pas y sauter.
-  let appui = null;
   const noeud = el(
     "div",
     {
       classe: "combat-bandeau",
       hidden: true,
-      onpointerdown: (evenement) => {
-        appui = evenement.pointerType ?? null;
-      },
+      // Le clic de « Journal ↓ » remonte au bandeau : il n'y compte pas deux
+      // fois.
       onclick: (evenement) => {
-        const souris = appui === "mouse";
-        appui = null;
         if (bouton.contains(evenement.target)) return;
-        if (souris) montrerLeJournal();
+        montrerLeJournal();
       },
     },
     el("span", { classe: "combat-bandeau-etiquette" }, ETIQUETTE),

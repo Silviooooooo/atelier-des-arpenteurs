@@ -12,8 +12,10 @@
 //   qui la ferme, ou la réduit après le premier dé, toujours en dernier pour
 //   que Tab sorte après lui. Réduite, elle laisse un onglet contre la case
 //   (« Taloche [1] : rouvrir »), qui la rouvre. Sur un téléphone, la feuille
-//   de style en fait le volet qui monte du bas : la liste seule, sans flèche ;
-//   le jet se joue alors sous la carte (combat_action.js) ;
+//   de style en fait le volet qui monte du bas, sans flèche : au repos
+//   (« À qui le tour ? », la fin du combat), la liste, puis le geste pas à
+//   pas (lot 4.3, contrat de la vague 3, § 4.2) ; la zone sous la carte reste
+//   vide ;
 // - les infobulles (creerInfobulles) : une par déclencheur (une ligne, un
 //   passif, le nombre des causes, « Jet d'attaque »), cachée et remplie
 //   d'emblée, liée à lui, jamais focalisable, ouverte au survol et au focus,
@@ -47,6 +49,13 @@
 // Le doigt se juge au dernier appui, que l'écran retient sur sa racine
 // (dernierAppui) : le focus qui suit un appui du doigt, sur le jeton comme sur
 // la ligne, n'ouvre pas d'infobulle (spéc. § 17.7).
+//
+// Au lot 4.3 (vague 3), la bulle est bornée sous le bandeau : l'écran lui
+// donne son plafond (le bas du bandeau), et echelle.js écrit sa plus grande
+// hauteur ; elle défile en elle. Sur PC, la palette (combat_palette.js) s'y
+// pose en colonne, à droite des dés, et la bulle s'élargit
+// (combat-bulle-large) ; au téléphone, la palette est une feuille, que
+// l'écran pose. Le Mode MJ et la palette ouverte passent au contenu.
 //
 // Le corps de la bulle n'est refait que si ce qu'il montre change : un rendu
 // de plus n'efface ni une saisie en cours, ni le focus. Avant de le refaire,
@@ -84,6 +93,24 @@ const GRACE = 300;
 // Le nom de la bulle quand elle porte la liste d'une case : le titre de
 // cette liste, que l'écran écrit (« Case D4 »).
 const ID_DU_TITRE_DE_LA_CASE = "combat-bulle-case-titre";
+
+// Le volet au repos, au téléphone (maquette, A1 et A7 ; contrat de la vague
+// 3, § 6.2) : qui joue, puis ce qui se fait entre deux gestes. La fin du
+// combat dit le vainqueur que la vue donne.
+const REPOS = {
+  pj: { titre: "À qui le tour ?", sous: "Touchez une vignette, ou un jeton sur la carte." },
+  adv: { titre: "Le MJ joue ses adversaires.", sous: "Touchez une vignette, ou « Fin de tour » quand tous ont joué." },
+};
+const COMBAT_TERMINE = "Combat terminé";
+const FICHE = "Fiche";
+const FICHES = "Fiches";
+const JOURNAL = "Journal";
+const FIN_DE_TOUR = "Fin de tour";
+const ANNULER_LE_GESTE = "Annuler le dernier geste";
+
+// Le numéro de la dernière raison du volet au repos : son identifiant ne
+// croise aucun de ceux du contenu (« combat-bulle-raison-… »).
+let numeroDeRaison = 0;
 
 const present = (valeur) => valeur !== null && valeur !== undefined;
 const rempli = (texte) => present(texte) && texte !== "";
@@ -297,15 +324,21 @@ export function creerInfobulles({ couche, repere = null, actions = {}, services 
 
 /**
  * Ce que montre la bulle (contrat, § 9.4) : « case » (la liste d'une case),
- * « jet », « liste », ou null (cachée). Sur un ordinateur : la liste d'une
- * case pendant le combat ; sinon, une action non réduite, son jet s'il y a
- * un geste. Sur un téléphone, le volet : la liste d'une action, sans geste ni
- * case ouverte.
+ * « jet », « liste », « repos », ou null (cachée). Sur un ordinateur : la
+ * liste d'une case pendant le combat ; sinon, une action non réduite, son
+ * jet s'il y a un geste. Sur un téléphone, le volet, tant qu'aucune case
+ * n'est ouverte : le repos entre deux gestes et à la fin du combat, la liste
+ * d'une action, puis son geste (contrat de la vague 3, § 4.2).
  */
 function contenuDe(vue, ecran, reduite) {
   const caseOuverte = present(ecran.caseOuverte) ? ecran.caseOuverte : null;
   const action = vue.genre === "action";
-  if (ecran.etroit === true) return action && !vue.geste && caseOuverte === null ? "liste" : null;
+  if (ecran.etroit === true) {
+    if (caseOuverte !== null) return null;
+    if (vue.genre === "qui_joue" || vue.genre === "termine") return "repos";
+    if (!action) return null;
+    return vue.geste ? "jet" : "liste";
+  }
   if (caseOuverte !== null && (action || vue.genre === "qui_joue")) return "case";
   if (!action || reduite) return null;
   return vue.geste ? "jet" : "liste";
@@ -362,18 +395,31 @@ function ecrire(noeud, texte) {
 /**
  * La bulle. `actions` : { executer(commande, origine), lancerLeDe(),
  * hachurer(noms | null), focusSurLeJeton(id), focusSurLaCase(nomDeCase),
- * fermerLaCase(), rafraichir() } ; composerListe et composerGeste fabriquent
- * son contenu (combat_action.js) ; dernierAppui() dit le genre du dernier
- * appui sur l'écran, que ses infobulles lisent. Rend { noeud, onglet,
- * listeDeCase, rendre, focaliser, echap, fermerLInfobulle, dehors, auDehors,
- * replacer, oublier }.
+ * fermerLaCase(), rafraichir(), ouvrirPalette(source, ancre),
+ * ouvrirFiches(id), ouvrirJournal(), demanderLAnnulation(), finDeTour(),
+ * ouvrirMenuDuCombat() } ; composerListe et composerGeste fabriquent son
+ * contenu (combat_action.js) ; dernierAppui() dit le genre du dernier appui
+ * sur l'écran, que ses infobulles lisent. Rend { noeud, onglet, listeDeCase,
+ * rendre, focaliser, echap, fermerLInfobulle, dehors, auDehors, replacer,
+ * oublier }.
  *
  * rendre(vue, ecran) → { montree, ouverture } ; vue : vuePanneau ; ecran :
- * { etroit, caseOuverte, ancre, repere, fenetre, origineDeLaCible } (ancre : la
- * case active ; repere : div.combat-cadre ; fenetre : { largeur, hauteur },
- * ou de quoi la lire). ouverture est vrai quand la bulle paraît, change de
- * protagoniste ou de genre de contenu : l'écran la replace alors, et, si le
- * rendu suit une commande, appelle focaliser().
+ * { etroit, caseOuverte, ancre, repere, fenetre, origineDeLaCible, plafond,
+ * modeMj, palette, vuePalette, repos } (ancre : la case active ; repere :
+ * div.combat-cadre ; fenetre : { largeur, hauteur }, ou de quoi la lire ;
+ * plafond : le bas du bandeau, en px de la fenêtre, ou de quoi le lire ;
+ * palette : le nœud de la palette, que la bulle porte en colonne sur PC, ou
+ * null ; vuePalette : la vue de la palette ouverte, que le contenu lit ;
+ * repos : { annuler, finDeTour } de la barre, pour le volet au repos).
+ * ouverture est vrai quand la bulle paraît, change de protagoniste ou de
+ * genre de contenu : l'écran la replace alors, et, si le rendu suit une
+ * commande, appelle focaliser().
+ *
+ * Au téléphone, le volet montre l'étape du geste que dit la vue (etape) ;
+ * « Un jet par cible » le mène aux dés sans rien émettre, le temps que la
+ * vue y vienne d'elle-même. Son en-tête porte « Fiche », qui ouvre la fiche
+ * de qui joue ; au repos, « Fiches », « Journal », « Fin de tour » (au tour
+ * adverse) et « Annuler le dernier geste », chacun par son action.
  *
  * Fermer (la croix, Échap, clic au-dehors), avant le premier dé : la
  * commande de vue.fermeture, depuis la bulle ; la séance joue d'abord
@@ -409,6 +455,8 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
   const couche = el("div", { classe: "combat-infobulles" });
   const poignee = el("span", { classe: "combat-bulle-poignee", "aria-hidden": "true" });
   const fermer = el("button", { type: "button", classe: "combat-bulle-fermer", "aria-label": LIBELLE_FERMER, onclick: () => surLeBoutonFermer() }, SIGNE_FERMER);
+  // « Fiche », dans l'en-tête du volet (mission du lot 4.3, § 3) : la fiche de qui joue.
+  const fiche = el("button", { type: "button", classe: "bouton secondaire", hidden: true, onclick: () => actions.ouvrirFiches?.(protagonisteDe(derniereVue)) }, FICHE);
   const noeud = el("div", { classe: "combat-bulle", role: "dialog", hidden: true, onkeydown: (evenement) => auClavier(evenement) }, tete, defile, couche, fermer);
   const onglet = el("button", { type: "button", classe: "combat-onglet", hidden: true, onclick: () => rouvrir() });
 
@@ -416,14 +464,18 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
   let derniereVue = null;
   let dernierEcran = {};
   let reduite = false;
-  // Ce que la bulle montre (« liste », « jet », « case », ou null), et pour qui.
+  // Ce que la bulle montre (« liste », « jet », « case », « repos », ou null), et pour qui.
   let contenuMontre = null;
   let cleMontree = null;
   // La signature du corps, la clé du geste (pour la mémoire), le côté posé.
   let rendue = null;
   let gesteGarde = null;
   let cote = null;
+  // Les enfants posés : le volet (sa poignée, « Fiche ») et la palette en colonne.
   let etroitMontre = false;
+  let paletteMontree = null;
+  // L'étape où « Un jet par cible » a mené le volet, avant que la vue y vienne.
+  let etapeForcee = null;
   // La clé du réglage qui garde le focus, le temps que l'écran redessine.
   let gardee = null;
   // La largeur de la fenêtre au dernier changement de taille, et l'écouteur
@@ -447,10 +499,11 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
   // Ce que le contenu émet passe par ici : le geste fini, la bulle cachée et
   // la vue qui dit « Qui joue ? », le focus va au jeton de qui jouait.
   function executerPuisSuivre(commande, origine = ORIGINE) {
-    const etaitMontree = contenuMontre !== null;
+    const montraitUneAction = contenuMontre === "liste" || contenuMontre === "jet";
     const qui = protagonisteDe(derniereVue);
     actions.executer(commande, origine);
-    if (etaitMontree && contenuMontre === null && derniereVue?.genre === "qui_joue") actions.focusSurLeJeton?.(qui);
+    const montreUneAction = contenuMontre === "liste" || contenuMontre === "jet";
+    if (montraitUneAction && !montreUneAction && contenuMontre !== "case" && derniereVue?.genre === "qui_joue") actions.focusSurLeJeton?.(qui);
   }
 
   /**
@@ -475,19 +528,36 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
     hachurer: (noms) => actions.hachurer?.(noms),
     // L'aperçu qui s'ouvre sous une ligne se montre dans la partie vue.
     montrer: (noeud) => montrerDansLaBulle(noeud),
+    // Un passif, « Appliquer l'effet de… », « Palette » : la palette, à ce nom.
+    // « Palette » l'ouvre libre ({ libre: true }), et l'écran doit le savoir.
+    ouvrirPalette: (source, ancre, options) => actions.ouvrirPalette?.(source, ancre, options),
+    // « Un jet par cible », au téléphone : le volet passe aux dés.
+    passerAuxDes: () => passerAuxDes(),
   };
 
   const classes = () =>
-    ["combat-bulle", contenuMontre === "jet" ? "combat-bulle-jet" : null, cote !== null ? `combat-bulle-${cote}` : null].filter(present).join(" ");
+    [
+      "combat-bulle",
+      contenuMontre === "jet" ? "combat-bulle-jet" : null,
+      paletteMontree !== null ? "combat-bulle-large" : null,
+      cote !== null ? `combat-bulle-${cote}` : null,
+    ]
+      .filter(present)
+      .join(" ");
 
-  // La poignée du volet n'est dans la bulle que sous 56rem.
-  function poserLaPoignee(etroit) {
-    if (etroit === etroitMontre) return;
+  // La poignée du volet et « Fiche » ne sont dans la bulle que sous 56rem ;
+  // la palette, en colonne après ce qui défile, qu'à partir de là. La croix reste
+  // le dernier enfant : Tab sort après elle.
+  function poserLesEnfants(etroit, palette) {
+    if (etroit === etroitMontre && palette === paletteMontree) return;
     etroitMontre = etroit;
-    noeud.replaceChildren(...(etroit ? [poignee] : []), tete, defile, couche, fermer);
+    paletteMontree = palette;
+    tete.replaceChildren(titre, sous, ...(etroit ? [fiche] : []));
+    noeud.replaceChildren(...(etroit ? [poignee] : []), tete, defile, ...(palette !== null ? [palette] : []), couche, fermer);
   }
 
-  // Le nom du dialogue : celui de la vue ; la liste d'une case, son titre.
+  // Le nom du dialogue : celui de la vue ; la liste d'une case, son titre ;
+  // le repos, son titre.
   function nommer() {
     if (contenuMontre === "case") {
       const titreDeLaCase = listeDeCase.querySelector("h3");
@@ -497,7 +567,69 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
       return;
     }
     noeud.removeAttribute("aria-labelledby");
-    noeud.setAttribute("aria-label", sansSensForce(derniereVue?.nom ?? ""));
+    noeud.setAttribute("aria-label", contenuMontre === "repos" ? titre.textContent : sansSensForce(derniereVue?.nom ?? ""));
+  }
+
+  /** Un bouton du repos ; inactif, il garde le focus, ne fait rien, et sa raison lui est liée. */
+  function boutonDuRepos(texte, { classe = "bouton secondaire", actif = true, raison = null, faire }) {
+    const inactif = actif === false;
+    let idRaison = null;
+    if (inactif && rempli(raison)) {
+      numeroDeRaison += 1;
+      idRaison = `combat-bulle-repos-raison-${numeroDeRaison}`;
+    }
+    const bouton = el(
+      "button",
+      {
+        type: "button",
+        classe,
+        "aria-disabled": inactif ? "true" : null,
+        "aria-describedby": idRaison,
+        onclick: () => {
+          if (!inactif) faire();
+        },
+      },
+      texte,
+    );
+    return [bouton, idRaison ? el("span", { id: idRaison, classe: "combat-raison" }, raison) : null];
+  }
+
+  /**
+   * Le volet au repos (maquette A1, A7) : « Fiches » ; « Journal » au tour
+   * des PJ et à la fin ; « Fin de tour », le principal, au tour adverse ;
+   * « Annuler le dernier geste » pendant le combat. Chacun appelle l'action
+   * de l'écran : c'est lui qui pose la question de l'annulation.
+   */
+  function composerLeRepos(vue, repos) {
+    const termine = vue.genre === "termine";
+    const adverse = !termine && vue.camp === "adv";
+    const annuler = repos?.annuler ?? null;
+    const fin = repos?.finDeTour ?? null;
+    return el(
+      "div",
+      { classe: "combat-repos" },
+      boutonDuRepos(FICHES, { faire: () => actions.ouvrirFiches?.(null) }),
+      adverse ? null : boutonDuRepos(JOURNAL, { faire: () => actions.ouvrirJournal?.() }),
+      adverse && fin ? boutonDuRepos(FIN_DE_TOUR, { classe: "bouton", actif: fin.actif, raison: fin.raison, faire: () => actions.finDeTour?.() }) : null,
+      !termine && annuler ? boutonDuRepos(annuler.libelle ?? ANNULER_LE_GESTE, { actif: annuler.actif, raison: annuler.raison, faire: () => actions.demanderLAnnulation?.() }) : null,
+    );
+  }
+
+  /** Le titre et le sous-titre du repos. */
+  function enteteDuRepos(vue) {
+    if (vue.genre === "termine") return { titre: vue.vainqueur ?? COMBAT_TERMINE, sous: null };
+    return REPOS[vue.camp === "adv" ? "adv" : "pj"];
+  }
+
+  /** L'étape que le volet montre : celle de la vue, ou les dés après « Un jet par cible ». */
+  const etapeVue = (vue) => (etapeForcee !== null && vue.etape === 1 ? etapeForcee : (vue.etape ?? null));
+
+  // « Un jet par cible », au téléphone : le volet montre les dés ; le corps
+  // refait rend le focus à la commande qui attend (le dé).
+  function passerAuxDes() {
+    if (!etroitMontre || derniereVue === null) return;
+    etapeForcee = 2;
+    rendre(derniereVue, dernierEcran);
   }
 
   // Un corps refait sans ouverture (un dé, un réglage) rend le focus qu'il
@@ -510,7 +642,10 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
     actions.hachurer?.(null);
     if (contenu === "case") {
       defile.replaceChildren(listeDeCase);
+    } else if (contenu === "repos") {
+      defile.replaceChildren(composerLeRepos(vue, dernierEcran.repos ?? null));
     } else {
+      const etroit = dernierEcran.etroit === true;
       const r = {
         actions: actionsDuContenu,
         origine: ORIGINE,
@@ -522,6 +657,10 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
         lier: infobulles.lier,
         memoire,
         cles: new Map(),
+        etroit,
+        modeMj: dernierEcran.modeMj === true,
+        palette: dernierEcran.vuePalette ?? null,
+        etapeVue: etroit ? etapeVue(vue) : null,
       };
       const noeuds = (contenu === "jet" ? composerGeste : composerListe)(r, vue);
       // Le réglage gardé n'est plus dans le corps refait : le focus va, comme
@@ -563,11 +702,16 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
     if (cleDuGeste !== gesteGarde) {
       gesteGarde = cleDuGeste;
       Object.assign(memoire, memoireVide());
+      etapeForcee = null;
     }
-    poserLaPoignee(etroit);
+    // La vue a quitté l'étape où « Un jet par cible » a mené le volet.
+    if (vue.etape !== 1) etapeForcee = null;
     if (etroit) cote = null;
 
     const contenu = contenuDe(vue, dernierEcran, reduite);
+    // La palette en colonne, sur PC, à côté d'une action montrée.
+    const palette = !etroit && (contenu === "jet" || contenu === "liste") ? (dernierEcran.palette ?? null) : null;
+    poserLesEnfants(etroit, palette);
     let ouverture = false;
     if (contenu === null) cacher();
     else {
@@ -577,16 +721,26 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
       contenuMontre = contenu;
       noeud.hidden = false;
       noeud.className = classes();
-      nommer();
       tete.hidden = contenu === "case";
-      ecrire(titre, vue.entete?.titre);
-      ecrire(sous, vue.entete?.sous);
-      sous.hidden = !rempli(vue.entete?.sous);
+      const entete = contenu === "repos" ? enteteDuRepos(vue) : (vue.entete ?? {});
+      ecrire(titre, entete.titre);
+      ecrire(sous, entete.sous);
+      sous.hidden = !rempli(entete.sous);
+      fiche.hidden = !(contenu === "liste" || contenu === "jet") || protagonisteDe(vue) === null;
+      nommer();
       const parReduction = contenu !== "case" && vue.fermeture?.genre === "reduire";
       ecrire(fermer, parReduction ? SIGNE_REDUIRE : SIGNE_FERMER);
       fermer.setAttribute("aria-label", parReduction ? (vue.fermeture.libelle ?? LIBELLE_REDUIRE) : contenu === "case" ? LIBELLE_FERMER : (vue.fermeture?.libelle ?? LIBELLE_FERMER));
+      // Le repos n'a rien à fermer.
+      fermer.hidden = contenu === "repos";
       // La signature de ce que montre le corps : un rendu égal ne le refait pas.
-      const signature = JSON.stringify([contenu, contenu === "case" ? dernierEcran.caseOuverte : { ...vue, annonce: undefined }, contenu === "jet" ? (dernierEcran.origineDeLaCible ?? null) : null]);
+      const signature = JSON.stringify([
+        contenu,
+        contenu === "case" ? dernierEcran.caseOuverte : { ...vue, annonce: undefined },
+        contenu === "jet" ? (dernierEcran.origineDeLaCible ?? null) : null,
+        contenu === "repos" ? (dernierEcran.repos ?? null) : null,
+        contenu === "liste" || contenu === "jet" ? [etroit, dernierEcran.modeMj === true, dernierEcran.vuePalette ?? null, etroit ? etapeVue(vue) : null] : null,
+      ]);
       if (signature !== rendue) {
         rendue = signature;
         refaireLeCorps(vue, contenu, ouverture);
@@ -603,7 +757,8 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
   }
 
   // La place de la bulle, ou de l'onglet, contre la case active, dans le
-  // repère du cadre. Sous 56rem, la feuille place le volet.
+  // repère du cadre, sous le plafond que l'écran donne (le bas du bandeau).
+  // Sous 56rem, la feuille place le volet.
   function placer(fenetre) {
     if (dernierEcran.etroit === true) return;
     const ancre = dernierEcran.ancre ?? null;
@@ -614,7 +769,8 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
       nommer();
       // La colonne voisine de la case reste libre : l'écart vaut le côté d'une case, plus la flèche.
       const ecart = Math.round(ancre.getBoundingClientRect().width) + FLECHE;
-      cote = placerBulle(noeud, { ancre, repere, fenetre, cotes: COTES_DE_LA_BULLE, ecart, pointe: POINTE_DE_LA_BULLE }).cote;
+      const plafond = typeof dernierEcran.plafond === "function" ? dernierEcran.plafond() : dernierEcran.plafond;
+      cote = placerBulle(noeud, { ancre, repere, fenetre, cotes: COTES_DE_LA_BULLE, ecart, pointe: POINTE_DE_LA_BULLE, plafond }).cote;
       noeud.className = classes();
     }
     if (!onglet.hidden) placerBulle(onglet, { ancre, repere, fenetre, cotes: COTES_DE_LA_BULLE, ecart: FLECHE, pointe: POINTE_DE_L_ONGLET });
@@ -731,6 +887,7 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
     reduite = false;
     gardee = null;
     rendue = null;
+    etapeForcee = null;
     Object.assign(memoire, memoireVide());
     infobulles.fermer();
   }

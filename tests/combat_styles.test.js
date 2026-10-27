@@ -17,7 +17,13 @@
 // groupe 2 : aucune ligne du journal sautée hors de la vue (sa dernière ligne
 // reste vue), le trait pointillé des passifs sous leur nom même, « Passer son
 // tour » en rangée plate dans la bulle (.combat-option, lu aussi dans
-// js/ecrans/combat_action.js).
+// js/ecrans/combat_action.js). Au lot 4.3 (vague 3, contrat § 5) : les
+// classes et les états de l'écran neuf, les trois couleurs du jeu en cours
+// et leurs contrastes, la quatrième propriété de la bulle (sa plus grande
+// hauteur), la hauteur de la fenêtre et son seul @supports (jetons.css),
+// l'écran en jeu au téléphone (la carte qui se réduit, le volet qui n'est
+// plus fixé), le dé en surimpression, les vignettes, le bandeau d'une ligne,
+// le journal en plein écran, les feuilles.
 //
 // Chaque règle est une fonction qui rend la liste des défauts : vide sur la
 // feuille du dépôt, non vide sur une feuille fautive écrite ici même. Une
@@ -131,9 +137,11 @@ function valeursEnDur(css, definis) {
     if (/#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix)\(/i.test(ligne)) defauts.push(`couleur écrite en dur : ${ligne}`);
     if (/:.*\b(?:white|black|red|green|blue|gr[ae]y|silver|orange|yellow|maroon|navy)\b/i.test(ligne)) defauts.push(`couleur nommée : ${ligne}`);
     // Le motif du site, puis plus strict : toute unité, hors les proportions
-    // (%, fr) et la part de la case (cqi).
+    // (%, fr), la part de la case (cqi) et, au lot 4.3, celle de la place de
+    // la carte sur un téléphone (cqi et cqb : la grille carrée prend la plus
+    // petite des deux).
     if (/\d(?:px|rem|em|vh|vw|pt|ms|s)\b/.test(ligne)) defauts.push(`valeur écrite en dur : ${ligne}`);
-    else if (/\d(?!fr\b|cqi\b)[a-z]+\b/i.test(ligne)) defauts.push(`unité écrite en dur : ${ligne}`);
+    else if (/\d(?!fr\b|cqi\b|cqb\b)[a-z]+\b/i.test(ligne)) defauts.push(`unité écrite en dur : ${ligne}`);
     if (/font-family:/.test(ligne) && !/font-family:\s*var\(--/.test(ligne)) defauts.push(`police écrite en dur : ${ligne}`);
     if (/!important/.test(ligne)) defauts.push(`!important : ${ligne}`);
     if (/^--[\w-]+\s*:/.test(ligne)) defauts.push(`jeton déclaré hors de jetons.css : ${ligne}`);
@@ -146,9 +154,10 @@ function valeursEnDur(css, definis) {
   return defauts;
 }
 
-test("combat.css — des jetons seulement : ni couleur, ni longueur, ni police en dur, hors des largeurs des @media ; les --bulle-* de placerBulle admises, sans repli", () => {
-  // Les trois propriétés de la place de la bulle (contrat § 9.3), lues dans echelle.js ; jetons.css n'en déclare aucune.
-  assert.deepEqual(DE_LA_BULLE, ["bulle-gauche", "bulle-haut", "bulle-fleche"]);
+test("combat.css — des jetons seulement : ni couleur, ni longueur, ni police en dur, hors des largeurs des @media ; les --bulle-* de placerBulle admises, sans repli ; la part de la carte en cqi et cqb", () => {
+  // Les quatre propriétés de la place de la bulle (contrat § 9.3 du groupe 2 ; au lot 4.3, sa plus grande hauteur,
+  // contrat de la vague 3, § 4.2), lues dans echelle.js ; jetons.css n'en déclare aucune.
+  assert.deepEqual(DE_LA_BULLE, ["bulle-gauche", "bulle-haut", "bulle-fleche", "bulle-hauteur"]);
   assert.deepEqual(Object.keys(jetons(JETONS, "sombre")).filter((nom) => nom.startsWith("bulle-")), []);
   for (const nom of DE_LA_BULLE) assert.ok(COMBAT.includes(`var(--${nom})`), `--${nom} n'est pas lue par la feuille`);
   assert.deepEqual(proprietesDePlacerBulle("export function placerBulle(n) {\n  n.style.setProperty(\"--bulle-x\", \"1px\");\n}\nexport function autre(n) {\n  n.style.setProperty(\"--hors\", \"1px\");\n}\n"), ["bulle-x"]);
@@ -165,6 +174,8 @@ test("combat.css — des jetons seulement : ni couleur, ni longueur, ni police e
   refuse(".combat-x { transition: opacity 0.2s; }", /valeur écrite en dur/);
   refuse(".combat-x { height: 100dvh; }", /unité écrite en dur/);
   refuse(".combat-x { min-width: 2ch; }", /unité écrite en dur/);
+  refuse(".combat-x { width: min(100cqw, 100cqh); }", /unité écrite en dur/);
+  refuse(".combat-x { width: 100cqmin; }", /unité écrite en dur/);
   refuse(".combat-x { font-family: ui-monospace, monospace; }", /police écrite en dur/);
   refuse(".combat-x { display: none !important; }", /!important/);
   refuse(".combat-x {\n  --combat-cote: 100%;\n}", /jeton déclaré hors de jetons\.css/);
@@ -182,6 +193,7 @@ test("combat.css — des jetons seulement : ni couleur, ni longueur, ni police e
   refuse("#face-contre { display: none; }", /couleur écrite en dur/);
   // Ce que la feuille emploie et qui n'est pas une longueur passe.
   assert.deepEqual(valeursEnDur(".combat-x {\n  grid-template-columns: var(--espace-4) repeat(10, minmax(0, 1fr));\n  font-size: min(var(--taille-petite), 20cqi);\n  width: 70%;\n  aspect-ratio: 1 / 1;\n}", definis), []);
+  assert.deepEqual(valeursEnDur(".combat-x {\n  width: min(100cqi, calc(100cqb - var(--espace-1)));\n}", definis), []);
 });
 
 // ——— Les trois @media ———
@@ -243,11 +255,13 @@ test("combat.css — #ecran:has(> .combat) élargit la page à --largeur-combat 
 // sous une classe du combat.
 const CLASSES_DU_SITE = new Set(["bouton", "champ"]);
 // Les états du contrat (§ 7.9), écrits en classes de plus ; au groupe 2, la
-// portée de la capacité survolée, sur une case et dans la légende.
+// portée de la capacité survolée, sur une case et dans la légende ; au lot
+// 4.3, la table des états de la vague 3 (contrat § 5.2), et aucun autre.
 const ETATS = new Set([
   "ouvert", "active", "possible", "inactive", "joue", "cible", "mort", "inactif", "fait", "en-cours", "reussi", "echoue", "relance", "a-lancer", "a-venir",
   "atteinte", "ciblee", "morte", "vide", "eteint", "tour", "abimee", "detruite",
   "portee",
+  "a-jouer", "epuise", "choisie", "blessure", "favorable", "alerte", "localisation", "danger", "change",
 ]);
 
 // Les classes du groupe 1 qui ont une règle.
@@ -288,9 +302,33 @@ const CLASSES_DU_GROUPE_2 = [
   "combat-annuler-geste", "combat-signe", "combat-limite", "combat-preparation-demonstration", "combat-preparation-question", "combat-preparation-phrase",
 ];
 
+// Les classes nouvelles du groupe 3 (contrat de la vague 3, § 5.1, liste close ; une classe de plus s'y ajoute par
+// l'agent principal, sur demande).
+const CLASSES_DU_GROUPE_3 = [
+  // La page et la barre.
+  "combat-en-jeu", "combat-site", "combat-etat-court", "combat-mj", "combat-intervenir", "combat-toast",
+  // Les vignettes.
+  "combat-vignettes", "combat-vignette", "combat-vignette-nom", "combat-vignette-garde", "combat-pastille-etat",
+  // Le volet.
+  "combat-fil", "combat-repos", "combat-consigne", "combat-cible-detail", "combat-jets-par-cible", "combat-progression", "combat-geste-avis",
+  "combat-interventions", "combat-intervenant", "combat-contre-attaque", "combat-critique", "combat-passif-bouton", "combat-de-outils",
+  "combat-blessure-detail", "combat-pied",
+  // Le dé en surimpression.
+  "combat-surimpression", "combat-surimpression-centre", "combat-surimpression-gauche", "combat-surimpression-droite", "combat-surimpression-titre",
+  "combat-surimpression-valeur", "combat-surimpression-verdict",
+  // La palette.
+  "combat-palette", "combat-palette-texte", "combat-palette-onglets", "combat-palette-groupe", "combat-palette-apercu", "combat-palette-effets",
+  "combat-bulle-large",
+  // Les feuilles et les dialogues.
+  "combat-voile", "combat-feuille", "combat-feuille-tete", "combat-feuille-corps", "combat-feuille-pied", "combat-menu", "combat-menu-ligne",
+  "combat-menu-contexte", "combat-interrupteur", "combat-champ-mj", "combat-plein", "combat-plein-tete", "combat-precedentes",
+  // Les fiches et le plateau.
+  "combat-etiquettes", "combat-etiquette", "combat-modifier", "combat-plateau-mj",
+];
+
 // Les classes de la feuille hors des listes : une classe nouvelle sans place au contrat, ou une classe qui a quitté le code.
 function classesHorsDesListes(css) {
-  const connues = new Set([...CLASSES_DU_GROUPE_1, ...CLASSES_DU_GROUPE_2, ...ETATS, ...CLASSES_DU_SITE]);
+  const connues = new Set([...CLASSES_DU_GROUPE_1, ...CLASSES_DU_GROUPE_2, ...CLASSES_DU_GROUPE_3, ...ETATS, ...CLASSES_DU_SITE]);
   const classes = new Set(selecteursDe(css).flatMap((regle) => [...regle.selecteur.matchAll(/\.([\w-]+)/g)].map(([, classe]) => classe)));
   return [...classes].filter((classe) => !connues.has(classe));
 }
@@ -321,7 +359,9 @@ test("combat.css — chaque règle part d'une classe « combat » (la racine seu
   refuse("#ecran { margin: 0; }", /hors de l'écran du combat/);
   refuse(".combat-x,\n.etapes { margin: 0; }", /hors de l'écran du combat/);
   refuse(".combat-x .etapes { margin: 0; }", /classe inconnue \.etapes/);
-  refuse(".combat-x.choisie { margin: 0; }", /classe inconnue \.choisie/);
+  // « choisie » est un état du lot 4.3 ; « choisi », non.
+  refuse(".combat-x.choisi { margin: 0; }", /classe inconnue \.choisi/);
+  assert.deepEqual(defautsDesClasses(".combat-vignette.choisie { margin: 0; }"), []);
   refuse(".combat-carte { margin: 0; }", /classe en « carte »/);
   refuse(".combat .carte-adversaire { margin: 0; }", /classe en « carte »/);
   refuse(":where(.fiche) button { margin: 0; }", /hors de l'écran du combat/);
@@ -332,11 +372,16 @@ test("combat.css — chaque règle part d'une classe « combat » (la racine seu
   refuse(":root:has(.combat-bulle:not([hidden])) { scroll-padding-bottom: var(--hauteur-volet); }", /hors de l'écran du combat/);
   refuse("html:has(.combat-bulle:not([hidden])) .fiche { margin: 0; }", /hors de l'écran du combat/);
   assert.deepEqual(defautsDesClasses(".combat { margin: 0; }\n.combat-fiche.joue summary::after,\n.combat-copie .champ { margin: 0; }\n:where(.combat) button { font: inherit; }\nhtml:has(.combat-bulle:not([hidden])) { scroll-padding-bottom: var(--hauteur-volet); }"), []);
-  // La racine que vise la largeur, les nœuds du contrat (§ 7.9) et les classes nouvelles du groupe 2 (contrat § 10.2) :
-  // chacune a sa règle ; « combat-qui-suite » a quitté le code avec les pas de la puissance.
+  // La racine que vise la largeur, les nœuds du contrat (§ 7.9) et les classes nouvelles du groupe 2 (contrat § 10.2),
+  // puis celles du groupe 3 (contrat de la vague 3, § 5.1) et ses états (§ 5.2) : chacune a sa règle ; « combat-qui-suite »
+  // a quitté le code avec les pas de la puissance.
   const classes = new Set(selecteursDe(COMBAT).flatMap((regle) => [...regle.selecteur.matchAll(/\.([\w-]+)/g)].map(([, classe]) => classe)));
-  for (const attendue of [...CLASSES_DU_GROUPE_1, ...CLASSES_DU_GROUPE_2, "portee"]) assert.ok(classes.has(attendue), `.${attendue} n'a aucune règle`);
+  const ETATS_DU_GROUPE_3 = ["a-jouer", "epuise", "choisie", "blessure", "favorable", "alerte", "localisation", "danger", "change"];
+  for (const attendue of [...CLASSES_DU_GROUPE_1, ...CLASSES_DU_GROUPE_2, ...CLASSES_DU_GROUPE_3, ...ETATS_DU_GROUPE_3, "portee"]) assert.ok(classes.has(attendue), `.${attendue} n'a aucune règle`);
   assert.equal(new Set(CLASSES_DU_GROUPE_2).size, 59);
+  assert.equal(new Set(CLASSES_DU_GROUPE_3).size, 57);
+  assert.equal(ETATS.size, 33);
+  assert.deepEqual(classesHorsDesListes(".combat-vignette-choisie { margin: 0; }"), ["combat-vignette-choisie"]);
   assert.ok(!classes.has("combat-qui-suite"), ".combat-qui-suite a quitté le code");
   // La liste est close : aucune classe hors d'elle, ni d'un nom nouveau, ni d'un nom parti.
   assert.deepEqual(classesHorsDesListes(COMBAT), []);
@@ -406,10 +451,12 @@ test("combat.css — aucun outline hors du focus ; la cible est une bordure roug
   assert.deepEqual(opacites(".combat-fiche.morte { opacity: var(--opacite-inactif); }"), [".combat-fiche.morte"]);
 });
 
-// ——— Les quinze couleurs ———
+// ——— Les dix-huit couleurs ———
 
 // Mission § 10.9, puis le complément du groupe 2, § 4.12 (les quatre
-// dernières) : [jeton, clair, sombre].
+// suivantes), puis, au lot 4.3, les trois du jeu en cours, celles du
+// catalogue pour « Atelier » (contrat de la vague 3, § 5.3) : [jeton, clair,
+// sombre].
 const COULEURS = [
   ["combat-pj", "#1e7a3c", "#3fae62"],
   ["combat-pj-doux", "#e2f2e7", "#163222"],
@@ -427,6 +474,10 @@ const COULEURS = [
   // Le même gris dans les deux thèmes, redéclaré en sombre.
   ["combat-cadre-jet", "#7d838d", "#7d838d"],
   ["combat-cadre-jet-fond", "#ffffff", "#262a30"],
+  // Qui peut encore agir, son fond doux, qui a tout joué.
+  ["combat-a-jouer", "#1e7a3c", "#5cc38a"],
+  ["combat-a-jouer-doux", "#e2f2e7", "#163222"],
+  ["combat-epuise", "#7d838d", "#6b717b"],
 ];
 
 function defautsDesCouleurs(css) {
@@ -448,8 +499,8 @@ function defautsDesCouleurs(css) {
   return defauts;
 }
 
-test("jetons.css — les quinze couleurs du combat, dans les deux thèmes, exactement ; --largeur-combat ; aucun nom en « carte » ; rien de plus", () => {
-  assert.equal(COULEURS.length, 15);
+test("jetons.css — les dix-huit couleurs du combat, dans les deux thèmes, exactement ; --largeur-combat ; aucun nom en « carte » ; rien de plus", () => {
+  assert.equal(COULEURS.length, 18);
   assert.deepEqual(defautsDesCouleurs(JETONS), []);
   const refuse = (css, motif) => assert.match(defautsDesCouleurs(css).join("\n"), motif);
   // Une couleur de trop, en clair puis en sombre ; une des quatre nouvelles changée ; la valeur sombre du cadre ôtée
@@ -464,6 +515,10 @@ test("jetons.css — les quinze couleurs du combat, dans les deux thèmes, exact
   refuse(JETONS.replace("--combat-adv: #e66b61;", "--combat-adv: #e0574d;"), /--combat-adv sombre : #e0574d/);
   refuse(JETONS.replace("--combat-sur-jeton: #0b1722;", "--combat-sur-jeton: #ffffff;"), /--combat-sur-jeton sombre : #ffffff/);
   refuse(JETONS.replace("--combat-pj: #1e7a3c;", "--combat-pj: #1e7a3d;"), /--combat-pj clair : #1e7a3d/);
+  // Les trois du lot 4.3 : une valeur changée, une valeur sombre ôtée.
+  refuse(JETONS.replace("--combat-a-jouer: #5cc38a;", "--combat-a-jouer: #3fae62;"), /--combat-a-jouer sombre : #3fae62/);
+  refuse(JETONS.replace("--combat-epuise: #7d838d;", "--combat-epuise: #9aa0a8;"), /--combat-epuise clair : #9aa0a8/);
+  refuse(JETONS.replace(/\r?\n {4}--combat-a-jouer-doux: #163222;/, ""), /--combat-a-jouer-doux sombre : undefined/);
   // Un jeton sans valeur sombre, un jeton de trop, un nom en « carte ».
   refuse(JETONS.replace(/\s*--combat-alerte: #e6a85a;/, ""), /--combat-alerte sombre : undefined/);
   refuse(JETONS.replace("--combat-alerte: #8a5300;", "--combat-alerte: #8a5300;\n  --combat-fond-3: #262a30;"), /jetons du combat, thème clair/);
@@ -557,6 +612,13 @@ const PAIRES_DE_TEXTE = [
   ["combat-reussite", "combat-cadre-jet-fond"],
   ["combat-echec", "combat-cadre-jet-fond"],
   ["texte", "combat-cadre-jet-fond"],
+  // Au lot 4.3 (contrat de la vague 3, § 5.4) : qui peut encore agir, sur les fonds et sur son fond doux ; le texte d'une
+  // vignette sur ce fond doux ; le nom d'un jeton qui a tout joué, sur le second fond de son rond ; l'accent du dé de
+  // localisation et de l'étape en cours, sur le fond.
+  ...["fond", "fond-2", "combat-a-jouer-doux"].map((fond) => ["combat-a-jouer", fond]),
+  ["texte", "combat-a-jouer-doux"],
+  ["texte", "fond-2"],
+  ["accent", "fond"],
 ];
 // Les ronds et les traits, à 3:1 : au groupe 2, le bord du cadre d'un jet sur les deux fonds et sur le sien ; les traits
 // de la hachure et le bord d'une case hachurée sur les trois fonds d'une case.
@@ -566,6 +628,9 @@ const PAIRES_DE_TRAIT = [
   ["bordure", "fond-2"],
   ...["fond", "fond-2", "combat-cadre-jet-fond"].map((fond) => ["combat-cadre-jet", fond]),
   ...["combat-portee", "combat-portee-bord"].flatMap((avant) => FONDS_DE_CASE.map((fond) => [avant, fond])),
+  // Au lot 4.3 : le gris de qui a tout joué, un bord et un anneau, sur les deux fonds.
+  ["combat-epuise", "fond"],
+  ["combat-epuise", "fond-2"],
 ];
 // Les contrastes du contrat (§ 10.1), remesurés : [thème, avant, fond, mesure arrondie au centième].
 const CONTRASTES_DU_CONTRAT = [
@@ -605,6 +670,9 @@ test("jetons.css — le texte du combat contraste d'au moins 4,5:1, ses ronds et
   assert.match(contrastesFaibles(JETONS.replace("--combat-alerte: #8a5300;", "--combat-alerte: #c98a1e;")).join("\n"), /clair : --combat-alerte sur --fond/);
   // Au groupe 2 : une hachure trop pâle sur le fond doux d'une case, un fond de cadre sombre qui avale son bord et son ✗.
   assert.match(contrastesFaibles(JETONS.replace("--combat-portee: #d9534f;", "--combat-portee: #e8776e;")).join("\n"), /clair : --combat-portee sur --accent-doux, 2\.\d\d:1 sous 3/);
+  // Au lot 4.3 : un vert trop clair pour s'écrire, un gris d'épuisé qui se perd sur le second fond.
+  assert.match(contrastesFaibles(JETONS.replace("--combat-a-jouer: #1e7a3c;", "--combat-a-jouer: #3fae62;")).join("\n"), /clair : --combat-a-jouer sur --fond, \d\.\d\d:1 sous 4\.5/);
+  assert.match(contrastesFaibles(JETONS.replace("--combat-epuise: #6b717b;", "--combat-epuise: #3a3f46;")).join("\n"), /sombre : --combat-epuise sur --fond-2, \d\.\d\d:1 sous 3/);
   const fondAbime = contrastesFaibles(JETONS.replace("--combat-cadre-jet-fond: #262a30;", "--combat-cadre-jet-fond: #3a3f46;")).join("\n");
   assert.match(fondAbime, /sombre : --combat-echec sur --combat-cadre-jet-fond, \d\.\d\d:1 sous 4\.5/);
   assert.match(fondAbime, /sombre : --combat-cadre-jet sur --combat-cadre-jet-fond, \d\.\d\d:1 sous 3/);
@@ -636,7 +704,7 @@ test("jetons.css — le texte du combat contraste d'au moins 4,5:1, ses ronds et
   assert.equal(valeur(COMBAT, ".combat-pj .combat-rond", "background"), "var(--combat-pj)");
   assert.equal(valeur(COMBAT, ".combat-adv .combat-rond", "background"), "var(--combat-adv)");
   assert.equal(valeur(COMBAT, ".combat-rond", "color"), "var(--combat-sur-jeton)");
-  // Chacun des quinze jetons sert, et chacun est mesuré, comme couleur ou comme fond.
+  // Chacun des dix-huit jetons sert, et chacun est mesuré, comme couleur ou comme fond.
   for (const [nom] of COULEURS) assert.ok(COMBAT.includes(`var(--${nom})`), `--${nom} ne sert à rien`);
   const mesures = new Set([...PAIRES_DE_TEXTE, ...PAIRES_DE_TRAIT].flat());
   assert.deepEqual(COULEURS.map(([nom]) => nom).filter((nom) => !mesures.has(nom)), []);
@@ -780,22 +848,35 @@ test("combat.css — le plateau : des pistes que rien n'élargit, des cases qui 
   assert.equal(valeur(COMBAT, ".combat-jeton", "z-index"), "1");
   // Les seuls positionnements absolus, avec la raison d'un bouton inactif, la région d'annonce et la ligne entière du
   // bandeau ; au groupe 2, le volet (fixé à la fenêtre), puis, posés, la bulle, son ✕, son onglet, les infobulles et
-  // leurs flèches.
+  // leurs flèches. Au lot 4.3 : la pastille d'un état, dans le coin du jeton et de la vignette ; le pied d'un geste et
+  // de la palette, collé au bas de ce qui défile ; le voile, la feuille et la ligne d'une seconde, fixés à la fenêtre ;
+  // le plein écran, sur l'écran ; le titre et l'aide, cachés à la vue au téléphone en jeu ; le volet en jeu, de nouveau
+  // posé à 56rem. Le dé en surimpression n'y est pas : il se pose sur les cases de la grille.
   assert.deepEqual(
     selecteursDe(COMBAT)
       .filter((regle) => /position:\s*(?:absolute|fixed|sticky)/.test(regle.corps))
       .map((regle) => `${regle.cadre ?? ""} ${regle.selecteur} ${regle.corps.match(/position:\s*([\w-]+)/)[1]}`.trim()),
     [
       ".combat-case-choix absolute",
+      ".combat-pastille-etat absolute",
       ".combat-bulle fixed",
       ".combat-bulle-fermer absolute",
       ".combat-onglet absolute",
       ".combat-infobulle absolute",
       ".combat-infobulle::before absolute",
       ".combat-infobulle::after absolute",
+      ".combat-bulle-defile > .combat-pied sticky",
+      ".combat-palette > .combat-pied sticky",
       ".combat-raison absolute",
       ".combat-annonce absolute",
       ".combat-bandeau-entier absolute",
+      ".combat-voile fixed",
+      ".combat-feuille fixed",
+      ".combat-plein absolute",
+      ".combat-toast fixed",
+      ".combat-en-jeu .combat-barre h1 absolute",
+      ".combat-en-jeu .combat-aide absolute",
+      `${MEDIA_56} .combat-en-jeu .combat-bulle absolute`,
       `${MEDIA_56} .combat-bulle absolute`,
       `${MEDIA_56} .combat-bulle::before absolute`,
       `${MEDIA_56} .combat-bulle::after absolute`,
@@ -1127,13 +1208,13 @@ function defautsDuPassif(css) {
     if (lue !== attendue) defauts.push(`.combat-passif { ${propriete}: ${lue} } au lieu de ${attendue}`);
   }
   for (const regle of selecteursDe(css)) {
-    if (!/\.combat-passif\b/.test(regle.selecteur) || (regle.cadre === null && regle.selecteur === ".combat-passif")) continue;
+    if (!/\.combat-passif(?![\w-])/.test(regle.selecteur) || (regle.cadre === null && regle.selecteur === ".combat-passif")) continue;
     for (const [propriete, v] of declarations(regle.corps)) if (/^(?:display|min-height|height|max-height)$/.test(propriete)) defauts.push(`${[regle.cadre, regle.selecteur].filter(Boolean).join(" ")} { ${propriete}: ${v} } : le passif perd ses 44 px`);
   }
   return defauts;
 }
 
-test("combat.css — toute cible fait 44 px, hors les cases (et les lignes de la bulle sous une souris, plus bas), les passifs compris ; le journal est limité à 18rem, à 24rem sur un grand écran, et défile", () => {
+test("combat.css — toute cible fait 44 px, hors les cases (et les lignes de la bulle sous une souris, plus bas), les passifs compris ; le journal est limité à 18rem, à 24rem sur un grand écran, et défile ; en plein écran, il prend la hauteur qui reste", () => {
   assert.equal(jetons(JETONS, "clair")["cible-tactile"], "44px");
   for (const selecteur of [".combat button", ".combat select", ".combat textarea", ".combat input", ".combat label", ".combat-fiche summary", ".combat-reglages summary", ".combat-capacite", ".combat-bulle .combat-capacite", ".combat-cibles button", ".combat-case-liste button", ".combat-passif"]) {
     assert.equal(valeur(COMBAT, selecteur, "min-height"), "var(--cible-tactile)", selecteur);
@@ -1145,6 +1226,9 @@ test("combat.css — toute cible fait 44 px, hors les cases (et les lignes de la
   assert.equal(feuille.split(".combat-passif {\n  display: inline-flex;\n  align-items: center;\n  min-height: var(--cible-tactile);\n").length, 2);
   refusePassif(feuille.replace(".combat-passif {\n  display: inline-flex;\n  align-items: center;\n  min-height: var(--cible-tactile);\n", ".combat-passif {\n"), /\.combat-passif \{ display: null \}[\s\S]*\{ min-height: null \}/);
   refusePassif(`${feuille}\n.combat-bulle-pied .combat-passif {\n  min-height: 0;\n}\n`, /\.combat-bulle-pied \.combat-passif \{ min-height: 0 \} : le passif perd ses 44 px/);
+  refusePassif(`${feuille}\n.combat-passif:hover {\n  display: inline;\n}\n`, /\.combat-passif:hover \{ display: inline \} : le passif perd ses 44 px/);
+  // Un bouton de passif du jet (lot 4.3) est un autre nœud : sa boîte ne touche pas le passif.
+  assert.deepEqual(defautsDuPassif(`${feuille}\n.combat-passif-bouton {\n  display: inline-flex;\n}\n`), []);
   refusePassif(feuille.replace("@media (pointer: fine) {\n", "@media (pointer: fine) {\n  .combat-passif {\n    min-height: var(--ligne-souris);\n  }\n\n"), /@media \(pointer: fine\) \.combat-passif \{ min-height: var\(--ligne-souris\) \}/);
   assert.equal(valeur(COMBAT, ".combat button", "min-width"), "var(--cible-tactile)");
   // Un dé est plus grand qu'une cible, dans les deux sens.
@@ -1163,6 +1247,20 @@ test("combat.css — toute cible fait 44 px, hors les cases (et les lignes de la
   assert.equal(enRem(valeur(COMBAT, ".combat-lignes", "max-height", MEDIA_56), definis), 24);
   assert.equal(valeur(COMBAT, ".combat-lignes", "max-height", MEDIA_80), null);
   assert.equal(valeur(COMBAT, ".combat-lignes", "overflow"), "auto");
+  // Lot 4.3 : en plein écran (le téléphone), la liste prend la hauteur que laisse sa tête, sans borne, et défile en
+  // elle-même ; la ligne lue, que « Lignes précédentes » garde à sa place, ne bouge que par la liste (pas d'ancrage du
+  // navigateur, qui la déplacerait une seconde fois).
+  for (const [propriete, attendue] of [["flex", "1 1 auto"], ["min-height", "0"], ["max-height", "none"], ["overflow-y", "auto"]]) {
+    assert.equal(valeur(COMBAT, ".combat-plein .combat-lignes", propriete), attendue, propriete);
+  }
+  for (const cadre of [MEDIA_56, MEDIA_80]) assert.equal(valeur(COMBAT, ".combat-plein .combat-lignes", "max-height", cadre), null, `${cadre}`);
+  assert.ok(pese(poids(".combat-plein .combat-lignes")) > pese(poids(".combat-lignes")));
+  assert.equal(valeur(COMBAT, ".combat-lignes", "overflow-anchor"), "none");
+  assert.equal(valeur(COMBAT, ".combat-plein", "display"), "flex");
+  assert.equal(valeur(COMBAT, ".combat-plein", "flex-direction"), "column");
+  assert.equal(valeur(COMBAT, ".combat-plein", "position"), "absolute");
+  assert.equal(valeur(COMBAT, ".combat-plein", "inset"), "0");
+  assert.equal(valeur(COMBAT, ".combat-plein-tete", "flex"), "none");
   // Vide, le journal quitte la page : une liste sans hauteur ne garde pas un arrêt du clavier (vu avant le lancement).
   assert.equal(valeur(COMBAT, ".combat-lignes:empty", "display"), "none");
   for (const vide of [".combat-avis:empty", ".combat-panneau:empty", ".combat-case-liste:empty", ".combat-copie:empty"]) assert.equal(valeur(COMBAT, vide, "display"), "none", vide);
@@ -1203,14 +1301,15 @@ const ATTENDUES_DE_LA_BULLE = [
   [".combat-bulle-defile", "overflow-y", "auto", null],
   [".combat-bulle-defile", "min-height", "0", null],
   // À 56rem, posée sur le cadre par les propriétés de placerBulle : 20rem pour la liste, 29,5rem pour le jet, jamais
-  // plus que le cadre ; au-delà de la hauteur de la fenêtre moins 32 px, elle défile.
+  // plus que le cadre ; au-delà de sa plus grande hauteur (lot 4.3 : du haut de la bulle, sous le bandeau, au bas de la
+  // fenêtre), jamais plus que la fenêtre moins 32 px, elle défile.
   [".combat-bulle", "position", "absolute", MEDIA_56],
   [".combat-bulle", "left", "var(--bulle-gauche)", MEDIA_56],
   [".combat-bulle", "top", "var(--bulle-haut)", MEDIA_56],
   [".combat-bulle", "right", "auto", MEDIA_56],
   [".combat-bulle", "bottom", "auto", MEDIA_56],
   [".combat-bulle", "width", "min(var(--largeur-bulle), 100%)", MEDIA_56],
-  [".combat-bulle", "max-height", "var(--hauteur-bulle-max)", MEDIA_56],
+  [".combat-bulle", "max-height", "min(var(--hauteur-bulle-max), var(--bulle-hauteur))", MEDIA_56],
   [".combat-bulle", "border", "var(--trait) solid var(--bordure)", MEDIA_56],
   [".combat-bulle-jet", "width", "min(var(--largeur-bulle-jet), 100%)", MEDIA_56],
   [".combat-bulle-poignee", "display", "none", MEDIA_56],
@@ -1312,12 +1411,14 @@ test("combat.css — la bulle : le volet sous 56rem ; à 56rem posée sur le cad
 
   // Armé : des feuilles fautives.
   const fautive = (css, motif) => assert.match([...ecarts(css, ATTENDUES_DE_LA_BULLE), ...defautsDesFleches(css)].join("\n"), motif);
-  fautive(casser(FEUILLE, "  position: fixed;\n", "  position: absolute;\n"), /\.combat-bulle \{ position: absolute \} au lieu de fixed/);
+  fautive(casser(FEUILLE, ".combat-bulle {\n  position: fixed;\n", ".combat-bulle {\n  position: absolute;\n"), /\.combat-bulle \{ position: absolute \} au lieu de fixed/);
   fautive(casser(FEUILLE, "  max-height: var(--hauteur-volet);", "  max-height: 60%;"), /max-height: 60%/);
+  // Lot 4.3 : la bulle sans sa plus grande hauteur, qui montait au-dessus du bandeau.
+  fautive(casser(FEUILLE, "    max-height: min(var(--hauteur-bulle-max), var(--bulle-hauteur));", "    max-height: var(--hauteur-bulle-max);"), /max-height: var\(--hauteur-bulle-max\) \} au lieu de min/);
   fautive(casser(FEUILLE, "    left: var(--bulle-gauche);\n    width: min(var(--largeur-bulle), 100%);", "    left: var(--bulle-x);\n    width: min(var(--largeur-bulle), 100%);"), /@media \(min-width: 56rem\) \.combat-bulle \{ left: var\(--bulle-x\) \}/);
   fautive(casser(FEUILLE, "    width: min(var(--largeur-bulle-jet), 100%);", "    width: var(--largeur-bulle-jet);"), /\.combat-bulle-jet \{ width: var\(--largeur-bulle-jet\) \}/);
   fautive(casser(FEUILLE, ".combat-bulle[hidden],\n", ""), /\.combat-bulle\[hidden\] \{ display: null \}/);
-  fautive(casser(FEUILLE, "  overflow: visible;\n", "  overflow: auto;\n"), /\.combat-bulle \{ overflow: auto \}/);
+  fautive(casser(FEUILLE, "  max-height: var(--hauteur-volet);\n  overflow: visible;\n", "  max-height: var(--hauteur-volet);\n  overflow: auto;\n"), /\.combat-bulle \{ overflow: auto \}/);
   fautive(`${FEUILLE}\n.combat-bulle-droite::before {\n  transform: rotate(45deg);\n}\n`, /\.combat-bulle-droite::before : une flèche tournée/);
   fautive(`${FEUILLE}\n.combat-bulle::before {\n  content: "";\n}\n`, /\.combat-bulle::before : une flèche au volet/);
   fautive(casser(FEUILLE, "  border-right-color: var(--fond);", "  border-right-color: var(--fond-2);"), /\.combat-bulle-droite::after : le triangle du fond/);
@@ -1740,8 +1841,12 @@ test("combat.css — tant que le volet est montré, la page garde en bas une mar
   refuse(`${FEUILLE}\n${RACINE_DU_VOLET} {\n  overflow: hidden;\n}\n`, /\{ overflow: hidden \}$/m);
 });
 
-// Contrat § 10.3, le bandeau.
+// Contrat § 10.3, le bandeau ; au lot 4.3, une ligne sur un téléphone, coupée par « … », et trois à 56rem.
 const ATTENDUES_DU_BANDEAU = [
+  [".combat-bandeau", "flex-wrap", "nowrap", null],
+  [".combat-bandeau-texte", "white-space", "nowrap", null],
+  [".combat-bandeau-texte", "text-overflow", "ellipsis", null],
+  [".combat-bandeau-texte", "white-space", "normal", MEDIA_56],
   [".combat-bandeau", "background", "var(--fond-2)", null],
   [".combat-bandeau", "border-left", "var(--trait-epais) solid var(--accent)", null],
   [".combat-bandeau-en-cours", "border-left-color", "var(--combat-alerte)", null],
@@ -1755,8 +1860,10 @@ const ATTENDUES_DU_BANDEAU = [
 function defautsDuBandeau(css) {
   const defauts = ecarts(css, ATTENDUES_DU_BANDEAU);
   if (!(rangDe(css, ".combat-bandeau-en-cours") > rangDe(css, ".combat-bandeau"))) defauts.push("la bordure du geste en cours ne l'emporte pas");
-  // Trois lignes au plus : trois fois l'interligne de sa propre taille de texte.
-  const hauteur = valeur(css, ".combat-bandeau-texte", "max-height");
+  // Une ligne au plus sur un téléphone, trois à 56rem : autant de fois l'interligne de sa propre taille de texte.
+  const une = valeur(css, ".combat-bandeau-texte", "max-height");
+  if (une !== `calc(${valeur(css, ".combat-bandeau-texte", "font-size")} * var(--interligne))`) defauts.push(`une ligne au plus sur un téléphone : ${une}`);
+  const hauteur = valeur(css, ".combat-bandeau-texte", "max-height", MEDIA_56);
   const [, taille, lignes] = (hauteur ?? "").match(/^calc\(var\(--([\w-]+)\) \* var\(--interligne\) \* (\d+)\)$/) ?? [];
   if (lignes !== "3" || `var(--${taille})` !== valeur(css, ".combat-bandeau-texte", "font-size")) defauts.push(`trois lignes au plus : ${hauteur}`);
   // La ligne entière, cachée à la vue par le procédé de l'annonce, et lue.
@@ -1767,9 +1874,14 @@ function defautsDuBandeau(css) {
   return defauts;
 }
 
-test("combat.css — le bandeau : le second fond, la bordure de l'accent, de l'alerte en cours ; chasse fixe, trois lignes au plus ; la ligne entière cachée comme l'annonce ; l'étiquette cachée sous 56rem", () => {
+test("combat.css — le bandeau : le second fond, la bordure de l'accent, de l'alerte en cours ; chasse fixe, une ligne coupée par « … » sur un téléphone, trois lignes au plus à 56rem ; la ligne entière cachée comme l'annonce ; l'étiquette cachée sous 56rem", () => {
   assert.deepEqual(defautsDuBandeau(COMBAT), []);
   const refuse = (css, motif) => assert.match(defautsDuBandeau(css).join("\n"), motif);
+  // Le bandeau d'avant le lot 4.3 sur un téléphone : trois lignes, le bouton passé dessous.
+  refuse(casser(FEUILLE, "  max-height: calc(var(--taille-petite) * var(--interligne));\n", "  max-height: calc(var(--taille-petite) * var(--interligne) * 3);\n"), /une ligne au plus sur un téléphone : calc\(var\(--taille-petite\) \* var\(--interligne\) \* 3\)/);
+  refuse(casser(FEUILLE, "  white-space: nowrap;\n  text-overflow: ellipsis;\n  overflow-wrap: anywhere;", "  overflow-wrap: anywhere;"), /\.combat-bandeau-texte \{ white-space: null \} au lieu de nowrap[\s\S]*text-overflow: null/);
+  refuse(casser(FEUILLE, ".combat-bandeau {\n  display: flex;\n  flex-wrap: nowrap;", ".combat-bandeau {\n  display: flex;\n  flex-wrap: wrap;"), /\.combat-bandeau \{ flex-wrap: wrap \} au lieu de nowrap/);
+  refuse(casser(FEUILLE, "    white-space: normal;\n    text-overflow: clip;", "    text-overflow: clip;"), /@media \(min-width: 56rem\) \.combat-bandeau-texte \{ white-space: null \}/);
   refuse(casser(FEUILLE, "var(--interligne) * 3)", "var(--interligne) * 4)"), /trois lignes au plus : calc\(var\(--taille-petite\) \* var\(--interligne\) \* 4\)/);
   refuse(casser(FEUILLE, ".combat-bandeau-etiquette {\n  display: none;", ".combat-bandeau-etiquette {\n  display: block;"), /\.combat-bandeau-etiquette \{ display: block \} au lieu de none/);
   refuse(`${casser(FEUILLE, ".combat-annonce,\n.combat-bandeau-entier {", ".combat-annonce {")}\n.combat-bandeau-entier {\n  display: none;\n}\n`, /la ligne entière : position[\s\S]*n'est plus lue : display/);
@@ -1875,6 +1987,316 @@ test("combat.css — ni transform, ni filter, ni container-type sur .combat et .
   assert.deepEqual(defautsDuRepere(`${FEUILLE}\n.combat-cadre {\n  transform: translateZ(0);\n}\n`), [".combat-cadre { transform: translateZ(0) }"]);
   assert.deepEqual(defautsDuRepere(casser(FEUILLE, "@media (min-width: 80rem) {\n", "@media (min-width: 80rem) {\n  .combat {\n    container-type: inline-size;\n  }\n\n")), ["@media (min-width: 80rem) .combat { container-type: inline-size }"]);
   assert.deepEqual(defautsDuRepere(".combat-cadre { filter: none; }\n.combat-case { container-type: size; }"), [".combat-cadre { filter: none }"]);
+});
+
+// ——— Le lot 4.3 (vague 3) : la fenêtre, l'écran en jeu, le dé, le camp qui joue, les feuilles ———
+
+// D1 (contrat de la vague 3, § 2.1) : la hauteur de la fenêtre. 100vh dans :root, en repli ; 100dvh par une seule règle
+// @supports, entre la fin de :root et le thème sombre, qui ne pose rien d'autre. Les lecteurs des jetons (ici,
+// tests/site.test.js, tests/carte.test.js, tests/themes_contrastes.test.js) lisent le clair de :root jusqu'au thème
+// sombre : placée après lui, elle passerait pour une redéclaration sombre. Le voile des feuilles : le fond de la page mêlé
+// de transparence, jamais une opacité.
+const HAUTEUR_DE_LA_FENETRE = "@supports (height: 100dvh) {\n  :root {\n    --hauteur-fenetre: 100dvh;\n  }\n}";
+function defautsDeLaFenetre(jetonsCss) {
+  const defauts = [];
+  const texte = sansCommentaires(jetonsCss).replaceAll("\r\n", "\n");
+  const arobases = texte.split("\n").map((ligne) => ligne.trim()).filter((ligne) => ligne.startsWith("@"));
+  if (JSON.stringify(arobases) !== JSON.stringify(["@supports (height: 100dvh) {", "@media (prefers-color-scheme: dark) {"])) defauts.push(`règles @ : ${JSON.stringify(arobases)}`);
+  const racine = texte.indexOf(":root {");
+  const finDeRacine = texte.indexOf("\n}\n", racine);
+  const supports = texte.indexOf(HAUTEUR_DE_LA_FENETRE);
+  const sombre = texte.indexOf("@media (prefers-color-scheme: dark)");
+  if (supports < 0) defauts.push("la règle @supports ne pose pas --hauteur-fenetre: 100dvh, et elle seule");
+  else if (!(finDeRacine < supports && supports < sombre && texte.slice(finDeRacine + 3, supports).trim() === "")) defauts.push("la règle @supports n'est pas entre la fin de :root et le thème sombre");
+  const blocRacine = texte.slice(racine, finDeRacine + 1);
+  if (!/\n {2}--hauteur-fenetre: 100vh;\n/.test(blocRacine)) defauts.push("--hauteur-fenetre: 100vh absent de :root");
+  if (/--hauteur-fenetre/.test(texte.slice(sombre))) defauts.push("--hauteur-fenetre redéclaré dans le thème sombre");
+  if (!/\n {2}--voile: color-mix\(in srgb, var\(--fond\) \d+%, transparent\);\n/.test(blocRacine)) defauts.push("--voile n'est pas le fond mêlé de transparence");
+  return defauts;
+}
+
+test("jetons.css — la hauteur de la fenêtre : 100vh dans :root, 100dvh par la seule règle @supports, entre :root et le thème sombre ; le voile, le fond mêlé de transparence", () => {
+  assert.deepEqual(defautsDeLaFenetre(JETONS), []);
+  const refuse = (css, motif) => assert.match(defautsDeLaFenetre(css).join("\n"), motif);
+  const texte = JETONS.replaceAll("\r\n", "\n");
+  assert.equal(texte.split(HAUTEUR_DE_LA_FENETRE).length, 2);
+  // Après le thème sombre : elle y passerait pour une redéclaration sombre.
+  refuse(`${texte.replace(`${HAUTEUR_DE_LA_FENETRE}\n`, "")}\n${HAUTEUR_DE_LA_FENETRE}\n`, /n'est pas entre la fin de :root et le thème sombre[\s\S]*redéclaré dans le thème sombre/);
+  // Elle pose autre chose ; une seconde règle @ ; le repli ôté ; un voile d'opacité.
+  refuse(texte.replace("    --hauteur-fenetre: 100dvh;\n", "    --hauteur-fenetre: 100dvh;\n    --fond: #ffffff;\n"), /ne pose pas --hauteur-fenetre: 100dvh, et elle seule/);
+  refuse(texte.replace("@media (prefers-color-scheme: dark) {", "@supports (display: grid) {\n  :root {\n    --rayon: 6px;\n  }\n}\n\n@media (prefers-color-scheme: dark) {"), /règles @ : /);
+  refuse(texte.replace("  --hauteur-fenetre: 100vh;\n", ""), /--hauteur-fenetre: 100vh absent de :root/);
+  refuse(texte.replace(/--voile: [^;]+;/, "--voile: rgba(0, 0, 0, 0.45);"), /--voile n'est pas le fond mêlé de transparence/);
+  // Ce qui les lit : la page du combat en jeu (css/ecran.css), la feuille qui monte du bas, le voile.
+  assert.equal(valeur(sansCommentaires(lire("css/ecran.css")), "body:has(.combat-en-jeu)", "height"), "var(--hauteur-fenetre)");
+  assert.equal(valeur(COMBAT, ".combat-feuille", "max-height"), "calc(var(--hauteur-fenetre) - var(--cible-tactile) * 2)");
+  assert.equal(valeur(COMBAT, ".combat-voile", "background"), "var(--voile)");
+  // Les lecteurs des jetons la lisent au clair à 100dvh (la règle précède le thème sombre), et le sombre n'en a pas.
+  assert.equal(jetons(JETONS, "clair")["hauteur-fenetre"], "100dvh");
+  assert.ok(!("hauteur-fenetre" in sombresSeuls(JETONS)));
+});
+
+// L'écran en jeu au téléphone (mission du lot 4.3, § 3 ; contrat de la vague 3, § 2.2 D2, § 5.3 et § 7) : une colonne de
+// la hauteur que la page lui laisse ; le cadre prend le reste, et la carte ce que laissent la dernière ligne du journal,
+// les vignettes et le volet, qui n'est plus fixé : quand il s'ouvre, la carte se réduit, au lieu d'être couverte. La
+// grille, carrée, prend la plus petite de la largeur et de la hauteur de sa place, moins la ligne de la légende. Les
+// fiches et le journal de la page cachés : le plein écran les porte. À 56rem (et 80rem pour les camps), tout est rendu.
+const ATTENDUES_EN_JEU = [
+  [".combat-en-jeu", "display", "flex", null],
+  [".combat-en-jeu", "flex-direction", "column", null],
+  [".combat-en-jeu", "flex", "1 1 auto", null],
+  [".combat-en-jeu", "min-height", "0", null],
+  [".combat-en-jeu", "position", "relative", null],
+  [".combat-en-jeu > *", "flex", "none", null],
+  [".combat-en-jeu .combat-cadre", "display", "flex", null],
+  [".combat-en-jeu .combat-cadre", "flex-direction", "column", null],
+  [".combat-en-jeu .combat-cadre", "flex", "1 1 auto", null],
+  [".combat-en-jeu .combat-cadre", "min-height", "0", null],
+  [".combat-en-jeu .combat-cadre > *", "flex", "none", null],
+  [".combat-en-jeu .combat-plateau", "flex", "1 1 0", null],
+  [".combat-en-jeu .combat-plateau", "min-height", "0", null],
+  [".combat-en-jeu .combat-plateau", "container-type", "size", null],
+  [".combat-en-jeu .combat-plateau-tete", "display", "none", null],
+  [".combat-en-jeu .combat-grille", "width", "min(100cqi, calc(100cqb - var(--taille-petite) * var(--interligne) - var(--espace-1)))", null],
+  [".combat-en-jeu .combat-legende", "flex-wrap", "nowrap", null],
+  [".combat-en-jeu .combat-legende", "overflow-x", "auto", null],
+  [".combat-en-jeu .combat-bulle", "position", "relative", null],
+  [".combat-en-jeu .combat-bulle", "flex", "0 1 auto", null],
+  [".combat-en-jeu .combat-bulle", "min-height", "0", null],
+  [".combat-en-jeu .combat-cadre > .combat-camps", "display", "none", null],
+  [".combat-en-jeu > .combat-journal", "display", "none", null],
+  [".combat-en-jeu .combat-site", "display", "inline-flex", null],
+  [".combat-site", "display", "none", null],
+  // La zone sous la carte, vide au téléphone (le geste est dans le volet), ne garde pas son cadre.
+  [".combat-action:empty", "display", "none", null],
+  // Le titre et l'aide, cachés à la vue comme l'annonce, et lus.
+  [".combat-en-jeu .combat-barre h1", "clip-path", "inset(50%)", null],
+  [".combat-en-jeu .combat-aide", "position", "absolute", null],
+  // À 56rem, rendu.
+  [".combat-en-jeu", "display", "block", MEDIA_56],
+  [".combat-en-jeu", "padding", "0", MEDIA_56],
+  [".combat-en-jeu .combat-cadre", "display", "grid", MEDIA_56],
+  [".combat-en-jeu .combat-cadre", "gap", "var(--espace-3)", MEDIA_56],
+  [".combat-en-jeu .combat-plateau", "display", "block", MEDIA_56],
+  [".combat-en-jeu .combat-plateau", "container-type", "normal", MEDIA_56],
+  [".combat-en-jeu .combat-plateau-tete", "display", "flex", MEDIA_56],
+  [".combat-en-jeu .combat-grille", "width", "auto", MEDIA_56],
+  [".combat-en-jeu .combat-grille", "margin", "0 auto", MEDIA_56],
+  [".combat-en-jeu .combat-legende", "flex-wrap", "wrap", MEDIA_56],
+  [".combat-en-jeu .combat-legende", "overflow-x", "visible", MEDIA_56],
+  [".combat-en-jeu .combat-bulle", "position", "absolute", MEDIA_56],
+  [".combat-en-jeu .combat-cadre > .combat-camps", "display", "grid", MEDIA_56],
+  [".combat-en-jeu .combat-cadre > .combat-camps", "display", "contents", MEDIA_80],
+  [".combat-en-jeu > .combat-journal", "display", "block", MEDIA_56],
+  [".combat-en-jeu .combat-site", "display", "none", MEDIA_56],
+  [".combat-en-jeu .combat-barre h1", "position", "static", MEDIA_56],
+  [".combat-en-jeu .combat-aide", "clip-path", "none", MEDIA_56],
+];
+function defautsEnJeu(css) {
+  const defauts = ecarts(css, ATTENDUES_EN_JEU);
+  // La carte se réduit : rien de ce que l'écran en jeu range n'est fixé à la fenêtre au téléphone.
+  for (const regle of selecteursDe(css)) {
+    if (regle.cadre === null && /^\.combat-en-jeu(?![\w-])/.test(regle.selecteur) && /position:\s*fixed/.test(regle.corps)) defauts.push(`${regle.selecteur} : fixé à la fenêtre`);
+  }
+  // Le volet garde sa hauteur de volet (45 %, du cadre désormais) : rien ne la change en jeu.
+  if (valeur(css, ".combat-en-jeu .combat-bulle", "max-height") !== null) defauts.push("le volet en jeu change de hauteur");
+  // La grille reste carrée.
+  if (valeur(css, ".combat-grille", "aspect-ratio") !== "1 / 1") defauts.push("la grille n'est plus carrée");
+  return defauts;
+}
+
+test("combat.css — en jeu, sur un téléphone : une colonne de la hauteur de la page, la carte qui se réduit quand le volet s'ouvre (le volet n'est plus fixé), la grille carrée dans sa place ; à 56rem, tout rendu", () => {
+  assert.deepEqual(defautsEnJeu(COMBAT), []);
+  const refuse = (css, motif) => assert.match(defautsEnJeu(css).join("\n"), motif);
+  // Le volet de nouveau fixé : il couvrirait la carte.
+  refuse(casser(FEUILLE, ".combat-en-jeu .combat-bulle {\n  position: relative;", ".combat-en-jeu .combat-bulle {\n  position: fixed;"), /\.combat-en-jeu \.combat-bulle : fixé à la fenêtre/);
+  // La carte sans sa place : ni conteneur, ni part qui grandit.
+  refuse(casser(FEUILLE, "  min-height: 0;\n  container-type: size;\n", "  min-height: 0;\n"), /\.combat-en-jeu \.combat-plateau \{ container-type: null \} au lieu de size/);
+  refuse(casser(FEUILLE, "  display: flex;\n  flex: 1 1 0;\n", "  display: flex;\n  flex: none;\n"), /\.combat-en-jeu \.combat-plateau \{ flex: none \} au lieu de 1 1 0/);
+  // La grille mesurée sur la largeur seule : un téléphone en hauteur la ferait déborder sous le volet.
+  refuse(casser(FEUILLE, "  width: min(100cqi, calc(100cqb - var(--taille-petite) * var(--interligne) - var(--espace-1)));", "  width: 100cqi;"), /\.combat-en-jeu \.combat-grille \{ width: 100cqi \}/);
+  // Le volet qui prend une autre hauteur.
+  refuse(casser(FEUILLE, ".combat-en-jeu .combat-bulle {\n  position: relative;\n", ".combat-en-jeu .combat-bulle {\n  position: relative;\n  max-height: 60%;\n"), /le volet en jeu change de hauteur/);
+  // À 56rem, rien de rendu : la bulle, les camps à 80rem.
+  refuse(casser(FEUILLE, "  .combat-en-jeu .combat-bulle {\n    position: absolute;\n  }\n\n", ""), /@media \(min-width: 56rem\) \.combat-en-jeu \.combat-bulle \{ position: null \} au lieu de absolute/);
+  refuse(casser(FEUILLE, "  .combat-camps,\n  .combat-en-jeu .combat-cadre > .combat-camps {", "  .combat-camps {"), /@media \(min-width: 80rem\) \.combat-en-jeu \.combat-cadre > \.combat-camps \{ display: null \} au lieu de contents/);
+
+  // D2 (css/ecran.css) : la page, une colonne de la hauteur de la fenêtre ; l'en-tête du site caché ; l'écran sans marge,
+  // qui prend le reste ; à 56rem (son dernier @media), rendu. Des jetons seulement.
+  const ECRAN = sansCommentaires(lire("css/ecran.css")).replaceAll("\r\n", "\n");
+  const DE_LA_PAGE = [
+    ["body:has(.combat-en-jeu)", "display", "flex", null],
+    ["body:has(.combat-en-jeu)", "flex-direction", "column", null],
+    ["body:has(.combat-en-jeu)", "height", "var(--hauteur-fenetre)", null],
+    ["body:has(.combat-en-jeu) .entete", "display", "none", null],
+    ["#ecran:has(> .combat-en-jeu)", "display", "flex", null],
+    ["#ecran:has(> .combat-en-jeu)", "flex", "1 1 auto", null],
+    ["#ecran:has(> .combat-en-jeu)", "min-height", "0", null],
+    ["#ecran:has(> .combat-en-jeu)", "padding", "0", null],
+    ["body:has(.combat-en-jeu)", "display", "block", MEDIA_56],
+    ["body:has(.combat-en-jeu)", "height", "auto", MEDIA_56],
+    ["body:has(.combat-en-jeu) .entete", "display", "flex", MEDIA_56],
+    ["#ecran:has(> .combat-en-jeu)", "display", "block", MEDIA_56],
+    ["#ecran:has(> .combat-en-jeu)", "padding", "var(--espace-4)", MEDIA_56],
+  ];
+  assert.deepEqual(ecarts(ECRAN, DE_LA_PAGE), []);
+  assert.match(ecarts(ECRAN.replace("body:has(.combat-en-jeu) .entete {\n  display: none;", "body:has(.combat-en-jeu) .entete {\n  display: flex;"), DE_LA_PAGE).join("\n"), /body:has\(\.combat-en-jeu\) \.entete \{ display: flex \} au lieu de none/);
+  // L'en-tête et la marge du site rendus dans le dernier @media à 56rem du site, après la règle du téléphone.
+  assert.ok(ECRAN.lastIndexOf("@media (min-width: 56rem) {") < ECRAN.lastIndexOf("body:has(.combat-en-jeu) .entete"));
+});
+
+// Le dé en surimpression (mission du lot 4.3, § 3, A5 et B2 ; contrat de la vague 3, § 2.2 D3, § 5.3) : posé sur les
+// cases de la grille, au centre ou au centre d'une moitié, par trois classes ; son cadre et sa valeur de la couleur de
+// son verdict ; aucun clic, aucune animation, aucune opacité, aucun transform.
+const ATTENDUES_DU_DE = [
+  [".combat-surimpression", "pointer-events", "none", null],
+  [".combat-surimpression", "grid-row", "2 / -1", null],
+  [".combat-surimpression", "grid-column", "2 / -1", null],
+  [".combat-surimpression", "place-self", "center", null],
+  [".combat-surimpression", "aspect-ratio", "1 / 1", null],
+  [".combat-surimpression", "background", "var(--fond)", null],
+  [".combat-surimpression:empty", "display", "none", null],
+  [".combat-surimpression-centre", "grid-column", "2 / -1", null],
+  [".combat-surimpression-gauche", "grid-column", "2 / 7", null],
+  [".combat-surimpression-droite", "grid-column", "7 / -1", null],
+  [".combat-surimpression.reussi", "border-color", "var(--combat-reussite)", null],
+  [".combat-surimpression.echoue", "border-color", "var(--combat-echec)", null],
+  [".combat-surimpression.localisation", "border-color", "var(--accent)", null],
+  ...[["reussi", "var(--combat-reussite)"], ["echoue", "var(--combat-echec)"], ["localisation", "var(--accent)"]].flatMap(([etat, couleur]) =>
+    ["valeur", "verdict"].map((partie) => [`.combat-surimpression.${etat} .combat-surimpression-${partie}`, "color", couleur, null]),
+  ),
+];
+function defautsDuDe(css) {
+  const defauts = ecarts(css, ATTENDUES_DU_DE);
+  for (const regle of selecteursDe(css)) {
+    const ou = [regle.cadre, regle.selecteur].filter(Boolean).join(" ");
+    for (const [propriete, v] of declarations(regle.corps)) {
+      // Rien ne s'anime dans la feuille (D3 : le dé paraît, puis disparaît ; aucune durée).
+      if (/^(?:animation|transition)(?:-|$)/.test(propriete)) defauts.push(`${ou} { ${propriete}: ${v} } : une animation`);
+      if (/surimpression/.test(regle.selecteur) && /^(?:transform|translate|scale|rotate|opacity|filter|position)$/.test(propriete)) defauts.push(`${ou} { ${propriete}: ${v} } : le dé quitte les cases, bouge ou pâlit`);
+    }
+  }
+  // Au-dessus des jetons.
+  if (!(Number(valeur(css, ".combat-surimpression", "z-index")) > Number(valeur(css, ".combat-jeton", "z-index")))) defauts.push("le dé sous les jetons");
+  return defauts;
+}
+
+test("combat.css — le dé en surimpression : sur les cases de la grille, au centre ou à la moitié que la bulle laisse, par trois classes ; vert, rouge ou l'accent ; aucun clic, aucune animation, ni transform ni opacité", () => {
+  assert.deepEqual(defautsDuDe(COMBAT), []);
+  const refuse = (css, motif) => assert.match(defautsDuDe(css).join("\n"), motif);
+  refuse(casser(FEUILLE, "  text-align: center;\n  pointer-events: none;\n}\n\n.combat-surimpression-centre", "  text-align: center;\n}\n\n.combat-surimpression-centre"), /\.combat-surimpression \{ pointer-events: null \} au lieu de none/);
+  refuse(casser(FEUILLE, ".combat-surimpression-gauche {\n  grid-column: 2 / 7;", ".combat-surimpression-gauche {\n  grid-column: 1 / 7;"), /\.combat-surimpression-gauche \{ grid-column: 1 \/ 7 \}/);
+  refuse(casser(FEUILLE, ".combat-surimpression.echoue {\n  border-color: var(--combat-echec);", ".combat-surimpression.echoue {\n  border-color: var(--combat-alerte);"), /\.combat-surimpression\.echoue \{ border-color: var\(--combat-alerte\) \}/);
+  // Le dé de la maquette : centré par transform, effacé par une animation.
+  refuse(`${FEUILLE}\n.combat-surimpression-centre {\n  position: absolute;\n  transform: translate(-50%, -50%);\n}\n`, /\{ position: absolute \} : le dé quitte les cases[\s\S]*\{ transform: translate\(-50%, -50%\) \} : le dé quitte les cases/);
+  refuse(`${FEUILLE}\n.combat-surimpression {\n  transition: opacity var(--rayon);\n}\n`, /\{ transition: opacity var\(--rayon\) \} : une animation/);
+  refuse(casser(FEUILLE, ".combat-surimpression {\n  z-index: 2;", ".combat-surimpression {\n  z-index: 1;"), /le dé sous les jetons/);
+  // Vide entre deux dés, il ne se voit pas.
+  refuse(casser(FEUILLE, ".combat-action:empty,\n.combat-surimpression:empty,\n", ".combat-action:empty,\n"), /\.combat-surimpression:empty \{ display: null \} au lieu de none/);
+});
+
+// Le camp qui joue (mission du lot 4.3, § 3 et B1 ; contrat de la vague 3, § 5.2 et § 5.3) : les vignettes, le bord
+// gauche des fiches, le jeton qui a tout joué (pâli par des couleurs : son nom à 4,5:1), la légende, les pastilles et
+// les étiquettes des états, l'état court du tour.
+const ATTENDUES_DU_CAMP = [
+  [".combat-vignette.a-jouer", "border-color", "var(--combat-a-jouer)", null],
+  [".combat-vignette.a-jouer", "background", "var(--combat-a-jouer-doux)", null],
+  [".combat-vignette.a-jouer", "color", "var(--texte)", null],
+  [".combat-vignette.epuise", "border-color", "var(--combat-epuise)", null],
+  [".combat-vignette.epuise", "background", "var(--fond)", null],
+  [".combat-vignette.epuise", "color", "var(--texte-2)", null],
+  [".combat-vignette.choisie", "border-color", "var(--accent)", null],
+  [".combat-vignettes", "overflow-x", "auto", null],
+  [".combat-vignettes", "display", "none", MEDIA_56],
+  [".combat-fiche.a-jouer", "border-left-color", "var(--combat-a-jouer)", null],
+  [".combat-fiche.epuise", "border-left-color", "var(--combat-epuise)", null],
+  [".combat-fiche.a-jouer", "border-left-width", "var(--trait-epais)", null],
+  [".combat-jeton.epuise .combat-rond", "background", "var(--fond-2)", null],
+  [".combat-jeton.epuise .combat-rond", "box-shadow", "inset 0 0 0 calc(var(--trait) * 2) var(--combat-epuise)", null],
+  [".combat-jeton.epuise .combat-rond", "color", "var(--texte)", null],
+  [".combat-legende .epuise .combat-rond", "border-color", "var(--combat-epuise)", null],
+  [".combat-legende .epuise .combat-rond", "background", "var(--fond-2)", null],
+  [".combat-pastille-etat.blessure", "background", "var(--combat-echec)", null],
+  [".combat-pastille-etat.alerte", "background", "var(--combat-alerte)", null],
+  [".combat-etiquette", "background", "var(--fond)", null],
+  [".combat-etiquette.blessure", "color", "var(--combat-echec)", null],
+  [".combat-etiquette.favorable", "color", "var(--combat-reussite)", null],
+  [".combat-etiquette.alerte", "color", "var(--combat-alerte)", null],
+  [".combat-etat-court.danger", "color", "var(--combat-adv-texte)", null],
+  [".combat-etat-court.danger", "background", "var(--combat-adv-doux)", null],
+  // Où l'écran pose les deux états, le court tient le téléphone, l'entier le grand écran.
+  [".combat-en-jeu .combat-barre:has(.combat-etat-court) .combat-etat", "display", "none", null],
+  [".combat-en-jeu .combat-barre:has(.combat-etat-court) .combat-etat", "display", "block", MEDIA_56],
+  [".combat-barre:has(.combat-etat) .combat-etat-court", "display", "none", MEDIA_56],
+];
+function defautsDuCamp(css) {
+  const defauts = ecarts(css, ATTENDUES_DU_CAMP);
+  const rang = (selecteur) => rangDe(css, selecteur);
+  // Le choix l'emporte sur l'état du jeu ; l'épuisé sur le rond creux d'un jeton qu'on ne choisit pas, et le mort sur lui ;
+  // le bord gauche d'une fiche suit les marques de qui joue et de la cible, qui posent tout le bord.
+  if (!(rang(".combat-vignette.choisie") > Math.max(rang(".combat-vignette.a-jouer"), rang(".combat-vignette.epuise")))) defauts.push("la vignette choisie ne l'emporte pas");
+  if (!(rang(".combat-jeton.epuise .combat-rond") > rang(".combat-adv.inactif .combat-rond") && rang(".combat-jeton.epuise .combat-rond") < rang(".combat-jeton.mort .combat-rond"))) defauts.push("le jeton épuisé n'est pas entre l'inactif et le mort");
+  if (!(rang(".combat-fiche.a-jouer") > Math.max(rang(".combat-fiche.joue"), rang(".combat-fiche.ciblee")))) defauts.push("le bord du camp qui joue précède les marques de la fiche");
+  return defauts;
+}
+
+test("combat.css — le camp qui joue : les vignettes et le bord des fiches aux couleurs du jeu en cours, le jeton qui a tout joué pâli sans opacité, son nom à 4,5:1 ; les pastilles et les étiquettes des états ; l'état court du tour adverse", () => {
+  assert.deepEqual(defautsDuCamp(COMBAT), []);
+  // Le nom d'un jeton qui a tout joué, sur le second fond de son rond, et son anneau : mesurés, dans les deux thèmes.
+  assert.ok(PAIRES_DE_TEXTE.some(([avant, fond]) => avant === "texte" && fond === "fond-2"));
+  assert.ok(PAIRES_DE_TRAIT.some(([avant, fond]) => avant === "combat-epuise" && fond === "fond-2"));
+  for (const theme of ["clair", "sombre"]) {
+    const j = jetons(JETONS, theme);
+    assert.ok(contraste(j.texte, j["fond-2"]) >= 4.5, theme);
+    assert.ok(contraste(j["combat-epuise"], j["fond-2"]) >= 3, theme);
+  }
+  const refuse = (css, motif) => assert.match(defautsDuCamp(css).join("\n"), motif);
+  refuse(casser(FEUILLE, ".combat-jeton.epuise .combat-rond {\n  background: var(--fond-2);", ".combat-jeton.epuise .combat-rond {\n  background: var(--combat-mort);"), /\.combat-jeton\.epuise \.combat-rond \{ background: var\(--combat-mort\) \}/);
+  refuse(casser(FEUILLE, ".combat-vignette.a-jouer {\n  border-color: var(--combat-a-jouer);", ".combat-vignette.a-jouer {\n  border-color: var(--combat-pj);"), /\.combat-vignette\.a-jouer \{ border-color: var\(--combat-pj\) \}/);
+  refuse(casser(FEUILLE, ".combat-fiche.epuise {\n  border-left-color: var(--combat-epuise);", ".combat-fiche.epuise {\n  border-left-color: var(--bordure);"), /\.combat-fiche\.epuise \{ border-left-color: var\(--bordure\) \}/);
+  // Le choix posé avant l'état du jeu : le vert l'effacerait.
+  const choisie = ".combat-vignette.choisie {\n  border-color: var(--accent);\n  box-shadow: inset 0 0 0 var(--trait) var(--accent);\n}\n\n";
+  refuse(casser(casser(FEUILLE, choisie, ""), ".combat-vignette.a-jouer {", `${choisie}.combat-vignette.a-jouer {`), /la vignette choisie ne l'emporte pas/);
+  refuse(casser(FEUILLE, ".combat-etiquette.favorable {\n  border-color: var(--combat-reussite);\n  color: var(--combat-reussite);", ".combat-etiquette.favorable {\n  border-color: var(--combat-reussite);\n  color: var(--combat-pj-texte);"), /\.combat-etiquette\.favorable \{ color: var\(--combat-pj-texte\) \}/);
+});
+
+// Les feuilles, le plein écran, la palette dans la bulle (contrat de la vague 3, § 2.2 D4, § 5.1) : au téléphone, une
+// feuille qui monte du bas sur un voile ; à 56rem, un dialogue au milieu ; la bulle élargie en deux colonnes ; les couches
+// dans l'ordre (le volet, le voile, la feuille et le plein écran, la ligne d'une seconde).
+const ATTENDUES_DES_FEUILLES = [
+  [".combat-voile", "position", "fixed", null],
+  [".combat-voile", "inset", "0", null],
+  [".combat-feuille", "position", "fixed", null],
+  [".combat-feuille", "bottom", "0", null],
+  [".combat-feuille", "display", "flex", null],
+  [".combat-feuille", "flex-direction", "column", null],
+  [".combat-feuille-corps", "overflow-y", "auto", null],
+  [".combat-feuille-corps", "min-height", "0", null],
+  [".combat-feuille", "top", "50%", MEDIA_56],
+  [".combat-feuille", "left", "50%", MEDIA_56],
+  [".combat-feuille", "bottom", "auto", MEDIA_56],
+  [".combat-toast", "pointer-events", "none", null],
+  [".combat-toast:empty", "display", "none", null],
+  [".combat-interrupteur[aria-checked=\"true\"]::before", "border-color", "var(--accent)", null],
+  [".combat-champ-mj.change", "box-shadow", "inset var(--trait-epais) 0 0 var(--combat-alerte)", null],
+  [".combat-bulle-large", "display", "grid", MEDIA_56],
+  [".combat-bulle-large > .combat-bulle-tete", "grid-column", "1 / -1", MEDIA_56],
+  [".combat-bulle-large > .combat-palette", "overflow-y", "auto", MEDIA_56],
+];
+function defautsDesFeuilles(css) {
+  const defauts = ecarts(css, ATTENDUES_DES_FEUILLES);
+  const z = (selecteur) => Number(valeur(css, selecteur, "z-index"));
+  if (!(z(".combat-bulle") < z(".combat-voile") && z(".combat-voile") < z(".combat-feuille") && z(".combat-feuille") <= z(".combat-plein") && z(".combat-plein") < z(".combat-toast"))) defauts.push("les couches ne sont pas dans l'ordre");
+  if (!(rangDe(css, ".combat-bulle-large", MEDIA_56) > rangDe(css, ".combat-bulle-jet", MEDIA_56))) defauts.push("la bulle élargie ne suit pas celle du jet");
+  return defauts;
+}
+
+test("combat.css — les feuilles sur leur voile, un dialogue à 56rem ; la bulle élargie par la palette ; les couches dans l'ordre", () => {
+  assert.deepEqual(defautsDesFeuilles(COMBAT), []);
+  const refuse = (css, motif) => assert.match(defautsDesFeuilles(css).join("\n"), motif);
+  refuse(casser(FEUILLE, "  inset: 0;\n  z-index: 5;", "  inset: 0;\n  z-index: 7;"), /les couches ne sont pas dans l'ordre/);
+  refuse(casser(FEUILLE, "    top: 50%;\n    right: auto;", "    top: auto;\n    right: auto;"), /\.combat-feuille \{ top: auto \} au lieu de 50%/);
+  refuse(casser(FEUILLE, "  .combat-bulle-large > .combat-bulle-tete {\n    grid-column: 1 / -1;", "  .combat-bulle-large > .combat-bulle-tete {\n    grid-column: 1;"), /\.combat-bulle-large > \.combat-bulle-tete \{ grid-column: 1 \}/);
 });
 
 // ——— Les textes des deux feuilles ———

@@ -18,13 +18,16 @@
 //    nœuds est celui de la ligne ;
 // b) les cadres des jets, un dé d'un seul tenant, sans espace insécable ;
 // c) la liste : les lignes neuves seules, les lignes barrées, un autre
-//    journal reposé en entier, la dernière ligne montrée ;
+//    journal reposé en entier, la dernière ligne montrée ; ses pages (lot
+//    4.3) : les 500 dernières lignes, puis 500 de plus à chaque « Lignes
+//    précédentes », la ligne lue gardée à sa place, les lignes arrivées
+//    barrées par une ligne « Annulé » déjà montrée ;
 // d) le bandeau : caché avant le lancement, sa forme, sa ligne en cours, la
 //    vue inchangée qui ne refait rien ;
 // e) la coupe, à 2, 3 et 6 phrases, par un budget de signes ; le nom de qui
 //    agit gardé, entier, quand rien ne tient ;
-// f) la mesure refaite à la largeur seule ; « Journal ↓ » et le clic à la
-//    souris, jamais au doigt ;
+// f) la mesure refaite à la largeur seule ; « Journal ↓ » et l'appui sur le
+//    bandeau, au doigt comme à la souris (lot 4.3) ;
 // g) les noms hostiles et piégés ; h) le module lui-même.
 //
 // La hauteur réelle de trois lignes, la chasse fixe et le cadre qui suit la
@@ -448,12 +451,12 @@ test("la liste : les lignes neuves seules, la dernière montrée, le tour marqu�
     assert.equal(liste.noeud.getAttribute("aria-label"), "Journal du combat");
 
     // Avant le lancement : rien.
-    assert.deepEqual(liste.rendre({ journal: [] }), { ajoutees: 0, reposee: false });
+    assert.deepEqual(liste.rendre({ journal: [] }), { ajoutees: 0, reposee: false, restantes: 0 });
     assert.equal(liste.noeud.children.length, 0);
 
     const journal = [LANCEMENT, TOUR_1, TALOCHE];
     liste.noeud.scrollHeight = 480;
-    assert.deepEqual(liste.rendre({ journal }), { ajoutees: 3, reposee: false });
+    assert.deepEqual(liste.rendre({ journal }), { ajoutees: 3, reposee: false, restantes: 0 });
     assert.deepEqual(appels, [0]);
     assert.equal(liste.noeud.scrollTop, 480, "la dernière ligne se montre");
     const premieres = [...liste.noeud.children];
@@ -463,7 +466,7 @@ test("la liste : les lignes neuves seules, la dernière montrée, le tour marqu�
 
     // Deux lignes de plus : elles seules se posent, les autres restent.
     liste.noeud.scrollHeight = 620;
-    assert.deepEqual(liste.rendre({ journal: [...journal, PAS_CHASSE, FIN_DU_TOUR] }), { ajoutees: 2, reposee: false });
+    assert.deepEqual(liste.rendre({ journal: [...journal, PAS_CHASSE, FIN_DU_TOUR] }), { ajoutees: 2, reposee: false, restantes: 0 });
     assert.deepEqual(appels, [0, 3]);
     assert.equal(liste.noeud.scrollTop, 620);
     assert.deepEqual([...liste.noeud.children].slice(0, 3), premieres);
@@ -471,7 +474,7 @@ test("la liste : les lignes neuves seules, la dernière montrée, le tour marqu�
 
     // Rien de neuf : rien ne se pose, rien ne défile.
     liste.noeud.scrollTop = 12;
-    assert.deepEqual(liste.rendre({ journal: [...journal, PAS_CHASSE, FIN_DU_TOUR] }), { ajoutees: 0, reposee: false });
+    assert.deepEqual(liste.rendre({ journal: [...journal, PAS_CHASSE, FIN_DU_TOUR] }), { ajoutees: 0, reposee: false, restantes: 0 });
     assert.equal(liste.noeud.scrollTop, 12);
     assert.equal(liste.noeud.children.length, 5);
   });
@@ -488,7 +491,7 @@ test("les lignes barrées : par la plage d'une ligne « Annulé », celles déj�
     // Une ligne « Annulé » neuve barre les lignes déjà posées de sa plage.
     const annuleLePas = annulation("Aubépine — Pas chassé [1]", [3, 4]);
     const apres = [...journal, annuleLePas];
-    assert.deepEqual(liste.rendre({ journal: apres }), { ajoutees: 1, reposee: false });
+    assert.deepEqual(liste.rendre({ journal: apres }), { ajoutees: 1, reposee: false, restantes: 0 });
     assert.deepEqual(classes(), ["", "tour", "", "combat-annulee", ""]);
     assert.equal(liste.noeud.children[4].textContent, "Annulé : Aubépine — Pas chassé [1].");
 
@@ -531,7 +534,7 @@ test("un autre journal se repose en entier : premier objet changé, dernier obje
     // Un combat repris : un autre premier objet, au même texte.
     const repris = [{ ...LANCEMENT }, TOUR_1, TALOCHE, PAS_CHASSE];
     liste.noeud.scrollHeight = 300;
-    assert.deepEqual(liste.rendre({ journal: repris }), { ajoutees: 4, reposee: true });
+    assert.deepEqual(liste.rendre({ journal: repris }), { ajoutees: 4, reposee: true, restantes: 0 });
     assert.equal(appels.at(-1), 0);
     assert.equal(liste.noeud.children.length, 4);
     assert.ok([...liste.noeud.children].every((li) => !avant.includes(li)), "tout est reposé");
@@ -539,14 +542,103 @@ test("un autre journal se repose en entier : premier objet changé, dernier obje
 
     // Le dernier objet posé a changé.
     const autre = [repris[0], TOUR_1, TALOCHE, { ...PAS_CHASSE }, FIN_DU_TOUR];
-    assert.deepEqual(liste.rendre({ journal: autre }), { ajoutees: 5, reposee: true });
+    assert.deepEqual(liste.rendre({ journal: autre }), { ajoutees: 5, reposee: true, restantes: 0 });
     assert.deepEqual([...liste.noeud.children].map((li) => li.textContent), autre.map((une) => une.texte));
 
     // Un combat neuf : le journal vide.
-    assert.deepEqual(liste.rendre({ journal: [] }), { ajoutees: 0, reposee: true });
+    assert.deepEqual(liste.rendre({ journal: [] }), { ajoutees: 0, reposee: true, restantes: 0 });
     assert.equal(liste.noeud.children.length, 0);
-    assert.deepEqual(liste.rendre({ journal: [] }), { ajoutees: 0, reposee: false });
-    assert.deepEqual(liste.rendre({ journal: [LANCEMENT] }), { ajoutees: 1, reposee: false });
+    assert.deepEqual(liste.rendre({ journal: [] }), { ajoutees: 0, reposee: false, restantes: 0 });
+    assert.deepEqual(liste.rendre({ journal: [LANCEMENT] }), { ajoutees: 1, reposee: false, restantes: 0 });
+  });
+});
+
+// ─── c bis) Les pages (lot 4.3) ─────────────────────────────────────────────
+
+// Un journal de n lignes, chacune un objet à elle : des gestes, et, aux rangs
+// donnés, une ligne « Annulé » et sa plage.
+function journalDe(n, annulations = {}) {
+  return Array.from({ length: n }, (_, rang) =>
+    Object.hasOwn(annulations, rang) ? annulation(`Aubépine — geste ${annulations[rang][0]}`, annulations[rang]) : ligne("geste", [["ouverture", [acteur("Aubépine", "pj"), texte(` : geste ${rang}.`)]]]),
+  );
+}
+
+// La hauteur de la liste, comme un navigateur la mesurerait : 20 px par ligne posée.
+function mesurerLaListe(liste) {
+  Object.defineProperty(liste.noeud, "scrollHeight", { configurable: true, get: () => liste.noeud.children.length * 20 });
+}
+
+// Les rangs, dans le journal, des lignes barrées d'une liste qui commence au rang « debut ».
+const rangsBarres = (liste, debut) => [...liste.noeud.children].flatMap((li, i) => (/\bcombat-annulee\b/.test(li.className) ? [debut + i] : []));
+const plage = (de, a) => Array.from({ length: a - de }, (_, k) => de + k);
+
+test("les pages : les 500 dernières lignes, puis 500 de plus à chaque « Lignes précédentes » (1 200 lignes : 500, 1 000, 1 200), la ligne lue gardée à sa place", () => {
+  avecDom(() => {
+    // Au rang 700, la première ligne montrée, une ligne « Annulé » couvre [650, 700) : des lignes cachées.
+    const journal = journalDe(1200, { 700: [650, 700] });
+    const { vueJournal, appels } = vueJournalEssai();
+    const liste = creerListe({ vueJournal });
+    mesurerLaListe(liste);
+    const textes = () => [...liste.noeud.children].map((li) => li.textContent);
+    // Rien de rendu : rien à poser au-dessus.
+    assert.deepEqual(liste.precedentes(), { ajoutees: 0, restantes: 0 });
+
+    assert.deepEqual(liste.rendre({ journal }), { ajoutees: 500, reposee: false, restantes: 700 });
+    assert.deepEqual(appels, [700]);
+    assert.equal(liste.noeud.children.length, 500);
+    assert.deepEqual(textes(), journal.slice(700).map((une) => une.texte));
+    assert.equal(liste.noeud.scrollTop, 10000, "la dernière ligne se montre");
+    assert.deepEqual(rangsBarres(liste, 700), [], "les lignes que la ligne « Annulé » couvre ne sont pas montrées");
+
+    // On lit plus haut ; « Lignes précédentes » pose 500 lignes au-dessus, et la ligne lue reste à sa place.
+    liste.noeud.scrollTop = 4000;
+    const lue = liste.noeud.children[200];
+    assert.deepEqual(liste.precedentes(), { ajoutees: 500, restantes: 200 });
+    assert.deepEqual(appels, [700, 200]);
+    assert.equal(liste.noeud.children.length, 1000);
+    assert.ok(liste.noeud.children[700] === lue, "les lignes déjà posées restent, les mêmes");
+    assert.deepEqual(textes(), journal.slice(200).map((une) => une.texte));
+    assert.equal(liste.noeud.scrollTop, 14000, "4 000 px, plus les 500 lignes posées au-dessus");
+    // La ligne « Annulé » déjà montrée barre les lignes arrivées qu'elle couvre, et celles-là seules ; jamais elle-même.
+    assert.deepEqual(rangsBarres(liste, 200), plage(650, 700));
+
+    // Puis les 200 qui restent ; puis plus rien.
+    assert.deepEqual(liste.precedentes(), { ajoutees: 200, restantes: 0 });
+    assert.equal(liste.noeud.children.length, 1200);
+    assert.deepEqual(textes(), journal.map((une) => une.texte));
+    assert.equal(liste.noeud.scrollTop, 18000);
+    assert.deepEqual(liste.precedentes(), { ajoutees: 0, restantes: 0 });
+    assert.equal(liste.noeud.scrollTop, 18000, "rien de posé : rien ne bouge");
+
+    // Une ligne neuve s'ajoute au bout ; la liste garde toutes les siennes, et montre la dernière.
+    const suite = [...journal, ligne("cadre", [["fin_de_tour", [{ type: "fin_de_tour", texte: "Fin du tour des PJ : ils retrouvent leurs actions." }]]])];
+    assert.deepEqual(liste.rendre({ journal: suite }), { ajoutees: 1, reposee: false, restantes: 0 });
+    assert.equal(liste.noeud.children.length, 1201);
+    assert.equal(liste.noeud.scrollTop, 24020);
+
+    // Un autre journal se repose à sa dernière page.
+    assert.deepEqual(liste.rendre({ journal: journalDe(1200) }), { ajoutees: 500, reposee: true, restantes: 700 });
+    assert.equal(liste.noeud.children.length, 500);
+  });
+});
+
+test("les pages d'une autre longueur : une ligne « Annulé » neuve barre aussi les lignes posées par « Lignes précédentes »", () => {
+  avecDom(() => {
+    const { vueJournal } = vueJournalEssai();
+    const liste = creerListe({ vueJournal, parPage: 2 });
+    const journal = journalDe(5);
+    assert.deepEqual(liste.rendre({ journal }), { ajoutees: 2, reposee: false, restantes: 3 });
+    assert.deepEqual(liste.precedentes(), { ajoutees: 2, restantes: 1 });
+    // Une ligne « Annulé » neuve couvre [1, 4) : trois lignes déjà posées, dont deux venues d'en haut.
+    const annule = annulation("Aubépine — trois gestes", [1, 4]);
+    assert.deepEqual(liste.rendre({ journal: [...journal, annule] }), { ajoutees: 1, reposee: false, restantes: 1 });
+    assert.deepEqual(rangsBarres(liste, 1), [1, 2, 3]);
+    // La dernière page reposée, puis la première ligne, qui n'est pas dans la plage.
+    assert.deepEqual(liste.precedentes(), { ajoutees: 1, restantes: 0 });
+    assert.deepEqual(rangsBarres(liste, 0), [1, 2, 3]);
+    // Une longueur qui n'en est pas une : les 500 de la mission.
+    const autre = creerListe({ vueJournal, parPage: 0 });
+    assert.deepEqual(autre.rendre({ journal: journalDe(501) }), { ajoutees: 500, reposee: false, restantes: 1 });
   });
 });
 
@@ -839,7 +931,7 @@ test("un bandeau construit hors de la page garde sa surveillance jusqu'à y entr
   });
 });
 
-test("« Journal ↓ » et un clic à la souris sur le bandeau mènent au journal ; un doigt, jamais", () => {
+test("« Journal ↓ » et un appui sur le bandeau, au doigt comme à la souris, mènent au journal ; le clic du bouton n'y compte qu'une fois", () => {
   avecDom(() => {
     const { bandeau, espion, texte: coupe, bouton } = monterLeBandeau();
     const { noeud } = bandeau;
@@ -852,24 +944,18 @@ test("« Journal ↓ » et un clic à la souris sur le bandeau mènent au journa
     noeud.declencher("click", { target: bouton });
     assert.equal(espion.montrer, 1);
 
-    // Un clic à la souris sur le texte.
-    noeud.declencher("pointerdown", { pointerType: "mouse", target: coupe });
-    noeud.declencher("click", { target: coupe });
-    assert.equal(espion.montrer, 2);
-
-    // Au doigt, au stylet : rien.
-    for (const appui of ["touch", "pen"]) {
+    // Un appui sur le texte, à la souris, au doigt, au stylet : le journal, chaque fois (lot 4.3 : sur un téléphone,
+    // la page ne défile plus, et la dernière ligne du journal s'ouvre d'un appui).
+    for (const [appui, attendu] of [["mouse", 2], ["touch", 3], ["pen", 4]]) {
       noeud.declencher("pointerdown", { pointerType: appui, target: coupe });
       noeud.declencher("click", { target: coupe });
+      assert.equal(espion.montrer, attendu, appui);
     }
-    assert.equal(espion.montrer, 2);
 
-    // Un clic sans appui noté, ou après un clic déjà compté : rien.
-    noeud.declencher("click", { target: coupe });
-    noeud.declencher("pointerdown", { pointerType: "mouse", target: coupe });
+    // Un clic sans appui noté, deux clics de suite : chacun compte.
     noeud.declencher("click", { target: coupe });
     noeud.declencher("click", { target: coupe });
-    assert.equal(espion.montrer, 3);
+    assert.equal(espion.montrer, 6);
   });
 });
 
@@ -950,7 +1036,7 @@ test("un nom hostile reste du texte, et ne commande pas le sens de l'écriture",
 
 // ─── h) Le module ───────────────────────────────────────────────────────────
 
-test("le module : dom.js seul, ni HTML ni style, aucun défilement de la page, une seule écriture de scrollTop", () => {
+test("le module : dom.js seul, ni HTML ni style, aucun défilement de la page, les deux écritures de scrollTop dans la liste", () => {
   const imports = [...SOURCE.matchAll(/^\s*import\s+([^;]*?)\s+from\s+"([^"]+)";/gm)].map(([, quoi, chemin]) => [quoi, chemin]);
   assert.deepEqual(imports, [["{ el, sansSensForce }", "./dom.js"]]);
   assert.ok(!/\bimport\s*\(/.test(SOURCE), "aucun import dynamique");
@@ -961,7 +1047,16 @@ test("le module : dom.js seul, ni HTML ni style, aucun défilement de la page, u
   }
   assert.doesNotMatch(SOURCE, /\bstyle\s*[:=]|setAttribute\(\s*["'`]style/, "aucun style écrit par le code");
   assert.doesNotMatch(SOURCE, /scrollTo\b/, "ni scrollTo");
-  assert.equal(SOURCE.match(/scrollTop\s*=[^=]/g)?.length, 1, "un seul scrollTop =, celui de la liste du journal");
+  // Deux écritures de scrollTop, toutes deux dans creerListe : la dernière ligne montrée, et la ligne lue gardée à sa
+  // place quand « Lignes précédentes » pose des lignes au-dessus (contrat de la vague 3, § 5.5).
+  const ecritures = [...SOURCE.matchAll(/\bscrollTop\s*[-+*/]?=(?!=)/g)].map((trouve) => trouve.index);
+  const debutDeLaListe = SOURCE.indexOf("export function creerListe(");
+  const finDeLaListe = SOURCE.indexOf("\n}", debutDeLaListe);
+  assert.equal(ecritures.length, 2, "deux écritures de scrollTop, celles de la liste du journal");
+  assert.ok(ecritures.every((i) => i > debutDeLaListe && i < finDeLaListe), "toutes deux dans creerListe");
+  // Les chaînes que le contrôle du défilement retouche (contrat de la vague 3, § 5.5) restent mot pour mot.
+  assert.ok(SOURCE.replaceAll("\r\n", "\n").includes("    if (ajoutees > 0 || !suite) noeud.scrollTop = noeud.scrollHeight;\n"));
+  assert.ok(SOURCE.includes("export function creerBandeau("));
   // Le texte d'une ligne ne se relit jamais pour y chercher un nom.
   assert.doesNotMatch(SOURCE, /\.texte\.(?:split|indexOf|includes|match|search|replace|startsWith|endsWith)\(/);
   for (const insecable of INSECABLES) assert.ok(!SOURCE.includes(insecable), "aucune espace insécable écrite telle quelle");

@@ -54,7 +54,7 @@ const infobulleDe = (lieu, declencheur) => {
   return id ? lieu.querySelector(`#${id}`) : null;
 };
 /** Les trois propriétés de place d'un nœud. */
-const proprietes = (noeud) => Object.fromEntries(["--bulle-gauche", "--bulle-haut", "--bulle-fleche"].map((nom) => [nom, noeud.style.getPropertyValue(nom)]));
+const proprietes = (noeud) => Object.fromEntries(["--bulle-gauche", "--bulle-haut", "--bulle-fleche", "--bulle-hauteur"].map((nom) => [nom, noeud.style.getPropertyValue(nom)]));
 const dernierFocus = () => globalThis.document.focalisations.at(-1);
 const classesDe = (noeud) => noeud.className.split(/\s+/);
 /**
@@ -80,7 +80,12 @@ const REDUIRE = String.fromCodePoint(0x2013);
 
 // ——— Les vues, écrites à la main dans les formes du contrat (§ 8.1, § 8.2) ———
 
-const PANNEAU_VIDE = { candidats: [], nom: null, entete: null, defenseur: null, fermeture: null, etapes: [], groupes: [], passer: null, passifs: [], geste: null, vainqueur: null, focus: null };
+// Avec les clés neuves de la vague 3 (contrat, § 3.2) : camp, etape, fil, consigne.
+const PANNEAU_VIDE = { candidats: [], nom: null, entete: null, defenseur: null, fermeture: null, etapes: [], groupes: [], passer: null, passifs: [], geste: null, vainqueur: null, focus: null, camp: null, etape: null, fil: [], consigne: null };
+
+/** Le fil d'une attaque au téléphone (contrat, § 3.2), à son étape en cours. */
+const filDeLAttaque = (etape) =>
+  ["Capacité", "Cible", "Dés", "Zone et dégâts"].map((nom, rang) => ({ nom, etape: rang, etat: rang < etape ? "faite" : rang === etape ? "en_cours" : "a_venir" }));
 
 const survolDe = (titre, champs = {}) => ({ titre, origine: null, description: "", portee: null, causes: [], cout: "Coût : 1 action, aucun souffle", hachures: [], ...champs });
 
@@ -146,6 +151,10 @@ const vueListe = (champs = {}) => ({
   annonce: null,
   vainqueur: null,
   focus: "ligne:0:0",
+  camp: "pj",
+  etape: 0,
+  fil: filDeLAttaque(0),
+  consigne: "Que fait Aubépine ?",
   ...champs,
 });
 
@@ -162,9 +171,11 @@ const vueDuChef = (champs = {}) =>
 
 const CONTEXTE_NU = { de: null, detail: null, modificateurs: [], difficulte: null, causes: null, defense: null, reglages: null };
 const CAUSES = { nombre: "1 avantage", nom: "1 avantage : voir la cause", phrases: [{ ...SOLO, texte: "Solo du chef [1] : aucun allié de son camp sur sa case (D4) ; 1 avantage." }], compte: null };
+// Les réglages à la main : le Mode MJ seul les montre (contrat de la vague 3, § 3.2, D11).
 const REGLAGES = {
   modificateur: { valeur: 0, raison: null, min: -20, max: 20, raisonParDefaut: "Taloche", gabarit: { evenement: { type: "regler", champ: "modificateur" } } },
   avantages: { valeur: 1, raison: "Nez fin", min: -20, max: 20, raisonParDefaut: "Taloche", gabarit: { evenement: { type: "regler", champ: "avantages" } } },
+  mj: true,
 };
 const CIBLE = { id: "adv4", libelle: "Marmiton de corvée n° 2", choisie: true, actif: true, raison: null, commande: regler("cible", "adv4") };
 
@@ -200,6 +211,20 @@ const gesteVu = (champs = {}) => ({
   appliquer: null,
   confirmer: null,
   revenir: null,
+  // Les clés de la vague 3 (contrat, § 3.2).
+  bilanAuDoigt: "1 réussite pour l'instant. Le 2e dé échoue : il reste 1 avantage.",
+  avis: null,
+  ciblesDetail: [],
+  jetsParCible: null,
+  progression: null,
+  dernierDe: 1,
+  passifs: [],
+  appliquerEffet: null,
+  palette: { libelle: "Palette", source: { genre: "capacite", qui: "pj1", capacite: 15 }, mj: true },
+  interventions: null,
+  aucuneIntervention: null,
+  contre: null,
+  critique: null,
   ...champs,
 });
 
@@ -223,6 +248,10 @@ const vueJet = (champs = {}) => ({
   annonce: { pas: 12, texte: "2e dé : 4, échec. Relancer ou garder ?" },
   vainqueur: null,
   focus: "choix:relancer",
+  camp: "pj",
+  etape: 2,
+  fil: filDeLAttaque(2),
+  consigne: null,
   ...champs,
 });
 
@@ -239,9 +268,16 @@ const QUI_JOUE = {
   ],
   annonce: null,
   focus: "candidat:pj1",
+  camp: "pj",
+  etape: 0,
 };
 const PREPARATION = { genre: "preparation", ...PANNEAU_VIDE, annonce: null };
 const TERMINE = { genre: "termine", ...PANNEAU_VIDE, annonce: null };
+/** Ce que la barre donne au volet au repos (contrat, § 4.2) : « Annuler le dernier geste » et « Fin de tour ». */
+const REPOS = {
+  annuler: { libelle: "Annuler le dernier geste", actif: true, raison: null, commande: { evenement: { type: "annuler" } }, question: { texte: "Annuler ?", confirmer: "Annuler", garder: "Garder" } },
+  finDeTour: { actif: true, raison: null, commande: { evenement: { type: "fin_de_tour" } } },
+};
 
 // ——— Le banc : la bulle dans le cadre, et l'écran qui la mène ———
 
@@ -266,7 +302,7 @@ const FENETRE = { largeur: 1280, hauteur: 800 };
  * joue est dans la case active. focusFidele : le document simulé déclenche
  * blur et focus à chaque focus().
  */
-function monter({ etroit = false, espion = false, focusFidele = false } = {}) {
+function monter({ etroit = false, espion = false, focusFidele = false, modeMj = false } = {}) {
   const retirerDom = installerDom({ focusFidele });
   const avant = { add: globalThis.addEventListener, remove: globalThis.removeEventListener };
   const ecoutes = [];
@@ -295,7 +331,7 @@ function monter({ etroit = false, espion = false, focusFidele = false } = {}) {
   let bulle = null;
   const afficher = (vue, autres = {}) => {
     champs = autres;
-    const rendu = bulle.rendre(vue, { etroit, caseOuverte: null, ancre: caseActive, repere: cadre, fenetre: FENETRE, origineDeLaCible: null, ...autres });
+    const rendu = bulle.rendre(vue, { etroit, caseOuverte: null, ancre: caseActive, repere: cadre, fenetre: FENETRE, origineDeLaCible: null, modeMj, repos: REPOS, ...autres });
     if (rendu.ouverture) {
       bulle.replacer();
       bulle.focaliser();
@@ -320,6 +356,12 @@ function monter({ etroit = false, espion = false, focusFidele = false } = {}) {
     focusSurLaCase: (nomDeCase) => banc.cases.push(nomDeCase),
     fermerLaCase: () => banc.appels.push({ fermerLaCase: true }),
     rafraichir: () => banc.rafraichis.push(true),
+    // Les actions de la vague 3 (contrat, § 4.2) : la palette, les fiches, le journal, le repos.
+    ouvrirPalette: (source, ancre, options) => banc.appels.push({ ouvrirPalette: source, ancre, options }),
+    ouvrirFiches: (id) => banc.appels.push({ ouvrirFiches: id }),
+    ouvrirJournal: () => banc.appels.push({ ouvrirJournal: true }),
+    demanderLAnnulation: () => banc.appels.push({ demanderLAnnulation: true }),
+    finDeTour: () => banc.appels.push({ finDeTour: true }),
   };
   // L'espion relève le contexte que la bulle passe au contenu, tel qu'il est à l'entrée.
   const releve = (composer) => (r, vue) => {
@@ -428,7 +470,7 @@ test("bulle — « +k » pendant le combat : la liste d'une case prend la place 
   });
 });
 
-test("bulle — sur un téléphone, le volet : la liste d'une action, sans geste ni case ouverte ; jamais le jet, jamais l'onglet ; sa poignée ; la feuille le place", () => {
+test("bulle — sur un téléphone, le volet (contrat de la vague 3, § 4.2) : la liste, puis le geste ; « Fiche » dans son en-tête ; jamais l'onglet ; sa poignée ; la feuille le place ; une case ouverte le cache", () => {
   avecLaBulle(
     (monte) => {
       const { noeud, onglet } = monte;
@@ -439,26 +481,104 @@ test("bulle — sur un téléphone, le volet : la liste d'une action, sans geste
       assert.equal(noeud.className, "combat-bulle", "ni flèche ni largeur de jet");
       assert.deepEqual(noeud.style.ecritures, [], "la feuille place le volet : aucune écriture");
       assert.equal(laLigne(noeud, "0:0").getAttribute("data-focus"), "ligne:0:0");
+      // La liste, au téléphone : le fil et la consigne en tête.
+      assert.deepEqual(monte.defile.children.slice(0, 2).map(forme), ["ol.combat-fil", "p.combat-consigne"]);
+      // « Fiche » dans l'en-tête : la fiche de qui joue.
+      const tete = noeud.querySelector(".combat-bulle-tete");
+      assert.deepEqual(tete.children.map(forme), ["h2.combat-bulle-titre", "p.combat-bulle-sous", "button.bouton secondaire"]);
+      const fiche = leBouton(tete, "Fiche");
+      assert.equal(fiche.hidden, false);
+      fiche.click();
+      assert.deepEqual(monte.appels, [{ ouvrirFiches: "pj1" }]);
 
-      // Avec un geste, le jet se joue sous la carte : le volet se ferme.
-      assert.deepEqual(monte.afficher(vueJet()), { montree: false, ouverture: false });
-      assert.equal(noeud.hidden, true);
+      // Avec un geste, le volet le porte, pas à pas : une ouverture, l'étape de la vue.
+      assert.deepEqual(monte.afficher(vueJet()), { montree: true, ouverture: true });
+      assert.equal(noeud.hidden, false);
+      assert.equal(texteDe(monte.defile.querySelector("ol.combat-fil li.en-cours")), "› 3 · Dés");
+      assert.equal(monte.defile.querySelector("ol.combat-etapes"), null, "ni les six étapes du PC");
+      assert.equal(texteDe(monte.defile.querySelector(".combat-de.echoue .combat-de-titre")), "2e dé");
+      assert.equal(leFermer(monte).textContent, REDUIRE);
+      assert.equal(fiche.hidden, false);
       assert.equal(onglet.hidden, true, "jamais d'onglet sur un téléphone");
-      assert.equal(monte.echap(), null);
-      // « +k » : la liste d'une case reste dans la zone.
+      assert.equal(monte.echap(), "reduite");
+      assert.equal(onglet.hidden, true);
+      // « +k » : la liste d'une case reste dans la zone ; le volet se cache.
       assert.deepEqual(monte.afficher(vueListe(), { caseOuverte: "D4" }), { montree: false, ouverture: false });
       assert.deepEqual(monte.afficher(vueListe()), { montree: true, ouverture: true });
       monte.replacer();
       monte.ecoutes.find(([type]) => type === "resize")[1]();
       assert.deepEqual(noeud.style.ecritures, [], "ni à l'ouverture, ni sur resize");
+      // La préparation : rien.
+      assert.deepEqual(monte.afficher(PREPARATION), { montree: false, ouverture: false });
     },
     { etroit: true },
   );
-  // Sur un ordinateur, pas de poignée.
+  // Sur un ordinateur, ni poignée, ni « Fiche ».
   avecLaBulle((monte) => {
     monte.afficher(vueListe());
     assert.deepEqual(monte.noeud.children.map((n) => n.className), ["combat-bulle-tete", "combat-bulle-defile", "combat-infobulles", "combat-bulle-fermer"]);
+    assert.deepEqual(monte.noeud.querySelector(".combat-bulle-tete").children.map(forme), ["h2.combat-bulle-titre", "p.combat-bulle-sous"]);
+    assert.equal(monte.defile.querySelector(".combat-fil"), null);
   });
+});
+
+test("bulle — au téléphone, le volet au repos (maquette A1, A7) : qui joue, « Fiches », « Journal » ou « Fin de tour », « Annuler le dernier geste », chacun par son action ; la fin du combat ; rien à fermer", () => {
+  avecLaBulle(
+    (monte) => {
+      const { noeud } = monte;
+      // Le tour des PJ : « À qui le tour ? ».
+      assert.deepEqual(monte.afficher(QUI_JOUE), { montree: true, ouverture: true });
+      const titre = noeud.querySelector(".combat-bulle-titre");
+      const sous = noeud.querySelector(".combat-bulle-sous");
+      assert.deepEqual([texteDe(titre), texteDe(sous)], ["À qui le tour ?", "Touchez une vignette, ou un jeton sur la carte."]);
+      assert.equal(noeud.getAttribute("aria-label"), "À qui le tour ?", "le dialogue se nomme par son titre");
+      assert.equal(leFermer(monte).hidden, true, "rien à fermer");
+      assert.equal(noeud.querySelector(".combat-bulle-tete button").hidden, true, "ni « Fiche »");
+      const repos = monte.defile.querySelector(".combat-repos");
+      memesNoeuds(monte.defile.children, [repos], "ce qui défile");
+      assert.deepEqual(tous(repos, "button").map((b) => [texteDe(b), b.className]), [["Fiches", "bouton secondaire"], ["Journal", "bouton secondaire"], ["Annuler le dernier geste", "bouton secondaire"]]);
+      for (const nom of ["Fiches", "Journal", "Annuler le dernier geste"]) leBouton(repos, nom).click();
+      assert.deepEqual(monte.appels, [{ ouvrirFiches: null }, { ouvrirJournal: true }, { demanderLAnnulation: true }], "l'écran pose la question de l'annulation");
+      assert.equal(monte.echap(), null, "Échap n'y ferme rien");
+      assert.equal(monte.focaliser(), true);
+      memeNoeud(dernierFocus().noeud, titre, "le focus, au titre");
+
+      // Rien à annuler : inactif, sa raison liée ; il ne fait rien.
+      monte.appels.length = 0;
+      monte.afficher(QUI_JOUE, { repos: { ...REPOS, annuler: { ...REPOS.annuler, actif: false, raison: "Aucun geste à annuler." } } });
+      const annuler = leBouton(noeud, "Annuler le dernier geste");
+      assert.equal(annuler.getAttribute("aria-disabled"), "true");
+      assert.equal(texteDe(noeud.querySelector(`#${annuler.getAttribute("aria-describedby")}`)), "Aucun geste à annuler.");
+      annuler.click();
+      assert.deepEqual(monte.appels, []);
+
+      // Le tour adverse : « Le MJ joue ses adversaires. », « Fin de tour » en principal, sans « Journal ».
+      monte.afficher({ ...QUI_JOUE, camp: "adv" });
+      assert.deepEqual([texteDe(titre), texteDe(sous)], ["Le MJ joue ses adversaires.", "Touchez une vignette, ou « Fin de tour » quand tous ont joué."]);
+      assert.deepEqual(tous(noeud, ".combat-repos button").map((b) => [texteDe(b), b.className]), [["Fiches", "bouton secondaire"], ["Fin de tour", "bouton"], ["Annuler le dernier geste", "bouton secondaire"]]);
+      leBouton(noeud, "Fin de tour").click();
+      assert.deepEqual(monte.appels, [{ finDeTour: true }]);
+      monte.afficher({ ...QUI_JOUE, camp: "adv" }, { repos: { ...REPOS, finDeTour: { actif: false, raison: "Une action est en cours.", commande: null } } });
+      leBouton(noeud, "Fin de tour").click();
+      assert.deepEqual(monte.appels, [{ finDeTour: true }], "inactif, il ne fait rien");
+
+      // La fin du combat : le vainqueur, « Fiches » et « Journal » seuls.
+      monte.afficher({ ...TERMINE, vainqueur: "Combat terminé : victoire des PJ." });
+      assert.equal(texteDe(titre), "Combat terminé : victoire des PJ.");
+      assert.equal(sous.hidden, true);
+      assert.deepEqual(tous(noeud, ".combat-repos button").map(texteDe), ["Fiches", "Journal"]);
+
+      // Le geste fini, depuis le volet : le repos revient, et le focus va au jeton de qui jouait.
+      monte.afficher(vueListe());
+      assert.equal(leFermer(monte).hidden, false);
+      monte.ensuite = () => QUI_JOUE;
+      leBouton(noeud, "Passer son tour").click();
+      assert.equal(noeud.hidden, false);
+      assert.equal(texteDe(titre), "À qui le tour ?");
+      assert.deepEqual(monte.jetons, ["pj1"]);
+    },
+    { etroit: true },
+  );
 });
 
 test("bulle — l'onglet : la bulle réduite après le premier dé, « Taloche [1] : rouvrir » ; réduite tant que la vue dit « reduire », elle revient avec le geste qui suit ; oublier() la rouvre", () => {
@@ -574,7 +694,7 @@ test("bulle — après le premier dé, « – », Échap et le clic au-dehors r�
     assert.equal(onglet.hidden, false);
     assert.deepEqual(monte.jetons, ["pj1"]);
     // L'onglet, contre la case : l'écart de la flèche, sa pointe à 22 px.
-    assert.deepEqual(proprietes(onglet), { "--bulle-gauche": "136px", "--bulle-haut": "92px", "--bulle-fleche": "22px" });
+    assert.deepEqual(proprietes(onglet), { "--bulle-gauche": "136px", "--bulle-haut": "92px", "--bulle-fleche": "22px", "--bulle-hauteur": "682px" });
 
     // Il rouvre, replace et focalise.
     const placees = noeud.style.ecritures.length;
@@ -583,7 +703,7 @@ test("bulle — après le premier dé, « – », Échap et le clic au-dehors r�
     assert.equal(globalThis.document.focalisations.length, focusAvant + 1, "un focus, par l'onglet");
     assert.equal(noeud.hidden, false);
     assert.equal(onglet.hidden, true);
-    assert.equal(noeud.style.ecritures.length, placees + 3, "replacée");
+    assert.equal(noeud.style.ecritures.length, placees + 4, "replacée : quatre propriétés");
     assert.equal(dernierFocus().noeud.textContent, "Relancer le 2e dé");
     assert.deepEqual(dernierFocus().options, { preventScroll: true });
 
@@ -778,25 +898,25 @@ test("bulle — le placement : contre la case, à droite en laissant libre la co
     monte.afficher(vueListe());
     // x = droite de la case (148) + un côté de case (48) + FLECHE ; y = milieu (124) − 60.
     assert.equal(FLECHE, 8);
-    assert.deepEqual(proprietes(noeud), { "--bulle-gauche": "184px", "--bulle-haut": "54px", "--bulle-fleche": "60px" });
-    assert.deepEqual(noeud.style.ecritures.map(([nom]) => nom), ["--bulle-gauche", "--bulle-haut", "--bulle-fleche"]);
+    assert.deepEqual(proprietes(noeud), { "--bulle-gauche": "184px", "--bulle-haut": "54px", "--bulle-fleche": "60px", "--bulle-hauteur": "720px" });
+    assert.deepEqual(noeud.style.ecritures.map(([nom]) => nom), ["--bulle-gauche", "--bulle-haut", "--bulle-fleche", "--bulle-hauteur"]);
     assert.equal(noeud.className, "combat-bulle combat-bulle-droite");
 
     // Au milieu de la carte, les deux côtés tiennent : à droite d'abord.
     monte.caseActive.rectangle = { left: 600, top: 100, width: 48, height: 48 };
     monte.replacer();
-    assert.deepEqual(proprietes(noeud), { "--bulle-gauche": "684px", "--bulle-haut": "54px", "--bulle-fleche": "60px" });
+    assert.deepEqual(proprietes(noeud), { "--bulle-gauche": "684px", "--bulle-haut": "54px", "--bulle-fleche": "60px", "--bulle-hauteur": "720px" });
     assert.equal(noeud.className, "combat-bulle combat-bulle-droite");
 
     // Une case plus large : l'écart suit son côté.
     monte.caseActive.rectangle = { left: 100, top: 100, width: 64, height: 64 };
     monte.replacer();
-    assert.deepEqual(proprietes(noeud), { "--bulle-gauche": "216px", "--bulle-haut": "62px", "--bulle-fleche": "60px" });
+    assert.deepEqual(proprietes(noeud), { "--bulle-gauche": "216px", "--bulle-haut": "62px", "--bulle-fleche": "60px", "--bulle-hauteur": "712px" });
 
     // La case au bord droit de la fenêtre : à gauche.
     monte.caseActive.rectangle = { left: 1100, top: 100, width: 48, height: 48 };
     monte.replacer();
-    assert.deepEqual(proprietes(noeud), { "--bulle-gauche": "704px", "--bulle-haut": "54px", "--bulle-fleche": "60px" });
+    assert.deepEqual(proprietes(noeud), { "--bulle-gauche": "704px", "--bulle-haut": "54px", "--bulle-fleche": "60px", "--bulle-hauteur": "720px" });
     assert.equal(noeud.className, "combat-bulle combat-bulle-gauche");
 
     // Le jet garde sa largeur et son côté.
@@ -825,37 +945,37 @@ test("bulle — le placement aux seuls moments du § 9.3 : à l'ouverture, au ch
   avecLaBulle((monte) => {
     const ecritures = () => monte.noeud.style.ecritures.length;
     assert.deepEqual(monte.afficher(vueJet()), { montree: true, ouverture: true });
-    assert.equal(ecritures(), 3, "à l'ouverture");
+    assert.equal(ecritures(), 4, "à l'ouverture : quatre propriétés");
     // Des dés : le corps se refait, la bulle ne bouge pas.
     for (const pas of [13, 14, 15]) {
       assert.deepEqual(monte.afficher(vueJet({ annonce: { pas, texte: `${pas}` }, geste: gesteVu({ bilan: `Bilan ${pas}.` }) })), { montree: true, ouverture: false });
     }
     assert.deepEqual(monte.afficher(vueJet({ geste: gesteVu({ bilan: "Bilan 15." }) })), { montree: true, ouverture: false }, "un rendu égal");
-    assert.equal(ecritures(), 3, "jamais à un dé");
+    assert.equal(ecritures(), 4, "jamais à un dé");
     // Le geste fini : la liste, un autre genre de contenu.
     assert.equal(monte.afficher(vueListe()).ouverture, true);
-    assert.equal(ecritures(), 6);
+    assert.equal(ecritures(), 8);
     assert.equal(monte.afficher(vueListe({ focus: null })).ouverture, false);
     // Un autre protagoniste.
     assert.equal(monte.afficher(vueDuChef()).ouverture, true);
-    assert.equal(ecritures(), 9);
+    assert.equal(ecritures(), 12);
 
     // La fenêtre change de taille : un seul écouteur, de taille ; aucun de défilement.
     assert.deepEqual(monte.ecoutes.map(([type]) => type), ["resize"]);
     const surLaTaille = monte.ecoutes[0][1];
     surLaTaille();
-    assert.equal(ecritures(), 12, "sur resize");
+    assert.equal(ecritures(), 16, "sur resize");
     assert.deepEqual(monte.rafraichis, [], "la largeur n'a pas changé : l'écran ne se refait pas");
     globalThis.document.documentElement.clientWidth = 900;
     surLaTaille();
     assert.deepEqual(monte.rafraichis, [true], "la largeur a changé : l'écran se refait (le téléphone se juge à la largeur)");
-    assert.equal(ecritures(), 15);
+    assert.equal(ecritures(), 20);
     surLaTaille();
     assert.deepEqual(monte.rafraichis, [true]);
     // Cachée : rien ne se place.
     monte.afficher(QUI_JOUE);
     surLaTaille();
-    assert.equal(ecritures(), 18);
+    assert.equal(ecritures(), 24);
     assert.deepEqual(monte.ecoutes.map(([type]) => type), ["resize"]);
   });
 });
@@ -962,10 +1082,10 @@ test("infobulle — ouverte au survol (pas au doigt) et au focus, une seule à l
     a.declencher("pointerenter", { pointerType: "mouse" });
     assert.equal(ia.hidden, false);
     assert.deepEqual(hachures, [["A1", "A2"]]);
-    assert.deepEqual(ia.style.ecritures.map(([nom]) => nom), ["--bulle-gauche", "--bulle-haut", "--bulle-fleche"], "placée à son ouverture");
+    assert.deepEqual(ia.style.ecritures.map(([nom]) => nom), ["--bulle-gauche", "--bulle-haut", "--bulle-fleche", "--bulle-hauteur"], "placée à son ouverture");
     assert.match(ia.className, /^combat-infobulle combat-infobulle-(droite|gauche|dessous)$/);
     a.declencher("pointerenter", { pointerType: "mouse" });
-    assert.equal(ia.style.ecritures.length, 3, "déjà ouverte, elle ne se replace pas");
+    assert.equal(ia.style.ecritures.length, 4, "déjà ouverte, elle ne se replace pas");
 
     // Une seule à la fois : le focus sur un passif ferme celle de la ligne.
     b.declencher("focus");
@@ -1083,7 +1203,7 @@ test("infobulle — sa place : une ligne s'accroche aux bords de la bulle et à 
     info.rectangle = { width: 288, height: 120 };
     bouton.declencher("pointerenter", { pointerType: "mouse" });
     // x = bord droit de la bulle (524) + FLECHE ; y = milieu de la ligne (168) − 14 ; relatifs à la bulle (204, 64).
-    assert.deepEqual(proprietes(info), { "--bulle-gauche": "328px", "--bulle-haut": "90px", "--bulle-fleche": "14px" });
+    assert.deepEqual(proprietes(info), { "--bulle-gauche": "328px", "--bulle-haut": "90px", "--bulle-fleche": "14px", "--bulle-hauteur": "630px" });
     assert.equal(info.className, "combat-infobulle combat-infobulle-droite");
   });
   // La bulle à gauche de sa case : l'infobulle à gauche, même si la droite tiendrait.
@@ -1094,7 +1214,7 @@ test("infobulle — sa place : une ligne s'accroche aux bords de la bulle et à 
       const [info] = couche.children;
       info.rectangle = { width: 288, height: 120 };
       bouton.declencher("focus");
-      assert.deepEqual(proprietes(info), { "--bulle-gauche": "-296px", "--bulle-haut": "90px", "--bulle-fleche": "14px" });
+      assert.deepEqual(proprietes(info), { "--bulle-gauche": "-296px", "--bulle-haut": "90px", "--bulle-fleche": "14px", "--bulle-hauteur": "630px" });
       assert.equal(info.className, "combat-infobulle combat-infobulle-gauche");
     },
     { classe: "combat-bulle combat-bulle-gauche", rectangle: { ...BULLE, left: 400 } },
@@ -1132,7 +1252,7 @@ test("infobulle — sa place : une ligne s'accroche aux bords de la bulle et à 
       info.rectangle = { width: 288, height: 120 };
       nombre.declencher("pointerenter", { pointerType: "mouse" });
       // x = milieu du nombre (330) − 14 ; y = son bas (324) + FLECHE ; relatifs à la zone (204, 64).
-      assert.deepEqual(proprietes(info), { "--bulle-gauche": "112px", "--bulle-haut": "268px", "--bulle-fleche": "14px" });
+      assert.deepEqual(proprietes(info), { "--bulle-gauche": "112px", "--bulle-haut": "268px", "--bulle-fleche": "14px", "--bulle-hauteur": "452px" });
       assert.equal(info.className, "combat-infobulle combat-infobulle-dessous");
       const bas = declencheur({ left: 300, top: 700, width: 60, height: 24 });
       infobulles.lier(bas, { contenu: contenu("1 désavantage"), cotes: ["dessous", "dessus"] });
@@ -1221,9 +1341,22 @@ test("bulle — le contexte du contenu : origine « bulle », l'origine de la ci
       assert.equal(typeof entree.lier, "function");
       assert.ok(entree.cles instanceof Map);
       assert.deepEqual(Object.keys(entree.memoire).sort(), ["apercu", "causesOuvertes", "reglagesOuverts"]);
-      assert.deepEqual(Object.keys(entree.actions).sort(), ["executer", "hachurer", "lancerLeDe", "montrer"]);
+      assert.deepEqual(Object.keys(entree.actions).sort(), ["executer", "hachurer", "lancerLeDe", "montrer", "ouvrirPalette", "passerAuxDes"]);
+      // Le contexte de la vague 3 (contrat, § 4.2) : sur PC, ni étape montrée ; le Mode MJ et la palette ouverte de l'écran.
+      assert.deepEqual([entree.etroit, entree.modeMj, entree.palette, entree.etapeVue], [false, false, null, null]);
       assert.equal(r.pose, true, "la commande qui attend a été marquée");
       assert.equal(texteDe(monte.noeud.querySelector(".combat-origine")), "choisie sur la carte");
+      // Le Mode MJ et la palette ouverte passent au contenu, et le refont.
+      const palette = { onglets: [] };
+      monte.afficher(vueJet(), { origineDeLaCible: "plateau", modeMj: true, vuePalette: palette });
+      const refait = monte.contextes.at(-1).entree;
+      assert.deepEqual([refait.modeMj, refait.etapeVue], [true, null]);
+      assert.ok(refait.palette === palette, "la vue de la palette ouverte, telle quelle");
+      // Un passif, « Appliquer l'effet de… », « Palette » : le contenu ouvre la palette par l'écran.
+      monte.contextes.at(-1).r.actions.ouvrirPalette({ genre: "capacite", qui: "pj1", capacite: 7 }, monte.noeud, { libre: true });
+      assert.deepEqual(monte.appels.at(-1).ouvrirPalette, { genre: "capacite", qui: "pj1", capacite: 7 });
+      // « Palette » l'ouvre libre : la bulle passe ce troisième argument à l'écran, tel quel.
+      assert.deepEqual(monte.appels.at(-1).options, { libre: true });
 
       // La même vue, la cible choisie ici : le corps se refait.
       monte.afficher(vueJet(), { origineDeLaCible: "bulle" });
@@ -1285,7 +1418,7 @@ test("bulle — la mémoire du contenu (aperçu, réglages, causes) tient le tem
     monte.oublier();
     monte.afficher(vueListe());
     memeNoeud(apercu(), null, "l'aperçu oublié");
-  });
+  }, { modeMj: true });
 });
 
 test("bulle — un réglage qui ne fait pas avancer le geste garde le focus ; parti du corps refait, le focus va à la commande qui attend ; refusé, rien ne passe au rendu suivant", () => {
@@ -1321,7 +1454,7 @@ test("bulle — un réglage qui ne fait pas avancer le geste garde le focus ; pa
   });
 });
 
-test("bulle — le geste fini : la liste revient, le focus à la première ligne active ; « Qui joue ? » : la bulle se cache et le focus va au jeton ; sur un téléphone, « Jouer » ferme le volet sans toucher au jeton", () => {
+test("bulle — le geste fini : la liste revient, le focus à la première ligne active ; « Qui joue ? » : la bulle se cache et le focus va au jeton ; sur un téléphone, « Jouer » mène le volet au geste, sans toucher au jeton", () => {
   avecLaBulle((monte) => {
     const { noeud } = monte;
     const appliquer = { evenement: { type: "appliquer" } };
@@ -1359,14 +1492,17 @@ test("bulle — le geste fini : la liste revient, le focus à la première ligne
       assert.deepEqual(monte.appels, [], "le premier appui ouvre l'aperçu");
       leBouton(noeud, "Jouer Taloche [1]").click();
       assert.deepEqual(monte.appels, [{ commande: capacite(15, 0), origine: "bulle" }]);
-      assert.equal(noeud.hidden, true, "le jet se joue sous la carte");
-      assert.equal(monte.hachures.at(-1), null, "les hachures de l'aperçu partent avec le volet");
+      assert.equal(noeud.hidden, false, "le geste se joue dans le volet");
+      assert.notEqual(monte.defile.querySelector(".combat-fil"), null);
+      assert.equal(monte.hachures.at(-1), null, "les hachures de l'aperçu partent avec la liste");
+      assert.equal(dernierFocus().noeud.getAttribute("data-focus"), "choix:relancer", "une ouverture : le focus à la commande qui attend");
       assert.deepEqual(monte.jetons, []);
-      // ✕ du volet : « Qui joue ? », le focus au jeton.
+      // ✕ du volet : « Qui joue ? », le repos ; le focus au jeton.
       monte.afficher(vueListe());
       monte.ensuite = () => QUI_JOUE;
       leFermer(monte).click();
       assert.deepEqual(monte.jetons, ["pj1"]);
+      assert.notEqual(monte.defile.querySelector(".combat-repos"), null);
     },
     { etroit: true },
   );
@@ -1386,7 +1522,7 @@ test("bulle — l'infobulle d'une ligne : survol, hachures, tenue 300 ms, côté
       frappe.declencher("pointerenter", { pointerType: "mouse" });
       assert.equal(info.hidden, false);
       assert.deepEqual(monte.hachures.at(-1), ["A1", "A2", "B1", "B2"]);
-      assert.deepEqual(proprietes(info), { "--bulle-gauche": "328px", "--bulle-haut": "90px", "--bulle-fleche": "14px" });
+      assert.deepEqual(proprietes(info), { "--bulle-gauche": "328px", "--bulle-haut": "90px", "--bulle-fleche": "14px", "--bulle-hauteur": "630px" });
       assert.equal(info.className, "combat-infobulle combat-infobulle-droite");
       frappe.declencher("pointerleave", { pointerType: "mouse" });
       mock.timers.tick(299);
@@ -1542,6 +1678,133 @@ test("bulle — ce qui défile en elle repart du haut à chaque ouverture (✕ p
       globalThis.document.createElement = creerAvant;
     }
   });
+});
+
+// ——— g) La vague 3 : la bulle bornée, la palette en colonne, le volet pas à pas ———
+
+test("bulle — bornée sous le bandeau (mission, § 6, point 10) : le plafond que l'écran donne, nombre ou fonction, la garde sous lui ; sa plus grande hauteur va jusqu'au bas de la fenêtre", () => {
+  avecLaBulle((monte) => {
+    const { noeud } = monte;
+    // Sans plafond : la marge ; de 64 px au bas de la fenêtre, marge ôtée.
+    monte.afficher(vueListe());
+    assert.deepEqual(proprietes(noeud), { "--bulle-gauche": "184px", "--bulle-haut": "54px", "--bulle-fleche": "60px", "--bulle-hauteur": "720px" });
+    // Sous un bandeau qui finit à 120 px : collée sous lui, la flèche au plus près de la case.
+    monte.afficher(vueJet(), { plafond: 120 });
+    assert.deepEqual(proprietes(noeud), { "--bulle-gauche": "184px", "--bulle-haut": "110px", "--bulle-fleche": "12px", "--bulle-hauteur": "664px" });
+    // Une fonction : lue au moment de placer, sur resize aussi.
+    let bas = 200;
+    monte.afficher(vueListe(), { plafond: () => bas });
+    assert.equal(proprietes(noeud)["--bulle-haut"], "190px");
+    bas = 300;
+    monte.ecoutes.find(([type]) => type === "resize")[1]();
+    assert.deepEqual(proprietes(noeud), { "--bulle-gauche": "184px", "--bulle-haut": "290px", "--bulle-fleche": "12px", "--bulle-hauteur": "484px" });
+    // L'onglet de la bulle réduite ne s'y borne pas : il reste contre la case.
+    monte.afficher(vueJet(), { plafond: 300 });
+    monte.echap();
+    assert.equal(proprietes(monte.onglet)["--bulle-haut"], "92px");
+  });
+});
+
+test("bulle — sur PC, la palette en colonne : posée après ce qui défile, la croix toujours en dernier, la bulle élargie (combat-bulle-large) ; ôtée quand l'écran ne la donne plus, cachée avec la bulle ; jamais au téléphone", () => {
+  avecLaBulle((monte) => {
+    const { noeud, defile } = monte;
+    const palette = globalThis.document.createElement("section");
+    palette.className = "combat-palette";
+    monte.afficher(vueJet(), { palette });
+    assert.deepEqual(noeud.children.map((n) => n.className), ["combat-bulle-tete", "combat-bulle-defile", "combat-palette", "combat-infobulles", "combat-bulle-fermer"]);
+    memeNoeud(noeud.children[2], palette, "la palette de l'écran, telle quelle");
+    assert.deepEqual(classesDe(noeud), ["combat-bulle", "combat-bulle-jet", "combat-bulle-large", "combat-bulle-droite"]);
+    memeNoeud(defile.querySelector(".combat-palette"), null, "hors de ce qui défile");
+    // Un dé, la palette toujours là : elle n'est pas reposée.
+    monte.afficher(vueJet({ annonce: { pas: 13, texte: "3e dé : 7, réussi." } }), { palette });
+    memeNoeud(noeud.children[2], palette);
+    // L'écran ne la donne plus (« Fermer », ou un effet appliqué hors Mode MJ) : ôtée, la bulle reprend sa largeur.
+    monte.afficher(vueJet(), { palette: null });
+    assert.deepEqual(noeud.children.map((n) => n.className), ["combat-bulle-tete", "combat-bulle-defile", "combat-infobulles", "combat-bulle-fermer"]);
+    memeNoeud(palette.parentNode, null, "elle a quitté la bulle");
+    assert.equal(classesDe(noeud).includes("combat-bulle-large"), false);
+    // La bulle cachée (« Qui joue ? ») : la palette part avec elle.
+    monte.afficher(vueJet(), { palette });
+    monte.afficher(QUI_JOUE, { palette });
+    memeNoeud(palette.parentNode, null);
+  });
+  avecLaBulle(
+    (monte) => {
+      const palette = globalThis.document.createElement("section");
+      monte.afficher(vueJet(), { palette });
+      memeNoeud(palette.parentNode, null, "au téléphone, la palette est une feuille que l'écran pose");
+      assert.equal(classesDe(monte.noeud).includes("combat-bulle-large"), false);
+    },
+    { etroit: true },
+  );
+});
+
+test("bulle — au téléphone, l'étape montrée est celle de la vue ; « Un jet par cible » mène le volet aux dés sans rien émettre, jusqu'à ce que la vue y vienne ; un autre geste, ou oublier(), l'efface", () => {
+  avecLaBulle(
+    (monte) => {
+      const { noeud, defile } = monte;
+      const centree = (champs = {}) =>
+        vueAvantLeDe({
+          etape: 1,
+          fil: filDeLAttaque(1),
+          consigne: "Toute la case D4 : qui est visé ?",
+          geste: gesteVu({ chaine: [], bilan: null, lettres: [], choix: [], dernierDe: null, aLancer: { faces: 8, combien: 1, libelle: "d8", motif: "jet" }, jetsParCible: { libelle: "Un jet par cible : 2 cibles" } }),
+          focus: "de",
+          ...champs,
+        });
+      monte.afficher(centree());
+      assert.equal(monte.contextes.at(-1).entree.etapeVue, 1);
+      assert.equal(texteDe(defile.querySelector(".combat-consigne")), "Toute la case D4 : qui est visé ?");
+      assert.equal(defile.querySelector(".combat-chaine"), null, "les dés sont à l'étape 2");
+      const jets = leBouton(defile, "Un jet par cible");
+      jets.focus({ preventScroll: true });
+      jets.click();
+      assert.deepEqual(monte.appels, [], "rien n'est émis");
+      assert.equal(monte.contextes.at(-1).entree.etapeVue, 2);
+      assert.equal(defile.querySelector(".combat-cibles"), null);
+      assert.equal(defile.querySelector(".combat-consigne"), null, "la consigne est celle de l'étape 1");
+      const de = defile.querySelector("[data-focus=de]");
+      assert.equal(texteDe(de.querySelector(".combat-de-detail")), "touchez");
+      memeNoeud(dernierFocus().noeud, de, "le focus, au dé qui attend");
+      // Un rendu de plus, la vue toujours à l'étape 1 : les dés restent.
+      monte.afficher(centree({ annonce: { pas: 5, texte: "…" } }));
+      assert.notEqual(defile.querySelector(".combat-chaine"), null);
+      // Le premier dé : la vue vient à l'étape 2 d'elle-même ; revenue à 1 (« Revenir »), l'étape forcée est oubliée.
+      monte.afficher(centree({ etape: 2 }));
+      monte.afficher(centree());
+      assert.notEqual(defile.querySelector(".combat-cibles"), null);
+      // Forcée, puis oubliée par oublier() (« Annuler le geste »).
+      leBouton(defile, "Un jet par cible").click();
+      monte.oublier();
+      monte.afficher(centree());
+      assert.notEqual(defile.querySelector(".combat-cibles"), null);
+      assert.equal(noeud.hidden, false);
+    },
+    { etroit: true, espion: true, focusFidele: false },
+  );
+  // Sur PC, « Un jet par cible » n'est qu'une phrase : tout se montre ensemble.
+  avecLaBulle((monte) => {
+    monte.afficher(vueAvantLeDe({ etape: 1, geste: gesteVu({ chaine: [], bilan: null, lettres: [], choix: [], jetsParCible: { libelle: "Un jet par cible : 2 cibles" } }) }));
+    assert.equal(boutons(monte.noeud, "Un jet par cible").length, 0);
+    assert.equal(texteDe(monte.noeud.querySelector("p.combat-jets-par-cible")), "Un jet par cible : 2 cibles");
+  });
+});
+
+test("bulle — le Mode MJ passe au contenu : sans lui, ni réglages à la main, ni « Palette » ; avec lui, les deux ; le changer refait le corps", () => {
+  avecLaBulle(
+    (monte) => {
+      const { defile } = monte;
+      const vue = vueAvantLeDe({ etape: 2, geste: gesteVu({ chaine: [], bilan: null, lettres: [], choix: [], contexte: { ...gesteVu().contexte, reglages: REGLAGES } }) });
+      monte.afficher(vue);
+      assert.equal(defile.querySelector(".combat-reglages"), null);
+      assert.equal(boutons(defile, "Palette").length, 0);
+      monte.afficher(vue, { modeMj: true });
+      assert.notEqual(defile.querySelector(".combat-reglages"), null);
+      leBouton(defile, "Palette").click();
+      assert.deepEqual(monte.appels.at(-1).ouvrirPalette, { genre: "capacite", qui: "pj1", capacite: 15 });
+    },
+    { etroit: true },
+  );
 });
 
 // ——— f) Le module ———

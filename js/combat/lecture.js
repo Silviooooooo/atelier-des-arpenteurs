@@ -71,15 +71,27 @@
 // - « Ajusté à » la valeur calculée ne fait aucun événement, ou défait
 //   l'ajustement d'avant (mission du lot, § 6) ;
 // - la palette et le menu du MJ ne se montrent pas encore.
+//
+// À la vague 3 (contrat de la vague, § 3.1 à § 3.5), les vues de l'écran :
+// - la barre dit l'état court du téléphone, le camp, et « Intervenir… » ;
+// - la bulle porte le volet du téléphone (l'étape, le fil, la consigne) et
+//   les étapes neuves du geste : les interventions, la contre-attaque, le
+//   critique, les passifs non câblés, « Appliquer l'effet de… », la palette,
+//   plusieurs cibles, ce que la blessure a fait ; « Touchez » au doigt ;
+// - la fiche et le jeton disent qui a tout joué, les états portés (une
+//   pastille, des étiquettes) et « Modifier… » ;
+// - les vignettes du téléphone, et le dé en surimpression ;
+// - ce que seul le Mode MJ montre porte « mj: true » : aucune vue ne lit le
+//   Mode MJ, l'écran cache ce qu'il ne montre pas.
 
 import { CARACTERISTIQUES, deDuJet } from "../personnage/regles.js";
 import { circonstances, modificateursDe, passifsDe, sourcesSansCible } from "./circonstances.js";
 import { coupsDuGeste, degatsFixes, frapper, lettreDe, lettreDuGeste, localisationsDuGeste, victimeDe } from "./degats.js";
-import { refusDeLaBlessure } from "./effets.js";
-import { evaluerEssai, modificateurDe, netDe, ouvrirJet, relancesRestantes, reussites } from "./jet.js";
-import { ecrireBilan, ecrireSource, ligneDeFin, ligneEnCours, nommerLeGeste } from "./journal.js";
-import { acteurCourant, annulation, boutons, candidats, cibles, esquiveOfferte, faconDeLArrivee, modeDeLaFacon, offre } from "./offre.js";
-import { casesEntre } from "./plateau.js";
+import { faconTenue, jugerEffet, jugerMj, passifDe, refusDeLaBlessure } from "./effets.js";
+import { evaluerEssai, lancerDe, modificateurDe, netDe, ouvrirJet, relancesRestantes, reussites } from "./jet.js";
+import { deNom, ecrireBilan, ecrireDuree, ecrireSource, ligneDeFin, ligneEnCours, nommerLeGeste } from "./journal.js";
+import { acteurCourant, annulation, boutons, candidats, cibles, esquiveOfferte, faconDeLArrivee, modeDeLaFacon, offre, prixDeLEsquive } from "./offre.js";
+import { casesEntre, distance } from "./plateau.js";
 import { ajouterAdversaires, ajouterPersonnage, peutLancer } from "./preparation.js";
 import {
   BORNES_EFFET,
@@ -94,7 +106,22 @@ import {
   SIGNES,
   ecrireEnMilliers,
 } from "./regles.js";
-import { aJoue, attaqueDe, campDe, capaciteDe, courantDe, defenseDe, faconDe, gesteEnCours, photoDe } from "./valeurs.js";
+import {
+  aJoue,
+  attaqueDe,
+  campDe,
+  capaciteDe,
+  courantDe,
+  defenseDe,
+  effetsDurablesDe,
+  faconDe,
+  gardesDe,
+  gesteEnCours,
+  nomDeLaSource,
+  photoDe,
+  vivant,
+  vivantsDe,
+} from "./valeurs.js";
 
 // La palette et le menu du MJ (contrat de la vague 3, § 3.5) vivent dans un
 // module à part, qu'écrit une autre part ; l'écran les lit ici, avec les
@@ -219,6 +246,62 @@ function boutonDAnnulation(etat) {
   };
 }
 
+// ─── Les interventions ──────────────────────────────────────────────────────
+//
+// « Intervenir… » (la barre, entre deux gestes) et l'étape « Interventions »
+// d'une attaque (le panneau) montrent les mêmes intervenants : ceux de
+// l'offre (offre.js, interventions), chacun avec ses options, actives ou non
+// avec leur raison (mission du lot 4.3, § 4.1 ; contrat de la vague 3, § 3.1
+// et § 3.2). L'esquive n'en est jamais : elle garde son événement.
+
+const PERSONNE_N_INTERVIENT = "Personne ne peut intervenir.";
+
+// Une option : « Dressage minute », « Frappe (en guet) » pour une ligne
+// qu'une garde rend jouable ; son texte, son coût (« 1 action · gratuit »),
+// et l'événement qui la joue.
+function optionDIntervention(etat, qui, { capacite, facon, gardee, actif, raison }) {
+  const laCapacite = capaciteDe(etat, qui, capacite);
+  const laFacon = element(laCapacite?.facons, facon);
+  const libelle = laCapacite === null ? "" : libelleDe(laCapacite, laFacon);
+  const cout = coutDeLaLigne(laFacon);
+  return {
+    cle: `intervention:${qui}:${capacite}:${facon}`,
+    libelle: present(gardee) ? `${libelle} (en guet)` : libelle,
+    texte: laFacon?.description ?? "",
+    cout: cout === null ? compter(1, "action") : enLigne(compter(1, "action"), cout),
+    actif,
+    raison,
+    commande: { evenement: { type: "intervenir", qui, capacite, facon } },
+  };
+}
+
+// Un intervenant : son nom entier, ses initiales, sa ligne de dessous (« sous »),
+// puis ses options. « sous » lit son courant et ses options : la barre écrit
+// « 2 actions · Dressage minute », l'étape « 1 action · souffle 5/10 · la
+// cible ».
+function intervenantVu(etat, { qui, options }, sousDe) {
+  const vues = options.map((option) => optionDIntervention(etat, qui, option));
+  return { id: qui, nom: nomEntier(etat, qui), initiales: etat.noms?.[qui]?.initiales ?? "?", sous: sousDe(qui, vues), options: vues };
+}
+
+// Le bouton « Intervenir… » : null hors d'un combat en cours ; dans la barre
+// au tour adverse, dans le menu ⋯ au tour des PJ ; actif entre deux gestes
+// quand quelqu'un du camp qui ne joue pas peut intervenir. Inactif, il ne
+// porte aucun intervenant.
+function boutonIntervenir(etat, offerts) {
+  const place = etat.tour.camp === "adv" ? "barre" : "menu";
+  const geste = gesteEnCours(etat);
+  const intervenants = geste === null ? (offerts.interventions?.intervenants ?? []) : [];
+  const actif = geste === null && offerts.types.includes("intervenir") && intervenants.length > 0;
+  const raison = actif ? null : geste !== null ? ACTION_EN_COURS : PERSONNE_N_INTERVIENT;
+  const sous = (qui, options) => {
+    const courant = courantDe(etat, qui);
+    const actives = options.filter((option) => option.actif).map((option) => option.libelle);
+    return enLigne(compter(courant.actions, "action"), actives.join(", "));
+  };
+  return { libelle: `Intervenir${String.fromCodePoint(0x2026)}`, place, actif, raison, intervenants: actif ? intervenants.map((un) => intervenantVu(etat, un, sous)) : [] };
+}
+
 /**
  * La barre de titre : l'état du combat (« Préparation », « Tour 2 · camp des
  * PJ », « Combat terminé »), la ligne d'aide de la phase, « Fin de tour »,
@@ -226,17 +309,28 @@ function boutonDAnnulation(etat) {
  * dernier geste » (null avant le lancement), et la ligne de la limite des
  * événements (null avant EVENEMENTS_ALERTE). Tous les champs sont dans
  * toutes ses formes.
+ *
+ * À la vague 3 du lot 4.3 (contrat de la vague, § 3.1) : « etatCourt », l'état
+ * que la barre du téléphone écrit (« Tour 2 · PJ », « Tour 2 ·
+ * adversaires ») ; « camp », celui qui joue (null hors d'un combat en
+ * cours) ; « intervenir », le bouton « Intervenir… » et ses intervenants.
  */
 export function vueBarre(etat) {
   const limite = (etat.pas ?? 0) >= EVENEMENTS_ALERTE ? LIMITE_PROCHE : null;
   const annuler = boutonDAnnulation(etat);
-  if (etat.phase === "preparation") return { etat: "Préparation", aide: AIDES.preparation, finDeTour: null, annuler, limite };
-  if (etat.phase !== "combat" || etat.tour === null) return { etat: "Combat terminé", aide: AIDES.termine, finDeTour: null, annuler, limite };
-  const actif = offre(etat).types.includes("fin_de_tour");
+  if (etat.phase === "preparation") return { etat: "Préparation", etatCourt: "Préparation", camp: null, aide: AIDES.preparation, finDeTour: null, intervenir: null, annuler, limite };
+  if (etat.phase !== "combat" || etat.tour === null) {
+    return { etat: "Combat terminé", etatCourt: "Combat terminé", camp: null, aide: AIDES.termine, finDeTour: null, intervenir: null, annuler, limite };
+  }
+  const offerts = offre(etat);
+  const actif = offerts.types.includes("fin_de_tour");
   return {
     etat: `Tour ${etat.tour.numero} ${SIGNES.point} camp des ${CAMPS[etat.tour.camp]}`,
+    etatCourt: `Tour ${etat.tour.numero} ${SIGNES.point} ${CAMPS[etat.tour.camp]}`,
+    camp: etat.tour.camp,
     aide: AIDES[etat.tour.camp],
     finDeTour: { actif, raison: actif ? null : ACTION_EN_COURS, commande: { evenement: { type: "fin_de_tour" } } },
+    intervenir: boutonIntervenir(etat, offerts),
     annuler,
     limite,
   };
@@ -355,6 +449,35 @@ function situationDe(etat, id, acteur) {
 
 const DIT_SUR_LE_JETON = { mort: "mort", joue: "joue", cible: "ciblé", a_joue: "a joué" };
 
+// Ce qu'un vivant du camp qui joue peut encore faire (contrat de la vague 3,
+// § 3.3 ; mission du lot 4.3, § 3, les vignettes et B1) : « peut_agir » tant
+// qu'il est candidat, et pendant son propre geste (celui du bas de la pile),
+// jusqu'à ce que ce geste finisse ; « epuise » quand il a tout joué. null
+// pour tout autre, et hors d'un combat en cours.
+function jeuDe(etat, id, lesCandidats) {
+  if (etat.phase !== "combat" || etat.tour === null || !vivant(etat, id) || campDe(etat, id) !== etat.tour.camp) return null;
+  return lesCandidats.includes(id) || etat.pile?.[0]?.acteur === id ? "peut_agir" : "epuise";
+}
+
+// La pastille d'un protagoniste qui porte un état (mission du lot 4.3, § 4.7) :
+// « blessure » s'il en porte une, sinon « alerte » ; null sans état.
+function pastilleDe(etat, id) {
+  const portes = effetsDurablesDe(etat, id).filter((effet) => effet.genre === "etat");
+  if (portes.length === 0) return null;
+  return portes.some((effet) => effet.blessure === true) ? "blessure" : "alerte";
+}
+
+const LE_GESTE_D_ABORD = "Le geste en cours se finit d'abord.";
+
+// « Modifier… », le menu du MJ d'un protagoniste (mission du lot 4.3, § 4.8) :
+// null pour un mort, un retiré, et hors d'un combat en cours ; inactif
+// pendant un geste. Seul le Mode MJ le montre.
+function menuMjDe(etat, id, offerts) {
+  if (etat.phase !== "combat" || etat.tour === null || !vivant(etat, id)) return null;
+  const actif = offerts.mj === true;
+  return { libelle: `Modifier${String.fromCodePoint(0x2026)}`, actif, raison: actif ? null : LE_GESTE_D_ABORD, mj: true };
+}
+
 // Le nom d'une case d'arrivée possible : le même sur la carte et sur son
 // double, dans la bulle ou sous la carte.
 const nomDArrivee = (nomDeCase) => `Case ${nomDeCase} : s'y déplacer`;
@@ -385,14 +508,21 @@ function commandeDArrivee(etat, geste, nomDeCase) {
  * « inactif ». Après le premier dé, chaque candidat autre que celui qui joue
  * l'est aussi, avec sa raison : « Une action est en cours. ». Avant le
  * lancement, aucun choix : l'écran déplace lui-même les jetons.
+ *
+ * À la vague 3 du lot 4.3 (contrat de la vague, § 3.4), un jeton porte aussi
+ * « epuise » (un vivant du camp qui joue qui a tout joué : il pâlit),
+ * « pastille » (« blessure », « alerte » ou null : l'état qu'il porte) et
+ * « menuMj » (« Modifier… », comme sa fiche).
  */
 export function vuePlateau(etat, choisi) {
   const acteur = acteurCourant(etat, choisi);
   const geste = gesteEnCours(etat);
   const enChoix = choixSurLePlateau(etat);
   const paye = engage(etat, geste);
-  const quiPeutJouer = paye ? [] : candidats(etat);
-  const quiAttend = paye ? candidats(etat).filter((id) => id !== acteur) : [];
+  const lesCandidats = candidats(etat);
+  const quiPeutJouer = paye ? [] : lesCandidats;
+  const quiAttend = paye ? lesCandidats.filter((id) => id !== acteur) : [];
+  const offerts = etat.phase === "combat" ? offre(etat) : null;
 
   const jetons = {};
   const cases = {};
@@ -421,6 +551,9 @@ export function vuePlateau(etat, choisi) {
       choix,
       inactif: (enChoix !== null && choix === null) || attend,
       raison: attend ? ACTION_EN_COURS : null,
+      epuise: jeuDe(etat, id, lesCandidats) === "epuise",
+      pastille: pastilleDe(etat, id),
+      menuMj: offerts === null ? null : menuMjDe(etat, id, offerts),
     };
     laCase(courant.case).jetons.push(id);
   }
@@ -484,6 +617,85 @@ const etatDeLArmure = ({ armure, armureMax }) => (armure <= 0 && armureMax > 0 ?
 const STATUTS = { joue: "joue", cible: "ciblé", a_joue: "a joué" };
 const MARQUES = { joue: "joue", cible: "ciblee", mort: "morte" };
 
+// ─── Les étiquettes des effets durables ─────────────────────────────────────
+//
+// Une étiquette par effet durable porté (etat.effets), dans leur ordre
+// (mission du lot 4.3, § 4.7 ; contrat de la vague 3, § 3.3, D13) : son nom,
+// sa source, sa durée, sa couleur, son texte ; un état seul se retire par le
+// MJ (✕, en Mode MJ) et ouvre la palette à son nom (« Appliquer l'effet
+// de… », dans les deux modes). Le noyau ne retire ni un ±N, ni une garde, ni
+// une attaque en plus : ceux-là n'ont pas de ✕.
+
+const POINTS = String.fromCodePoint(0x2026);
+const VALEURS_D_UN_MODIF = { attaque: "Attaque", defense: "Défense" };
+
+// « Étourdi », « Main brûlée », ou le nom libre d'un état.
+const nomDUnEtat = (effet) => effet.capacite?.nom ?? effet.libre ?? "";
+
+// La façon d'une capacité figée, ou de la ligne qu'une garde garde.
+const descriptionDe = (capacite, facon = null) => {
+  const lue = capacite === null ? null : (element(capacite.facons, facon ?? faconTenue(capacite)) ?? null);
+  return lue?.description ?? "";
+};
+
+// « Appliquer l'effet de Frappe… », « Appliquer l'effet d'Étourdi… ».
+const appliquerLEffetDe = (nom) => `Appliquer l'effet ${deNom(nom)}${POINTS}`;
+
+// Le nom, la couleur et le texte de chaque genre d'effet durable (D13 : vert
+// pour un ±N positif et pour une garde, rouge pour une blessure, la couleur
+// d'alerte pour le reste).
+function lireLEffet(etat, effet) {
+  if (effet.genre === "etat") {
+    return { nom: nomDUnEtat(effet), couleur: effet.blessure === true ? "blessure" : "alerte", texte: effet.capacite ? descriptionDe(effet.capacite) : null };
+  }
+  if (effet.genre === "modif") {
+    return { nom: `${VALEURS_D_UN_MODIF[effet.valeur] ?? ""} ${signer(effet.n)}`, couleur: effet.n > 0 ? "favorable" : "alerte", texte: null };
+  }
+  if (effet.genre === "guet") {
+    const capacite = capaciteDe(etat, effet.porteur, effet.garde?.capacite);
+    const facon = element(capacite?.facons, effet.garde?.facon);
+    return { nom: `en guet : ${capacite === null ? "" : libelleDe(capacite, facon)}`, couleur: "favorable", texte: facon?.description ?? null };
+  }
+  return { nom: "attaque en plus", couleur: "alerte", texte: null };
+}
+
+// La source d'une étiquette (R n° 16) : pour une blessure, le titre du bloc de
+// sa capacité figée ; sinon le nom de la source (« MJ », « Taloche »).
+const sourceDeLEtiquette = (etat, effet) => (effet.genre === "etat" && effet.blessure === true ? (effet.capacite?.groupe?.titre ?? null) : nomDeLaSource(etat, effet.source));
+
+// La durée : celle du journal ; une garde court jusqu'au prochain tour du camp
+// de son porteur, que l'effet porte.
+const dureeDeLEtiquette = (etat, effet) => (effet.genre === "guet" ? ecrireDuree(etat, "tour", null, effet.camp) : ecrireDuree(etat, effet.duree, effet.auteur ?? null, effet.camp ?? null));
+
+function etiquettesDe(etat, id) {
+  return effetsDurablesDe(etat, id).map((effet) => {
+    const { nom, couleur, texte } = lireLEffet(etat, effet);
+    const unEtat = effet.genre === "etat";
+    let retirer = null;
+    if (unEtat) {
+      const verdict = jugerMj(etat, { type: "mj", genre: "etat", qui: id, retrait: effet.id });
+      retirer = {
+        libelle: `Retirer l'état ${nom}`,
+        actif: verdict.ok,
+        raison: verdict.ok ? null : verdict.message,
+        commande: { evenement: { type: "mj", genre: "etat", qui: id, retrait: effet.id } },
+        mj: true,
+      };
+    }
+    return {
+      id: effet.id,
+      genre: effet.genre,
+      nom,
+      source: sourceDeLEtiquette(etat, effet),
+      duree: dureeDeLEtiquette(etat, effet),
+      couleur,
+      texte,
+      retirer,
+      appliquer: unEtat ? { libelle: appliquerLEffetDe(nom), source: { genre: "etat", effet: effet.id } } : null,
+    };
+  });
+}
+
 /**
  * La fiche vivante d'un protagoniste : son en-tête (initiales, nom entier,
  * sous-titre, statut, actions restantes, écrites « actions restantes : 1
@@ -495,6 +707,11 @@ const MARQUES = { joue: "joue", cible: "ciblee", mort: "morte" };
  * cible ou d'arrivée ; celui qui joue n'en a pas. « avant », le champ
  * « Case » et « Retirer » d'avant le lancement. null pour qui n'est pas dans
  * le combat.
+ *
+ * À la vague 3 du lot 4.3 (contrat de la vague, § 3.3) : « jeu » (« peut_agir »,
+ * « epuise », ou null hors du camp qui joue : la couleur de la fiche) ;
+ * « effets », une étiquette par effet durable porté ; « pastille » ;
+ * « menuMj », « Modifier… » (Mode MJ seulement).
  */
 export function vueFiche(etat, id, choisi) {
   const photo = photoDe(etat, id);
@@ -505,6 +722,7 @@ export function vueFiche(etat, id, choisi) {
   const estUnPj = courant.camp === "pj";
   const geste = gesteEnCours(etat);
   const libre = !engage(etat, geste) && choixSurLePlateau(etat) === null;
+  const lesCandidats = candidats(etat);
 
   return {
     id,
@@ -533,12 +751,15 @@ export function vueFiche(etat, id, choisi) {
     bouclier: photo.bouclier === null ? null : `${photo.bouclier.nom} : ${photo.bouclier.defense} (sans effet)`,
     liens: photo.liens.map((lien, rang) => ({ nom: lien.nom, valeur: courant.liens[rang].points, max: courant.liens[rang].max })).filter((lien) => lien.max > 0),
     passifs: passifsDe(etat, id).map(({ nom, effet, actif, raison }) => ({ texte: `${nom} : ${effet}`, actif, raison })),
-    effets: [],
-    jouer: libre && id !== acteur && candidats(etat).includes(id) ? { commande: { choisir: id } } : null,
+    effets: etiquettesDe(etat, id),
+    jouer: libre && id !== acteur && lesCandidats.includes(id) ? { commande: { choisir: id } } : null,
     avant:
       etat.phase === "preparation"
         ? { case: courant.case, poser: { gabarit: { preparer: { type: "poser", id } } }, retirer: { commande: { preparer: { type: "retirer", id } } } }
         : null,
+    jeu: jeuDe(etat, id, lesCandidats),
+    pastille: pastilleDe(etat, id),
+    menuMj: etat.phase === "combat" ? menuMjDe(etat, id, offre(etat)) : null,
   };
 }
 
@@ -800,8 +1021,11 @@ function passifsVus(etat, acteur) {
 
 const nomDuJet = (etat, geste) => (geste?.mode === "caracteristique" ? "Jet de caractéristique" : campDe(etat, geste?.acteur) === "pj" ? "Jet d'attaque" : "Jet de défense");
 
-// Les étapes d'un geste, et le rang de celle qui est en cours.
-function etapesDe(etat, acteur, geste, offerts) {
+// Les étapes d'un geste, et le rang de celle qui est en cours. Aux suites,
+// « Interventions » est en cours tant que l'étape offre quelqu'un (le geste
+// vu porte « interventions »), sinon « Dégâts » (contrat de la vague 3,
+// § 3.2, R n° 14).
+function etapesDe(etat, acteur, geste, offerts, vu) {
   const jet = geste === null ? (campDe(etat, acteur) === "pj" ? "Jet d'attaque" : "Jet de défense") : nomDuJet(etat, geste);
   const entieres = ["Capacité", "Cible", jet, "Localisation", "Interventions", "Dégâts"];
   if (geste === null) return { noms: entieres, enCours: 0 };
@@ -819,14 +1043,87 @@ function etapesDe(etat, acteur, geste, offerts) {
     bilan: 2,
     localisation: 3,
     contre_attaque: 3,
-    suites: offerts.esquive !== null ? 4 : 5,
+    suites: (vu?.interventions ?? null) !== null ? 4 : 5,
   };
   return { noms: entieres, enCours: parMoment[geste.moment] ?? 5 };
 }
 
-function etapesVues(etat, acteur, geste, offerts) {
-  const { noms, enCours } = etapesDe(etat, acteur, geste, offerts);
+function etapesVues(etat, acteur, geste, offerts, vu) {
+  const { noms, enCours } = etapesDe(etat, acteur, geste, offerts, vu);
   return noms.map((nom, rang) => ({ nom, etat: rang < enCours ? "faite" : rang === enCours ? "en_cours" : "a_venir" }));
+}
+
+// ─── La bulle : le volet du téléphone ───────────────────────────────────────
+//
+// Au téléphone, le volet montre une étape à la fois (mission du lot 4.3, § 3 ;
+// contrat de la vague 3, § 3.2, D8, R n° 26) : « etape » dit laquelle (0, la
+// capacité ; 1, ce qui se règle ; 2, les dés ; 3, la zone et les dégâts), et
+// « fil » la suite des étapes du geste, l'une en cours.
+
+// L'étape que montre le volet, d'après le moment du geste. En préparation,
+// un geste sans jet reste à 1 (sa cible, « Confirmer »), et une façon
+// Centrée aussi tant qu'elle vise deux cibles ou plus (« Un jet par cible »
+// y passe aux dés) ; une seule cible cochée en fait une attaque ordinaire
+// (mission du lot 4.3, § 4.9) : un jet passe à 2 dès qu'il est prêt.
+const ETAPE_DU_MOMENT = { jet: 2, critique: 2, bilan: 3, localisation: 3, contre_attaque: 3, suites: 3, blessure: 3 };
+
+function etapeDuVolet(etat, geste, offerts) {
+  if (geste === null) return 0;
+  if (geste.moment !== "preparation") return ETAPE_DU_MOMENT[geste.moment] ?? 3;
+  if (!MODES_A_JET.includes(geste.mode)) return 1;
+  if (Object.hasOwn(offerts.reglages, "cibles") && jetsParCibleDe(etat, geste, offerts) !== null) return 1;
+  return offerts.pret.ok ? 2 : 1;
+}
+
+// Les entrées du fil, selon le mode du geste ; sans geste, celles d'une
+// attaque. « Dés » se dit « Défense » quand le lanceur est le PJ visé (un
+// adversaire attaque).
+function entreesDuFil(etat, acteur, geste) {
+  const mode = geste?.mode ?? "attaque";
+  if (mode === "deplacement") return [["Capacité", 0], ["Arrivée", 1]];
+  if (mode === "sans_jet") return [["Capacité", 0], ["Cible", 1]];
+  if (mode === "attendre") return [["Capacité", 0], ["Garde", 1]];
+  if (mode === "caracteristique") return [["Capacité", 0], ["Dés", 2]];
+  const des = campDe(etat, geste?.acteur ?? acteur) === "pj" ? "Dés" : "Défense";
+  return [["Capacité", 0], ["Cible", 1], [des, 2], ["Zone et dégâts", 3]];
+}
+
+// L'entrée en cours est celle de la plus grande étape qui ne dépasse pas
+// celle du volet ; avant elle « faite », après elle « a_venir ».
+function filDe(etat, acteur, geste, etape) {
+  const entrees = entreesDuFil(etat, acteur, geste);
+  let enCours = 0;
+  entrees.forEach(([, pas], rang) => {
+    if (pas <= etape) enCours = rang;
+  });
+  return entrees.map(([nom, pas], rang) => ({ nom, etape: pas, etat: rang < enCours ? "faite" : rang === enCours ? "en_cours" : "a_venir" }));
+}
+
+// « (portée 0 : sa case) », « (portée 1 : sa case et les huit voisines) »,
+// « (portée 3 : à 3 cases au plus) ».
+function porteeDeLaConsigne(portee) {
+  if (portee === 0) return "(portée 0 : sa case)";
+  if (portee === 1) return "(portée 1 : sa case et les huit voisines)";
+  return `(portée ${portee} : à ${portee} cases au plus)`;
+}
+
+// La portée d'une attaque : celle de la façon jouée ; pour un jet prêté,
+// celle de l'arme prêtée, 0 sans arme (comme offre.js).
+const porteeDuGeste = (etat, geste, facon) => (geste.mode === "jet_prete" ? (armePreteeDe(etat, geste)?.portee ?? 0) : (facon?.portee ?? 0));
+
+// La consigne en tête du volet : sans geste, « Que fait Aubépine ? » ; une
+// cible à choisir, « Contre qui ? » et la portée ; une façon Centrée, « Toute
+// la case D4 : qui est visé ? » ; attendre, la capacité à garder. null
+// ailleurs, et pour une capacité sans jet, dont la cible n'a pas de portée.
+function consigneDe(etat, acteur, geste, offerts) {
+  if (geste === null) return `Que fait ${court(etat, acteur)} ?`;
+  if (geste.moment !== "preparation") return null;
+  if (Object.hasOwn(offerts.reglages, "cibles")) return `Toute la case ${courantDe(etat, geste.acteur)?.case ?? ""} : qui est visé ?`;
+  if (Object.hasOwn(offerts.reglages, "garde")) {
+    return `Quelle capacité garder pour le tour adverse ? Elle s'y jouera en intervention, jusqu'au prochain tour des ${CAMPS[campDe(etat, geste.acteur)] ?? ""}.`;
+  }
+  if (Object.hasOwn(offerts.reglages, "cible") && MODES_D_ATTAQUE.includes(geste.mode)) return `Contre qui ? ${porteeDeLaConsigne(porteeDuGeste(etat, geste, faconDe(etat, geste)))}`;
+  return null;
 }
 
 // ─── La bulle : le geste ────────────────────────────────────────────────────
@@ -878,7 +1175,8 @@ function contexteVu(etat, geste, capacite, jet, offerts) {
       gabarit: gabaritDe(champ),
     };
   };
-  const reglages = Object.hasOwn(offerts.reglages, "modificateur") ? { modificateur: aLaMain("modificateur"), avantages: aLaMain("avantages") } : null;
+  // Les réglages à la main ne se montrent qu'en Mode MJ (mission du lot 4.3, § 5).
+  const reglages = Object.hasOwn(offerts.reglages, "modificateur") ? { modificateur: aLaMain("modificateur"), avantages: aLaMain("avantages"), mj: true } : null;
   const defense = defenseVue(offerts.reglages.defense);
 
   if (jet === null) return { de: null, detail: null, modificateurs: [], difficulte: null, causes: null, defense, reglages };
@@ -936,29 +1234,36 @@ function chaineVue(jet) {
 // relance reprend la tête, comme sur la maquette : « 1 réussite pour
 // l'instant. Avantage dépensé : … ». Une relance de la palette ne dépense
 // aucun avantage (jet.relanceParPalette) : elle ne le dit donc pas.
+//
+// Au téléphone, le geste est un toucher (mission du lot 4.3, § 6, point 4) :
+// la même phrase s'écrit avec « touchez » (bilanAuDoigt). Le verbe est un
+// argument : rien n'est jamais cherché ni remplacé dans un texte, qui peut
+// porter un nom.
+const VERBES = { clic: { tete: "Cliquez sur", suite: "cliquez sur" }, doigt: { tete: "Touchez", suite: "touchez" } };
+
 const BILANS_DU_JET = {
-  de: (jet, tete) => `${tete} Cliquez sur le d${jet.faces} pour lancer le ${RANGS[jet.places.length]}.`,
+  de: (jet, tete, verbe) => `${tete} ${verbe.tete} le d${jet.faces} pour lancer le ${RANGS[jet.places.length]}.`,
   choix_relance: (jet, tete) => `${tete} Le ${RANGS[jet.places.length - 1]} échoue : il reste ${compter(relancesRestantes(jet), "avantage")}.`,
-  de_relance: (jet, tete) => {
-    const clic = `cliquez sur le d${jet.faces} pour relancer le ${RANGS[jet.places.length - 1]}.`;
+  de_relance: (jet, tete, verbe) => {
+    const clic = `${verbe.suite} le d${jet.faces} pour relancer le ${RANGS[jet.places.length - 1]}.`;
     return `${tete} ${jet.relanceParPalette === true ? majuscule(clic) : `Avantage dépensé : ${clic}`}`;
   },
   choix_explosion: (jet) => `Le ${RANGS[jet.places.length - 1]} montre sa face maximale sans atteindre la difficulté : il peut exploser.`,
-  de_explosion: (jet) => `Cliquez sur le d${jet.faces} pour faire exploser le ${RANGS[jet.places.length - 1]}.`,
+  de_explosion: (jet, tete, verbe) => `${verbe.tete} le d${jet.faces} pour faire exploser le ${RANGS[jet.places.length - 1]}.`,
 };
 
-function bilanVu(etat, geste, jet, offerts) {
+function bilanVu(etat, geste, jet, offerts, verbe = VERBES.clic) {
   if (geste.moment === "preparation") {
     if (!offerts.pret.ok) return offerts.pret.manque;
     if (offerts.de === null) return null;
     const plusieurs = offerts.de.combien > 1 ? ` Il se lance ${offerts.de.combien} fois : le pire est gardé.` : "";
-    return `Cliquez sur le d${offerts.de.faces} pour lancer le ${RANGS[0]}.${plusieurs}`;
+    return `${verbe.tete} le d${offerts.de.faces} pour lancer le ${RANGS[0]}.${plusieurs}`;
   }
   if (jet === null) return null;
   if (geste.moment === "jet") {
     const nombre = reussites(jet);
     const tete = nombre === 0 ? "Aucune réussite pour l'instant." : `${compter(nombre, "réussite")} pour l'instant.`;
-    return Object.hasOwn(BILANS_DU_JET, jet.attente) ? BILANS_DU_JET[jet.attente](jet, tete) : tete;
+    return Object.hasOwn(BILANS_DU_JET, jet.attente) ? BILANS_DU_JET[jet.attente](jet, tete, verbe) : tete;
   }
   return `${majuscule(ecrireBilan(etat, geste))}.`;
 }
@@ -1023,6 +1328,10 @@ function degatsVus(etat, geste, capacite, facon, offerts) {
     arme: `Dégâts de l'arme${chiffrer(armePreteeDe(etat, geste)?.degats ?? null)}`,
     aucun: "Sans dégâts",
   };
+  // Ajuster ce que la règle a calculé est au Mode MJ ; saisir des dégâts que
+  // la règle ne donne pas (base « aucun », dégâts illisibles) reste dans les
+  // deux modes (mission du lot 4.3, § 5 ; contrat de la vague 3, § 3.2).
+  const parLaRegle = fixes.base !== "aucun";
   return {
     bases: offerts.degats.bases.map((base) => ({ libelle: libelles[base], choisie: fixes.base === base, commande: commande(base, [], "normaux") })),
     saisie: {
@@ -1033,10 +1342,11 @@ function degatsVus(etat, geste, capacite, facon, offerts) {
       max: offerts.degats.max,
       gabarit: { evenement: { type: "degats", base: fixes.base, nature } },
       sansEffet: nature === "normaux" ? { valeur: calculee, commande: saisi === null ? null : commande(fixes.base, [], nature) } : null,
+      mj: parLaRegle,
     },
     natures: offerts.degats.natures.map((nature) => {
       const directs = saisi !== null ? [saisi] : [{ op: "ajuster", valeur: Math.min(fixes.valeur, offerts.degats.max), raison: raisonParDefaut }];
-      return { libelle: LIBELLES_DE_NATURE[nature], choisie: fixes.nature === nature, commande: commande(fixes.base, nature === "normaux" ? operations : directs, nature) };
+      return { libelle: LIBELLES_DE_NATURE[nature], choisie: fixes.nature === nature, commande: commande(fixes.base, nature === "normaux" ? operations : directs, nature), mj: true };
     }),
   };
 }
@@ -1067,6 +1377,7 @@ function localisationVue(etat, geste, offerts) {
               max: borne.max,
               raisonParDefaut: raisonDepuis(capaciteDe(etat, geste.acteur, geste.capacite)?.nom),
               gabarit: { evenement: { type: "decaler", de: rang } },
+              mj: true,
             },
     };
   });
@@ -1208,6 +1519,7 @@ function blessureVue(etat, geste, offerts, capacites) {
   const zone = element(photoDe(etat, victime)?.zones, offerts.blessure.zone)?.nom ?? "?";
   return {
     titre: `Blessure : ${court(etat, victime)}, ${minuscule(zone)}`,
+    detail: detailDeLaBlessure(etat, geste, offerts.blessure.zone),
     options: capacites.map((capacite, rang) => {
       const raison = refusDeLaBlessure(etat, capacite);
       return {
@@ -1221,6 +1533,302 @@ function blessureVue(etat, geste, offerts, capacites) {
     }),
     vide: capacites.length === 0 ? SANS_BLOC_DE_BLESSURE : null,
     libre: { libelle: UNE_AUTRE, max: BORNES_EFFET.libre, gabarit: { evenement: { type: "blessure" } } },
+  };
+}
+
+// Ce que le coup a fait à la zone blessée (mission du lot 4.3, § 4.10) : « C =
+// 10 : armure 2 → 0, endurance 5 → 0, corps 10 → 7. », le premier coup qui
+// l'a blessée, dans l'ordre des dés. Le nombre est celui que le coup a porté
+// (toute opération et l'esquive comprises), pour que les pertes qui suivent
+// s'y additionnent ; il suit sa lettre, ou « dégâts » sans lettre. null si
+// aucun coup ne l'a blessée.
+function detailDeLaBlessure(etat, geste, zone) {
+  const coups = geste.resultat?.coups ?? [];
+  const rang = coups.findIndex((coup) => coup.blessure === true && coup.zone === zone);
+  if (rang < 0) return null;
+  const coup = coups[rang];
+  const changements = [
+    ["armure", coup.armure],
+    ["endurance", coup.resistance],
+    ["corps", coup.corps],
+  ]
+    .filter(([, paire]) => Array.isArray(paire) && paire[0] !== paire[1])
+    .map(([nom, [avant, apres]]) => `${nom} ${avant} ${SIGNES.fleche} ${apres}`);
+  const fixes = degatsFixes(etat, geste);
+  const porte = fixes.parCoup[rang] ?? fixes.valeur;
+  const degats = fixes.lettre === null ? `${porte} dégâts` : `${LETTRES[fixes.lettre]} = ${porte}`;
+  return `${degats} : ${changements.join(", ")}.`;
+}
+
+// ─── Le geste : les étapes neuves du lot 4.3 ────────────────────────────────
+
+// Les d20 lancés : { zone, face } chacun, la zone écrite en minuscule
+// (« jambe droite »), une face de contre-attaque « contre-attaque » sur son
+// dé brut.
+function zonesDesD20(etat, geste) {
+  const victime = photoDe(etat, victimeDe(geste));
+  return localisationsDuGeste(etat, geste).map((lu, rang) => {
+    if (lu.contre) return { zone: "contre-attaque", face: geste.localisation[rang]?.brut ?? "?" };
+    return { zone: minuscule(element(victime?.zones, lu.zone)?.nom ?? "?"), face: lu.face };
+  });
+}
+
+// « jambe droite (d20 → 15) ».
+const zoneEtFace = ({ zone, face }) => `${zone} (d20 ${SIGNES.fleche} ${face})`;
+
+// Les phrases de D9 (mission du lot 4.3, § 4.3) : la contre-attaque que la
+// cible précédente n'a pas pu jouer, dite au-dessus de la cible suivante tant
+// que son jet n'a aucun dé. Le geste fini, la région d'annonce et le journal
+// la disent seuls.
+function avisDe(etat, geste) {
+  const faites = Array.isArray(geste.faites) ? geste.faites : [];
+  if (faites.length === 0 || (geste.jet?.places?.length ?? 0) > 0) return null;
+  const precedente = faites[faites.length - 1];
+  const contre = precedente.contre ?? null;
+  if (contre === null || contre.statut !== "impossible") return null;
+  const jete = court(etat, precedente.cible);
+  if (contre.raison === "action") return `${jete} n'a plus d'action : pas de contre-attaque.`;
+  if (contre.raison === "portee") {
+    return `${court(etat, geste.acteur)} est à ${compter(contre.distance ?? 0, "case")}, au-delà de la portée ${contre.portee ?? 0} ${deNom(contre.arme ?? "?")} : pas de contre-attaque.`;
+  }
+  return `${jete} n'a aucune arme : pas de contre-attaque.`;
+}
+
+// Le détail de chaque cible, dans l'ordre des cibles : sa case, puis ce que
+// son jet opposera (« défense 5 », ou, quand le PJ visé lance sa défense,
+// « lance sa défense ») et son corps ; hors de portée, la distance.
+function ciblesDetailDe(etat, geste, offerts, cibles) {
+  const depart = courantDe(etat, geste.acteur)?.case ?? null;
+  const facon = faconDe(etat, geste);
+  const attaque = MODES_D_ATTAQUE.includes(geste.mode);
+  const portee = porteeDuGeste(etat, geste, facon);
+  // La portée ne se juge pas pour une façon Centrée (mission du lot 4.3, § 4.9).
+  const centree = (geste.cibles ?? null) !== null || Object.hasOwn(offerts.reglages, "cibles");
+  const camp = campDe(etat, geste.acteur);
+  return cibles.map(({ id }) => {
+    const courant = courantDe(etat, id);
+    const lieu = courant?.case ?? "?";
+    const ecart = depart === null || courant === null ? 0 : distance(depart, courant.case);
+    let detail;
+    if (!vivant(etat, id)) detail = enLigne(lieu, "mort");
+    else if (attaque && !centree && geste.moment === "preparation" && ecart > portee) detail = enLigne(lieu, `hors de portée : à ${compter(ecart, "case")}`);
+    else {
+      // Le jet n'oppose rien à un allié de l'auteur, ni à l'auteur (une façon Centrée les montre, inactifs).
+      const adverse = attaque && campDe(etat, id) !== camp;
+      const oppose = !adverse ? null : campDe(etat, id) === "pj" ? "lance sa défense" : `défense ${defenseDe(etat, id).valeur}`;
+      detail = [lieu, oppose, `corps ${courant.corps}/${courant.corpsMax}`].filter(present).join(` ${SIGNES.point} `);
+    }
+    return { id, initiales: etat.noms?.[id]?.initiales ?? "?", detail };
+  });
+}
+
+// Les cibles d'une façon Centrée, cochées ou figées : celles qu'elle coche
+// encore (en préparation), ou celles que le moteur a figées.
+function ciblesDeLaCase(etat, geste, offerts) {
+  if (geste.moment === "preparation") {
+    const reglage = offerts.reglages.cibles ?? null;
+    return reglage === null ? null : (reglage.valeur ?? reglage.dOffice);
+  }
+  return Array.isArray(geste.cibles) ? geste.cibles : null;
+}
+
+// « Un jet par cible : 2 cibles », une façon Centrée en préparation, deux
+// cibles cochées ou plus.
+function jetsParCibleDe(etat, geste, offerts) {
+  if (geste.moment !== "preparation") return null;
+  const cochees = ciblesDeLaCase(etat, geste, offerts);
+  return cochees === null || cochees.length < 2 ? null : { libelle: `Un jet par cible : ${compter(cochees.length, "cible")}` };
+}
+
+// L'ordre des jets d'un geste à plusieurs cibles (mission du lot 4.3, § 4.9) :
+// « 1 · Marmiton n° 2 », chacune faite, en cours ou à venir, avec ce qu'elle a
+// donné ou ce qu'elle attend. null pour une seule cible.
+function progressionDe(etat, geste, offerts, jet) {
+  const liste = ciblesDeLaCase(etat, geste, offerts);
+  if (liste === null || liste.length < 2) return null;
+  const enPreparation = geste.moment === "preparation";
+  const faites = Array.isArray(geste.faites) ? geste.faites : [];
+  return liste.map((id, rang) => {
+    const libelle = `${rang + 1} ${SIGNES.point} ${court(etat, id)}`;
+    if (enPreparation || rang > (geste.rang ?? 0)) return { libelle, etat: "a_venir", detail: null };
+    if (rang === (geste.rang ?? 0)) {
+      const quoi = jet === null ? null : jet.genre === "defense" ? `jet de défense, attaque ${jet.difficulte}` : `jet d'attaque, défense ${jet.difficulte}`;
+      return { libelle, etat: "en_cours", detail: quoi === null ? null : `en cours : ${quoi}` };
+    }
+    const faite = faites.find((une) => une.rang === rang) ?? null;
+    if (faite === null || (faite.jet ?? null) === null) return { libelle, etat: "faite", detail: null };
+    const lu = { ...geste, ...faite };
+    const zones = zonesDesD20(etat, lu).map(({ zone }) => zone);
+    return { libelle, etat: "faite", detail: [`fait : ${ecrireBilan(etat, lu)}`, ...zones].join(", ") };
+  });
+}
+
+// Le rang, dans la chaîne, du dernier dé lancé, tant qu'il est posé (ni une
+// relance ni une explosion n'attendent leur dé) : celui qu'inverser ou
+// relancer toucherait. null sinon.
+const ATTENTES_DU_DE_POSE = ["de", "choix_relance", "choix_explosion", "fini"];
+
+function dernierDeDe(jet) {
+  if (jet === null || jet.places.length === 0 || !ATTENTES_DU_DE_POSE.includes(jet.attente)) return null;
+  return somme(jet.places.map((place) => place.essais.length)) - 1;
+}
+
+// Le lanceur du jet du geste : celui du jet figé, ou de celui qui se
+// figerait ; avant la cible, l'acteur s'il est un PJ (un adversaire ne lance
+// jamais de dés). null pour un geste sans jet.
+function lanceurDe(etat, geste, jet) {
+  if (!MODES_A_JET.includes(geste.mode)) return null;
+  if (jet !== null) return jet.lanceur;
+  return campDe(etat, geste.acteur) === "pj" ? geste.acteur : null;
+}
+
+// Pourquoi un passif non câblé ne s'applique pas (« Ce passif a déjà servi
+// pour ce jet. », ou la raison de son prix), lu par effets.js sur un effet
+// qui a toujours prise : ±N sur son porteur, de durée « jet » avant le
+// paiement, « tour » après. Seul le refus « interdit » est la raison du
+// bouton ; le moment et les bornes de chaque genre se lisent dans la palette.
+function raisonDuPassif(etat, geste, source) {
+  const duree = geste.moment === "preparation" ? "jet" : "tour";
+  const verdict = jugerEffet(etat, { type: "effet", genre: "attaque", source, sur: source.qui, n: 1, duree });
+  return verdict.ok || verdict.code !== "interdit" ? null : verdict.message;
+}
+
+// Les boutons des passifs non câblés du lanceur (mission du lot 4.3, § 4.5) :
+// « Nez fin · 1 souffle », « Maîtrise de l'agile · gratuit », dès
+// l'ouverture du geste ; un appui ouvre la palette à leur nom.
+function passifsDuJet(etat, geste, jet) {
+  const qui = lanceurDe(etat, geste, jet);
+  if (qui === null) return [];
+  const photo = photoDe(etat, qui);
+  const boutonsVus = [];
+  (photo?.capacites ?? []).forEach((capacite, indice) => {
+    const source = { genre: "capacite", qui, capacite: indice };
+    const passif = passifDe(etat, source);
+    if (passif === null) return;
+    const facon = passif.capacite.facons[passif.facon];
+    const raison = raisonDuPassif(etat, geste, source);
+    boutonsVus.push({
+      cle: `passif:${qui}:${indice}`,
+      qui,
+      libelle: enLigne(capacite.nom, coutDeLaLigne(facon) ?? "coût illisible"),
+      texte: facon.description ?? "",
+      actif: raison === null,
+      raison,
+      source,
+    });
+  });
+  return boutonsVus;
+}
+
+// « Appliquer l'effet de Frappe… » (mission du lot 4.3, § 5) : la capacité
+// jouée sans rôle câblé, dès que sa cible est posée (ou sans cible), jusqu'à
+// la fin du geste.
+function appliquerEffetDe(capacite, facon, geste) {
+  if (capacite.role !== null) return null;
+  if (MODES_D_ATTAQUE.includes(geste.mode) && !present(geste.cible)) return null;
+  return { libelle: appliquerLEffetDe(capacite.nom), texte: facon.description ?? "", source: { genre: "capacite", qui: geste.acteur, capacite: geste.capacite } };
+}
+
+// L'étape « Interventions » (mission du lot 4.3, § 4.1 ; contrat de la vague
+// 3, § 3.2) : null hors de l'étape et quand personne ne peut intervenir (ni
+// intervenant, ni esquive) ; sinon sa tête, ses intervenants, et « Passer »,
+// qui émet « Appliquer ».
+function interventionsDe(etat, geste, offerts) {
+  const offertes = geste.moment === "suites" ? (offerts.interventions ?? null) : null;
+  if (offertes === null || (offertes.intervenants.length === 0 && offertes.esquive === null)) return null;
+  const touche = lettreDuGeste(etat, geste) !== null;
+  let tete = "Le coup manque. Avant de finir, qui intervient ?";
+  if (touche) {
+    const fixes = degatsFixes(etat, geste);
+    const lettre = fixes.lettre === null ? [] : [`${LETTRES[fixes.lettre]} = ${fixes.deBase}`];
+    tete = `Le coup porte : ${[...lettre, ...zonesDesD20(etat, geste).map(zoneEtFace)].join(", ")}. Avant les dégâts, qui intervient ?`;
+  }
+  const sous = (qui) => {
+    const courant = courantDe(etat, qui);
+    return [compter(courant.actions, "action"), souffleDit(courant, photoDe(etat, qui)), qui === geste.cible ? "la cible" : null].filter(present).join(` ${SIGNES.point} `);
+  };
+  return {
+    tete,
+    intervenants: offertes.intervenants.map((un) => intervenantVu(etat, un, sous)),
+    passer: touche ? "Passer : appliquer les dégâts" : "Passer : terminer",
+  };
+}
+
+// « Aucune intervention possible. » : aux suites d'une attaque dont l'étape
+// n'offre rien (mission du lot 4.3, § 4.1, choix 3 de l'auteur).
+const AUCUNE_INTERVENTION = "Aucune intervention possible.";
+
+function aucuneInterventionDe(geste, offerts) {
+  const offertes = geste.moment === "suites" ? (offerts.interventions ?? null) : null;
+  return offertes !== null && offertes.intervenants.length === 0 && offertes.esquive === null ? AUCUNE_INTERVENTION : null;
+}
+
+// Le titre du groupe d'une arme : « Couteau d'office (précise) ».
+const titreDeLArme = (arme) => (arme === null ? "" : POIDS[arme.poids] ? `${arme.libelle} (${POIDS[arme.poids]})` : arme.libelle);
+
+// L'étape « Contre-attaque » (mission du lot 4.3, § 4.3) : son titre (la face
+// du d20), sa phrase, et une ligne par façon d'attaque de l'arme du jeté (un
+// adversaire : un groupe par arme), chacune jouable ou non avec sa raison.
+// « Laisser passer » reste parmi les choix.
+function contreDe(etat, geste, offerts, hachures) {
+  if (geste.moment !== "contre_attaque" || offerts.contre === null) return null;
+  const defenseur = geste.cible;
+  const photo = photoDe(etat, defenseur);
+  const courant = courantDe(etat, defenseur);
+  const groupes = [];
+  for (const { capacite, facon, actif, raison } of offerts.contre.options) {
+    const laCapacite = photo.capacites[capacite];
+    const laFacon = laCapacite.facons[facon];
+    const arme = element(photo.armes, laFacon.arme);
+    const titre = titreDeLArme(arme);
+    let groupe = groupes.find((un) => un.rang === laFacon.arme) ?? null;
+    if (groupe === null) {
+      groupe = { rang: laFacon.arme, titre, lignes: [] };
+      groupes.push(groupe);
+    }
+    const libelle = libelleDe(laCapacite, laFacon);
+    groupe.lignes.push({
+      cle: `contre:${capacite}:${facon}`,
+      libelle,
+      degats: ecrireDegats(laFacon.degats),
+      desavantage: laFacon.desavantage === true,
+      intervention: laFacon.intervention === true,
+      cout: coutDeLaLigne(laFacon),
+      choisi: false,
+      actif,
+      raison,
+      commande: { evenement: { type: "contre_attaquer", capacite, facon } },
+      jouer: `Jouer ${libelle}`,
+      survol: survolDeLaLigne(etat, defenseur, capacite, facon, hachures),
+    });
+  }
+  const premiere = offerts.contre.options.find((option) => option.actif) ?? offerts.contre.options[0] ?? null;
+  const arme = premiere === null ? null : element(photo.armes, photo.capacites[premiere.capacite].facons[premiere.facon].arme);
+  const face = geste.localisation[geste.localisation.length - 1]?.brut ?? "?";
+  const portee = arme === null ? "" : `, à la portée ${arme.portee ?? 0} ${deNom(arme.libelle)}`;
+  return {
+    titre: `${face} : contre-attaque !`,
+    texte: `L'attaque est annulée. ${court(etat, defenseur)} peut contre-attaquer ${court(etat, geste.acteur)}${portee}. Une action ; il en reste ${courant.actions}.`,
+    groupes: groupes.map(({ titre, lignes }) => ({ titre, lignes })),
+  };
+}
+
+// Le coup critique double les dégâts de la lettre (mission du lot 4.3, § 4.4 ;
+// js/combat/degats.js, qui les double).
+const DOUBLE_DU_CRITIQUE = 2;
+
+// Le moment du coup critique (mission du lot 4.3, § 4.4) : « Trois réussites,
+// et 1 avantage non dépensé. », ce que ferait un 4e dé réussi, et le rang
+// « critique : 16 » sous les rangs quand il double des dégâts.
+function critiqueDe(etat, geste, offerts) {
+  if (geste.moment !== "critique" || !offerts.types.includes("critique")) return null;
+  const restants = relancesRestantes(geste.jet);
+  const { lettre, deBase } = degatsFixes(etat, geste);
+  const double = deBase * DOUBLE_DU_CRITIQUE;
+  return {
+    texte: `Trois réussites, et ${compter(restants, "avantage")} non dépensé${restants > 1 ? "s" : ""}.`,
+    detail: lettre === null ? "Un 4e dé réussi fait un coup critique." : `Un 4e dé réussi double les dégâts : ${LETTRES[lettre]} = ${deBase} ${SIGNES.fleche} ${double}.`,
+    rang: lettre === null ? null : `critique : ${double}`,
   };
 }
 
@@ -1243,12 +1851,15 @@ function gesteVu(etat, geste, offerts, hachures, blessures) {
   // Un jet ne clôt jamais le geste (contrat de la vague 1, § 12, choix 1) :
   // un manqué et un jet de caractéristique attendent « Terminer », sans dégâts.
   const terminer = lettreDuGeste(etat, geste) === null;
+  const cibles = ciblesVues(etat, geste, offerts);
+  const bilan = bilanVu(etat, geste, jet, offerts);
+  const garde = geste.mode === "attendre" && present(geste.garde) ? capaciteDe(etat, geste.acteur, geste.garde.capacite) : null;
 
   return {
     description: facon.description,
     jetPrete: jetPreteVu(etat, geste, offerts, hachures),
     armes: offert("arme_pretee") ? reglables.arme_pretee.options.map((rang) => ({ libelle: photo.armes[rang].libelle, choisie: geste.armePretee === rang, commande: regler("arme_pretee", rang) })) : null,
-    cibles: ciblesVues(etat, geste, offerts),
+    cibles,
     sansCible: offert("cible") && reglables.cible.options.includes(null) ? { choisie: geste.cible === null, commande: regler("cible", null) } : null,
     cases: offert("arrivee") ? reglables.arrivee.options.map((nom) => ({ case: nom, nom: nomDArrivee(nom), choisie: geste.arrivee === nom, commande: commandeDArrivee(etat, geste, nom) })) : null,
     caracteristiques: caracteristiquesVues(etat, geste, offerts),
@@ -1264,18 +1875,53 @@ function gesteVu(etat, geste, offerts, hachures, blessures) {
     contexte: aJet ? contexteVu(etat, geste, capacite, jet, offerts) : null,
     chaine: jet === null ? [] : chaineVue(jet),
     aLancer: offerts.de === null ? null : { faces: offerts.de.faces, combien: offerts.de.combien, libelle: `d${offerts.de.faces}`, motif: offerts.de.motif },
-    bilan: bilanVu(etat, geste, jet, offerts),
+    bilan,
     lettres: lettresVues(etat, geste, facon, jet),
     choix: choixVus(etat, geste, offerts),
     degats: degatsVus(etat, geste, capacite, facon, offerts),
     localisation: localisationVue(etat, geste, offerts),
-    esquive: esquive === null ? null : { libelle: capaciteDe(etat, victimeDe(geste), esquive.capacite)?.nom ?? "", min: esquive.min, max: esquive.max, gabarit: { evenement: { type: "esquive" } } },
+    esquive:
+      esquive === null
+        ? null
+        : {
+            libelle: capaciteDe(etat, victimeDe(geste), esquive.capacite)?.nom ?? "",
+            qui: victimeDe(geste),
+            cout: `${compter(prixDeLEsquive(1).actions, "action")} + X souffle`,
+            texte: "annule X dégâts, X souffle",
+            min: esquive.min,
+            max: esquive.max,
+            gabarit: { evenement: { type: "esquive" } },
+            actif: true,
+            raison: null,
+          },
     detail: geste.moment === "suites" ? detailVu(etat, geste) : null,
     blessure: blessureVue(etat, geste, offerts, blessures),
     appliquer: offerts.types.includes("appliquer") ? { libelle: terminer ? "Terminer" : "Appliquer", commande: { evenement: { type: "appliquer" } } } : null,
+    // Attendre se confirme par « Garder Frappe » (contrat de la vague 3, § 3.2).
     confirmer:
-      enPreparation && !aJet ? { libelle: "Confirmer", actif: offerts.pret.ok, raison: offerts.pret.ok ? null : offerts.pret.manque, commande: { evenement: { type: "confirmer" } } } : null,
+      enPreparation && !aJet
+        ? {
+            libelle: geste.mode !== "attendre" ? "Confirmer" : garde === null ? "Garder" : `Garder ${libelleDe(garde, element(garde.facons, geste.garde.facon))}`,
+            actif: offerts.pret.ok,
+            raison: offerts.pret.ok ? null : offerts.pret.manque,
+            commande: { evenement: { type: "confirmer" } },
+          }
+        : null,
     revenir: enPreparation ? { commande: { evenement: { type: "revenir" } } } : null,
+    // La vague 3 du lot 4.3 (contrat de la vague, § 3.2).
+    bilanAuDoigt: bilan === null ? null : bilanVu(etat, geste, jet, offerts, VERBES.doigt),
+    avis: avisDe(etat, geste),
+    ciblesDetail: ciblesDetailDe(etat, geste, offerts, cibles),
+    jetsParCible: jetsParCibleDe(etat, geste, offerts),
+    progression: progressionDe(etat, geste, offerts, jet),
+    dernierDe: dernierDeDe(jet),
+    passifs: passifsDuJet(etat, geste, jet),
+    appliquerEffet: appliquerEffetDe(capacite, facon, geste),
+    palette: { libelle: "Palette", source: { genre: "capacite", qui: geste.acteur, capacite: geste.capacite }, mj: true },
+    interventions: interventionsDe(etat, geste, offerts),
+    aucuneIntervention: aucuneInterventionDe(geste, offerts),
+    contre: contreDe(etat, geste, offerts, hachures),
+    critique: critiqueDe(etat, geste, offerts),
   };
 }
 
@@ -1346,7 +1992,24 @@ function fermetureDe(etat, geste) {
   return { genre: "reduire", libelle: "Réduire", onglet: `${libelle} : rouvrir` };
 }
 
-const PANNEAU_VIDE = { candidats: [], nom: null, entete: null, defenseur: null, fermeture: null, etapes: [], groupes: [], passer: null, passifs: [], geste: null, vainqueur: null, focus: null };
+const PANNEAU_VIDE = {
+  candidats: [],
+  nom: null,
+  entete: null,
+  defenseur: null,
+  fermeture: null,
+  etapes: [],
+  groupes: [],
+  passer: null,
+  passifs: [],
+  geste: null,
+  vainqueur: null,
+  focus: null,
+  camp: null,
+  etape: null,
+  fil: [],
+  consigne: null,
+};
 
 /**
  * La bulle d'action (contrat du groupe 2, § 8.1). « genre » dit ce qu'elle
@@ -1366,6 +2029,10 @@ const PANNEAU_VIDE = { candidats: [], nom: null, entete: null, defenseur: null, 
  * pas : « blessures », les capacités figées du bloc de blessure
  * (js/combat/photographie.js, etatsDeLaBanque), que l'étape « La blessure »
  * propose ; aucune par défaut.
+ *
+ * À la vague 3 du lot 4.3 (contrat de la vague, § 3.2) : « camp » (celui qui
+ * joue), « etape » et « fil » (le volet du téléphone), « consigne » (la
+ * question en tête du volet) ; le geste porte les étapes neuves.
  */
 export function vuePanneau(etat, choisi, apports = {}) {
   const annonce = etat.annonce ?? null;
@@ -1377,7 +2044,7 @@ export function vuePanneau(etat, choisi, apports = {}) {
   const photo = photoDe(etat, acteur);
   if (acteur === null || courant === null || photo === null) {
     const liste = candidats(etat).map((id) => ({ id, nom: nomEntier(etat, id), commande: { choisir: id } }));
-    return { genre: "qui_joue", ...PANNEAU_VIDE, annonce, candidats: liste, focus: liste.length > 0 ? `candidat:${liste[0].id}` : null };
+    return { genre: "qui_joue", ...PANNEAU_VIDE, annonce, candidats: liste, focus: liste.length > 0 ? `candidat:${liste[0].id}` : null, camp: etat.tour?.camp ?? null };
   }
 
   const calculees = new Map();
@@ -1393,6 +2060,7 @@ export function vuePanneau(etat, choisi, apports = {}) {
   const vu = geste === null ? null : gesteVu(etat, geste, offerts, hachures, Array.isArray(apports?.blessures) ? apports.blessures : []);
   const groupes = grouper(lignesVues(etat, acteur, geste, hachures), courant.camp !== "pj");
   const passer = { actif: libre, raison: libre ? null : ACTION_EN_COURS, commande: { evenement: { type: "passer", qui: acteur } } };
+  const etape = etapeDuVolet(etat, geste, offerts);
   return {
     genre: "action",
     candidats: [],
@@ -1400,7 +2068,7 @@ export function vuePanneau(etat, choisi, apports = {}) {
     entete: enteteDe(etat, acteur, geste),
     defenseur: defenseurDe(etat, geste),
     fermeture: fermetureDe(etat, geste),
-    etapes: etapesVues(etat, acteur, geste, offerts),
+    etapes: etapesVues(etat, acteur, geste, offerts, vu),
     groupes,
     passer,
     passifs: passifsVus(etat, acteur),
@@ -1408,6 +2076,10 @@ export function vuePanneau(etat, choisi, apports = {}) {
     annonce,
     vainqueur: null,
     focus: geste === null ? focusDeLaListe(groupes, passer) : focusDe(geste, vu, offerts),
+    camp: etat.tour?.camp ?? null,
+    etape,
+    fil: filDe(etat, acteur, geste, etape),
+    consigne: consigneDe(etat, acteur, geste, offerts),
   };
 }
 
@@ -1483,11 +2155,16 @@ export function vuePreparation(miseEnPlace, apports) {
   };
 }
 
-// ─── Les vues neuves de la vague 3 (souches) ────────────────────────────────
-//
-// Posées avant le départ de la vague 3 (contrat de la vague, § 8.0), pour que
-// l'écran et les contrôles se chargent pendant que chaque part écrit la
-// sienne. Elles rendent null ; leur forme est celle du contrat (§ 3.5).
+// ─── Les vignettes et le dé en surimpression (vague 3 du lot 4.3) ───────────
+
+// « en guet : Frappe » : les lignes que ses gardes gardent ; null sans garde.
+function gardeDite(etat, id) {
+  const gardees = gardesDe(etat, id).map((effet) => {
+    const capacite = capaciteDe(etat, id, effet.garde?.capacite);
+    return capacite === null ? "" : libelleDe(capacite, element(capacite.facons, effet.garde?.facon));
+  });
+  return gardees.length === 0 ? null : `en guet : ${gardees.join(", ")}`;
+}
 
 /**
  * Les vignettes du téléphone (mission du lot 4.3, § 3 ; contrat de la vague
@@ -1495,18 +2172,97 @@ export function vuePreparation(miseEnPlace, apports) {
  * id, initiales, nom, etiquette, actions: { reste, max, texte }, jeu,
  * choisie, garde, pastille, choix, inactif, raison, menuMj }] }, un vivant du
  * camp qui joue par vignette, dans l'ordre d'ajout ; « choix », « inactif »
- * et « raison » sont ceux de son jeton (vuePlateau).
+ * et « raison » sont ceux de son jeton (vuePlateau), quels qu'ils soient.
+ * « nom » est le nom court (« Aubépine ») ; « etiquette », son nom
+ * accessible : le nom entier, ses actions restantes, sa garde.
  */
 export function vueVignettes(etat, choisi) {
-  return null;
+  if (etat.phase !== "combat" || etat.tour === null) return null;
+  const { jetons } = vuePlateau(etat, choisi);
+  const acteur = acteurCourant(etat, choisi);
+  const lesCandidats = candidats(etat);
+  const vignettes = vivantsDe(etat, etat.tour.camp).map((id) => {
+    const courant = courantDe(etat, id);
+    const jeton = jetons[id];
+    const garde = gardeDite(etat, id);
+    const actions = { reste: courant.actions, max: courant.actionsMax, texte: actionsRestantes(courant) };
+    return {
+      id,
+      initiales: etat.noms?.[id]?.initiales ?? "?",
+      nom: court(etat, id),
+      etiquette: [nomEntier(etat, id), actions.texte, garde].filter(present).join(", "),
+      actions,
+      jeu: jeuDe(etat, id, lesCandidats),
+      choisie: id === acteur,
+      garde,
+      pastille: jeton.pastille,
+      choix: jeton.choix,
+      inactif: jeton.inactif,
+      raison: jeton.raison,
+      menuMj: jeton.menuMj,
+    };
+  });
+  return { camp: etat.tour.camp, vignettes };
+}
+
+// « d8+1 », « d10 », « d8−1 » : le dé et son modificateur, d'un trait.
+function deEtModificateur(jet) {
+  const modificateur = modificateurDe(jet);
+  return `d${jet.faces}${modificateur === 0 ? "" : signer(modificateur)}`;
+}
+
+const DESAVANTAGE = " (désavantage)";
+
+// Un d20 de localisation : sa zone sur la grille de la victime, ou la face de
+// contre-attaque du jeté (degats.js, localisationsDuGeste).
+function d20Vu(avant, geste, valeurs) {
+  const brut = valeurs[0];
+  const lu = localisationsDuGeste(avant, { ...geste, localisation: [...geste.localisation, { brut, decalage: null }] }).at(-1) ?? null;
+  if (lu === null) return null;
+  const titre = `Localisation ${SIGNES.point} d20`;
+  if (lu.contre) return { titre, valeur: `${brut}`, verdict: "contre-attaque", genre: "localisation" };
+  const zone = element(photoDe(avant, victimeDe(geste))?.zones, lu.zone)?.nom ?? "?";
+  return { titre, valeur: `${brut}`, verdict: minuscule(zone), genre: "localisation" };
 }
 
 /**
  * Le dé en surimpression (mission du lot 4.3, § 3, A5 et B2 ; contrat de la
  * vague 3, § 3.5) : l'événement « de » que la séance vient de jouer, lu sur
- * l'état d'avant, sans le moteur. null, ou { titre: "1er dé · d8+1", valeur:
- * "8", verdict: "✓ réussite", genre: "reussite" | "echec" | "localisation" }.
+ * l'état d'avant, sans le moteur : le jet d'avant reçoit ses valeurs par
+ * jet.js (lancerDe), un d20 se lit sur la grille de la victime. null pour
+ * tout autre événement, ou un dé que l'état d'avant n'attendait pas ; sinon
+ * { titre: "1er dé · d8+1" (« relance · … », « explosion · … », « 4e dé ·
+ * critique », « Localisation · d20 », « (désavantage) » sous désavantage),
+ * valeur: "8" (le dé gardé, son modificateur et ses explosions compris),
+ * verdict: "✓ réussite" | "✗ échec" | "✓ coup critique" | "peut exploser" |
+ * la zone | "contre-attaque", genre: "reussite" | "echec" | "localisation" }.
  */
 export function vueDuDe(avant, evenement) {
-  return null;
+  if (evenement?.type !== "de" || !Array.isArray(evenement.valeurs) || evenement.valeurs.length === 0) return null;
+  const geste = gesteEnCours(avant);
+  if (geste === null) return null;
+  const offert = offre(avant).de;
+  if (offert === null || offert.faces !== evenement.faces) return null;
+  if (offert.motif === "localisation") return d20Vu(avant, geste, evenement.valeurs);
+  const jet = jetDe(avant, geste);
+  const lance = jet === null ? null : lancerDe(jet, evenement.valeurs);
+  if (lance === null || lance.refus) return null;
+  const apres = lance.jet;
+  const place = apres.places[apres.places.length - 1];
+  const essai = evaluerEssai(apres, place.essais[place.essais.length - 1]);
+  const de = deEtModificateur(apres);
+  const critique = apres.critique === "tente" && apres.places.length > REUSSITES_MAX;
+  let titre;
+  if (offert.motif === "relance") titre = `relance ${SIGNES.point} ${de}`;
+  else if (offert.motif === "explosion") titre = `explosion ${SIGNES.point} ${de}`;
+  else if (critique) titre = `${RANGS[REUSSITES_MAX]} ${SIGNES.point} critique`;
+  else titre = `${RANGS[apres.places.length - 1]} ${SIGNES.point} ${de}`;
+  if (evenement.valeurs.length > 1) titre += DESAVANTAGE;
+  let verdict = essai.reussi ? `${SIGNES.reussi} réussite` : `${SIGNES.echoue} échec`;
+  let genre = essai.reussi ? "reussite" : "echec";
+  if (essai.explosible) {
+    verdict = "peut exploser";
+    genre = "localisation";
+  } else if (essai.reussi && critique) verdict = `${SIGNES.reussi} coup critique`;
+  return { titre, valeur: `${essai.somme}`, verdict, genre };
 }

@@ -17,11 +17,22 @@
    fine), n'en a pas.
 
    La place de la bulle, de son onglet et des infobulles se calcule dans
-   js/ecrans/echelle.js, qui l'écrit sur elles en trois propriétés (la
-   gauche, le haut, la flèche) que cette feuille lit sans valeur de repli :
-   c'est la seule écriture de style du code. Ni transform, ni filter, ni
-   container-type sur .combat et .combat-cadre : le volet, fixé à la
-   fenêtre, ne s'y accrocherait plus.
+   js/ecrans/echelle.js, qui l'écrit sur elles en quatre propriétés (la
+   gauche, le haut, la flèche, et, depuis le lot 4.3, la plus grande
+   hauteur, du haut de la bulle au bas de la fenêtre) que cette feuille lit
+   sans valeur de repli : c'est la seule écriture de style du code. Ni
+   transform, ni filter, ni container-type sur .combat et .combat-cadre : le
+   volet, fixé à la fenêtre, ne s'y accrocherait plus.
+
+   Au lot 4.3, sur un téléphone, l'écran en jeu (.combat-en-jeu, que l'écran
+   pose hors de la préparation) tient dans la hauteur de la fenêtre et la
+   page ne défile plus : la barre, la dernière ligne du journal, les
+   vignettes, la carte, puis le volet, qui n'est plus fixé ; quand il
+   s'ouvre, la carte se réduit au lieu d'être couverte. Les fiches et le
+   journal y passent en plein écran. À 56rem, chaque règle de ce téléphone
+   est rendue à ce qu'elle était, dans le premier @media. Les classes
+   d'état sont celles du contrat de la vague 3 (§ 5.2), et rien n'y bouge :
+   ni animation, ni opacité ; le dé tiré paraît et disparaît.
 
    Dans le code, la carte de 10 × 10 cases s'appelle « le plateau » : le mot
    « carte » désigne déjà la carte d'adversaire (§ 16.5). */
@@ -84,6 +95,62 @@
 
 .combat-barre h1 {
   margin: 0;
+}
+
+/* ☰ : sur un téléphone, en jeu, l'en-tête du site cède sa place à la barre,
+   et ☰ en ouvre les liens. Ailleurs, l'en-tête est là : ☰ n'y sert pas. */
+.combat-site {
+  display: none;
+}
+
+.combat-en-jeu .combat-site {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+
+/* L'état du tour en peu de mots (« Tour 2 · PJ »), sur un téléphone : la
+   pastille de l'état, en rouge au tour adverse. Là où l'écran pose les deux
+   états, le court tient le téléphone et l'entier le grand écran. */
+.combat-etat-court {
+  flex: none;
+  margin: 0;
+  padding: var(--espace-1) var(--espace-3);
+  border: var(--trait) solid var(--accent);
+  border-radius: var(--cible-tactile);
+  background: var(--accent-doux);
+  color: var(--accent);
+  font-size: var(--taille-petite);
+  font-weight: var(--graisse-forte);
+  white-space: nowrap;
+}
+
+.combat-etat-court.danger {
+  border-color: var(--combat-adv);
+  background: var(--combat-adv-doux);
+  color: var(--combat-adv-texte);
+}
+
+.combat-en-jeu .combat-barre:has(.combat-etat-court) .combat-etat {
+  display: none;
+}
+
+/* « MJ » : le Mode MJ est allumé. */
+.combat-mj {
+  flex: none;
+  padding: 0 var(--espace-2);
+  border: var(--trait) solid var(--accent);
+  border-radius: var(--cible-tactile);
+  color: var(--accent);
+  font-size: var(--taille-petite);
+  font-weight: var(--graisse-forte);
+  line-height: var(--interligne);
+}
+
+/* « Intervenir… », au tour adverse, à la place de « Fin de tour ». */
+.combat-intervenir {
+  white-space: nowrap;
 }
 
 .combat-etat {
@@ -168,12 +235,17 @@
 
 /* Le journal vide s'efface lui aussi : il peut recevoir le focus pour
    défiler au clavier, et le clavier s'arrêtait sur une liste sans hauteur
-   (vu dans Edge, avant le lancement). */
+   (vu dans Edge, avant le lancement). Au lot 4.3, la zone sous la carte,
+   vide sur un téléphone (le geste se joue dans le volet), le dé tiré entre
+   deux dés, et la ligne d'une seconde, entre deux phrases. */
 .combat-avis:empty,
 .combat-panneau:empty,
 .combat-case-liste:empty,
 .combat-copie:empty,
-.combat-lignes:empty {
+.combat-lignes:empty,
+.combat-action:empty,
+.combat-surimpression:empty,
+.combat-toast:empty {
   display: none;
 }
 
@@ -240,12 +312,13 @@
    plus ; pendant un geste, après le premier dé, la ligne de ce geste, bordée
    de l'alerte. Le texte coupé est caché aux lecteurs d'écran ; la ligne
    entière le suit, cachée à la vue comme l'annonce des dés. Sur un
-   téléphone, ni étiquette, et « Journal ↓ » sous le texte, qui garde toute
-   la largeur. */
+   téléphone (lot 4.3), une seule ligne, coupée par « … », et « Journal ↓ »
+   au bout ; ni étiquette. Un appui, au doigt comme à la souris, mène au
+   journal. */
 .combat-bandeau {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  flex-wrap: nowrap;
+  align-items: center;
   gap: var(--espace-2) var(--espace-3);
   min-width: 0;
   padding: var(--espace-2) var(--espace-3);
@@ -264,17 +337,22 @@
   display: none;
 }
 
-/* Trois lignes au plus : la coupe (js/ecrans/combat_journal.js) mesure la
-   hauteur du texte contre trois fois son interligne ; ce qui dépasserait
-   encore est rogné. Un dé ne se coupe jamais (.combat-de-insecable). */
+/* Sur un téléphone, une ligne : le texte ne passe pas à la ligne, et ce qui
+   dépasse finit par « … » (mission du lot 4.3, § 6, point 5) ; la coupe de
+   js/ecrans/combat_journal.js, qui mesure trois lignes, le laisse entier. À
+   56rem, trois lignes au plus : la coupe mesure la hauteur du texte contre
+   trois fois son interligne, et ce qui dépasserait encore est rogné. Un dé
+   ne se coupe jamais (.combat-de-insecable). */
 .combat-bandeau-texte {
-  flex: 1 1 100%;
+  flex: 1 1 0;
   min-width: 0;
-  max-height: calc(var(--taille-petite) * var(--interligne) * 3);
+  max-height: calc(var(--taille-petite) * var(--interligne));
   overflow: hidden;
   font-family: var(--police-journal);
   font-size: var(--taille-petite);
   line-height: var(--interligne);
+  white-space: nowrap;
+  text-overflow: ellipsis;
   overflow-wrap: anywhere;
 }
 
@@ -508,6 +586,44 @@
   pointer-events: none;
 }
 
+/* Qui a tout joué pâlit (lot 4.3, B1) : son rond prend le second fond et un
+   anneau gris, sans opacité ; ses initiales et son nom gardent la couleur du
+   texte, qui tient 4,5:1 sur ce fond. Un mort, plus bas, l'emporte. */
+.combat-jeton.epuise .combat-rond {
+  background: var(--fond-2);
+  box-shadow: inset 0 0 0 calc(var(--trait) * 2) var(--combat-epuise);
+  color: var(--texte);
+}
+
+/* Un état porté : une pastille dans le coin du jeton, et de la vignette,
+   rouge pour une blessure, de l'alerte pour le reste ; cerclée du fond, elle
+   se détache du rond. Le nom de l'état se lit sur la fiche. */
+.combat-pastille-etat {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  width: var(--espace-3);
+  aspect-ratio: 1 / 1;
+  border: var(--trait) solid var(--fond);
+  border-radius: 50%;
+  background: var(--combat-alerte);
+  pointer-events: none;
+}
+
+.combat-pastille-etat.blessure {
+  background: var(--combat-echec);
+}
+
+.combat-pastille-etat.alerte {
+  background: var(--combat-alerte);
+}
+
+/* Sur la carte, la pastille suit la case, comme le jeton. */
+.combat-grille .combat-pastille-etat {
+  width: 18cqi;
+}
+
 /* Un mort est grisé et barré : le rond d'un trait, le nom d'un autre. */
 .combat-jeton.mort .combat-rond {
   background:
@@ -600,11 +716,105 @@
     var(--combat-mort);
 }
 
+/* « a tout joué » : le rond pâli d'un jeton qui a tout joué. */
+.combat-legende .epuise .combat-rond {
+  border-color: var(--combat-epuise);
+  background: var(--fond-2);
+}
+
 /* « portée de la capacité survolée » : un carré hachuré comme les cases. */
 .combat-legende .portee .combat-rond {
   border-color: var(--combat-portee-bord);
   border-radius: calc(var(--rayon) / 2);
   background-image: repeating-linear-gradient(var(--hachure-angle), var(--combat-portee) 0 var(--hachure-trait), transparent var(--hachure-trait) var(--hachure-pas));
+}
+
+/* Le dé tiré, en surimpression sur la carte, une seconde (lot 4.3, A5, B2) :
+   dernier enfant de la grille, posé sur ses cases (les lignes et les
+   colonnes 2 à la fin, celles des cases), au centre, ou au centre de la
+   moitié gauche ou droite que la bulle laisse libre ; l'écran choisit la
+   classe, et rien d'autre. Il ne prend aucun clic, ne se lit pas, et
+   n'arrête rien. Ni animation (il paraît, puis disparaît), ni transform, ni
+   opacité : son cadre, sur le fond, de la couleur de son verdict, qui colore
+   aussi sa valeur. */
+.combat-surimpression {
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espace-1);
+  grid-row: 2 / -1;
+  grid-column: 2 / -1;
+  place-self: center;
+  width: min(calc(var(--taille-de-jet) * 2), 100%);
+  aspect-ratio: 1 / 1;
+  padding: var(--espace-2);
+  overflow: hidden;
+  border: var(--trait-epais) solid var(--bordure);
+  border-radius: calc(var(--rayon) * 4);
+  background: var(--fond);
+  color: var(--texte);
+  text-align: center;
+  pointer-events: none;
+}
+
+.combat-surimpression-centre {
+  grid-column: 2 / -1;
+}
+
+.combat-surimpression-gauche {
+  grid-column: 2 / 7;
+}
+
+.combat-surimpression-droite {
+  grid-column: 7 / -1;
+}
+
+.combat-surimpression-titre {
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+  font-weight: var(--graisse-forte);
+  line-height: var(--interligne-titre);
+}
+
+.combat-surimpression-valeur {
+  font-size: calc(var(--taille-titre) * 2);
+  font-weight: var(--graisse-forte);
+  line-height: 1;
+}
+
+.combat-surimpression-verdict {
+  font-size: var(--taille-petite);
+  font-weight: var(--graisse-forte);
+  line-height: var(--interligne-titre);
+}
+
+.combat-surimpression.reussi {
+  border-color: var(--combat-reussite);
+}
+
+.combat-surimpression.reussi .combat-surimpression-valeur,
+.combat-surimpression.reussi .combat-surimpression-verdict {
+  color: var(--combat-reussite);
+}
+
+.combat-surimpression.echoue {
+  border-color: var(--combat-echec);
+}
+
+.combat-surimpression.echoue .combat-surimpression-valeur,
+.combat-surimpression.echoue .combat-surimpression-verdict {
+  color: var(--combat-echec);
+}
+
+.combat-surimpression.localisation {
+  border-color: var(--accent);
+}
+
+.combat-surimpression.localisation .combat-surimpression-valeur,
+.combat-surimpression.localisation .combat-surimpression-verdict {
+  color: var(--accent);
 }
 
 /* La bulle d'options, accrochée à la case de qui joue (complément, § 4.1) :
@@ -1033,6 +1243,305 @@ html:has(.combat-bulle:not([hidden])) {
 .combat-bulle .combat-option > .combat-capacite:not([data-ligne]):not([aria-disabled="true"]):focus-visible {
   background: var(--accent-doux);
   box-shadow: inset 0 0 0 var(--trait) var(--accent);
+}
+
+/* Le volet pas à pas, au téléphone, et ce que le geste du lot 4.3 y montre
+   comme dans la bulle (vues A2 à A7, F1 à F12). Le fil des étapes : celle
+   en cours en évidence, celles faites dans la couleur du texte. */
+.combat-fil {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--espace-1);
+  margin: 0 0 var(--espace-2);
+  padding: 0;
+  list-style: none;
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+}
+
+.combat-fil li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espace-1);
+}
+
+.combat-fil li.fait {
+  color: var(--texte);
+}
+
+.combat-fil li.en-cours {
+  color: var(--accent);
+  font-weight: var(--graisse-forte);
+}
+
+/* La consigne de l'étape (« Que fait Aubépine ? »), au-dessus de ce qu'on
+   y touche. */
+.combat-consigne {
+  margin: 0 0 var(--espace-2);
+  color: var(--texte-2);
+}
+
+/* Le volet au repos : « Fiches », « Journal », « Annuler le dernier
+   geste », « Fin de tour » au tour adverse. */
+.combat-repos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espace-2);
+  margin: var(--espace-2) 0 0;
+}
+
+/* Ce qui suit le nom d'une cible (« défense 5 · corps 10/10 »). */
+.combat-cible-detail {
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+  font-weight: normal;
+}
+
+/* « Un jet par cible : 2 cibles » : une phrase sur PC, un bouton au
+   téléphone. */
+.combat-jets-par-cible {
+  margin: 0 0 var(--espace-2);
+}
+
+/* L'avancement de plusieurs cibles, une pastille par cible, comme les
+   étapes. */
+.combat-progression {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espace-1);
+  margin: 0 0 var(--espace-2);
+  padding: 0;
+  list-style: none;
+  font-size: var(--taille-petite);
+}
+
+.combat-progression li {
+  padding: 0 var(--espace-2);
+  border: var(--trait) solid var(--separateur);
+  border-radius: var(--cible-tactile);
+  background: var(--fond);
+  color: var(--texte-2);
+}
+
+.combat-progression li.fait {
+  color: var(--texte);
+}
+
+.combat-progression li.en-cours {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: var(--graisse-forte);
+}
+
+.combat-progression li.a-venir {
+  border-style: dashed;
+}
+
+/* L'avis du geste (« Le coup manque… », « Aucune intervention
+   possible. ») : comme la zone d'avis, bordé de l'alerte. */
+.combat-geste-avis {
+  margin: 0 0 var(--espace-2);
+  padding: var(--espace-2) var(--espace-3);
+  border-left: var(--trait-epais) solid var(--combat-alerte);
+  background: var(--fond-2);
+}
+
+/* Les interventions : chaque intervenant dans son cadre, ses interventions
+   dessous, chacune sur la largeur. */
+.combat-interventions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espace-2);
+  margin: 0 0 var(--espace-2);
+}
+
+.combat-interventions p {
+  margin: 0;
+}
+
+.combat-intervenant {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espace-1);
+  padding: var(--espace-2);
+  border: var(--trait) solid var(--separateur);
+  border-radius: var(--rayon);
+  background: var(--fond-2);
+}
+
+.combat-intervenant .combat-capacite {
+  width: 100%;
+}
+
+/* La contre-attaque (« 20 : contre-attaque ! ») et le coup critique : un
+   cadre, de l'alerte pour l'une, de l'accent pour l'autre. */
+.combat-contre-attaque,
+.combat-critique {
+  margin: 0 0 var(--espace-2);
+  padding: var(--espace-2) var(--espace-3);
+  border: var(--trait) solid var(--combat-alerte);
+  border-radius: var(--rayon);
+  background: var(--fond-2);
+}
+
+.combat-critique {
+  border-color: var(--accent);
+}
+
+.combat-contre-attaque p,
+.combat-critique p {
+  margin: 0 0 var(--espace-1);
+}
+
+/* Un passif du jet (« Nez fin · 1 souffle ») : un bouton qui ouvre la
+   palette à son nom, du trait de l'accent. */
+.combat-passif-bouton {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--espace-2);
+  max-width: 100%;
+  margin: 0 var(--espace-2) var(--espace-2) 0;
+  padding: var(--espace-1) var(--espace-3);
+  border: var(--trait) solid var(--accent);
+  border-radius: var(--rayon);
+  background: var(--accent-doux);
+  color: var(--texte);
+  text-align: left;
+  cursor: pointer;
+}
+
+/* « Inverser » et « Relancer », sous le dernier dé. */
+.combat-de-outils {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espace-2);
+  margin: 0 0 var(--espace-2);
+}
+
+/* Ce que le coup a fait, en tête de la blessure. */
+.combat-blessure-detail {
+  margin: 0 0 var(--espace-2);
+  font-weight: var(--graisse-forte);
+}
+
+/* Le pied d'un geste ou de la palette : ses boutons au bout, sous un trait.
+   Dans ce qui défile (la bulle, la palette), il reste au bas de la partie
+   vue, sur le fond. */
+.combat-pied {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--espace-2);
+  margin: var(--espace-3) 0 0;
+  padding: var(--espace-2) 0 0;
+  border-top: var(--trait) solid var(--separateur);
+}
+
+.combat-bulle-defile > .combat-pied,
+.combat-palette > .combat-pied {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding-bottom: var(--espace-2);
+  background: var(--fond);
+}
+
+/* La palette (lot 4.3, F4, E1) : son titre, la phrase de sa source, ses
+   onglets, ses genres par groupe, l'aperçu de ce que le journal écrira, les
+   effets en cours, puis son pied. Au téléphone, une feuille ; sur PC, une
+   colonne de la bulle élargie, plus bas. */
+.combat-palette {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espace-2);
+  min-width: 0;
+  font-size: var(--taille-petite);
+}
+
+.combat-palette h2 {
+  margin: 0;
+  font-size: var(--taille-texte);
+}
+
+.combat-palette h3,
+.combat-palette h4 {
+  margin: 0;
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+  text-transform: uppercase;
+}
+
+.combat-palette p {
+  margin: 0;
+}
+
+/* Le texte de la source, dans son cadre de l'accent. */
+.combat-palette-texte {
+  padding: var(--espace-2) var(--espace-3);
+  border: var(--trait) solid var(--accent);
+  border-radius: var(--rayon);
+  background: var(--accent-doux);
+}
+
+.combat-palette-onglets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espace-1);
+}
+
+.combat-palette-onglets [role="tab"] {
+  padding: 0 var(--espace-3);
+  border: var(--trait) solid var(--bordure);
+  border-radius: var(--cible-tactile);
+  background: var(--fond);
+  color: var(--texte);
+  cursor: pointer;
+}
+
+.combat-palette-onglets [aria-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--texte-sur-accent);
+  font-weight: var(--graisse-forte);
+}
+
+.combat-palette-groupe {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espace-1) var(--espace-2);
+}
+
+.combat-palette-groupe h4 {
+  flex: 1 1 100%;
+}
+
+/* « Le journal écrira : … », dans la police du journal. */
+.combat-palette-apercu {
+  padding: var(--espace-2) var(--espace-3);
+  border: var(--trait) solid var(--separateur);
+  border-radius: var(--rayon);
+  background: var(--fond-2);
+  font-family: var(--police-journal);
+  overflow-wrap: anywhere;
+}
+
+.combat-palette-effets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espace-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.combat-palette-effets li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--espace-1);
 }
 
 /* Le panneau d'action et la préparation */
@@ -1631,6 +2140,24 @@ html:has(.combat-bulle:not([hidden])) {
   box-shadow: inset 0 0 0 var(--trait) var(--combat-adv);
 }
 
+/* Le camp qui joue (lot 4.3, B1) : un bord gauche épais, de la couleur des
+   vignettes, vert pour qui peut encore agir, gris pour qui a tout joué. Il
+   suit les marques de qui joue et de la cible, dont il ne change que ce
+   bord. */
+.combat-fiche.a-jouer,
+.combat-fiche.epuise {
+  border-left-width: var(--trait-epais);
+  border-left-style: solid;
+}
+
+.combat-fiche.a-jouer {
+  border-left-color: var(--combat-a-jouer);
+}
+
+.combat-fiche.epuise {
+  border-left-color: var(--combat-epuise);
+}
+
 /* Avant le lancement, le champ « Case » et « Retirer » suivent la fiche,
    hors du volet : ils se voient que la fiche soit ouverte ou repliée, à
    toute largeur. Leur groupe prolonge le cadre de la fiche. */
@@ -1951,6 +2478,81 @@ html:has(.combat-bulle:not([hidden])) {
   color: var(--texte-2);
 }
 
+/* Les effets en cours (lot 4.3, § 4.7) : une étiquette chacun, son nom, sa
+   source et sa durée, bordée et écrite de sa couleur sur le fond (rouge pour
+   une blessure, vert pour ce qui aide, l'alerte pour le reste) ; elle se
+   déplie sur son texte et « Appliquer l'effet de… ». Le ✕ la suit. Son
+   intitulé n'est pas celui d'une fiche : ni sa grille, ni son repli. */
+.combat-etiquettes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--espace-1);
+  margin: var(--espace-2) 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--taille-petite);
+}
+
+.combat-etiquette {
+  position: relative;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--espace-1);
+  max-width: 100%;
+  padding: 0 0 0 var(--espace-2);
+  border: var(--trait) solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--fond);
+  color: var(--texte);
+  overflow-wrap: anywhere;
+}
+
+.combat-etiquette summary {
+  display: flex;
+  align-items: center;
+  gap: var(--espace-1);
+  padding: 0 var(--espace-1) 0 0;
+}
+
+.combat-etiquette details:not([open]) > summary::after {
+  content: "▸";
+}
+
+.combat-etiquette details[open] > summary::after {
+  content: "▾";
+}
+
+.combat-etiquette details[open] {
+  flex: 1 1 100%;
+  padding-bottom: var(--espace-1);
+}
+
+.combat-etiquette p {
+  margin: 0 0 var(--espace-1);
+  color: var(--texte);
+}
+
+.combat-etiquette.blessure {
+  border-color: var(--combat-echec);
+  color: var(--combat-echec);
+}
+
+.combat-etiquette.favorable {
+  border-color: var(--combat-reussite);
+  color: var(--combat-reussite);
+}
+
+.combat-etiquette.alerte {
+  border-color: var(--combat-alerte);
+  color: var(--combat-alerte);
+}
+
+/* « Modifier… », en Mode MJ, avec « Jouer » et « Fiche complète ». */
+.combat-modifier {
+  white-space: nowrap;
+}
+
 /* Le journal */
 
 .combat-journal {
@@ -1971,12 +2573,15 @@ html:has(.combat-bulle:not([hidden])) {
 
 /* Sa hauteur est limitée et il défile : 18rem sur un téléphone. À droite,
    la place d'une barre de défilement : dans Firefox elle se pose sur le
-   contenu, et couvrait la fin des lignes. */
+   contenu, et couvrait la fin des lignes. Quand « Lignes précédentes » pose
+   des lignes au-dessus, la liste garde à sa place la ligne lue, d'elle-même
+   (js/ecrans/combat_journal.js) : le navigateur n'en rajoute pas. */
 .combat-lignes {
   max-height: calc(var(--espace-6) * 9);
   margin: 0;
   padding: 0 var(--espace-3) 0 0;
   overflow: auto;
+  overflow-anchor: none;
   list-style: none;
   font-family: var(--police-journal);
   font-size: var(--taille-petite);
@@ -2077,6 +2682,478 @@ html:has(.combat-bulle:not([hidden])) {
   margin-bottom: 0;
 }
 
+/* « Lignes précédentes » : 500 lignes de plus, au-dessus. */
+.combat-precedentes {
+  display: block;
+  margin: var(--espace-2) auto;
+}
+
+/* L'interrupteur du Mode MJ, sur PC, dans l'en-tête de la carte. */
+.combat-plateau-mj {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+/* Les feuilles et les dialogues (lot 4.3, D4, F1 à F13) : un voile, puis,
+   au téléphone, une feuille qui monte du bas, sa tête (son titre, ✕), son
+   corps qui défile en lui-même, son pied ; à 56rem, un dialogue au milieu
+   de la fenêtre. Le voile ne prend que les appuis qui ferment. */
+.combat-voile {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  background: var(--voile);
+}
+
+.combat-feuille {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(var(--hauteur-fenetre) - var(--cible-tactile) * 2);
+  border-top: var(--trait) solid var(--bordure);
+  border-radius: calc(var(--rayon) * 2) calc(var(--rayon) * 2) 0 0;
+  background: var(--fond);
+  color: var(--texte);
+}
+
+/* Sa tête : le titre, puis ce qui le précise, l'un sous l'autre ; ✕, le
+   dernier du document, dans le coin. */
+.combat-feuille-tete {
+  display: grid;
+  flex: none;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0 var(--espace-2);
+  padding: var(--espace-2) var(--espace-2) var(--espace-2) var(--espace-3);
+  border-bottom: var(--trait) solid var(--separateur);
+}
+
+.combat-feuille-tete > * {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.combat-feuille-tete > :last-child {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+}
+
+.combat-feuille-tete h2,
+.combat-feuille-tete h3 {
+  font-size: var(--taille-texte);
+}
+
+.combat-feuille-corps,
+.combat-feuille > .combat-palette {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--espace-2) var(--espace-3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.combat-feuille-pied {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--espace-2);
+  padding: var(--espace-2) var(--espace-3);
+  border-top: var(--trait) solid var(--separateur);
+}
+
+/* Au téléphone, les boutons du pied se partagent sa largeur. */
+.combat-feuille-pied > * {
+  flex: 1 1 auto;
+}
+
+/* Un menu : une ligne par entrée, sur la largeur, son intitulé puis ce
+   qu'elle fait, en petit (« attaque, défense, souffle… »). */
+.combat-menu {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.combat-menu-ligne {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--espace-2);
+  width: 100%;
+  min-height: var(--cible-tactile);
+  padding: var(--espace-1) var(--espace-2);
+  border: var(--trait) solid transparent;
+  border-radius: var(--rayon);
+  background: transparent;
+  color: var(--texte);
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.combat-menu-ligne:not([aria-disabled="true"]):hover,
+.combat-menu-ligne:not([aria-disabled="true"]):focus-visible {
+  background: var(--accent-doux);
+  box-shadow: inset 0 0 0 var(--trait) var(--accent);
+}
+
+.combat-menu-ligne[aria-disabled="true"] {
+  border-style: dashed;
+  border-color: var(--bordure);
+  color: var(--texte-2);
+}
+
+.combat-menu-contexte {
+  display: block;
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--texte-2);
+  font-size: var(--taille-petite);
+  font-weight: normal;
+}
+
+/* L'interrupteur du Mode MJ (role="switch") : un rail et son bouton rond,
+   à gauche éteint, à droite et sur l'accent allumé ; sa phrase dit l'état,
+   jamais la couleur seule. */
+.combat-interrupteur {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--espace-2);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--texte);
+  text-align: left;
+  cursor: pointer;
+}
+
+.combat-interrupteur::before {
+  content: "";
+  flex: none;
+  width: calc(var(--espace-6) + var(--espace-3));
+  height: var(--espace-5);
+  border: calc(var(--trait) * 2) solid var(--bordure);
+  border-radius: var(--espace-5);
+  background: radial-gradient(circle closest-side, var(--texte-2) 70%, transparent 75%) left / var(--espace-5) 100% no-repeat, var(--fond);
+}
+
+.combat-interrupteur[aria-checked="true"]::before {
+  border-color: var(--accent);
+  background: radial-gradient(circle closest-side, var(--texte-sur-accent) 70%, transparent 75%) right / var(--espace-5) 100% no-repeat, var(--accent);
+}
+
+/* Un champ du menu du MJ : son intitulé, puis « − », la valeur, « + ». Une
+   saisie qui diffère de la valeur se voit : un trait de l'alerte à gauche,
+   et le champ bordé de l'alerte. */
+.combat-champ-mj {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espace-1) var(--espace-2);
+  padding: var(--espace-1) 0 var(--espace-1) var(--espace-2);
+  border-bottom: var(--trait) solid var(--separateur);
+}
+
+.combat-champ-mj > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.combat-champ-mj.change {
+  box-shadow: inset var(--trait-epais) 0 0 var(--combat-alerte);
+}
+
+.combat-champ-mj.change input {
+  border-color: var(--combat-alerte);
+  color: var(--combat-alerte);
+}
+
+/* Le plein écran du journal et des fiches, au téléphone : par-dessus le
+   combat, sous la bannière de la démonstration ; sa tête (le titre,
+   « Copier », « Télécharger », ✕), puis ce qui défile en lui-même. */
+.combat-plein {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--fond);
+  color: var(--texte);
+}
+
+.combat-plein-tete {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espace-2);
+  padding: var(--espace-2) var(--espace-2) var(--espace-2) var(--espace-3);
+  border-bottom: var(--trait) solid var(--separateur);
+}
+
+.combat-plein-tete > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+}
+
+.combat-plein .combat-journal {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.combat-plein .combat-lignes,
+.combat-plein .combat-camps {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  padding: var(--espace-2) var(--espace-3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* La ligne d'une seconde (ce qu'un appui ne fait pas, une raison) : posée
+   sous la barre, sur la largeur d'une lecture ; elle ne prend aucun appui. */
+.combat-toast {
+  position: fixed;
+  top: calc(var(--cible-tactile) * 2);
+  right: var(--espace-4);
+  left: var(--espace-4);
+  z-index: 7;
+  max-width: var(--largeur-lecture);
+  margin: 0 auto;
+  padding: var(--espace-2) var(--espace-3);
+  border: var(--trait) solid var(--bordure);
+  border-radius: var(--rayon);
+  background: var(--fond-2);
+  color: var(--texte);
+  font-size: var(--taille-petite);
+  text-align: center;
+  pointer-events: none;
+}
+
+/* Le combat en jeu, sur un téléphone (lot 4.3) : l'écran prend la hauteur
+   que la page lui laisse (css/ecran.css), et la répartit. La barre et ce qui
+   la suit gardent leur hauteur ; le cadre prend le reste, et, dans le cadre,
+   la carte prend ce que laissent la dernière ligne du journal, les
+   vignettes et le volet, qui n'est plus fixé à la fenêtre : quand il
+   s'ouvre, elle se réduit. Les fiches et le journal passent en plein
+   écran : la feuille cache ceux de la page. À 56rem, tout est rendu. */
+.combat-en-jeu {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--espace-1);
+  min-height: 0;
+  padding: var(--espace-1) var(--espace-2) 0;
+}
+
+.combat-en-jeu > * {
+  flex: none;
+}
+
+/* Le titre de l'écran et l'aide, cachés à la vue comme l'annonce, et lus :
+   la barre du téléphone n'a que l'état du tour et ses boutons. */
+.combat-en-jeu .combat-barre h1,
+.combat-en-jeu .combat-aide {
+  position: absolute;
+  width: var(--trait);
+  height: var(--trait);
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.combat-en-jeu .combat-cadre {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--espace-1);
+  min-height: 0;
+}
+
+.combat-en-jeu .combat-cadre > * {
+  flex: none;
+}
+
+.combat-en-jeu .combat-cadre > .combat-camps,
+.combat-en-jeu > .combat-journal {
+  display: none;
+}
+
+/* Les vignettes : une rangée qui défile de côté en elle-même, jamais la
+   page ; la raison d'une vignette inactive s'y lit à sa suite. */
+.combat-vignettes {
+  display: flex;
+  gap: var(--espace-2);
+  min-width: 0;
+  padding: var(--espace-1) 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.combat-vignettes > .combat-raison {
+  position: static;
+  flex: none;
+  align-self: center;
+  max-width: var(--largeur-infobulle);
+}
+
+/* Une vignette (A1, A7) : l'initiale dans un rond, un rond par action
+   restante, le nom court, la garde ; verte tant qu'on peut agir, grise et
+   sur le fond quand on a tout joué ; celle du protagoniste choisi, bordée
+   de l'accent. Inactive, son trait est discontinu. */
+.combat-vignette {
+  position: relative;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--trait) * 2);
+  width: calc(var(--cible-tactile) * 1.5);
+  padding: var(--espace-1);
+  border: calc(var(--trait) * 2) solid var(--bordure);
+  border-radius: calc(var(--rayon) * 2);
+  background: var(--fond);
+  color: var(--texte);
+  font-size: var(--taille-petite);
+  font-weight: var(--graisse-forte);
+  line-height: var(--interligne-titre);
+  cursor: pointer;
+}
+
+.combat-vignette.a-jouer {
+  border-color: var(--combat-a-jouer);
+  background: var(--combat-a-jouer-doux);
+  color: var(--texte);
+}
+
+.combat-vignette.epuise {
+  border-color: var(--combat-epuise);
+  background: var(--fond);
+  color: var(--texte-2);
+  font-weight: normal;
+}
+
+.combat-vignette.choisie {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 var(--trait) var(--accent);
+}
+
+.combat-vignette[aria-disabled="true"] {
+  border-style: dashed;
+}
+
+.combat-vignette .combat-rond {
+  flex: none;
+  width: calc(var(--espace-5) + var(--espace-1));
+  border: calc(var(--trait) * 2) solid var(--bordure);
+  background: var(--fond);
+  color: var(--texte);
+}
+
+.combat-vignette.a-jouer .combat-rond {
+  border-color: var(--combat-a-jouer);
+}
+
+.combat-vignette.epuise .combat-rond {
+  border-color: var(--combat-epuise);
+  color: var(--texte-2);
+}
+
+.combat-vignette .combat-actions {
+  display: flex;
+  gap: calc(var(--trait) * 2);
+  min-height: var(--espace-2);
+}
+
+.combat-vignette .combat-pion {
+  width: var(--espace-2);
+  height: var(--espace-2);
+  border-width: var(--trait);
+  border-color: var(--combat-a-jouer);
+  background: var(--combat-a-jouer);
+}
+
+.combat-vignette .combat-pion.vide {
+  background: transparent;
+}
+
+.combat-vignette.epuise .combat-pion {
+  border-color: var(--combat-epuise);
+}
+
+.combat-vignette-nom,
+.combat-vignette-garde {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.combat-vignette-garde {
+  font-weight: normal;
+}
+
+/* La carte prend la place qui reste : un conteneur de taille, où la grille,
+   carrée, prend la plus petite de sa largeur et de sa hauteur, moins la
+   ligne de la légende, qui défile de côté en elle-même. L'en-tête de la
+   carte n'y est pas (la maquette) ; la légende reste. */
+.combat-en-jeu .combat-plateau {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espace-1);
+  min-height: 0;
+  container-type: size;
+}
+
+.combat-en-jeu .combat-plateau-tete {
+  display: none;
+}
+
+.combat-en-jeu .combat-grille {
+  flex: none;
+  width: min(100cqi, calc(100cqb - var(--taille-petite) * var(--interligne) - var(--espace-1)));
+  margin: 0;
+}
+
+.combat-en-jeu .combat-legende {
+  flex: none;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  max-width: 100%;
+  margin: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+/* Le volet n'est plus fixé : il suit la carte dans la colonne, à 45 % du
+   cadre au plus (sa hauteur de volet), et défile en lui-même. */
+.combat-en-jeu .combat-bulle {
+  position: relative;
+  flex: 0 1 auto;
+  min-height: 0;
+}
+
 /* De 56rem à 80rem : le bandeau, le plateau et la zone sous la carte à
    gauche, les deux camps à droite ; la bulle, posée sur le cadre, à côté de
    la case de qui joue. Un jeton montre son nom court à côté de son rond ;
@@ -2091,6 +3168,81 @@ html:has(.combat-bulle:not([hidden])) {
 @media (min-width: 56rem) {
   .combat-plus-bouton {
     display: none;
+  }
+
+  /* Le combat en jeu, sur un grand écran (lot 4.3) : chaque règle du
+     téléphone rendue à ce qu'elle était ; la page défile comme avant, le
+     titre, l'aide, la carte entière, les fiches et le journal y sont. Ni ☰
+     ni vignettes : l'en-tête du site et les fiches les tiennent. */
+  .combat-en-jeu {
+    display: block;
+    padding: 0;
+  }
+
+  .combat-en-jeu .combat-barre h1,
+  .combat-en-jeu .combat-aide {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  .combat-en-jeu .combat-aide {
+    margin: var(--espace-2) 0 var(--espace-3);
+  }
+
+  .combat-en-jeu .combat-site,
+  .combat-vignettes {
+    display: none;
+  }
+
+  .combat-barre:has(.combat-etat) .combat-etat-court {
+    display: none;
+  }
+
+  .combat-en-jeu .combat-barre:has(.combat-etat-court) .combat-etat {
+    display: block;
+  }
+
+  .combat-en-jeu .combat-cadre {
+    display: grid;
+    gap: var(--espace-3);
+  }
+
+  .combat-en-jeu .combat-cadre > .combat-camps {
+    display: grid;
+  }
+
+  .combat-en-jeu > .combat-journal {
+    display: block;
+  }
+
+  .combat-en-jeu .combat-plateau {
+    display: block;
+    container-type: normal;
+  }
+
+  .combat-en-jeu .combat-plateau-tete {
+    display: flex;
+  }
+
+  .combat-en-jeu .combat-grille {
+    width: auto;
+    margin: 0 auto;
+  }
+
+  .combat-en-jeu .combat-legende {
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: var(--espace-2) 0 0;
+    overflow-x: visible;
+    white-space: normal;
+  }
+
+  .combat-en-jeu .combat-bulle {
+    position: absolute;
   }
 
   /* Comme sur la maquette, tout tient sur une ligne, et le bouton principal
@@ -2150,10 +3302,11 @@ html:has(.combat-bulle:not([hidden])) {
   }
 
   /* Le bandeau, sur la largeur de la colonne de la carte : son étiquette,
-     sur deux lignes, puis le texte, puis « Journal ↓ », sur une rangée. */
+     sur deux lignes, puis le texte, sur trois lignes au plus, puis
+     « Journal ↓ », sur une rangée. */
   .combat-bandeau {
     grid-area: bandeau;
-    flex-wrap: nowrap;
+    align-items: flex-start;
   }
 
   .combat-bandeau-etiquette {
@@ -2167,11 +3320,15 @@ html:has(.combat-bulle:not([hidden])) {
   }
 
   .combat-bandeau-texte {
-    flex: 1 1 0;
+    max-height: calc(var(--taille-petite) * var(--interligne) * 3);
+    white-space: normal;
+    text-overflow: clip;
   }
 
   /* La bulle se pose sur le cadre, à la place calculée, et défile en
-     elle-même au-delà de la hauteur de la fenêtre moins 32 px : 20rem pour
+     elle-même au-delà de sa plus grande hauteur, que echelle.js calcule du
+     haut de la bulle, jamais au-dessus du bandeau, au bas de la fenêtre
+     (lot 4.3, B1), et jamais plus que la fenêtre moins 32 px : 20rem pour
      la liste, 29,5rem pour le jet, jamais plus que le cadre. */
   .combat-bulle {
     position: absolute;
@@ -2180,13 +3337,53 @@ html:has(.combat-bulle:not([hidden])) {
     bottom: auto;
     left: var(--bulle-gauche);
     width: min(var(--largeur-bulle), 100%);
-    max-height: var(--hauteur-bulle-max);
+    max-height: min(var(--hauteur-bulle-max), var(--bulle-hauteur));
     border: var(--trait) solid var(--bordure);
     border-radius: var(--rayon);
   }
 
   .combat-bulle-jet {
     width: min(var(--largeur-bulle-jet), 100%);
+  }
+
+  /* La bulle élargie, quand la palette s'y ouvre (E1) : le jet à gauche, la
+     palette en colonne à droite, chacun défilant en lui-même, sous la tête
+     commune. */
+  .combat-bulle-large {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    width: min(calc(var(--largeur-bulle-jet) + var(--largeur-bulle)), 100%);
+  }
+
+  .combat-bulle-large > .combat-bulle-tete {
+    grid-column: 1 / -1;
+  }
+
+  .combat-bulle-large > .combat-palette {
+    min-height: 0;
+    padding: var(--espace-2) var(--espace-3) var(--espace-3);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-left: var(--trait) solid var(--separateur);
+  }
+
+  /* Une feuille devient un dialogue au milieu de la fenêtre ; les boutons
+     de son pied gardent leur largeur. */
+  .combat-feuille {
+    top: 50%;
+    right: auto;
+    bottom: auto;
+    left: 50%;
+    width: min(var(--largeur-bulle-jet), calc(100% - var(--espace-6) * 2));
+    max-height: var(--hauteur-bulle-max);
+    border: var(--trait) solid var(--bordure);
+    border-radius: var(--rayon);
+    transform: translate(-50%, -50%);
+  }
+
+  .combat-feuille-pied > * {
+    flex: 0 1 auto;
   }
 
   .combat-bulle-poignee {
@@ -2418,7 +3615,8 @@ html:has(.combat-bulle:not([hidden])) {
       "pj action adv";
   }
 
-  .combat-camps {
+  .combat-camps,
+  .combat-en-jeu .combat-cadre > .combat-camps {
     display: contents;
   }
 

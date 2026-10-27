@@ -58,8 +58,11 @@ const PAIRES = [
   ["combat-cadre-jet", ["fond", "fond-2", "combat-cadre-jet-fond"], 3],
   ["combat-portee", FONDS_DE_CASE, 3],
   ["combat-portee-bord", FONDS_DE_CASE, 3],
-  // Les jetons neufs : les titres (lot 5) ; les vignettes du combat (lot 4,
-  // groupe 3), mesurées dès maintenant.
+  // Les jetons neufs : les titres (lot 5) ; les vignettes et les fiches du
+  // combat (lot 4.3) : qui peut encore agir, un texte et un bord, sur les
+  // fonds et son fond doux ; qui a tout joué, un bord et un anneau. Le nom
+  // d'un jeton qui a tout joué, en --texte sur --fond-2, est mesuré plus
+  // haut avec le texte du site.
   ["couleur-titre", ["fond", "fond-2"], 4.5],
   ["combat-a-jouer", ["fond", "fond-2", "combat-a-jouer-doux"], 4.5],
   ["combat-epuise", ["fond", "fond-2"], 3],
@@ -225,12 +228,20 @@ function ecartsAvecAtelier(css) {
 
 test("contrastes — css/jetons.css, clair puis sombre, a les couleurs d'atelier-clair et d'atelier-sombre", () => {
   const { clair, sombre } = couleursDeJetons(JETONS_CSS);
-  // Les vingt-huit jetons du catalogue, moins les trois réservés au groupe 3
-  // du lot 4 ; le sombre les redéclare tous.
-  assert.equal(Object.keys(clair).length, 25);
-  assert.equal(Object.keys(sombre).length, 25);
-  assert.deepEqual(JETONS_RESERVES, ["combat-a-jouer", "combat-a-jouer-doux", "combat-epuise"]);
+  // Les vingt-huit jetons du catalogue, tous : plus aucun n'est réservé
+  // depuis le lot 4.3 ; le sombre les redéclare tous.
+  assert.equal(Object.keys(clair).length, 28);
+  assert.equal(Object.keys(sombre).length, 28);
+  assert.deepEqual(JETONS_RESERVES, []);
   assert.deepEqual(ecartsAvecAtelier(JETONS_CSS), []);
+  // Un des trois du jeu en cours ôté de jetons.css, ou changé : chacun se voit.
+  assert.ok(JETONS_CSS.includes("  --combat-epuise: #7d838d;\n") || JETONS_CSS.includes("  --combat-epuise: #7d838d;\r\n"));
+  assert.deepEqual(ecartsAvecAtelier(JETONS_CSS.replace(/\r?\n {2}--combat-epuise: #7d838d;/, "")), [
+    "clair : --combat-epuise de atelier-clair manque dans jetons.css",
+  ]);
+  assert.deepEqual(ecartsAvecAtelier(JETONS_CSS.replace("--combat-a-jouer-doux: #163222;", "--combat-a-jouer-doux: #183022;")), [
+    "sombre : --combat-a-jouer-doux vaut #183022 dans jetons.css, #163222 dans atelier-sombre",
+  ]);
 
   // Une couleur changée, dans un bloc ou dans l'autre, une couleur retirée,
   // une couleur de plus : chacune se voit.

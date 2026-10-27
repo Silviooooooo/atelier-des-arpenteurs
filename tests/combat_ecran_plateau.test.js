@@ -69,10 +69,14 @@ function vueDe({ phase = "combat", places = { pj1: "D4", adv2: "F6", adv3: "D4",
   return vue;
 }
 
-/** Des actions qui notent ce qu'on leur demande ; « suite » se joue à chaque « executer ». */
+/**
+ * Des actions qui notent ce qu'on leur demande ; « suite » se joue à chaque
+ * « executer ». Un jeton actionné sans choix (vague 3, « jetonSansChoix ») se
+ * note à part, dans « sansChoix » : il ne rend aucune commande.
+ */
 function actionsEspionnes() {
   const appels = [];
-  const espion = { appels, suite: null };
+  const espion = { appels, suite: null, sansChoix: [] };
   const noter = (nom) => (...parametres) => {
     appels.push([nom, ...parametres]);
     if (nom === "executer" && espion.suite) espion.suite(...parametres);
@@ -86,17 +90,20 @@ function actionsEspionnes() {
     lancer: noter("lancer"),
     ouvrirFiche: noter("ouvrirFiche"),
     ouvrirCase: noter("ouvrirCase"),
+    ouvrirMenuMj: noter("ouvrirMenuMj"),
+    dire: noter("dire"),
+    jetonSansChoix: (id) => espion.sansChoix.push(id),
   };
   return espion;
 }
 
 /** Un plateau posé dans la page, et de quoi le défaire. */
-function monter(vue = vueDe()) {
+function monter(vue = vueDe(), ecran = {}, options = undefined) {
   const retirer = installerDom();
   const espion = actionsEspionnes();
-  const partie = creer(espion.actions);
+  const partie = creer(espion.actions, options);
   document.body.append(partie.noeud);
-  if (vue) partie.rendre(vue, {});
+  if (vue) partie.rendre(vue, ecran);
   return { partie, appels: espion.appels, espion, retirer };
 }
 
@@ -166,8 +173,10 @@ test("le plateau : cent cases de A1 à J10, leurs repères, la légende", () => 
     // que là où une souris survole).
     const tete = noeud.querySelector(".combat-plateau-tete");
     assert.equal(tete.tagName, "P");
-    assert.deepEqual(tete.children.map(texteDe), ["Carte de 10 × 10 cases · une diagonale compte pour une case", "Survolez un jeton pour son nom complet"]);
-    assert.deepEqual(tete.children.map((enfant) => enfant.className), ["", "combat-plateau-survol"]);
+    // La vague 3 (contrat, § 4.2) : la place de l'interrupteur du Mode MJ, vide, que l'écran remplit.
+    assert.deepEqual(tete.children.map(texteDe), ["Carte de 10 × 10 cases · une diagonale compte pour une case", "Survolez un jeton pour son nom complet", ""]);
+    assert.deepEqual(tete.children.map((enfant) => enfant.className), ["", "combat-plateau-survol", "combat-plateau-mj"]);
+    assert.ok(tete.children[2] === partie.emplacementMj && partie.emplacementMj.tagName === "SPAN");
     for (const balise of ["button", "a", "input"]) assert.equal(tete.querySelectorAll(balise).length, 0, `rien ne s'y actionne : ${balise}`);
 
     // L'ordre du document est celui que la feuille range : le coin, les dix
@@ -178,11 +187,13 @@ test("le plateau : cent cases de A1 à J10, leurs repères, la légende", () => 
       attendu.push(String(ligne));
       for (const lettre of "ABCDEFGHIJ") attendu.push(`case ${lettre}${ligne}`);
     }
-    assert.equal(grille.children.length, 121);
+    // Puis, dernier enfant de la grille, la surimpression du dé (vague 3, § 4.2, R n° 40).
+    assert.equal(grille.children.length, 122);
     assert.deepEqual(
-      grille.children.map((enfant) => (enfant.hasAttribute("data-case") ? `case ${enfant.getAttribute("data-case")}` : texteDe(enfant))),
+      grille.children.slice(0, 121).map((enfant) => (enfant.hasAttribute("data-case") ? `case ${enfant.getAttribute("data-case")}` : texteDe(enfant))),
       attendu,
     );
+    assert.ok(grille.children[121] === partie.surimpression);
     const reperes = [...grille.querySelectorAll(".combat-coord")];
     assert.equal(reperes.length, 21);
     // Les repères ne se lisent pas à part : chaque bouton dit déjà sa case.
@@ -195,8 +206,9 @@ test("le plateau : cent cases de A1 à J10, leurs repères, la légende", () => 
     // La légende gagne la portée de la capacité survolée (compl. § 4.2) : son
     // rond porte la classe des cases hachurées.
     const legende = [...noeud.querySelectorAll(".combat-legende li")];
-    assert.deepEqual(legende.map(texteDe), ["personnage", "adversaire", "joue", "cible", "mort, barré", "portée de la capacité survolée"]);
-    assert.deepEqual(legende.map((li) => li.className), ["combat-pj", "combat-adv", "joue", "cible", "mort", "portee"]);
+    // La vague 3 : « a tout joué » (le jeton pâli d'un épuisé, contrat, § 3.4).
+    assert.deepEqual(legende.map(texteDe), ["personnage", "adversaire", "joue", "cible", "a tout joué", "mort, barré", "portée de la capacité survolée"]);
+    assert.deepEqual(legende.map((li) => li.className), ["combat-pj", "combat-adv", "joue", "cible", "epuise", "mort", "portee"]);
     assert.ok(legende.every((li) => li.children.length === 1 && li.children[0].className === "combat-rond"));
     assert.equal(noeud.querySelectorAll(".combat-legende li.portee .combat-rond").length, 1);
     // Aucune case n'est hachurée tant qu'on ne survole rien.
@@ -210,7 +222,7 @@ test("le plateau : cent cases de A1 à J10, leurs repères, la légende", () => 
 
     // Toute classe est du combat, ou un état que nomme le contrat ; aucune ne
     // touche à la carte d'adversaire.
-    const etats = ["active", "possible", "inactive", "joue", "cible", "mort", "inactif", "portee"];
+    const etats = ["active", "possible", "inactive", "joue", "cible", "mort", "inactif", "portee", "epuise"];
     const classes = [noeud, ...noeud.descendants()].flatMap(classesDe);
     for (const classe of classes) {
       assert.ok(classe.startsWith("combat-") || etats.includes(classe), `classe inattendue : ${classe}`);
@@ -448,11 +460,11 @@ test("« +k » suit la case : il paraît, change et s'en va avec les jetons", ()
   }
 });
 
-test("un jeton qu'on peut choisir rend sa commande, avec l'origine « plateau » ; les autres ne font rien", () => {
+test("un jeton qu'on peut choisir rend sa commande, avec l'origine « plateau » ; les autres ne rendent rien, et le disent à l'écran (jetonSansChoix)", () => {
   const vue = vueDe({
     jetons: { pj1: { choix: CHOISIR("pj1") }, adv2: { choix: CIBLER("adv2") }, adv3: { inactif: true }, adv4: { mort: true } },
   });
-  const { partie, appels, retirer } = monter(vue);
+  const { partie, appels, espion, retirer } = monter(vue);
   try {
     assert.equal(inactif(jetonDe(partie, "pj1")), false);
     jetonDe(partie, "pj1").click();
@@ -467,12 +479,14 @@ test("un jeton qu'on peut choisir rend sa commande, avec l'origine « plateau »
     assert.equal(inactif(ecarte), true);
     ecarte.click();
     // Sans choix, sans être écarté (un mort, quelqu'un qui a joué) : un
-    // bouton nommé qui ne fait rien, et qui le dit.
+    // bouton nommé qui ne rend rien, et qui le dit.
     const mort = jetonDe(partie, "adv4");
     assert.ok(!classesDe(mort).includes("inactif"));
     assert.equal(inactif(mort), true);
     mort.click();
     assert.equal(appels.length, 2);
+    // La vague 3 (mission, § 6, point 6b) : l'écran apprend qu'un jeton sans choix a été actionné, et rien d'autre.
+    assert.deepEqual(espion.sansChoix, ["adv3", "adv4"]);
 
     // Un jeton à la fois écarté et porteur d'une commande reste inactif.
     partie.rendre(vueDe({ jetons: { adv3: { inactif: true, choix: CIBLER("adv3") } } }), {});
@@ -485,6 +499,7 @@ test("un jeton qu'on peut choisir rend sa commande, avec l'origine « plateau »
     jetonDe(partie, "adv3").click();
     assert.equal(appels.length, 3);
     assert.deepEqual(appels[2][1], { evenement: { type: "regler", champ: "cible", valeur: "adv3" } });
+    assert.deepEqual(espion.sansChoix, ["adv3", "adv4", "adv3"], "un jeton qui rend sa commande ne le dit pas");
   } finally {
     retirer();
   }
@@ -1174,5 +1189,222 @@ test("le focus ne fait jamais défiler la page : chaque focus du module porte pr
   assert.deepEqual([...new Set(focus)], [".focus({ preventScroll: true })"]);
   for (const interdit of ["scrollIntoView", "scrollTo", "scrollBy", "window.scroll", "scrollTop"]) {
     assert.ok(!SOURCE.includes(interdit), `« ${interdit} » n'a pas sa place dans le plateau`);
+  }
+});
+
+// ─── La vague 3 du lot 4.3 : l'épuisé, la pastille, le menu du MJ, la case demandée ───
+
+/** Un minuteur simulé : ce qui est posé attend « avancer ». */
+function minuteurSimule() {
+  const poses = new Map();
+  let numero = 0;
+  return {
+    poses,
+    poser(faire, ms) {
+      numero += 1;
+      poses.set(numero, { faire, ms });
+      return numero;
+    },
+    retirer(n) {
+      poses.delete(n);
+    },
+    avancer() {
+      for (const [n, { faire }] of [...poses]) {
+        poses.delete(n);
+        faire();
+      }
+    },
+  };
+}
+
+const MODIFIER = { libelle: "Modifier…", actif: true, raison: null, mj: true };
+const PHRASE_HORS_MJ = "Le menu du MJ s'ouvre en Mode MJ (menu ⋯).";
+const LE_GESTE_D_ABORD = "Le geste en cours se finit d'abord.";
+
+test("qui a tout joué pâlit (« epuise ») ; un état porté met une pastille dans le jeton, de sa couleur ; elles suivent la vue", () => {
+  const vue = vueDe({ jetons: { pj1: { epuise: true, pastille: "blessure" }, adv2: { pastille: "alerte" }, adv3: { pastille: "inconnue" } } });
+  const { partie, retirer } = monter(vue);
+  try {
+    assert.deepEqual(classesDe(jetonDe(partie, "pj1")), ["combat-jeton", "combat-pj", "epuise"]);
+    assert.ok(!classesDe(jetonDe(partie, "pj1")).includes("inactif"), "pâlir n'est pas être écarté");
+    const pastille = jetonDe(partie, "pj1").querySelector(".combat-pastille-etat");
+    assert.deepEqual(classesDe(pastille), ["combat-pastille-etat", "blessure"]);
+    assert.equal(pastille.getAttribute("aria-hidden"), "true");
+    assert.ok(pastille.parentNode === jetonDe(partie, "pj1"), "un enfant du jeton");
+    assert.deepEqual(classesDe(jetonDe(partie, "adv2").querySelector(".combat-pastille-etat")), ["combat-pastille-etat", "alerte"]);
+    assert.equal(jetonDe(partie, "adv3").querySelector(".combat-pastille-etat"), null, "une pastille inconnue ne paraît pas");
+    assert.equal(jetonDe(partie, "adv4").querySelector(".combat-pastille-etat"), null);
+    // L'état retiré, la pastille s'en va ; le jeton reste le même nœud.
+    const jeton = jetonDe(partie, "pj1");
+    partie.rendre(vueDe({ jetons: { pj1: { epuise: false, pastille: null } } }), {});
+    assert.ok(jetonDe(partie, "pj1") === jeton);
+    assert.deepEqual(classesDe(jeton), ["combat-jeton", "combat-pj"]);
+    assert.equal(jeton.querySelector(".combat-pastille-etat"), null);
+    assert.deepEqual(jeton.children.map((enfant) => enfant.className), ["combat-rond", "combat-nom-court"]);
+    // Avant le lancement, rien ne pâlit.
+    partie.rendre(vueDe({ phase: "preparation", jetons: { pj1: { epuise: true } } }), {});
+    assert.ok(!classesDe(jetonDe(partie, "pj1")).includes("epuise"));
+  } finally {
+    retirer();
+  }
+});
+
+test("le clic droit : en Mode MJ, le menu du MJ près du jeton au lieu de celui du navigateur ; inactif, sa raison ; hors Mode MJ ou sans menu, rien", () => {
+  const vue = vueDe({ jetons: { pj1: { menuMj: MODIFIER }, adv2: { menuMj: { ...MODIFIER, actif: false, raison: LE_GESTE_D_ABORD } }, adv3: { mort: true, menuMj: null } } });
+  const { partie, appels, retirer } = monter(vue, { modeMj: false });
+  try {
+    const droit = (id) => {
+      const evenement = { defaultPrevented: false };
+      jetonDe(partie, id).declencher("contextmenu", { preventDefault: () => (evenement.defaultPrevented = true) });
+      return evenement.defaultPrevented;
+    };
+    assert.equal(droit("pj1"), false, "hors Mode MJ, le menu du navigateur");
+    assert.deepEqual(appels, []);
+
+    partie.rendre(vue, { modeMj: true });
+    assert.equal(droit("pj1"), true);
+    assert.equal(appels.length, 1);
+    assert.deepEqual(appels[0].slice(0, 2), ["ouvrirMenuMj", "pj1"]);
+    assert.ok(appels[0][2] === jetonDe(partie, "pj1"), "l'ancre est le jeton");
+    assert.equal(droit("adv2"), true);
+    assert.deepEqual(appels[1], ["dire", LE_GESTE_D_ABORD]);
+    assert.equal(droit("adv3"), false, "un mort n'a pas de menu du MJ : le menu du navigateur");
+    assert.equal(appels.length, 2);
+    // Quand on ne joue pas, rien.
+    partie.rendre(vue, { modeMj: true, arrete: true });
+    assert.equal(droit("pj1"), false);
+    assert.equal(appels.length, 2);
+  } finally {
+    retirer();
+  }
+});
+
+test("l'appui long d'une demi-seconde, au minuteur : en Mode MJ le menu du MJ, hors Mode MJ la phrase ; relâché, annulé ou quitté avant, rien ; le clic qui le suit est avalé", () => {
+  const minuteur = minuteurSimule();
+  const vue = vueDe({ jetons: { pj1: { menuMj: MODIFIER, choix: CHOISIR("pj1") }, adv3: { mort: true, menuMj: null } } });
+  const { partie, appels, retirer } = monter(vue, { modeMj: false }, { minuteur });
+  try {
+    const jeton = () => jetonDe(partie, "pj1");
+    jeton().declencher("pointerdown", { pointerType: "touch", button: 0 });
+    assert.deepEqual([...minuteur.poses.values()].map(({ ms }) => ms), [500]);
+    minuteur.avancer();
+    assert.deepEqual(appels, [["dire", PHRASE_HORS_MJ]]);
+    // Le clic qui suit l'appui long ne choisit pas le protagoniste ; le suivant, si.
+    jeton().declencher("pointerup");
+    jeton().click();
+    assert.equal(appels.length, 1);
+    jeton().declencher("pointerdown", { pointerType: "mouse", button: 0 });
+    jeton().declencher("pointerup");
+    assert.equal(minuteur.poses.size, 0, "relâché avant la demi-seconde : l'appui s'oublie");
+    jeton().click();
+    assert.deepEqual(appels[1], ["executer", { choisir: "pj1" }, "plateau"]);
+
+    // En Mode MJ : le menu ; puis le clic droit qu'un téléphone envoie après l'appui ne l'ouvre pas deux fois.
+    partie.rendre(vue, { modeMj: true });
+    jeton().declencher("pointerdown", { pointerType: "touch", button: 0 });
+    minuteur.avancer();
+    assert.deepEqual(appels[2].slice(0, 2), ["ouvrirMenuMj", "pj1"]);
+    const droit = { evite: false };
+    jeton().declencher("contextmenu", { preventDefault: () => (droit.evite = true) });
+    assert.equal(droit.evite, true);
+    assert.equal(appels.length, 3, "un seul menu pour un appui");
+    // Annulé, ou le doigt qui quitte le jeton : rien.
+    for (const fin of ["pointercancel", "pointerleave"]) {
+      jeton().declencher("pointerdown", { pointerType: "touch", button: 0 });
+      jeton().declencher(fin);
+      assert.equal(minuteur.poses.size, 0, fin);
+    }
+    // Le bouton droit d'une souris ne pose pas d'appui long ; un jeton sans menu non plus.
+    jeton().declencher("pointerdown", { pointerType: "mouse", button: 2 });
+    jetonDe(partie, "adv3").declencher("pointerdown", { pointerType: "touch", button: 0 });
+    assert.equal(minuteur.poses.size, 0);
+    assert.equal(appels.length, 3);
+    // Un menu inactif dit sa raison.
+    partie.rendre(vueDe({ jetons: { pj1: { menuMj: { ...MODIFIER, actif: false, raison: LE_GESTE_D_ABORD } } } }), { modeMj: true });
+    jeton().declencher("pointerdown", { pointerType: "touch", button: 0 });
+    minuteur.avancer();
+    assert.deepEqual(appels.at(-1), ["dire", LE_GESTE_D_ABORD]);
+  } finally {
+    retirer();
+  }
+});
+
+test("la surimpression : un div caché aux lecteurs d'écran, dernier enfant de la grille, que les rendus ne touchent jamais", () => {
+  const { partie, retirer } = monter(null);
+  try {
+    const { surimpression } = partie;
+    assert.equal(surimpression.tagName, "DIV");
+    assert.equal(surimpression.className, "combat-surimpression");
+    assert.equal(surimpression.getAttribute("aria-hidden"), "true");
+    const grille = partie.noeud.querySelector(".combat-grille");
+    assert.ok(grille.children.at(-1) === surimpression);
+    // L'écran le remplit et lui pose ses classes : le plateau n'y revient pas.
+    surimpression.className = "combat-surimpression combat-surimpression-centre reussi";
+    surimpression.append("dé");
+    const ecritures = compterLesEcritures([surimpression]);
+    const classes = releverLesClasses([surimpression]);
+    partie.rendre(vueDe(), {});
+    partie.hachurer(["D4"]);
+    partie.rendre(vueDe({ jetons: { pj1: { marque: "joue" } } }), { modeMj: true, etroit: true });
+    partie.demanderUneCase({ exclue: "D4", nommer: (nom) => `Case ${nom}` }, () => {});
+    partie.finirLaDemande();
+    assert.equal(ecritures(), 0);
+    assert.deepEqual(classes, []);
+    assert.equal(surimpression.className, "combat-surimpression combat-surimpression-centre reussi");
+    assert.equal(texteDe(surimpression), "dé");
+    assert.ok(grille.children.at(-1) === surimpression, "toujours le dernier enfant");
+  } finally {
+    retirer();
+  }
+});
+
+test("la légende du téléphone dit « portée de la capacité choisie » ; sur PC, « survolée »", () => {
+  const { partie, retirer } = monter(vueDe(), { etroit: true });
+  try {
+    const portee = () => texteDe(partie.noeud.querySelector(".combat-legende li.portee"));
+    assert.equal(portee(), "portée de la capacité choisie");
+    assert.equal(partie.noeud.querySelectorAll(".combat-legende li.portee .combat-rond").length, 1);
+    partie.rendre(vueDe(), { etroit: false });
+    assert.equal(portee(), "portée de la capacité survolée");
+  } finally {
+    retirer();
+  }
+});
+
+test("demanderUneCase : chaque case sauf l'exclue devient un bouton nommé par qui la demande ; un appui finit la demande puis rappelle ; Échap ou finirLaDemande la finissent sans rien", () => {
+  const { partie, appels, retirer } = monter(vueDe({ jetons: { pj1: { marque: "joue" } }, cases: { D4: { active: true } } }));
+  try {
+    const rappels = [];
+    const nommer = (nom) => `Case ${nom} : y déplacer Marmiton de corvée n° 2`;
+    partie.demanderUneCase({ exclue: "E5", nommer }, (nom) => {
+      rappels.push([nom, partie.noeud.querySelectorAll(".combat-case-choix").length]);
+    });
+    assert.equal(partie.noeud.querySelectorAll(".combat-case-choix").length, 99);
+    assert.equal(choixDe(partie, "E5"), null, "la case exclue ne se choisit pas");
+    assert.equal(choixDe(partie, "D5").getAttribute("aria-label"), "Case D5 : y déplacer Marmiton de corvée n° 2");
+    choixDe(partie, "D5").click();
+    assert.deepEqual(rappels, [["D5", 0]], "la demande est finie quand le rappel arrive");
+    assert.deepEqual(appels, [], "aucune commande : le rappel décide");
+    // Échap sur une case.
+    partie.demanderUneCase({ exclue: null, nommer }, (nom) => rappels.push([nom]));
+    assert.equal(partie.noeud.querySelectorAll(".combat-case-choix").length, 100);
+    choixDe(partie, "A1").declencher("keydown", { key: "Escape" });
+    assert.equal(partie.noeud.querySelectorAll(".combat-case-choix").length, 0);
+    // finirLaDemande.
+    partie.demanderUneCase({ exclue: null, nommer }, (nom) => rappels.push([nom]));
+    partie.finirLaDemande();
+    assert.equal(partie.noeud.querySelectorAll(".combat-case-choix").length, 0);
+    assert.equal(rappels.length, 1);
+    // Avant le lancement, et quand on ne joue pas : rien ne se demande.
+    partie.rendre(vueDe(), { arrete: true });
+    partie.demanderUneCase({ exclue: null, nommer }, () => rappels.push(["?"]));
+    assert.equal(partie.noeud.querySelectorAll(".combat-case-choix").length, 0);
+    partie.rendre(vueDe(), {});
+    assert.equal(partie.noeud.querySelectorAll(".combat-case-choix").length, 0, "une demande refusée ne revient pas quand on rejoue");
+    partie.rendre(vueDe({ phase: "preparation" }), {});
+    partie.demanderUneCase({ exclue: null, nommer }, () => rappels.push(["?"]));
+    assert.equal(partie.noeud.querySelectorAll(".combat-case-choix").length, 0);
+  } finally {
+    retirer();
   }
 });

@@ -186,6 +186,9 @@
     --combat-portee-bord: #f2a08e;
     --combat-cadre-jet: #8f7a5c;
     --combat-cadre-jet-fond: #2f251c;
+    --combat-a-jouer: #7fcf86;
+    --combat-a-jouer-doux: #1e2f1d;
+    --combat-epuise: #8b7f70;
     --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "MedievalSharp", Georgia, serif;
     --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -221,6 +224,9 @@
     --combat-portee-bord: #f6ae9b;
     --combat-cadre-jet: #6e8c79;
     --combat-cadre-jet-fond: #1b2e23;
+    --combat-a-jouer: #84dca0;
+    --combat-a-jouer-doux: #1d3626;
+    --combat-epuise: #84968a;
     --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "Uncial Antiqua", Georgia, serif;
     --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -256,6 +262,9 @@
     --combat-portee-bord: #f39a8d;
     --combat-cadre-jet: #7f746a;
     --combat-cadre-jet-fond: #2b2826;
+    --combat-a-jouer: #6fd08a;
+    --combat-a-jouer-doux: #1c2e20;
+    --combat-epuise: #857b72;
     --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "Germania One", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -291,6 +300,9 @@
     --combat-portee-bord: #f07c7f;
     --combat-cadre-jet: #7c6c6a;
     --combat-cadre-jet-fond: #1f181a;
+    --combat-a-jouer: #74c987;
+    --combat-a-jouer-doux: #182619;
+    --combat-epuise: #7d7072;
     --police: "EB Garamond", Georgia, "Times New Roman", serif;
     --police-titre: "Grenze Gotisch", Georgia, serif;
     --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
@@ -326,6 +338,9 @@
     --combat-portee-bord: #c8372d;
     --combat-cadre-jet: #7d838d;
     --combat-cadre-jet-fond: #fffdf6;
+    --combat-a-jouer: #1c7439;
+    --combat-a-jouer-doux: #dff0e3;
+    --combat-epuise: #7d838d;
     --police: "EB Garamond", Georgia, "Times New Roman", serif;
     --police-titre: "Cinzel", Georgia, serif;
     --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
@@ -361,6 +376,9 @@
     --combat-portee-bord: #b8442a;
     --combat-cadre-jet: #8b7860;
     --combat-cadre-jet-fond: #fffaf0;
+    --combat-a-jouer: #1b7035;
+    --combat-a-jouer-doux: #dcefdc;
+    --combat-epuise: #8b7860;
     --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "El Messiri", Georgia, serif;
     --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -396,6 +414,9 @@
     --combat-portee-bord: #f5a198;
     --combat-cadre-jet: #677a88;
     --combat-cadre-jet-fond: #1d2a34;
+    --combat-a-jouer: #73d29c;
+    --combat-a-jouer-doux: #17322a;
+    --combat-epuise: #7d8b96;
     --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "Marcellus", Georgia, serif;
     --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -431,6 +452,9 @@
     --combat-portee-bord: #f4a097;
     --combat-cadre-jet: #6e7280;
     --combat-cadre-jet-fond: #1d212a;
+    --combat-a-jouer: #6fd08f;
+    --combat-a-jouer-doux: #183022;
+    --combat-epuise: #6e7280;
     --police: "EB Garamond", Georgia, "Times New Roman", serif;
     --police-titre: "UnifrakturMaguntia", Georgia, serif;
     --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
@@ -466,6 +490,9 @@
     --combat-portee-bord: #c8372d;
     --combat-cadre-jet: #8d7a7f;
     --combat-cadre-jet-fond: #f0e6dc;
+    --combat-a-jouer: #1d763a;
+    --combat-a-jouer-doux: #e0f0e3;
+    --combat-epuise: #8d7a7f;
     --police: "EB Garamond", Georgia, "Times New Roman", serif;
     --police-titre: "Playfair Display", Georgia, serif;
     --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
@@ -501,6 +528,9 @@
     --combat-portee-bord: #f4a097;
     --combat-cadre-jet: #8a6570;
     --combat-cadre-jet-fond: #2b141b;
+    --combat-a-jouer: #6fd08f;
+    --combat-a-jouer-doux: #183022;
+    --combat-epuise: #8a6570;
     --police: "EB Garamond", Georgia, "Times New Roman", serif;
     --police-titre: "Cormorant Garamond", Georgia, serif;
     --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
@@ -536,6 +566,9 @@
     --combat-portee-bord: #f49a94;
     --combat-cadre-jet: #6b7387;
     --combat-cadre-jet-fond: #252931;
+    --combat-a-jouer: #66cf8d;
+    --combat-a-jouer-doux: #173023;
+    --combat-epuise: #7b8291;
     --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-journal: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -571,6 +604,9 @@
     --combat-portee-bord: #ff8f99;
     --combat-cadre-jet: #7d72b5;
     --combat-cadre-jet-fond: #1d1940;
+    --combat-a-jouer: #4ff59a;
+    --combat-a-jouer-doux: #0f3326;
+    --combat-epuise: #8a83ab;
     --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "Orbitron", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-journal: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -606,6 +642,9 @@
     --combat-portee-bord: #c8372d;
     --combat-cadre-jet: #8a8a8a;
     --combat-cadre-jet-fond: #ffffff;
+    --combat-a-jouer: #1b7a3e;
+    --combat-a-jouer-doux: #e1f2e6;
+    --combat-epuise: #8a8a8a;
     --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-journal: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -641,6 +680,9 @@
     --combat-portee-bord: #b00000;
     --combat-cadre-jet: #000000;
     --combat-cadre-jet-fond: #ffffff;
+    --combat-a-jouer: #006b25;
+    --combat-a-jouer-doux: #e3f3e8;
+    --combat-epuise: #555555;
     --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-journal: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -676,6 +718,9 @@
     --combat-portee-bord: #c25000;
     --combat-cadre-jet: #7a7a7a;
     --combat-cadre-jet-fond: #ffffff;
+    --combat-a-jouer: #0068a8;
+    --combat-a-jouer-doux: #dcebf6;
+    --combat-epuise: #7a7a7a;
     --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-journal: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -711,6 +756,9 @@
     --combat-portee-bord: #a3301f;
     --combat-cadre-jet: #8c7b58;
     --combat-cadre-jet-fond: #fdfbf4;
+    --combat-a-jouer: #2f6e3a;
+    --combat-a-jouer-doux: #e1ecd8;
+    --combat-epuise: #8c7b58;
     --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "Marcellus", Georgia, serif;
     --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -746,6 +794,9 @@
     --combat-portee-bord: #b13a1d;
     --combat-cadre-jet: #8f7333;
     --combat-cadre-jet-fond: #fffaf0;
+    --combat-a-jouer: #23743b;
+    --combat-a-jouer-doux: #e0efdf;
+    --combat-epuise: #8f7333;
     --police: "EB Garamond", Georgia, "Times New Roman", serif;
     --police-titre: "Cinzel Decorative", Georgia, serif;
     --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
@@ -781,6 +832,9 @@
     --combat-portee-bord: #f7a59f;
     --combat-cadre-jet: #6c76a8;
     --combat-cadre-jet-fond: #18214a;
+    --combat-a-jouer: #7edca6;
+    --combat-a-jouer-doux: #15322f;
+    --combat-epuise: #7d86ad;
     --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "Cormorant Garamond", Georgia, serif;
     --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -816,6 +870,9 @@
     --combat-portee-bord: #c8372d;
     --combat-cadre-jet: #857150;
     --combat-cadre-jet-fond: #e0d0ad;
+    --combat-a-jouer: #196632;
+    --combat-a-jouer-doux: #e0f0e3;
+    --combat-epuise: #857150;
     --police: "EB Garamond", Georgia, "Times New Roman", serif;
     --police-titre: "IM Fell English", Georgia, serif;
     --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
@@ -851,6 +908,9 @@
     --combat-portee-bord: #f4a097;
     --combat-cadre-jet: #7d6d58;
     --combat-cadre-jet-fond: #26201a;
+    --combat-a-jouer: #6fd08f;
+    --combat-a-jouer-doux: #183022;
+    --combat-epuise: #7d6d58;
     --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "IM Fell English", Georgia, serif;
     --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -886,6 +946,9 @@
     --combat-portee-bord: #f4a097;
     --combat-cadre-jet: #4f7d8c;
     --combat-cadre-jet-fond: #0a2330;
+    --combat-a-jouer: #6fd08f;
+    --combat-a-jouer-doux: #183022;
+    --combat-epuise: #4f7d8c;
     --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "Exo 2", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-journal: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -921,6 +984,9 @@
     --combat-portee-bord: #f4a097;
     --combat-cadre-jet: #7c7f8c;
     --combat-cadre-jet-fond: #1f2430;
+    --combat-a-jouer: #6fd08f;
+    --combat-a-jouer-doux: #183022;
+    --combat-epuise: #7c7f8c;
     --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "Cinzel", Georgia, serif;
     --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -956,6 +1022,9 @@
     --combat-portee-bord: #f4a097;
     --combat-cadre-jet: #84705a;
     --combat-cadre-jet-fond: #261c15;
+    --combat-a-jouer: #6fd08f;
+    --combat-a-jouer-doux: #183022;
+    --combat-epuise: #84705a;
     --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "Germania One", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -991,6 +1060,9 @@
     --combat-portee-bord: #c8372d;
     --combat-cadre-jet: #8b7349;
     --combat-cadre-jet-fond: #e4d4ad;
+    --combat-a-jouer: #196833;
+    --combat-a-jouer-doux: #e0f0e3;
+    --combat-epuise: #8b7349;
     --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "Marcellus", Georgia, serif;
     --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -1026,6 +1098,9 @@
     --combat-portee-bord: #f4a097;
     --combat-cadre-jet: #866a32;
     --combat-cadre-jet-fond: #0a1428;
+    --combat-a-jouer: #6fd08f;
+    --combat-a-jouer-doux: #183022;
+    --combat-epuise: #866a32;
     --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "Cinzel", Georgia, serif;
     --police-journal: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -1061,6 +1136,9 @@
     --combat-portee-bord: #c8372d;
     --combat-cadre-jet: #8c7a5c;
     --combat-cadre-jet-fond: #eadfc9;
+    --combat-a-jouer: #1b7037;
+    --combat-a-jouer-doux: #e0f0e3;
+    --combat-epuise: #8c7a5c;
     --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "Rye", Georgia, serif;
     --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -1096,6 +1174,9 @@
     --combat-portee-bord: #c8372d;
     --combat-cadre-jet: #6b5900;
     --combat-cadre-jet-fond: #ffe14d;
+    --combat-a-jouer: #1c7238;
+    --combat-a-jouer-doux: #e0f0e3;
+    --combat-epuise: #6b5900;
     --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "Racing Sans One", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-journal: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -1131,6 +1212,9 @@
     --combat-portee-bord: #c8372d;
     --combat-cadre-jet: #8f7a52;
     --combat-cadre-jet-fond: #ece2cf;
+    --combat-a-jouer: #1c7238;
+    --combat-a-jouer-doux: #e0f0e3;
+    --combat-epuise: #8f7a52;
     --police: "EB Garamond", Georgia, "Times New Roman", serif;
     --police-titre: "Cormorant Garamond", Georgia, serif;
     --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
@@ -1166,6 +1250,9 @@
     --combat-portee-bord: #f4a097;
     --combat-cadre-jet: #7d6f58;
     --combat-cadre-jet-fond: #171411;
+    --combat-a-jouer: #6fd08f;
+    --combat-a-jouer-doux: #183022;
+    --combat-epuise: #7d6f58;
     --police: "EB Garamond", Georgia, "Times New Roman", serif;
     --police-titre: "Cormorant Garamond", Georgia, serif;
     --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
@@ -1201,6 +1288,9 @@
     --combat-portee-bord: #f4a097;
     --combat-cadre-jet: #7e6aa8;
     --combat-cadre-jet-fond: #261845;
+    --combat-a-jouer: #6fd08f;
+    --combat-a-jouer-doux: #183022;
+    --combat-epuise: #7e6aa8;
     --police: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "Pixelify Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-journal: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -1236,6 +1326,9 @@
     --combat-portee-bord: #f4a097;
     --combat-cadre-jet: #6f7a72;
     --combat-cadre-jet-fond: #1d2626;
+    --combat-a-jouer: #6fd08f;
+    --combat-a-jouer-doux: #183022;
+    --combat-epuise: #6f7a72;
     --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "Libre Baskerville", Georgia, serif;
     --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -1271,6 +1364,9 @@
     --combat-portee-bord: #c8372d;
     --combat-cadre-jet: #767b6f;
     --combat-cadre-jet-fond: #e0d8c4;
+    --combat-a-jouer: #1a6c35;
+    --combat-a-jouer-doux: #e0f0e3;
+    --combat-epuise: #767b6f;
     --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "Libre Baskerville", Georgia, serif;
     --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -1306,6 +1402,9 @@
     --combat-portee-bord: #f4a097;
     --combat-cadre-jet: #7d7360;
     --combat-cadre-jet-fond: #29201c;
+    --combat-a-jouer: #6fd08f;
+    --combat-a-jouer-doux: #183022;
+    --combat-epuise: #7d7360;
     --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "Almendra", Georgia, serif;
     --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -1341,6 +1440,9 @@
     --combat-portee-bord: #f4a097;
     --combat-cadre-jet: #7a6a93;
     --combat-cadre-jet-fond: #211832;
+    --combat-a-jouer: #6fd08f;
+    --combat-a-jouer-doux: #183022;
+    --combat-epuise: #7a6a93;
     --police: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --police-titre: "Almendra", Georgia, serif;
     --police-journal: "Alegreya Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -1376,6 +1478,9 @@
     --combat-portee-bord: #c8372d;
     --combat-cadre-jet: #8b4a2e;
     --combat-cadre-jet-fond: #e5dab7;
+    --combat-a-jouer: #1a6c35;
+    --combat-a-jouer-doux: #e0f0e3;
+    --combat-epuise: #8b4a2e;
     --police: "EB Garamond", Georgia, "Times New Roman", serif;
     --police-titre: "IM Fell English", Georgia, serif;
     --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;
@@ -1411,6 +1516,9 @@
     --combat-portee-bord: #f4a097;
     --combat-cadre-jet: #73697f;
     --combat-cadre-jet-fond: #1b1c20;
+    --combat-a-jouer: #6fd08f;
+    --combat-a-jouer-doux: #183022;
+    --combat-epuise: #73697f;
     --police: "EB Garamond", Georgia, "Times New Roman", serif;
     --police-titre: "Pirata One", Georgia, serif;
     --police-journal: "EB Garamond", Georgia, "Times New Roman", serif;

@@ -159,6 +159,31 @@ dl {
   outline: none;
 }
 
+/* L'écran du combat en jeu, sur un téléphone (lot 4.3) : la page ne défile
+   plus pendant un tour. L'en-tête du site cède sa place à la barre du
+   combat, dont ☰ ouvre les liens ; la page devient une colonne de la
+   hauteur de la fenêtre, la bannière de la démonstration en tête, l'écran
+   qui prend le reste, sans marge. css/combat.css y range le combat. À
+   56rem, tout revient comme avant (plus bas). */
+body:has(.combat-en-jeu) {
+  display: flex;
+  flex-direction: column;
+  height: var(--hauteur-fenetre);
+}
+
+body:has(.combat-en-jeu) .entete {
+  display: none;
+}
+
+#ecran:has(> .combat-en-jeu) {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+}
+
 .secondaire-texte {
   color: var(--texte-2);
 }
@@ -1217,5 +1242,21 @@ dl {
 @media (min-width: 56rem) {
   .vignettes-themes {
     grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  /* L'écran du combat en jeu, sur un grand écran : la page d'avant, son
+     en-tête, sa marge ; elle défile comme les autres. */
+  body:has(.combat-en-jeu) {
+    display: block;
+    height: auto;
+  }
+
+  body:has(.combat-en-jeu) .entete {
+    display: flex;
+  }
+
+  #ecran:has(> .combat-en-jeu) {
+    display: block;
+    padding: var(--espace-4);
   }
 }

@@ -10,8 +10,9 @@
 // L'impression ne voit donc aucun thème, et ne charge aucune de ces polices.
 //
 // Chaque bloc écrit ses valeurs en toutes lettres, sans var() vers un autre
-// jeton : ses couleurs (moins les trois réservées), ses trois polices, la
-// graisse des titres, l'arrondi, l'ajustement et color-scheme. Le sélecteur
+// jeton : ses couleurs (moins les réservées, aucune depuis le lot 4.3), ses
+// trois polices, la graisse des titres, l'arrondi, l'ajustement et
+// color-scheme. Le sélecteur
 // est [data-theme="<code>"], sans :root, car une vignette de la page
 // Apparence porte elle aussi data-theme ; il gagne sur le :root de
 // css/jetons.css parce que la feuille vient après.

@@ -179,7 +179,7 @@ test("nommer : les exemplaires d'un même adversaire ne forment pas un groupe à
   assert.deepEqual(champ(noms, "initiales"), { adv1: "M1", adv2: "M2", adv3: "M3" });
 });
 
-test("nommer : la seconde est un signe du nom, en majuscule ; les blancs n'occupent aucune position, une apostrophe en occupe une", () => {
+test("nommer : la seconde est un signe du nom, en majuscule ; les blancs n'occupent aucune position, une apostrophe n'en occupe aucune", () => {
   const noms = nommer(liste(["adv", "Chef de partie"], ["adv", "Chef de rang"]));
   assert.deepEqual(champ(noms, "initiales"), { adv1: "CP", adv2: "CR" });
 
@@ -329,9 +329,14 @@ test("initiales — le premier signe se compare par sa clé : « É… » et « 
   assert.deepEqual(champ(nommer(liste(["adv", "Émincer"], ["adv", "Chef de partie"])), "initiales"), { adv1: "É", adv2: "C" });
 });
 
-test("initiales — les positions comptent tout signe de clé non vide : un tiret peut être la seconde (cas à trancher) ; un signe invisible n'en occupe aucune", () => {
-  // Le cas à trancher au compte rendu (contrat du groupe 2, § 7.1) : tel que le contrat l'écrit, le tiret est la seconde.
-  assert.deepEqual(champ(nommer(liste(["adv", "Chef-de-partie"], ["adv", "Chef de partie"])), "initiales"), { adv1: "C-", adv2: "CD" });
+test("initiales — les positions ne comptent que les lettres et les chiffres : un tiret n'est jamais la seconde ; un signe invisible n'en occupe aucune", () => {
+  // Tranché par l'auteur (mission du lot 4.3, § 6, point 3) : « Chef-de-partie » ne donne plus « C- ». À côté de
+  // « Chef de partie », il a les mêmes lettres : aucune position ne les distingue, une marque les sépare.
+  assert.deepEqual(champ(nommer(liste(["adv", "Chef-de-partie"], ["adv", "Chef de partie"])), "initiales"), { adv1: `C${PRIME}`, adv2: `C${SECONDE}` });
+  // À côté de « Chef de rang », le tiret ôté, la seconde est la première lettre qui les distingue.
+  assert.deepEqual(champ(nommer(liste(["adv", "Chef-de-partie"], ["adv", "Chef de rang"])), "initiales"), { adv1: "CP", adv2: "CR" });
+  // Ni une apostrophe, ni un signe : « Ch'ti » et « Ch!c » ont les lettres C, H, T… et C, H, C.
+  assert.deepEqual(champ(nommer(liste(["adv", "Ch'ti"], ["adv", "Ch!c"])), "initiales"), { adv1: "CT", adv2: "CC" });
   // Un signe invisible a une clé vide : il est ôté de la suite, et le « o » qui le suit est en position 1.
   assert.deepEqual(champ(nommer(liste(["adv", "Marmiton de corvée"], ["adv", `M${ESPACE_SANS_CHASSE}ouette chapardeuse`])), "initiales"), { adv1: "MA", adv2: "MO" });
 });
@@ -363,10 +368,10 @@ test("initiales — un combat plein des noms de la démonstration et d'essai : 7
   ]);
 });
 
-test("initiales — un nom hostile dont la seconde est une marque ne prend pas les initiales d'un autre", () => {
-  // Sans le filet, « A » suivi d'une prime s'écrirait comme le premier « A », marqué.
+test("initiales — un nom hostile qui porte une marque ne la prend jamais pour seconde, ni les initiales d'un autre", () => {
+  // Depuis le lot 4.3, seules les lettres et les chiffres comptent : la prime de « A′x » est ôtée, sa seconde est « X ».
   const noms = nommer(liste(["pj", "A"], ["pj", "A"], ["pj", `A${PRIME}x`]));
-  assert.deepEqual(champ(noms, "initiales"), { pj1: `A${PRIME}`, pj2: `A${SECONDE}`, pj3: `A${PRIME}${PRIME}` });
+  assert.deepEqual(champ(noms, "initiales"), { pj1: `A${PRIME}`, pj2: `A${SECONDE}`, pj3: "AX" });
   distincts(noms, "initiales");
 });
 

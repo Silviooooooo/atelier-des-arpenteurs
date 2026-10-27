@@ -18,6 +18,14 @@
 // Au groupe 2 (contrat du groupe 2, § 8.5, § 9.9 et § 9.11) : l'en-tête
 // écrit les actions restantes telles que la vue les dit (« actions
 // restantes : 1 sur 2 »), et le focus rendu ne fait jamais défiler la page.
+//
+// Au lot 4.3, vague 3 (contrat de la vague, § 3.3, § 4.2 et § 5.2) : la fiche
+// du camp qui joue prend la couleur de ce qu'il peut encore faire (« a-jouer »,
+// « epuise ») ; chaque effet durable porté est une étiquette (son nom, sa
+// source, sa durée, sa couleur), qui se déplie sur son texte et « Appliquer
+// l'effet de… » (la palette, dans les deux modes) ; en Mode MJ seulement, ✕
+// retire un état, et « Modifier… » ouvre le menu du MJ. Un bouton inactif le
+// dit (aria-disabled) et dit sa raison ; il n'est jamais éteint.
 
 import { abregerZone } from "../adversaire/carte.js";
 import { lireCase } from "../combat/plateau.js";
@@ -32,6 +40,12 @@ const CAMPS = [
 // feuille ne s'écrit pas.
 const MARQUES = ["joue", "ciblee", "morte"];
 const MARQUES_D_ARMURE = ["abimee", "detruite"];
+// La classe d'état que prend la fiche du camp qui joue (contrat de la vague
+// 3, § 5.2), d'après vueFiche.jeu ; et celles d'une étiquette, d'après sa
+// couleur. Une valeur inconnue ne s'écrit pas.
+const JEUX = { peut_agir: "a-jouer", epuise: "epuise" };
+const COULEURS = ["blessure", "favorable", "alerte"];
+const RETIRER = String.fromCodePoint(0x2715);
 // Au-delà, une jauge s'écrit en nombres seulement (mission, § 10.5).
 const CASES_MAX = 30;
 const SOUFFLE_ABSENT = "—";
@@ -103,13 +117,12 @@ function tableDesZones(zones, nom) {
 }
 
 /**
- * Un passif câblé, ou un effet en cours. Inactif, il le dit en toutes
- * lettres, avec sa raison : la couleur seule ne dit jamais rien.
+ * Un passif câblé. Inactif, il le dit en toutes lettres, avec sa raison : la
+ * couleur seule ne dit jamais rien.
  */
-function ligneDEffet(effet) {
-  if (typeof effet === "string") return el("li", {}, effet);
-  if (effet.actif !== false) return el("li", {}, effet.texte);
-  return el("li", { classe: "eteint" }, effet.texte, effet.raison ? ` (inactif : ${effet.raison})` : " (inactif)");
+function ligneDePassif(passif) {
+  if (passif.actif !== false) return el("li", {}, passif.texte);
+  return el("li", { classe: "eteint" }, passif.texte, passif.raison ? ` (inactif : ${passif.raison})` : " (inactif)");
 }
 
 /**
@@ -131,8 +144,10 @@ function actionsRestantes({ reste, max, texte }) {
  * La partie « fiches » de l'écran du combat : { noeud, rendre(vue, ecran) }.
  *
  * « vue » est { pj: [vueFiche…], adv: [vueFiche…] }, dans l'ordre du combat ;
- * « ecran.etroit » dit qu'on est sur un téléphone. « actions » vient de
- * l'écran : executer(commande, origine) et ouvrirFiche(id).
+ * « ecran.etroit » dit qu'on est sur un téléphone, « ecran.modeMj » que le
+ * Mode MJ est allumé. « actions » vient de l'écran : executer(commande,
+ * origine), ouvrirFiche(id), et, à la vague 3, ouvrirPalette(source, ancre)
+ * et ouvrirMenuMj(id, ancre).
  */
 export function creer(actions) {
   // Les identifiants de la page ne se font jamais d'un identifiant de
@@ -255,8 +270,74 @@ export function creer(actions) {
     ];
   }
 
-  function faireCorps(fiche, vue) {
-    const lignes = [...(vue.effets ?? []), ...vue.passifs];
+  /**
+   * Un bouton qui peut être inactif (contrat de la vague 3, § 3) : il le dit
+   * par aria-disabled, et sa raison le suit, liée par aria-describedby ; il
+   * n'est jamais éteint, et un appui sur lui ne fait rien. Son identifiant de
+   * page se fait du numéro de la fiche, jamais d'un identifiant de
+   * protagoniste.
+   */
+  function boutonAvecRaison(fiche, repere, { classe, contenu, etiquette = null, actif, raison, faire }) {
+    const inactif = actif === false;
+    const idRaison = inactif && raison ? `${PREFIXE}-${fiche.numero}-${repere}-raison` : null;
+    const noeud = el(
+      "button",
+      {
+        type: "button",
+        classe,
+        "data-repere": repere,
+        "aria-disabled": inactif ? "true" : null,
+        "aria-describedby": idRaison,
+        "aria-label": etiquette === null ? null : sansSensForce(etiquette),
+        onclick: () => {
+          if (!inactif) faire(noeud);
+        },
+      },
+      contenu,
+    );
+    return [noeud, idRaison ? el("span", { id: idRaison, classe: "combat-raison" }, raison) : null];
+  }
+
+  /**
+   * Une étiquette (mission du lot 4.3, § 4.7 ; contrat de la vague 3, § 3.3) :
+   * son nom, sa source et sa durée, dans la couleur de la vue. Elle se déplie
+   * sur son texte et « Appliquer l'effet de… », qui ouvre la palette à son nom
+   * (dans les deux modes) ; ✕ la retire, en Mode MJ seulement. Rien de ce qui
+   * s'actionne n'est dans la ligne qui la déplie.
+   */
+  function faireEtiquette(fiche, effet, rang, modeMj) {
+    const couleur = COULEURS.includes(effet.couleur) ? effet.couleur : null;
+    const tete = [effet.nom, effet.source, effet.duree].filter(Boolean).join(" · ");
+    const appliquer = effet.appliquer ?? null;
+    let boutonAppliquer = null;
+    if (appliquer) {
+      boutonAppliquer = el(
+        "button",
+        { type: "button", classe: "bouton secondaire petit", "data-repere": `appliquer-${rang}`, onclick: () => actions.ouvrirPalette(appliquer.source, boutonAppliquer) },
+        appliquer.libelle,
+      );
+    }
+    const deplie = effet.texte || appliquer ? el("details", {}, el("summary", {}, tete), effet.texte ? el("p", {}, effet.texte) : null, boutonAppliquer) : el("span", {}, tete);
+    const retirer = effet.retirer && (effet.retirer.mj !== true || modeMj) ? effet.retirer : null;
+    return el(
+      "li",
+      { classe: ["combat-etiquette", couleur].filter(Boolean).join(" ") },
+      deplie,
+      retirer
+        ? boutonAvecRaison(fiche, `retirer-etat-${rang}`, {
+            classe: "bouton secondaire petit",
+            contenu: RETIRER,
+            etiquette: retirer.libelle,
+            actif: retirer.actif,
+            raison: retirer.raison,
+            faire: () => actions.executer(retirer.commande, "panneau"),
+          })
+        : null,
+    );
+  }
+
+  function faireCorps(fiche, vue, modeMj) {
+    const etiquettes = Array.isArray(vue.effets) ? vue.effets : [];
     return [
       vue.souffle.absent ? jauge("souffle", "Souffle", 0, 0, SOUFFLE_ABSENT) : jauge("souffle", "Souffle", vue.souffle.valeur, vue.souffle.max),
       jauge("corps", "Corps", vue.corps.valeur, vue.corps.max),
@@ -264,8 +345,9 @@ export function creer(actions) {
       el("p", { classe: "combat-contre" }, vue.contre),
       [vue.attaque, vue.defense, vue.bouclier].filter(Boolean).map((texte) => el("p", { classe: "combat-valeurs" }, texte)),
       vue.liens.map((lien) => jauge("lien", `Lien · ${sansSensForce(lien.nom)}`, lien.valeur, lien.max)),
-      lignes.length ? el("ul", { classe: "combat-effets" }, lignes.map(ligneDEffet)) : null,
-      faireLesBoutons(fiche, vue),
+      etiquettes.length ? el("ul", { classe: "combat-etiquettes", "aria-label": `Effets en cours : ${sansSensForce(vue.nom)}` }, etiquettes.map((effet, rang) => faireEtiquette(fiche, effet, rang, modeMj))) : null,
+      vue.passifs.length ? el("ul", { classe: "combat-effets" }, vue.passifs.map(ligneDePassif)) : null,
+      faireLesBoutons(fiche, vue, modeMj),
     ].flat().filter(Boolean);
   }
 
@@ -276,17 +358,36 @@ export function creer(actions) {
   }
 
   /**
-   * La rangée des boutons : « Jouer », puis « Fiche complète ». La fiche en
-   * garde les nœuds : « Jouer » paraît et disparaît à chaque geste sur toutes
-   * les fiches du camp qui joue, sans que rien d'autre n'y change.
+   * « Modifier… », le menu du MJ de ce protagoniste : en Mode MJ seulement,
+   * pour le clavier comme pour la souris (mission du lot 4.3, § 4.8).
    */
-  function faireLesBoutons(fiche, vue) {
+  function boutonModifier(fiche, vue, modeMj) {
+    const menu = vue.menuMj ?? null;
+    if (menu === null || (menu.mj === true && !modeMj)) return null;
+    return boutonAvecRaison(fiche, "modifier", {
+      classe: "bouton secondaire combat-modifier",
+      contenu: menu.libelle,
+      etiquette: `${menu.libelle} : ${vue.nom}`,
+      actif: menu.actif,
+      raison: menu.raison,
+      faire: (bouton) => actions.ouvrirMenuMj(vue.id, bouton),
+    });
+  }
+
+  /**
+   * La rangée des boutons : « Jouer », « Fiche complète », puis « Modifier… »
+   * en Mode MJ. La fiche en garde les nœuds : « Jouer » paraît et disparaît à
+   * chaque geste sur toutes les fiches du camp qui joue, sans que rien
+   * d'autre n'y change.
+   */
+  function faireLesBoutons(fiche, vue, modeMj) {
     fiche.complete = el(
       "button",
       { type: "button", classe: "bouton secondaire", "data-repere": "fiche-complete", "aria-label": `Fiche complète : ${sansSensForce(vue.nom)}`, onclick: () => actions.ouvrirFiche(vue.id) },
       "Fiche complète",
     );
-    fiche.boutons = el("div", { classe: "combat-ligne" }, boutonJouer(vue), fiche.complete);
+    fiche.modifier = boutonModifier(fiche, vue, modeMj);
+    fiche.boutons = el("div", { classe: "combat-ligne" }, boutonJouer(vue), fiche.complete, fiche.modifier);
     return fiche.boutons;
   }
 
@@ -297,8 +398,8 @@ export function creer(actions) {
    * entier la fiche de chaque protagoniste du camp, pour un bouton (mesuré :
    * douze à quatorze fiches sur quinze, plus de cent millisecondes au clic).
    */
-  function refaire(fiche, vue) {
-    const texte = JSON.stringify(vue);
+  function refaire(fiche, vue, modeMj) {
+    const texte = JSON.stringify([vue, modeMj]);
     if (texte === fiche.texte) return;
     fiche.texte = texte;
     const marques = MARQUES.filter((marque) => vue.marques.includes(marque));
@@ -308,25 +409,28 @@ export function creer(actions) {
     if (morte && !fiche.morte) fiche.choix = null;
     fiche.morte = morte;
     fiche.joue = marques.includes("joue");
-    fiche.noeud.className = [PREFIXE, ...marques].join(" ");
+    fiche.noeud.className = [PREFIXE, ...marques, Object.hasOwn(JEUX, vue.jeu ?? "") ? JEUX[vue.jeu] : null].filter(Boolean).join(" ");
 
     const tete = JSON.stringify([vue.initiales, vue.nom, vue.sousTitre, vue.statut, vue.actions]);
     if (tete !== fiche.texteDeTete) {
       fiche.texteDeTete = tete;
       fiche.resume.replaceChildren(...faireResume(vue));
     }
-    // Le corps ne lit ni l'état, ni les marques, ni les actions : ce sont
-    // l'en-tête et les classes qui les montrent. Ni la case d'avant le
-    // lancement, qui a son groupe : un jeton déplacé ne refait pas la fiche.
-    const corps = JSON.stringify({ ...vue, statut: undefined, marques: undefined, actions: undefined, jouer: undefined, avant: undefined });
-    const jouer = JSON.stringify(vue.jouer ?? null);
+    // Le corps ne lit ni l'état, ni les marques, ni les actions, ni ce que
+    // le protagoniste peut encore faire : ce sont l'en-tête et les classes qui
+    // les montrent. Ni la case d'avant le lancement, qui a son groupe : un
+    // jeton déplacé ne refait pas la fiche. « Jouer » et « Modifier… », qui
+    // changent à chaque geste, ne refont que leur rangée.
+    const corps = JSON.stringify({ ...vue, statut: undefined, marques: undefined, actions: undefined, jouer: undefined, avant: undefined, jeu: undefined, menuMj: undefined, modeMj });
+    const boutons = JSON.stringify([vue.jouer ?? null, vue.menuMj ?? null, modeMj]);
     if (corps !== fiche.texteDuCorps) {
       fiche.texteDuCorps = corps;
-      fiche.texteDeJouer = jouer;
-      fiche.corps.replaceChildren(...faireCorps(fiche, vue));
-    } else if (jouer !== fiche.texteDeJouer) {
-      fiche.texteDeJouer = jouer;
-      fiche.boutons.replaceChildren(...[boutonJouer(vue), fiche.complete].filter(Boolean));
+      fiche.texteDeJouer = boutons;
+      fiche.corps.replaceChildren(...faireCorps(fiche, vue, modeMj));
+    } else if (boutons !== fiche.texteDeJouer) {
+      fiche.texteDeJouer = boutons;
+      fiche.modifier = boutonModifier(fiche, vue, modeMj);
+      fiche.boutons.replaceChildren(...[boutonJouer(vue), fiche.complete, fiche.modifier].flat().filter(Boolean));
     }
     const avant = JSON.stringify(vue.avant ? [vue.avant, vue.nom] : null);
     if (avant !== fiche.texteDAvant) {
@@ -353,12 +457,12 @@ export function creer(actions) {
     fiche.ecrit = ouverte;
   }
 
-  function rendreCamp(camp, vues, etroit) {
+  function rendreCamp(camp, vues, etroit, modeMj) {
     for (const vue of vues) {
       if (!fiches.has(vue.id)) fiches.set(vue.id, creerFiche(vue.id));
       const fiche = fiches.get(vue.id);
       releverLeGeste(fiche);
-      refaire(fiche, vue);
+      refaire(fiche, vue, modeMj);
       deplier(fiche, etroit);
     }
     // Les fiches ne se reposent dans la liste que si la liste a changé : un
@@ -414,11 +518,12 @@ export function creer(actions) {
   function rendre(vue, ecran) {
     const avant = focusAvant();
     const etroit = ecran?.etroit === true;
+    const modeMj = ecran?.modeMj === true;
     const presents = new Set();
     for (const camp of camps) {
       const vues = vue[camp.camp] ?? [];
       for (const { id } of vues) presents.add(id);
-      rendreCamp(camp, vues, etroit);
+      rendreCamp(camp, vues, etroit, modeMj);
     }
     for (const id of [...fiches.keys()]) {
       if (!presents.has(id)) fiches.delete(id);

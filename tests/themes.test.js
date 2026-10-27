@@ -124,11 +124,15 @@ test("feuille — 36 blocs [data-theme], sans :root ni Atelier, puis les deux cl
   }
 });
 
-test("feuille — chaque bloc écrit ses 25 couleurs, ses polices et color-scheme en toutes lettres, sans var()", () => {
+test("feuille — chaque bloc écrit ses 28 couleurs, ses polices et color-scheme en toutes lettres, sans var()", () => {
+  // Plus aucun jeton réservé : les trois du jeu en cours (lot 4.3) sont entrés avec les vignettes et les fiches du
+  // combat, et chaque thème les écrit.
   const couleurs = JETONS.filter((jeton) => !JETONS_RESERVES.includes(jeton));
-  assert.equal(couleurs.length, 25);
-  assert.deepEqual(JETONS_RESERVES, ["combat-a-jouer", "combat-a-jouer-doux", "combat-epuise"]);
-  assert.doesNotMatch(FEUILLE, /--combat-a-jouer|--combat-epuise/);
+  assert.equal(couleurs.length, 28);
+  assert.deepEqual(JETONS_RESERVES, []);
+  for (const jeton of ["combat-a-jouer", "combat-a-jouer-doux", "combat-epuise"]) {
+    assert.equal(FEUILLE.split(`--${jeton}:`).length - 1, THEMES_A_BLOC.length, jeton);
+  }
   for (const theme of THEMES_A_BLOC) {
     const bloc = blocDe(theme.code);
     assert.deepEqual(

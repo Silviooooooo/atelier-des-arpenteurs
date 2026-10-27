@@ -14,15 +14,25 @@
 //   choix du moment, le texte de la capacité, les réglages à la main.
 // Il tient aussi la zone sous la carte (creer) : « Qui joue ? », la fin du
 // combat, ou la phrase qui dit que le jet se joue dans la bulle ; sur un
-// téléphone, le jet lui-même, sous la carte, sans bouton pour fermer.
+// téléphone, en jeu, elle reste vide : tout se joue dans le volet.
 // Chaque bouton émet la commande que la vue lui donne, avec son origine
-// ("bulle" ou "panneau"), chaque saisie complète le gabarit que la vue lui
-// donne.
+// ("bulle", "panneau" ou "palette"), chaque saisie complète le gabarit que
+// la vue lui donne.
 //
-// Au lot 4.3 (vague 1), il suit le noyau neuf sans en dessiner les vues : les
-// choix du critique et de la contre-attaque, la capacité gardée d'attendre,
-// l'étape de la blessure (ses capacités, puis un état libre nommé), et des
-// dégâts « ajustés à » la valeur calculée, qui ne changent rien.
+// Au lot 4.3 (vague 1), il suit le noyau neuf : les choix du critique et de
+// la contre-attaque, la capacité gardée d'attendre, l'étape de la blessure
+// (ses capacités, puis un état libre nommé), et des dégâts « ajustés à » la
+// valeur calculée, qui ne changent rien. À la vague 3 (contrat, § 3.2 et
+// § 4.2), il en dessine les vues : sur PC, le jet entier, comme au groupe 2 ;
+// au téléphone, le volet pas à pas, une étape à la fois (la clé etape de la
+// vue), sous le fil des étapes (« 1 · Capacité », puis « Cible », « Dés »,
+// « Zone et dégâts »), avec son pied (« Appliquer l'effet de… », « Palette », puis « Passer : … » ou
+// « Terminer »). S'y ajoutent les interventions, la contre-attaque, le coup
+// critique, les passifs non câblés, « Inverser » et « Relancer » sous le
+// dernier dé quand la palette est ouverte, plusieurs cibles et leur
+// avancement, ce que la blessure a fait. Ce que seul le Mode MJ montre
+// (mj: true) ne paraît pas quand il est éteint ; un appui sur un passif, sur
+// « Appliquer l'effet de… » ou sur « Palette » ouvre la palette.
 //
 // Pourquoi il existe : l'écran du combat se partage en parties, pour que
 // chacune se contrôle seule, sur des vues écrites à la main. Celle-ci ne
@@ -39,8 +49,8 @@
 // section, après la liste d'une case. Le corps, lui, est refait en entier
 // dès que ce qu'il montre change, et seulement alors : un rendu de plus
 // (l'enregistrement qui finit, un dé pendant que le jet se joue dans la
-// bulle) ne doit ni effacer une saisie en cours, ni déplacer le focus. Tout
-// focus posé ici l'est sans faire défiler la page.
+// bulle) ne doit pas déplacer le focus. Tout focus posé ici l'est sans faire
+// défiler la page.
 
 import { el, enumerer, sansSensForce } from "./dom.js";
 
@@ -86,6 +96,19 @@ const TITRE_DE_LA_DESCRIPTION = "Effets de capacité (mode assisté)";
 const REGLAGES = "Réglages à la main";
 const REGLAGES_QUAND = "(avant le premier dé)";
 const DEFENSE = "Défense :";
+// Sous le dé à lancer : « cliquez » sur PC, « touchez » au téléphone
+// (mission du lot 4.3, § 6, point 4).
+const CLIQUEZ = "cliquez";
+const TOUCHEZ = "touchez";
+// Le volet du téléphone (contrat de la vague 3, § 4.2, § 6.1 et § 6.2) : le
+// chevron (U+203A) entre deux étapes du fil, caché aux lecteurs d'écran, et
+// celui de « Changer de capacité » (U+2039), écrits par leur code ; le
+// dernier bouton du pied.
+const SEPARATEUR_DU_FIL = " \u203a ";
+const CHANGER_DE_CAPACITE = "\u2039 Changer de capacité";
+const TERMINER = "Terminer";
+// L'origine d'un outil de la palette posé sous le dernier dé.
+const ORIGINE_DE_LA_PALETTE = "palette";
 
 // Ce que dit une saisie refusée : ces textes ne viennent pas de l'auteur, et
 // restent à lui faire confirmer.
@@ -152,9 +175,16 @@ function identifiant(r, nom) {
 }
 
 /** Émet une commande de la vue, avec l'origine du clic. */
-function emettre(r, commande) {
-  if (commande) r.actions.executer(commande, origineDe(r));
+function emettre(r, commande, origine = origineDe(r)) {
+  if (commande) r.actions.executer(commande, origine);
 }
+
+/** Ce que seul le Mode MJ montre (mj: true) ne paraît pas quand il est éteint ; rien d'absent ne paraît. */
+const montre = (r, objet) => present(objet) && !(objet.mj === true && r.modeMj !== true);
+
+/** Un enfant d'un parent inactif l'est aussi, avec la raison du parent (contrat, § 3). */
+const herite = (parent, enfant) =>
+  parent?.actif === false ? { actif: false, raison: parent.raison ?? null } : { actif: enfant.actif !== false, raison: enfant.actif === false ? (enfant.raison ?? null) : null };
 
 /** Hachure les cases que nomme la vue sur la carte ; null les efface. */
 function hachurer(r, noms) {
@@ -207,11 +237,13 @@ function surPlace(r, cle, faire) {
 const nomAccessible = (etiquette) => (present(etiquette) ? sansSensForce(etiquette) : null);
 
 /**
- * Un bouton qui émet sa commande. Inactif, il garde le focus (aria-disabled,
- * jamais disabled), ne fait rien, et sa raison, écrite juste après lui, lui
- * est liée. Rend le bouton, puis sa raison s'il en a une.
+ * Un bouton qui émet sa commande (avec l'origine du clic, ou celle qu'on lui
+ * donne), ou qui appelle faire(lui-même) : ouvrir la palette, par exemple.
+ * Inactif, il garde le focus (aria-disabled, jamais disabled), ne fait rien,
+ * et sa raison, écrite juste après lui, lui est liée. Rend le bouton, puis sa
+ * raison s'il en a une.
  */
-function bouton(r, { cle = null, classe, contenu, commande = null, actif = true, raison = null, presse, etiquette = null, garde = false }) {
+function bouton(r, { cle = null, classe, contenu, commande = null, actif = true, raison = null, presse, etiquette = null, garde = false, origine = null, faire = null, repere = null }) {
   const inactif = actif === false;
   const idRaison = inactif && rempli(raison) ? identifiant(r, "raison") : null;
   const noeud = el(
@@ -219,14 +251,20 @@ function bouton(r, { cle = null, classe, contenu, commande = null, actif = true,
     {
       type: "button",
       classe,
+      "data-repere": present(repere) ? repere : null,
       "aria-pressed": presse === undefined ? null : String(Boolean(presse)),
       "aria-disabled": inactif ? "true" : null,
       "aria-describedby": idRaison,
       "aria-label": nomAccessible(etiquette),
       onclick: () => {
-        if (inactif || !commande) return;
+        if (inactif) return;
+        if (faire) {
+          faire(noeud);
+          return;
+        }
+        if (!commande) return;
         if (garde && present(cle)) surPlace(r, cle, () => emettre(r, commande));
-        else emettre(r, commande);
+        else emettre(r, commande, origine ?? origineDe(r));
       },
     },
     contenu,
@@ -266,7 +304,10 @@ function saisie(r, { cle, libelle, donnee, action, defaut = "" }) {
   });
   nombre.value = String(donnee.valeur ?? defaut);
   marquer(r, nombre, cle);
-  const veutUneRaison = Object.hasOwn(donnee, "raisonParDefaut") || Object.hasOwn(donnee, "raison");
+  // Seule « raisonParDefaut » demande une raison : depuis la vague 3, tout
+  // objet qui porte un gabarit porte aussi « raison », celle qui dit pourquoi
+  // il est inactif (null quand il est actif), et l'esquive en est un.
+  const veutUneRaison = Object.hasOwn(donnee, "raisonParDefaut");
   const raison = veutUneRaison ? el("input", { type: "text", classe: "champ", "aria-describedby": idRefus }) : null;
   if (raison) raison.value = String(donnee.raison ?? donnee.raisonParDefaut ?? "");
 
@@ -485,22 +526,17 @@ function piedDesPassifs(r, passifs, apercus) {
 }
 
 /**
- * La liste des capacités d'un protagoniste (vuePanneau « action » sans
- * geste), sans en-tête ni conteneur : par groupe, son intitulé puis une
- * ligne par capacité et par puissance ; « Passer son tour » ferme le dernier
- * groupe ; les passifs en pied. Rend des nœuds.
- *
- * Un seul aperçu à la fois ; sa clé (r.memoire.apercu) survit à un corps
- * refait : il se rouvre, avec ses hachures, tant que sa ligne est là. Ouvert
- * sous une ligne, il a un identifiant, et la ligne le dit (aria-expanded,
- * aria-controls) jusqu'à ce qu'il se ferme : un lecteur d'écran sait que
- * l'appui a ouvert quelque chose (WCAG 4.1.2) ; un passif ne porte rien.
- * Ouvert, il se montre dans la partie vue de la bulle (r.actions.montrer,
- * que la zone n'a pas).
+ * Les aperçus d'une composition : un seul ouvert à la fois ; sa clé
+ * (r.memoire.apercu) survit à un corps refait : il se rouvre, avec ses
+ * hachures, tant que sa ligne est là (rouvrir). Ouvert sous une ligne, il a
+ * un identifiant, et la ligne le dit (aria-expanded, aria-controls) jusqu'à
+ * ce qu'il se ferme : un lecteur d'écran sait que l'appui a ouvert quelque
+ * chose (WCAG 4.1.2) ; un passif ne porte rien. Ouvert, il se montre dans la
+ * partie vue de la bulle (r.actions.montrer, que la zone n'a pas).
  */
-export function composerListe(r, vue) {
+function apercusDe(r) {
   const memoire = r.memoire ?? {};
-  const apercus = {
+  return {
     places: new Map(),
     ouvert: { cle: null, noeud: null, declencheur: null },
     fermer() {
@@ -537,7 +573,42 @@ export function composerListe(r, vue) {
       memoire.apercu = null;
       hachurer(r, null);
     },
+    // L'aperçu gardé se rouvre si sa ligne est là ; sinon, il s'oublie.
+    rouvrir() {
+      if (!present(memoire.apercu)) return;
+      if (this.places.has(memoire.apercu)) this.ouvrir(memoire.apercu);
+      else memoire.apercu = null;
+    },
   };
+}
+
+/** Le fil des étapes, au téléphone : « 2 · Cible » pour celle en cours, les autres à leur nom. */
+function fil(liste) {
+  if (!liste?.length) return null;
+  return el(
+    "ol",
+    { classe: "combat-fil" },
+    liste.map((entree, rang) =>
+      el(
+        "li",
+        { classe: CLASSE_ETAPE[entree.etat] ?? null, "aria-current": entree.etat === "en_cours" ? "step" : null },
+        rang > 0 ? el("span", { "aria-hidden": "true" }, SEPARATEUR_DU_FIL) : null,
+        entree.etat === "en_cours" ? `${rang + 1} · ${entree.nom}` : entree.nom,
+      ),
+    ),
+  );
+}
+
+/**
+ * La liste des capacités d'un protagoniste (vuePanneau « action » sans
+ * geste), sans en-tête ni conteneur : par groupe, son intitulé puis une
+ * ligne par capacité et par puissance ; « Passer son tour » ferme le dernier
+ * groupe ; les passifs en pied. Au téléphone, le fil et la consigne
+ * (« Que fait Aubépine ? ») la précèdent. Rend des nœuds. Ses aperçus :
+ * apercusDe.
+ */
+export function composerListe(r, vue) {
+  const apercus = apercusDe(r);
 
   const passer = vue.passer
     ? el("div", { classe: "combat-option" }, bouton(r, { cle: "passer", classe: "combat-capacite", actif: vue.passer.actif, raison: vue.passer.raison, commande: vue.passer.commande, contenu: PASSER }))
@@ -554,11 +625,9 @@ export function composerListe(r, vue) {
   );
   if (passer && groupes.length === 0) noeuds.push(el("div", { classe: "combat-groupe" }, passer));
   noeuds.push(...piedDesPassifs(r, vue.passifs ?? [], apercus));
+  if (r.etroit === true) noeuds.unshift(...[fil(vue.fil), paragraphe(vue.consigne, "combat-consigne")].filter(present));
 
-  if (present(memoire.apercu)) {
-    if (apercus.places.has(memoire.apercu)) apercus.ouvrir(memoire.apercu);
-    else memoire.apercu = null;
-  }
+  apercus.rouvrir();
   return noeuds;
 }
 
@@ -588,10 +657,16 @@ function armes(r, liste) {
   );
 }
 
+/**
+ * Les cibles : un bouton par cible possible, d'où vient le choix après la
+ * choisie, puis ce que la vue en dit (ciblesDetail : sa case, sa défense,
+ * son corps, ou pourquoi elle est hors de portée).
+ */
 function cibles(r, geste) {
   const liste = geste.cibles ?? [];
   if (liste.length === 0 && !geste.sansCible) return null;
   const origine = TEXTE_ORIGINE[r.origineDeLaCible] ?? null;
+  const details = new Map((geste.ciblesDetail ?? []).map((une) => [une.id, une.detail]));
   return rangee(
     r,
     "combat-cibles",
@@ -599,6 +674,7 @@ function cibles(r, geste) {
     liste.map((cible) => [
       bouton(r, { cle: `cible:${cible.id}`, classe: null, presse: Boolean(cible.choisie), actif: cible.actif, raison: cible.raison, commande: cible.commande, contenu: cible.libelle }),
       cible.choisie && origine ? el("span", { classe: "combat-origine" }, origine) : null,
+      rempli(details.get(cible.id)) ? el("span", { classe: "combat-cible-detail" }, details.get(cible.id)) : null,
     ]),
     geste.sansCible ? bouton(r, { cle: "sans_cible", classe: null, presse: Boolean(geste.sansCible.choisie), commande: geste.sansCible.commande, contenu: "Sans cible" }) : null,
   );
@@ -676,6 +752,172 @@ function gardes(r, liste) {
   );
 }
 
+// ——— Le geste du lot 4.3 (vague 3) ———
+
+const CLASSE_D_AVANCEMENT = { ...CLASSE_ETAPE, a_venir: "a-venir" };
+
+/** L'avancement de plusieurs cibles : une entrée par cible, faite, en cours ou à venir, et ce qui s'y est passé. */
+function progression(liste) {
+  if (!liste?.length) return null;
+  return el(
+    "ol",
+    { classe: "combat-progression" },
+    liste.map((entree) =>
+      el(
+        "li",
+        { classe: CLASSE_D_AVANCEMENT[entree.etat] ?? null, "aria-current": entree.etat === "en_cours" ? "step" : null },
+        entree.libelle,
+        rempli(entree.detail) ? [" ", el("span", { classe: "combat-sous" }, entree.detail)] : null,
+      ),
+    ),
+  );
+}
+
+/**
+ * « Un jet par cible : 2 cibles » (une façon Centrée en préparation) : sur
+ * PC, une phrase ; au téléphone, un bouton qui mène le volet aux dés, sans
+ * rien émettre (r.actions.passerAuxDes).
+ */
+function jetsParCible(r, j) {
+  if (!j || !rempli(j.libelle)) return null;
+  if (r.etroit !== true) return el("p", { classe: "combat-jets-par-cible" }, j.libelle);
+  return bouton(r, { cle: "jets_par_cible", classe: "bouton combat-jets-par-cible", contenu: j.libelle, faire: () => r.actions.passerAuxDes?.() });
+}
+
+/**
+ * Un bouton qui ouvre la palette à un nom (un passif, « Appliquer l'effet
+ * de… », « Palette ») ; l'ancre est lui. « Palette » l'ouvre libre (Mode MJ :
+ * tout genre, la source au choix). Son repère (data-repere, sa clé) reste le
+ * même d'un rendu à l'autre : quand la bulle refait son corps, l'écran y
+ * rend le focus au bouton de même repère.
+ */
+function ouvreLaPalette(r, { cle, classe, contenu, source, actif = true, raison = null, libre = false }) {
+  return bouton(r, { cle, classe, contenu, actif, raison, repere: cle, faire: (noeud) => r.actions.ouvrirPalette?.(source, noeud, { libre }) });
+}
+
+/** Les passifs non câblés du lanceur du jet en cours (F5) : un bouton chacun, son texte, qui ouvre la palette à son nom. */
+function passifsDuJet(r, liste) {
+  if (!liste?.length) return null;
+  return el(
+    "div",
+    {},
+    liste.map((passif) =>
+      ouvreLaPalette(r, {
+        cle: passif.cle,
+        classe: "combat-passif-bouton",
+        contenu: [passif.libelle, rempli(passif.texte) ? [" ", el("span", { classe: "combat-sous" }, passif.texte)] : null],
+        source: passif.source,
+        actif: passif.actif,
+        raison: passif.raison,
+      }),
+    ),
+  );
+}
+
+/**
+ * « Inverser » et « Relancer » sous le dernier dé (F5), tant que la palette
+ * est ouverte : les genres de son onglet Dés, leur actif et leur raison ; un
+ * appui émet leur gabarit, complet, depuis la palette.
+ */
+function outilsDuDe(r, geste) {
+  if (!present(geste.dernierDe) || !r.palette) return null;
+  const des = (r.palette.onglets ?? []).find((onglet) => onglet.cle === "des");
+  const outils = (des?.genres ?? []).filter((genre) => (genre.genre === "inverser" || genre.genre === "relancer") && montre(r, genre));
+  if (outils.length === 0) return null;
+  return el(
+    "div",
+    { classe: "combat-de-outils" },
+    outils.map((genre) =>
+      bouton(r, { cle: `outil:${genre.genre}`, classe: "bouton secondaire", actif: genre.actif, raison: genre.raison, commande: genre.gabarit?.evenement ? { evenement: genre.gabarit.evenement } : null, origine: ORIGINE_DE_LA_PALETTE, contenu: genre.libelle }),
+    ),
+  );
+}
+
+/** Le coup critique possible (F6) : ce que dit le jet, et ce qu'un 4e dé ferait ; ses choix sont ceux du moment. */
+function critique(c) {
+  if (!c) return null;
+  return el("div", { classe: "combat-critique" }, paragraphe(c.texte), paragraphe(c.detail));
+}
+
+/**
+ * La contre-attaque (F3) : « 20 : contre-attaque ! », la phrase, puis les
+ * attaques de l'arme, une ligne par puissance, chacune qui contre-attaque ;
+ * « Laisser passer » reste dans les choix du moment.
+ */
+function contreAttaque(r, c, apercus) {
+  if (!c) return null;
+  return el(
+    "div",
+    { classe: "combat-contre-attaque" },
+    el("p", {}, el("b", {}, c.titre ?? "")),
+    paragraphe(c.texte),
+    (c.groupes ?? []).map((groupe) => el("div", { classe: "combat-groupe" }, el("h3", { classe: "combat-groupe-titre" }, groupe.titre), (groupe.lignes ?? []).map((ligne) => ligneDeCapacite(r, ligne, apercus)))),
+  );
+}
+
+/** L'esquive, au seul attaqué : combien (X), dans les bornes de la vue ; son coût et ce qu'elle annule. */
+function esquive(r, e) {
+  return [
+    rempli(e.cout) || rempli(e.texte) ? el("p", { classe: "combat-sous" }, [e.texte, e.cout].filter(rempli).join(" · ")) : null,
+    saisie(r, { cle: "esquive", libelle: `${e.libelle}, X`, donnee: e, action: e.libelle, defaut: e.min ?? "" }),
+  ];
+}
+
+/**
+ * L'étape des interventions (F2, E2) : la tête (ce que fait le coup), puis
+ * chaque intervenant (son initiale, son nom, ses actions et son souffle) et
+ * ses interventions, chacune avec son coût ; l'esquive sous l'attaqué.
+ * « Passer : … » est le dernier bouton du geste (dernierBouton).
+ */
+function interventions(r, geste) {
+  const i = geste.interventions;
+  const e = geste.esquive ?? null;
+  if (!i) return e ? esquive(r, e) : null;
+  let esquivePosee = e === null;
+  const intervenants = (i.intervenants ?? []).map((intervenant) => {
+    const ici = !esquivePosee && present(e.qui) && e.qui === intervenant.id;
+    if (ici) esquivePosee = true;
+    return el(
+      "div",
+      { classe: "combat-intervenant" },
+      el("p", {}, rempli(intervenant.initiales) ? [el("span", { "aria-hidden": "true" }, intervenant.initiales), " "] : null, el("b", {}, intervenant.nom ?? ""), rempli(intervenant.sous) ? ` · ${intervenant.sous}` : null),
+      ici ? esquive(r, e) : null,
+      (intervenant.options ?? []).map((option) => {
+        const { actif, raison } = herite(intervenant, option);
+        return bouton(r, {
+          cle: option.cle,
+          classe: "combat-capacite",
+          actif,
+          raison,
+          commande: option.commande,
+          contenu: enumerer([el("span", {}, option.libelle), rempli(option.cout) ? el("span", { classe: "combat-cout" }, option.cout) : null, rempli(option.texte) ? el("span", { classe: "combat-sous" }, option.texte) : null].filter(present), " "),
+        });
+      }),
+    );
+  });
+  return el("div", { classe: "combat-interventions" }, paragraphe(i.tete), intervenants, esquivePosee ? null : esquive(r, e));
+}
+
+/**
+ * Le dernier bouton du geste : « Passer : … » quand l'étape des
+ * interventions est là (il émet la commande d'« Appliquer ») ; sinon
+ * « Terminer » au téléphone, le libellé de la vue sur PC.
+ */
+function dernierBouton(r, geste) {
+  if (!geste.appliquer) return null;
+  const passer = geste.interventions?.passer ?? null;
+  const contenu = rempli(passer) ? passer : r.etroit === true ? TERMINER : (geste.appliquer.libelle ?? "Appliquer");
+  return bouton(r, { cle: "appliquer", classe: "bouton", commande: geste.appliquer.commande, contenu });
+}
+
+/** « Appliquer l'effet de Frappe… » (Mode MJ ou non), et « Palette » (Mode MJ, au téléphone) : chacun ouvre la palette. */
+function ouvertures(r, geste) {
+  return [
+    geste.appliquerEffet ? ouvreLaPalette(r, { cle: "appliquer_effet", classe: "bouton secondaire", contenu: geste.appliquerEffet.libelle, source: geste.appliquerEffet.source }) : null,
+    r.etroit === true && montre(r, geste.palette) ? ouvreLaPalette(r, { cle: "palette", classe: "bouton secondaire", contenu: geste.palette.libelle, source: geste.palette.source, libre: true }) : null,
+  ].filter(present);
+}
+
 // ——— La blessure ———
 
 /** Ce que dit un nom refusé : « Un nom de 1 à 40 signes est attendu. » */
@@ -717,17 +959,18 @@ function saisieDUnNom(r, { cle, libelle, donnee, action }) {
 
 /**
  * L'étape « La blessure » : son titre (« Blessure : Aubépine, bras
- * gauche »), une option par capacité du bloc de blessure, chacune suivie de
- * son texte, la phrase d'une banque sans bloc, puis l'état libre. En
- * attendant ses vues (vague 3), elle prend les classes d'aujourd'hui : une
- * option est une rangée de choix, jamais une .combat-option, qui a l'aspect
- * de « Passer son tour ».
+ * gauche »), ce que le coup a fait (« C = 10 : armure 2 → 0, … »), une
+ * option par capacité du bloc de blessure, chacune suivie de son texte, la
+ * phrase d'une banque sans bloc, puis l'état libre. Une option est une
+ * rangée de choix, jamais une .combat-option, qui a l'aspect de « Passer son
+ * tour ».
  */
 function blessure(r, b) {
   return el(
     "div",
     { classe: "combat-blessure" },
     el("p", { classe: "combat-blessure-titre" }, b.titre ?? ""),
+    paragraphe(b.detail, "combat-blessure-detail"),
     (b.options ?? []).map((option) =>
       el(
         "div",
@@ -851,9 +1094,12 @@ function de(r, { titre, valeur, detail, classe, etiquette, aLancer }) {
   return noeud;
 }
 
+/** Ce que dit le dé à lancer : « touchez » au téléphone, « cliquez » sinon. */
+const invite = (r) => (r.etroit === true ? TOUCHEZ : CLIQUEZ);
+
 /** Le dé qu'attend le moteur, quand aucune entrée de la chaîne ne le montre. */
 function deALancer(r, titre, aLancer) {
-  return de(r, { titre, valeur: aLancer.libelle, detail: "cliquez", classe: ETATS_DE.a_lancer.classe, etiquette: `${titre} : lancer le ${aLancer.libelle}`, aLancer: true });
+  return de(r, { titre, valeur: aLancer.libelle, detail: invite(r), classe: ETATS_DE.a_lancer.classe, etiquette: `${titre} : lancer le ${aLancer.libelle}`, aLancer: true });
 }
 
 function chaine(r, geste, dansLaChaine) {
@@ -868,7 +1114,7 @@ function chaine(r, geste, dansLaChaine) {
     let detail = entree.detail ?? null;
     if (etat.signe) detail = [detail, etat.signe].filter(present).join(" ");
     else if (entree.etat === "relance") detail = etat.dit;
-    else if (agit) detail = "cliquez";
+    else if (agit) detail = invite(r);
     const dit = [lance ? `${entree.valeur}${present(entree.detail) ? ` (${entree.detail})` : ""}` : entree.de, etat.dit].filter(rempli).join(", ");
     return de(r, { titre: entree.titre, valeur: lance ? entree.valeur : entree.de, detail, classe: etat.classe, etiquette: `${entree.titre} : ${dit}`, aLancer: agit });
   });
@@ -876,15 +1122,24 @@ function chaine(r, geste, dansLaChaine) {
   return el("div", { classe: "combat-chaine" }, des);
 }
 
-function lettres(liste) {
-  return el("ul", { classe: "combat-lettres" }, liste.map((lettre) => el("li", { classe: lettre.atteinte ? "atteinte" : null }, lettre.texte)));
+/** Les rangs de dégâts, l'atteint en évidence ; puis celui du coup critique (« critique : 16 »), s'il y en a un. */
+function lettres(liste, rangCritique = null) {
+  return el(
+    "ul",
+    { classe: "combat-lettres" },
+    liste.map((lettre) => el("li", { classe: lettre.atteinte ? "atteinte" : null }, lettre.texte)),
+    rempli(rangCritique) ? el("li", {}, rangCritique) : null,
+  );
 }
 
+/** Les dégâts : la base, la nature et la saisie ; ce que seul le Mode MJ montre ne paraît pas quand il est éteint. */
 function degats(r, d) {
   const noeuds = [];
+  // L'indice d'une nature reste celui de la vue : sa clé ne change pas avec le Mode MJ.
+  const natures = (d.natures ?? []).map((nature, i) => [nature, i]).filter(([nature]) => montre(r, nature));
   if (d.bases?.length) noeuds.push(rangee(r, "combat-ligne combat-degats-bases", "Dégâts :", d.bases.map((base, i) => bouton(r, { cle: `degats:base:${i}`, classe: "combat-capacite", presse: Boolean(base.choisie), commande: base.commande, contenu: base.libelle }))));
-  if (d.natures?.length) noeuds.push(rangee(r, "combat-ligne combat-degats-natures", "Nature :", d.natures.map((nature, i) => bouton(r, { cle: `degats:nature:${i}`, classe: "combat-capacite", presse: Boolean(nature.choisie), commande: nature.commande, contenu: nature.libelle }))));
-  if (d.saisie) noeuds.push(saisie(r, { cle: "degats:saisie", libelle: "Dégâts à la main", donnee: d.saisie, action: "Fixer les dégâts" }));
+  if (natures.length) noeuds.push(rangee(r, "combat-ligne combat-degats-natures", "Nature :", natures.map(([nature, i]) => bouton(r, { cle: `degats:nature:${i}`, classe: "combat-capacite", presse: Boolean(nature.choisie), commande: nature.commande, contenu: nature.libelle }))));
+  if (montre(r, d.saisie)) noeuds.push(saisie(r, { cle: "degats:saisie", libelle: "Dégâts à la main", donnee: d.saisie, action: "Fixer les dégâts" }));
   return noeuds;
 }
 
@@ -913,7 +1168,7 @@ function localisation(r, geste, d20Attendu) {
     return de(r, { titre: decale ? `d20 : ${coup.brut}` : "d20", valeur: face, detail: coup.zone ?? null, classe: "", etiquette: `Localisation : ${dite}`, aLancer: false });
   });
   if (d20Attendu) des.push(deALancer(r, "Localisation", geste.aLancer));
-  const decalages = liste.map((coup, i) => (coup.decaler ? saisie(r, { cle: `decaler:${i}`, libelle: libelleDuDecalage(coup), donnee: coup.decaler, action: "Décaler" }) : null));
+  const decalages = liste.map((coup, i) => (montre(r, coup.decaler) ? saisie(r, { cle: `decaler:${i}`, libelle: libelleDuDecalage(coup), donnee: coup.decaler, action: "Décaler" }) : null));
   return [el("div", { classe: "combat-chaine combat-localisation" }, des), decalages];
 }
 
@@ -954,77 +1209,147 @@ function etapes(liste) {
 }
 
 /**
+ * Les morceaux d'un geste, chacun fabriqué à la demande : sur PC, tous sont
+ * montrés ensemble ; au téléphone, chaque étape prend les siens.
+ */
+function morceaux(r, vue, geste, apercus) {
+  const aLancer = geste.aLancer ?? null;
+  const d20Attendu = Boolean(aLancer) && aLancer.motif === "localisation";
+  const dansLaChaine = Boolean(aLancer) && !d20Attendu;
+  const bilan = r.etroit === true && rempli(geste.bilanAuDoigt) ? geste.bilanAuDoigt : geste.bilan;
+  // Un morceau se fabrique quand il se montre : un bouton fabriqué marque
+  // le focus (marquer), même s'il ne paraissait pas.
+  const choix = () => (geste.choix ?? []).map((c) => bouton(r, { cle: `choix:${c.cle}`, classe: "bouton", commande: c.commande, contenu: c.libelle }));
+  return {
+    avis: () => paragraphe(geste.avis, "combat-geste-avis"),
+    aucuneIntervention: () => paragraphe(geste.aucuneIntervention, "combat-geste-avis"),
+    defenseur: () => (rempli(vue.defenseur) ? el("p", { classe: "combat-defenseur" }, vue.defenseur) : null),
+    jetPrete: () => (geste.jetPrete ? jetPrete(r, geste.jetPrete) : null),
+    armes: () => (geste.armes?.length ? armes(r, geste.armes) : null),
+    cibles: () => cibles(r, geste),
+    progression: () => progression(geste.progression),
+    jetsParCible: () => jetsParCible(r, geste.jetsParCible),
+    cases: () => (geste.cases?.length ? cases(r, geste.cases) : null),
+    caracteristiques: () => (geste.caracteristiques ? caracteristiques(r, geste.caracteristiques) : null),
+    difficultes: () => (geste.difficultes?.length ? difficultes(r, geste.difficultes) : null),
+    x: () => (geste.x ? saisie(r, { cle: "x", libelle: "X", donnee: geste.x, action: "Régler X", defaut: 0 }) : null),
+    jauges: () => (geste.jauges?.length ? jauges(r, geste.jauges) : null),
+    gardes: () => (geste.gardes?.length ? gardes(r, geste.gardes) : null),
+    contexte: () => contexte(r, geste.contexte),
+    reglages: () => (montre(r, geste.contexte?.reglages) ? reglages(r, geste.contexte.reglages) : null),
+    chaine: () => chaine(r, geste, dansLaChaine),
+    outils: () => outilsDuDe(r, geste),
+    passifs: () => passifsDuJet(r, geste.passifs),
+    bilan: () => (rempli(bilan) ? el("p", { classe: "combat-bilan" }, bilan) : null),
+    lettres: () => (geste.lettres?.length ? lettres(geste.lettres, geste.critique?.rang ?? null) : null),
+    critique: () => critique(geste.critique),
+    choix: () => (geste.choix?.length ? el("div", { classe: "combat-choix" }, choix()) : null),
+    degats: () => (geste.degats ? degats(r, geste.degats) : null),
+    localisation: () => localisation(r, geste, d20Attendu),
+    contre: () => contreAttaque(r, geste.contre, apercus),
+    interventions: () => interventions(r, geste),
+    detail: () => (geste.detail?.length ? detail(geste.detail) : null),
+    blessure: () => (geste.blessure ? blessure(r, geste.blessure) : null),
+    confirmer: () => (geste.confirmer ? bouton(r, { cle: "confirmer", classe: "bouton", actif: geste.confirmer.actif, raison: geste.confirmer.raison, commande: geste.confirmer.commande, contenu: geste.confirmer.libelle ?? "Confirmer" }) : null),
+    revenir: (libelle) => (geste.revenir ? bouton(r, { cle: "revenir", classe: "bouton secondaire", commande: geste.revenir.commande, contenu: libelle }) : null),
+    dernier: () => dernierBouton(r, geste),
+    ouvertures: () => ouvertures(r, geste),
+  };
+}
+
+/**
+ * Le jet sur PC, dans l'ordre de la vue 2 bis : l'avis de la cible
+ * précédente ; les étapes ; qui se défend ; les rangées du groupe 1 (les
+ * cibles et ce qu'on en sait, leur avancement, la capacité gardée
+ * d'attendre) ; puis, ensemble, le contexte, les dés (la chaîne, les outils
+ * de la palette sous le dernier dé, les passifs, le bilan, les rangs, le
+ * critique, les choix du moment, les dégâts, la face, la ligne qui dit
+ * qu'aucune intervention n'est possible, la contre-attaque, les
+ * interventions et l'esquive, le détail, la blessure, puis « Passer : … » ou
+ * « Appliquer », « Confirmer », « Revenir »), « Appliquer l'effet de… », et
+ * le pied : le texte de la capacité, toujours (mode assisté), et les
+ * réglages à la main tant qu'ils existent, en Mode MJ.
+ */
+function composerLeJet(m) {
+  const fins = [m.dernier(), m.confirmer(), m.revenir("Revenir")].filter(present);
+  const jet = el(
+    "div",
+    { classe: "combat-jet" },
+    ["chaine", "outils", "passifs", "bilan", "lettres", "critique", "choix", "degats", "localisation", "aucuneIntervention", "contre", "interventions", "detail", "blessure"].map((nom) => m[nom]()),
+    fins.length ? el("div", { classe: "combat-choix" }, fins) : null,
+  );
+  const ouvertures = m.ouvertures();
+  return [
+    m.avis(),
+    ...["defenseur", "jetPrete", "armes", "cibles", "progression", "jetsParCible", "cases", "caracteristiques", "difficultes", "x", "jauges", "gardes"].map((nom) => m[nom]()),
+    el("div", { classe: "combat-des" }, m.contexte(), jet, ouvertures.length ? el("div", { classe: "combat-pied" }, ouvertures) : null, m.assiste(), m.reglages()),
+  ];
+}
+
+/**
+ * Le volet du téléphone (contrat de la vague 3, § 4.2) : au-dessus de tout,
+ * l'avis de la cible précédente (et, à l'étape 3, la ligne qui dit
+ * qu'aucune intervention n'est possible) ; le fil ; la consigne en tête de
+ * l'étape 1 ; le contenu de l'étape montrée (r.etapeVue : celle de la vue,
+ * ou les dés après « Un jet par cible ») ; puis le pied : « Appliquer
+ * l'effet de… », « Palette » (Mode MJ), et le dernier bouton.
+ *  - 1 : la cible et ce qu'on en sait, l'avancement, « Un jet par cible »,
+ *    l'arrivée, les caractéristiques, la difficulté, la capacité gardée, X,
+ *    la jauge, le jet prêté, l'arme, « Changer de capacité » (son chevron devant), « Confirmer » ;
+ *  - 2 : qui se défend, le contexte (et les réglages, en Mode MJ), la
+ *    chaîne et les outils sous le dernier dé, le bilan au doigt, les rangs,
+ *    le critique, les choix du moment, les passifs, l'avancement ;
+ *  - 3 : la face, les dégâts, la contre-attaque, les choix du moment, les
+ *    interventions et l'esquive, le détail, la blessure.
+ */
+function composerLeVolet(r, vue, m) {
+  const etape = r.etapeVue ?? vue.etape ?? 1;
+  const parEtape = {
+    1: ["cibles", "progression", "jetsParCible", "cases", "caracteristiques", "difficultes", "gardes", "x", "jauges", "jetPrete", "armes"],
+    2: ["defenseur", "contexte", "reglages", "chaine", "outils", "bilan", "lettres", "critique", "choix", "passifs", "progression"],
+    3: ["localisation", "degats", "contre", "choix", "interventions", "detail", "blessure"],
+  };
+  const contenu = (parEtape[etape] ?? []).map((nom) => m[nom]());
+  if (etape === 1) contenu.push(m.revenir(CHANGER_DE_CAPACITE), m.confirmer());
+  const pied = [...m.ouvertures(), m.dernier()].filter(present);
+  return [
+    m.avis(),
+    etape === 3 ? m.aucuneIntervention() : null,
+    fil(vue.fil),
+    etape <= 1 ? paragraphe(vue.consigne, "combat-consigne") : null,
+    contenu,
+    pied.length ? el("div", { classe: "combat-pied" }, pied) : null,
+  ];
+}
+
+/**
  * Le jet d'un geste (vuePanneau « action » avec geste), sans en-tête ni
- * conteneur, dans l'ordre de la vue 2 bis, qui est aussi celui du
- * téléphone : les étapes ; qui se défend ; les rangées du groupe 1 (et la
- * capacité gardée d'attendre) ; puis, ensemble, le contexte, les dés (la
- * chaîne, le bilan, les rangs, les choix du moment, critique et
- * contre-attaque compris, les dégâts, la face, l'esquive, le détail, la
- * blessure, « Appliquer » ou « Terminer », « Confirmer », « Revenir ») et le
- * pied : le texte de la capacité, toujours (mode assisté : c'est au joueur
- * d'en appliquer l'effet), et les réglages à la main tant qu'ils existent.
- * Rend des nœuds.
+ * conteneur : sur PC, le jet entier (composerLeJet) ; au téléphone
+ * (r.etroit), le volet pas à pas (composerLeVolet). Rend des nœuds ; les
+ * aperçus d'une contre-attaque se rouvrent comme ceux de la liste.
  */
 export function composerGeste(r, vue) {
   const geste = vue.geste ?? null;
   if (geste === null) return [];
-  const aLancer = geste.aLancer ?? null;
-  const d20Attendu = Boolean(aLancer) && aLancer.motif === "localisation";
-  const dansLaChaine = Boolean(aLancer) && !d20Attendu;
-
-  const choix = (geste.choix ?? []).map((c) => bouton(r, { cle: `choix:${c.cle}`, classe: "bouton", commande: c.commande, contenu: c.libelle }));
-  const fins = [
-    geste.appliquer ? bouton(r, { cle: "appliquer", classe: "bouton", commande: geste.appliquer.commande, contenu: geste.appliquer.libelle ?? "Appliquer" }) : null,
-    geste.confirmer ? bouton(r, { cle: "confirmer", classe: "bouton", actif: geste.confirmer.actif, raison: geste.confirmer.raison, commande: geste.confirmer.commande, contenu: geste.confirmer.libelle ?? "Confirmer" }) : null,
-    geste.revenir ? bouton(r, { cle: "revenir", classe: "bouton secondaire", commande: geste.revenir.commande, contenu: "Revenir" }) : null,
-  ].filter(present);
-
-  const jet = el(
-    "div",
-    { classe: "combat-jet" },
-    chaine(r, geste, dansLaChaine),
-    rempli(geste.bilan) ? el("p", { classe: "combat-bilan" }, geste.bilan) : null,
-    geste.lettres?.length ? lettres(geste.lettres) : null,
-    choix.length ? el("div", { classe: "combat-choix" }, choix) : null,
-    geste.degats ? degats(r, geste.degats) : null,
-    localisation(r, geste, d20Attendu),
-    geste.esquive ? saisie(r, { cle: "esquive", libelle: `${geste.esquive.libelle}, X`, donnee: geste.esquive, action: geste.esquive.libelle, defaut: geste.esquive.min ?? "" }) : null,
-    geste.detail?.length ? detail(geste.detail) : null,
-    geste.blessure ? blessure(r, geste.blessure) : null,
-    fins.length ? el("div", { classe: "combat-choix" }, fins) : null,
-  );
-  const assiste = el("div", { classe: "combat-assiste" }, el("h3", {}, TITRE_DE_LA_DESCRIPTION), el("p", { classe: "combat-description" }, geste.description ?? ""));
-
-  return [
-    etapes(vue.etapes),
-    rempli(vue.defenseur) ? el("p", { classe: "combat-defenseur" }, vue.defenseur) : null,
-    geste.jetPrete ? jetPrete(r, geste.jetPrete) : null,
-    geste.armes?.length ? armes(r, geste.armes) : null,
-    cibles(r, geste),
-    geste.cases?.length ? cases(r, geste.cases) : null,
-    geste.caracteristiques ? caracteristiques(r, geste.caracteristiques) : null,
-    geste.difficultes?.length ? difficultes(r, geste.difficultes) : null,
-    geste.x ? saisie(r, { cle: "x", libelle: "X", donnee: geste.x, action: "Régler X", defaut: 0 }) : null,
-    geste.jauges?.length ? jauges(r, geste.jauges) : null,
-    geste.gardes?.length ? gardes(r, geste.gardes) : null,
-    el("div", { classe: "combat-des" }, contexte(r, geste.contexte), jet, assiste, geste.contexte?.reglages ? reglages(r, geste.contexte.reglages) : null),
-  ]
-    .flat(Infinity)
-    .filter(present);
+  const apercus = apercusDe(r);
+  const m = morceaux(r, vue, geste, apercus);
+  m.assiste = () => el("div", { classe: "combat-assiste" }, el("h3", {}, TITRE_DE_LA_DESCRIPTION), el("p", { classe: "combat-description" }, geste.description ?? ""));
+  const noeuds = (r.etroit === true ? composerLeVolet(r, vue, m) : [etapes(vue.etapes), composerLeJet(m)]).flat(Infinity).filter(present);
+  apercus.rouvrir();
+  return noeuds;
 }
 
 // ——— La zone sous la carte ———
 
 /**
- * Ce que montre la zone : « vide » (la préparation, ou le volet ouvert sur
- * un téléphone), « qui_joue », « termine », « phrase » (le jet se joue dans
- * la bulle), « geste » (le jet, sous la carte, sur un téléphone).
+ * Ce que montre la zone : « vide » (la préparation ; au téléphone, toujours :
+ * le volet porte tout, contrat de la vague 3, § 4.2), « qui_joue »,
+ * « termine », « phrase » (le jet se joue dans la bulle).
  */
 function modeDe(vue, etroit) {
+  if (etroit) return "vide";
   if (vue.genre === "qui_joue" || vue.genre === "termine") return vue.genre;
-  if (vue.genre !== "action") return "vide";
-  if (!etroit) return "phrase";
-  return vue.geste ? "geste" : "vide";
+  return vue.genre === "action" ? "phrase" : "vide";
 }
 
 /** Le corps de la zone, et son titre (où va le focus quand aucune commande n'attend). */
@@ -1040,12 +1365,6 @@ function composerLaZone(r, vue, mode) {
     return { tete, noeuds: [tete] };
   }
   if (mode === "phrase") return { tete: null, noeuds: [el("p", { classe: "combat-action-phrase" }, PHRASE_DE_LA_ZONE)] };
-  if (mode === "geste") {
-    // Le jet sous la carte, avec l'en-tête de la bulle, mais sans ce qui la
-    // ferme ou la réduit : il n'y a rien à fermer.
-    const tete = titre(vue.entete?.titre ?? "");
-    return { tete, noeuds: [tete, rempli(vue.entete?.sous) ? el("p", { classe: "combat-sous" }, vue.entete.sous) : null, composerGeste(r, vue)] };
-  }
   return { tete: null, noeuds: [] };
 }
 
@@ -1054,37 +1373,24 @@ function composerLaZone(r, vue, mode) {
  * lancerLeDe(), hachurer(noms | null) }. `lier` lie un déclencheur à son
  * infobulle ; `couche`, où vivent les infobulles de la zone, que l'écran
  * crée et que la zone porte dans sa section. Rend { noeud, rendre(vue,
- * ecran), listeDeCase, annonce, dire(texte), couche } ; `ecran` : { etroit,
- * origineDeLaCible } (origineDeLaCible : "plateau", "panneau", "bulle" ou
- * rien). `rendre` dit vrai quand il a refait le corps : l'écran ne repose le
- * focus (sur [data-focus]) que dans ce cas. `annonce` est la région polie,
- * que l'écran pose dans la page ; `dire` y écrit ce que l'écran a à dire
- * lui-même (« Journal copié. »), et l'annonce suivante du combat le remplace.
- *
- * La mémoire de la zone (les réglages dépliés, l'explication des causes
- * montrée) est remise à zéro quand le geste change : un autre protagoniste,
- * ou un geste qui finit.
+ * ecran), listeDeCase, annonce, dire(texte), couche } ; `ecran` : { etroit }
+ * (au téléphone, la zone reste vide). `rendre` dit vrai quand il a refait le
+ * corps : l'écran ne repose le focus (sur [data-focus]) que dans ce cas.
+ * `annonce` est la région polie, que l'écran pose dans la page ; `dire` y
+ * écrit ce que l'écran a à dire lui-même (« Journal copié. »), et l'annonce
+ * suivante du combat le remplace.
  *
  * Avant de refaire son corps, la zone vide elle-même sa couche (les
- * infobulles du corps d'avant) et, si elle montrait un jet, efface les
- * hachures : les liens du corps neuf se posent ensuite, pendant le rendu.
- * L'écran ne vide donc pas cette couche après un rendu.
+ * infobulles du corps d'avant) : les liens du corps neuf se posent ensuite,
+ * pendant le rendu. L'écran ne vide donc pas cette couche après un rendu.
  */
 export function creer(actions, { lier: lierDeLaZone = null, couche = null } = {}) {
   const corps = el("div", { classe: "combat-action-corps" });
   const listeDeCase = el("div", { classe: "combat-case-liste" });
   const annonce = el("p", { classe: "combat-annonce", "aria-live": "polite" });
   const noeud = el("section", { classe: "combat-action", "aria-label": "Action en cours" }, corps, listeDeCase, couche);
-  const memoire = { reglagesOuverts: false, apercu: null, causesOuvertes: false };
   let rendue = null;
-  let montre = null;
-  let gesteMontre = null;
   let pasAnnonce = null;
-  // La clé du réglage qui garde le focus, le temps que l'écran redessine.
-  let gardee = null;
-  const garder = (cle) => {
-    gardee = cle;
-  };
 
   // Un lecteur d'écran redit ce qui change dans la région : elle ne change
   // donc que lorsque le pas de l'annonce change, jamais à chaque rendu.
@@ -1101,32 +1407,18 @@ export function creer(actions, { lier: lierDeLaZone = null, couche = null } = {}
 
   function rendre(vue, ecran = {}) {
     annoncer(vue.annonce ?? null);
-    const etroit = ecran?.etroit === true;
-    const origine = ecran?.origineDeLaCible ?? null;
-    const cleDuGeste = vue.genre === "action" && vue.geste ? (vue.nom ?? "") : null;
-    if (cleDuGeste !== gesteMontre) {
-      gesteMontre = cleDuGeste;
-      Object.assign(memoire, { reglagesOuverts: false, apercu: null, causesOuvertes: false });
-    }
     // La signature de ce que montre le corps : la phrase de la bulle ne se
     // refait pas à chaque dé.
-    const mode = modeDe(vue, etroit);
-    const signature = JSON.stringify([mode, mode === "vide" || mode === "phrase" ? null : { ...vue, annonce: undefined }, mode === "geste" ? origine : null]);
+    const mode = modeDe(vue, ecran?.etroit === true);
+    const signature = JSON.stringify([mode, mode === "vide" || mode === "phrase" ? null : { ...vue, annonce: undefined }]);
     if (signature === rendue) return false;
     rendue = signature;
-    // Les infobulles et les hachures du corps d'avant partent avec lui.
+    // Les infobulles du corps d'avant partent avec lui.
     couche?.replaceChildren();
-    if (montre === "geste") actions.hachurer?.(null);
-    montre = mode;
 
-    const r = { actions, origine: ORIGINE_DE_LA_ZONE, origineDeLaCible: origine, focus: gardee ?? vue.focus ?? null, garder, pose: false, compteur: 0, lier: lierDeLaZone, memoire, cles: new Map() };
+    const r = { actions, origine: ORIGINE_DE_LA_ZONE, focus: vue.focus ?? null, pose: false, compteur: 0, lier: lierDeLaZone, memoire: {}, cles: new Map() };
     const { tete, noeuds } = composerLaZone(r, vue, mode);
-    // Le réglage gardé n'est plus dans le corps refait : le focus va, comme
-    // toujours, à la commande qui attend ; à défaut, au titre.
-    if (!r.pose && gardee !== null && r.cles.has(vue.focus ?? null)) {
-      r.cles.get(vue.focus).setAttribute("data-focus", vue.focus);
-      r.pose = true;
-    }
+    // Aucune commande n'attend : le focus va au titre.
     if (!r.pose && tete) tete.setAttribute("data-focus", "titre");
     corps.replaceChildren(...[noeuds].flat(Infinity).filter(present));
     return true;

@@ -27,11 +27,13 @@ import {
   appliquerMj,
   attaqueEnPlusDe,
   echeances,
+  faconTenue,
   gardeJouable,
   horsDesBornesDeLaPhoto,
   jugerEffet,
   jugerMj,
   offreDesEffets,
+  passifDe,
   prixDuPassif,
   rendrePrixDesPassifs,
   sansEffetsDesAbsents,
@@ -633,6 +635,33 @@ test("Le passif se lit à la puissance tenue : la plus haute qui ne passe pas so
   assert.equal(prixDuPassif(auRang1, deCapacite(auRang1, "adv2", "Piment")).souffle, 2, "au rang 1, la puissance 1");
   const auRang2 = piment(2);
   assert.equal(prixDuPassif(auRang2, deCapacite(auRang2, "adv2", "Piment")).souffle, 4, "au rang 2, la plus haute");
+});
+
+// Les deux exports des vues (contrat de la vague 3 du lot 4.3, D12) : les
+// boutons des passifs non câblés, près des dés, lisent passifDe et faconTenue
+// au lieu de recopier la règle.
+test("passifDe et faconTenue, exportés pour les vues : le passif non câblé d'une source, à sa puissance tenue ; rien pour une autre source", () => {
+  const etat = combat();
+  const nezFin = deCapacite(etat, "adv2", "Nez fin");
+  const lu = passifDe(etat, nezFin);
+  assert.equal(lu.capacite.nom, "Nez fin");
+  assert.ok(lu.capacite === photoDe(etat, "adv2").capacites[nezFin.capacite], "la capacité même de la photographie");
+  assert.equal(lu.facon, 0);
+  assert.equal(passifDe(etat, deCapacite(etat, "pj1", "Minutie")).capacite.nom, "Minutie");
+  // Un passif câblé (Vif, bonus d'agilité), une capacité active (Frappe), le MJ, un état, une capacité qui n'existe pas : null.
+  assert.equal(passifDe(etat, deCapacite(etat, "pj1", "Vif")), null);
+  assert.equal(passifDe(etat, deCapacite(etat, "pj1", "Frappe")), null);
+  assert.equal(passifDe(etat, MJ), null);
+  assert.equal(passifDe(etat, { genre: "etat", effet: 1 }), null);
+  assert.equal(passifDe(etat, { genre: "capacite", qui: "pj1", capacite: 999 }), null);
+  assert.equal(passifDe(etat, null), null);
+
+  // La façon tenue : la plus haute puissance qui ne passe pas le niveau, la première à égalité ; à défaut, la première ; null sans façon.
+  const facons = (...puissances) => puissances.map((puissance) => faconEssai({ puissance }));
+  assert.equal(faconTenue(capaciteEssai({ niveau: 2, facons: facons(1, 2, 3) })), 1);
+  assert.equal(faconTenue(capaciteEssai({ niveau: 3, facons: facons(1, 2, 2) })), 1, "la première à égalité");
+  assert.equal(faconTenue(capaciteEssai({ niveau: 0, facons: facons(1, 2) })), 0, "aucune ne tient : la première");
+  assert.equal(faconTenue(capaciteEssai({ niveau: 1, facons: [] })), null);
 });
 
 // ─── Les effets sur une cible ───────────────────────────────────────────────

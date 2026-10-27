@@ -68,6 +68,8 @@ function composer(fonction, vue, champs = {}) {
       executer: (commande, origine) => appels.push({ commande, origine }),
       lancerLeDe: () => appels.push({ de: true }),
       hachurer: (noms) => hachures.push(noms),
+      ouvrirPalette: (source, ancre, options) => appels.push({ ouvrirPalette: source, ancre, options }),
+      passerAuxDes: () => appels.push({ passerAuxDes: true }),
     },
     origine: "bulle",
     focus: vue.focus ?? null,
@@ -77,6 +79,11 @@ function composer(fonction, vue, champs = {}) {
     // L'identifiant de la raison doit être posé avant le lien : celui de l'infobulle vient après lui.
     lier: (declencheur, options) => liens.push({ declencheur, options, decrit: declencheur.getAttribute("aria-describedby") }),
     memoire: { reglagesOuverts: false, apercu: null, causesOuvertes: false },
+    // Le contexte du lot 4.3 (contrat de la vague 3, § 4.2) : sur PC, Mode MJ éteint, sans palette ouverte.
+    etroit: false,
+    modeMj: false,
+    palette: null,
+    etapeVue: null,
     ...champs,
   };
   const noeuds = fonction(r, vue);
@@ -127,12 +134,74 @@ function avecLaZone(faire, options) {
   }
 }
 
-/** Le jet joué sous la carte, sur un téléphone : la zone montre composerGeste. */
-const avecLeTelephone = (faire) => avecLaZone(faire, { etroit: true });
+/**
+ * Le jet composé dans un lieu de la page, rendu après rendu, comme le fait la
+ * bulle, avec un contexte r sans origine : ses commandes partent avec
+ * l'origine par défaut du module, « panneau ». Jusqu'au lot 4.3, la zone
+ * sous la carte le montrait ainsi au téléphone ; elle y est vide depuis la
+ * vague 3, et ces contrôles du jet gardent son origine. rendre(vue, ecran)
+ * refait tout ; ecran : { origineDeLaCible, etroit, modeMj, palette,
+ * etapeVue }. La mémoire du contenu tient d'un rendu à l'autre.
+ */
+function monterLeJet({ etroit = false, modeMj = false } = {}) {
+  const retirer = installerDom();
+  const appels = [];
+  const liens = [];
+  const hachures = [];
+  const memoire = { reglagesOuverts: false, apercu: null, causesOuvertes: false };
+  const noeud = globalThis.document.createElement("div");
+  globalThis.document.body.append(noeud);
+  const actions = {
+    executer: (commande, origine) => appels.push({ commande, origine }),
+    lancerLeDe: () => appels.push({ de: true }),
+    hachurer: (noms) => hachures.push(noms),
+    ouvrirPalette: (source, ancre, options) => appels.push({ ouvrirPalette: source, ancre, options }),
+    passerAuxDes: () => appels.push({ passerAuxDes: true }),
+  };
+  const rendre = (vue, ecran = {}) => {
+    const r = {
+      actions,
+      origineDeLaCible: ecran.origineDeLaCible ?? null,
+      focus: vue.focus ?? null,
+      garder: () => {},
+      pose: false,
+      compteur: 0,
+      lier: (declencheur, options) => liens.push({ declencheur, options }),
+      memoire,
+      cles: new Map(),
+      etroit: ecran.etroit ?? etroit,
+      modeMj: ecran.modeMj ?? modeMj,
+      palette: ecran.palette ?? null,
+      etapeVue: ecran.etapeVue ?? null,
+    };
+    noeud.replaceChildren(...composerGeste(r, vue));
+    return true;
+  };
+  return { noeud, rendre, appels, liens, hachures, memoire, retirer };
+}
+
+function avecLeJet(faire, options) {
+  const monte = monterLeJet(options);
+  try {
+    faire(monte);
+  } finally {
+    monte.retirer();
+  }
+}
 
 // ——— Les vues, écrites à la main dans les formes du contrat (§ 8.1 à § 8.4) ———
 
-const PANNEAU_VIDE = { candidats: [], nom: null, entete: null, defenseur: null, fermeture: null, etapes: [], groupes: [], passer: null, passifs: [], geste: null, vainqueur: null, focus: null };
+// Avec les clés neuves de la vague 3 (contrat, § 3.2) : camp, etape, fil, consigne.
+const PANNEAU_VIDE = { candidats: [], nom: null, entete: null, defenseur: null, fermeture: null, etapes: [], groupes: [], passer: null, passifs: [], geste: null, vainqueur: null, focus: null, camp: null, etape: null, fil: [], consigne: null };
+
+/** Le fil d'une attaque au téléphone (contrat, § 3.2) : son étape en cours ; le jet de qui se défend, « Défense ». */
+const filDeLAttaque = (etape, jet = "Dés") =>
+  [
+    ["Capacité", 0],
+    ["Cible", 1],
+    [jet, 2],
+    ["Zone et dégâts", 3],
+  ].map(([nom, rang]) => ({ nom, etape: rang, etat: rang < etape ? "faite" : rang === etape ? "en_cours" : "a_venir" }));
 
 /** Le survol d'une ligne ou d'un passif (§ 8.2). */
 const survolDe = (titre, champs = {}) => ({ titre, origine: null, description: "", portee: null, causes: [], cout: "Coût : 1 action, aucun souffle", hachures: [], ...champs });
@@ -222,6 +291,10 @@ const vueListe = (champs = {}) => ({
   annonce: { pas: 1, texte: "Combat lancé : 1 personnage contre 3 adversaires. Les PJ commencent. — Tour 1 · camp des PJ —" },
   vainqueur: null,
   focus: "ligne:0:0",
+  camp: "pj",
+  etape: 0,
+  fil: filDeLAttaque(0),
+  consigne: "Que fait Aubépine ?",
   ...champs,
 });
 
@@ -235,9 +308,11 @@ const DEFENSE = (choisie) => ({
     ["precise", "précise"],
   ].map(([code, libelle]) => ({ code, libelle, choisie: code === choisie, commande: regler("defense", code) })),
 });
+// Les réglages à la main : le Mode MJ seul les montre (contrat de la vague 3, § 3.2, D11).
 const REGLAGES = {
   modificateur: { valeur: 0, raison: null, min: -20, max: 20, raisonParDefaut: "Taloche", gabarit: { evenement: { type: "regler", champ: "modificateur" } } },
   avantages: { valeur: 1, raison: "Nez fin", min: -20, max: 20, raisonParDefaut: "Taloche", gabarit: { evenement: { type: "regler", champ: "avantages" } } },
+  mj: true,
 };
 
 /** Le geste de la vue 2 bis : Aubépine, Taloche contre le Marmiton n° 2, 8 puis 3 sur son d8. */
@@ -274,6 +349,20 @@ const gesteVu = (champs = {}) => ({
   appliquer: null,
   confirmer: null,
   revenir: null,
+  // Les clés de la vague 3 (contrat, § 3.2), au point du jet : le 2e dé est le dernier lancé ; Taloche, à mains nues, n'a pas « Appliquer l'effet de… ».
+  bilanAuDoigt: "1 réussite pour l'instant. Le 2e dé échoue : il reste 1 avantage.",
+  avis: null,
+  ciblesDetail: [],
+  jetsParCible: null,
+  progression: null,
+  dernierDe: 1,
+  passifs: [],
+  appliquerEffet: null,
+  palette: { libelle: "Palette", source: { genre: "capacite", qui: "pj1", capacite: 15 }, mj: true },
+  interventions: null,
+  aucuneIntervention: null,
+  contre: null,
+  critique: null,
   ...champs,
 });
 
@@ -297,6 +386,10 @@ const vueJet = (champs = {}) => ({
   annonce: { pas: 12, texte: "2e dé : 4, échec. Relancer ou garder ?" },
   vainqueur: null,
   focus: "choix:relancer",
+  camp: "pj",
+  etape: 2,
+  fil: filDeLAttaque(2),
+  consigne: null,
   ...champs,
 });
 
@@ -332,6 +425,9 @@ const vueDeLAttaqueDuChef = (champs = {}) =>
     passer: { actif: false, raison: ACTION_EN_COURS, commande: { evenement: { type: "passer", qui: "adv2" } } },
     passifs: [],
     annonce: { pas: 45, texte: "1er dé : 5, réussi." },
+    camp: "adv",
+    fil: filDeLAttaque(2, "Défense"),
+    geste: gesteVu({ dernierDe: 0, palette: { libelle: "Palette", source: { genre: "capacite", qui: "adv2", capacite: 0 }, mj: true } }),
     ...champs,
   });
 
@@ -422,8 +518,8 @@ test("zone — une section nommée : son corps, la liste d'une case, la couche d
   }, { avecCouche: false });
 });
 
-test("zone — « Qui joue ? » : un bouton par candidat, à son nom entier, qui émet « choisir » depuis la zone ; sans candidat, le titre seul ; de même sur un téléphone", () => {
-  for (const etroit of [false, true]) {
+test("zone — « Qui joue ? » : un bouton par candidat, à son nom entier, qui émet « choisir » depuis la zone ; sans candidat, le titre seul ; sur PC seulement", () => {
+  for (const etroit of [false]) {
     avecLaZone(({ noeud, rendre, appels }) => {
       rendre(QUI_JOUE);
       const titre = noeud.querySelector("h2.combat-qui");
@@ -443,8 +539,8 @@ test("zone — « Qui joue ? » : un bouton par candidat, à son nom entier, qui
   }
 });
 
-test("zone — la fin du combat : la phrase du vainqueur, sans bouton ; la préparation : un corps vide", () => {
-  for (const etroit of [false, true]) {
+test("zone — la fin du combat : la phrase du vainqueur, sans bouton ; la préparation : un corps vide ; sur PC seulement", () => {
+  for (const etroit of [false]) {
     avecLaZone(({ noeud, rendre }) => {
       rendre({ genre: "termine", ...PANNEAU_VIDE, vainqueur: "Combat terminé : victoire des PJ.", annonce: null });
       assert.equal(texteDe(noeud.querySelector("h2.combat-qui")), "Combat terminé : victoire des PJ.");
@@ -484,87 +580,49 @@ test("zone — sur un grand écran, pendant une action, la phrase seule : ni lis
   });
 });
 
-test("zone — sur un téléphone, le jet sous la carte : son titre, qui le joue, puis le jet ; ni ✕ ni « – » ; sans geste, un corps vide (le volet est ouvert)", () => {
-  avecLeTelephone(({ noeud, rendre, appels }) => {
-    const corps = noeud.querySelector(".combat-action-corps");
-    assert.equal(rendre(vueJet()), true);
-    const [titre, sous, ...jet] = corps.children;
-    assert.equal(forme(titre), "h2.combat-qui");
-    assert.equal(titre.getAttribute("tabindex"), "-1");
-    assert.equal(titre.textContent, "Taloche [1] contre Marmiton de corvée n° 2");
-    assert.equal(forme(sous), "p.combat-sous");
-    assert.equal(sous.textContent, "Aubépine · dernière action · souffle 6/10");
-    assert.deepEqual(jet.map(forme), ["ol.combat-etapes", "div.combat-cibles", "div.combat-des"], "le jet, tel que composerGeste le rend");
-    // Rien qui ferme ou réduise : il n'y a rien à fermer sous la carte.
-    const fermetures = tous(noeud, "button").filter((b) => [FERMER, REDUIRE].includes(texteDe(b)) || ["Fermer", "Réduire"].includes(b.getAttribute("aria-label")));
-    assert.deepEqual(fermetures, []);
-    assert.equal(noeud.querySelector(".combat-bulle-fermer"), null);
-    assert.equal(noeud.textContent.includes("Taloche [1] : rouvrir"), false);
-    assert.equal(noeud.querySelector(".combat-action-phrase"), null);
-    // Ses commandes partent de la zone.
-    leBouton(noeud, "Garder ce dé").click();
-    assert.deepEqual(appels, [{ commande: { evenement: { type: "garder" } }, origine: "panneau" }]);
-
-    // Un adversaire attaque : son en-tête, et qui se défend sous les étapes ; le jet est celui de la défense.
-    rendre(vueDeLAttaqueDuChef());
-    assert.deepEqual(corps.children.slice(0, 4).map((n) => [forme(n), n.textContent]), [
-      ["h2.combat-qui", "Frappe contre Aubépine Crèmebrûlée"],
-      ["p.combat-sous", "Chef · dernière action · souffle 6/7"],
-      ["ol.combat-etapes", "CapacitéCibleJet de défenseLocalisationInterventionsDégâts"],
-      ["p.combat-defenseur", "Aubépine lance sa défense · souffle 6/10"],
-    ]);
-
-    // Sans geste, la liste est dans le volet : la zone est vide.
-    assert.equal(rendre(vueListe()), true);
-    assert.equal(corps.childNodes.length, 0);
-    assert.equal(rendre(vueListe()), false);
-    // Le même jet, sur un grand écran : la phrase ; revenu au téléphone : le jet.
-    rendre(vueJet(), { etroit: false });
-    assert.deepEqual(corps.children.map(forme), ["p.combat-action-phrase"]);
-    assert.equal(rendre(vueJet()), true);
-    assert.equal(forme(corps.children[0]), "h2.combat-qui");
-  });
+test("zone — au téléphone, en jeu, elle reste vide (contrat de la vague 3, § 4.2) : ni « Qui joue ? », ni la fin, ni la liste, ni le jet ; le volet porte tout ; l'annonce, elle, parle toujours", () => {
+  avecLaZone(
+    ({ noeud, rendre, annonce, liens }) => {
+      const corps = noeud.querySelector(".combat-action-corps");
+      for (const vue of [QUI_JOUE, { genre: "termine", ...PANNEAU_VIDE, vainqueur: "Combat terminé : victoire des PJ.", annonce: null }, vueListe(), vueJet(), vueDeLAttaqueDuChef()]) {
+        rendre(vue);
+        assert.equal(corps.childNodes.length, 0, vue.genre);
+        assert.equal(tous(noeud, "[data-focus]").length, 0, "rien à focaliser sous la carte");
+      }
+      assert.deepEqual(liens, [], "aucune infobulle sous la carte");
+      // Le même rendu ne refait rien ; l'annonce suit son pas.
+      assert.equal(rendre(vueJet({ annonce: { pas: 13, texte: "1er dé : 9, réussi." } })), false);
+      assert.equal(annonce.textContent, "1er dé : 9, réussi.");
+      // Revenu au PC : la phrase ; puis le téléphone : vide de nouveau.
+      assert.equal(rendre(vueJet(), { etroit: false }), true);
+      assert.deepEqual(corps.children.map(forme), ["p.combat-action-phrase"]);
+      assert.equal(rendre(vueJet()), true);
+      assert.equal(corps.childNodes.length, 0);
+    },
+    { etroit: true },
+  );
 });
 
-test("zone — le corps n'est refait que si ce qu'il montre change ; une saisie en cours survit à un rendu de plus", () => {
-  avecLeTelephone(({ noeud, rendre }) => {
-    assert.equal(rendre(vueJet()), true);
-    const relancer = leBouton(noeud, "Relancer le 2e dé");
+test("zone — le corps n'est refait que si ce qu'il montre change : « Qui joue ? » ne bouge pas à un rendu égal ; une autre vue le refait", () => {
+  avecLaZone(({ noeud, rendre }) => {
+    assert.equal(rendre(QUI_JOUE), true);
+    const premier = leBouton(noeud, "Aubépine Crèmebrûlée");
     const titre = noeud.querySelector("h2.combat-qui");
-
     // La même vue, refabriquée (un rendu de plus quand l'enregistrement finit) : rien ne bouge.
-    assert.equal(rendre(vueJet()), false);
-    assert.equal(leBouton(noeud, "Relancer le 2e dé"), relancer);
-    assert.equal(noeud.querySelector("h2.combat-qui"), titre);
+    assert.equal(rendre(structuredClone(QUI_JOUE)), false);
+    assert.ok(leBouton(noeud, "Aubépine Crèmebrûlée") === premier);
+    assert.ok(noeud.querySelector("h2.combat-qui") === titre);
     // Une annonce de plus ne refait pas le corps.
-    assert.equal(rendre(vueJet({ annonce: { pas: 13, texte: "Le dé explose : 6 plus 3, 9, réussi." } })), false);
-    assert.equal(leBouton(noeud, "Relancer le 2e dé"), relancer);
-
-    // Une saisie en cours survit à un rendu sans changement.
-    const avecX = vueDuGeste({ x: { valeur: 0, min: 0, max: 5, gabarit: { evenement: { type: "regler", champ: "x" } } } });
-    rendre(avecX);
-    noeud.querySelector("input[type=number]").value = "4";
-    rendre(structuredClone(avecX));
-    assert.equal(noeud.querySelector("input[type=number]").value, "4");
-
-    // La vue change (un dé de plus) : le corps est refait.
-    rendre(vueJet());
-    const avant = leBouton(noeud, "Relancer le 2e dé");
-    assert.equal(rendre(vueJet({ geste: gesteVu({ bilan: "2 réussites." }) })), true);
-    assert.notEqual(leBouton(noeud, "Relancer le 2e dé"), avant);
-    assert.equal(avant.isConnected, false);
-    assert.equal(texteDe(noeud.querySelector("p.combat-bilan")), "2 réussites.");
-
-    // L'origine de la cible change seule : le corps est refait aussi.
-    const deux = vueJet({ geste: gesteVu({ bilan: "2 réussites." }) });
-    assert.equal(rendre(deux, { origineDeLaCible: "plateau" }), true);
-    assert.equal(rendre(deux, { origineDeLaCible: "plateau" }), false);
-    assert.equal(rendre(deux, { origineDeLaCible: "panneau" }), true);
+    assert.equal(rendre({ ...QUI_JOUE, annonce: { pas: 3, texte: "Fin du tour des PJ." } }), false);
+    // Un candidat de moins : refait.
+    assert.equal(rendre({ ...QUI_JOUE, candidats: QUI_JOUE.candidats.slice(0, 1) }), true);
+    assert.equal(premier.isConnected, false);
+    assert.equal(tous(noeud, "button").length, 1);
   });
 });
 
 test("zone — l'annonce s'écrit quand son pas change, et alors seulement", () => {
-  avecLeTelephone(({ noeud, rendre, annonce }) => {
+  avecLaZone(({ noeud, rendre, annonce }) => {
     assert.equal(annonce.childNodes.length, 0);
     rendre(vueJet());
     assert.equal(annonce.textContent, "2e dé : 4, échec. Relancer ou garder ?");
@@ -595,8 +653,8 @@ test("zone — l'annonce s'écrit quand son pas change, et alors seulement", () 
   });
 });
 
-test("zone — data-focus désigne la commande qui attend, et elle seule ; à défaut, le titre", () => {
-  avecLeTelephone(({ noeud, rendre }) => {
+test("jet — data-focus désigne la commande qui attend, et elle seule ; rien d'autre quand elle n'est pas montrée", () => {
+  avecLeJet(({ noeud, rendre }) => {
     const marques = () => tous(noeud, "[data-focus]").map((n) => [n.tagName, n.getAttribute("data-focus"), texteDe(n)]);
     rendre(vueJet());
     assert.deepEqual(marques(), [["BUTTON", "choix:relancer", "Relancer le 2e dé"]]);
@@ -609,12 +667,22 @@ test("zone — data-focus désigne la commande qui attend, et elle seule ; à d�
     rendre(vueDuGeste({ x: { valeur: 0, min: 0, max: 5, gabarit: { evenement: { type: "regler", champ: "x" } } } }, { focus: "x" }));
     assert.deepEqual(tous(noeud, "[data-focus]").map((n) => [n.tagName, n.getAttribute("type")]), [["INPUT", "number"]]);
 
-    // Rien n'attend, ou une clé que la zone ne montre pas : le titre, qui peut recevoir le focus.
+    // Rien n'attend, ou une clé que le jet ne montre pas : aucune marque (la bulle se rabat sur sa première ligne, puis son titre).
     for (const focus of [null, "choix:exploser"]) {
       rendre(vueJet({ focus }));
-      assert.deepEqual(marques(), [["H2", "titre", "Taloche [1] contre Marmiton de corvée n° 2"]]);
-      assert.equal(noeud.querySelector("h2.combat-qui").getAttribute("tabindex"), "-1");
+      assert.deepEqual(marques(), []);
     }
+    // Au téléphone, une étape qui ne montre pas la commande ne la marque pas : le choix du jet attend à l'étape 2.
+    rendre(vueJet({ etape: 1 }), { etroit: true });
+    assert.deepEqual(marques(), []);
+    rendre(vueJet(), { etroit: true });
+    assert.deepEqual(marques(), [["BUTTON", "choix:relancer", "Relancer le 2e dé"]]);
+  });
+});
+
+test("zone — data-focus désigne le candidat qui attend ; à défaut, le titre", () => {
+  avecLaZone(({ noeud, rendre }) => {
+    const marques = () => tous(noeud, "[data-focus]").map((n) => [n.tagName, n.getAttribute("data-focus"), texteDe(n)]);
     rendre(QUI_JOUE);
     assert.deepEqual(marques(), [["BUTTON", "candidat:pj1", "Aubépine Crèmebrûlée"]]);
     rendre({ ...QUI_JOUE, focus: null });
@@ -624,140 +692,93 @@ test("zone — data-focus désigne la commande qui attend, et elle seule ; à d�
   });
 });
 
-test("zone — un réglage qui ne fait pas avancer le geste garde le focus : une caractéristique, la défense ; tout autre le rend à la commande qui attend", () => {
-  const retirer = installerDom();
-  try {
-    // L'écran redessine pendant « executer » : c'est là que la zone apprend où poser le focus.
-    let suivante = null;
-    const zone = creer({
-      executer: () => {
-        if (suivante !== null) zone.rendre(suivante, { etroit: true });
-      },
-      lancerLeDe: () => {},
-      hachurer: () => {},
-    });
-    globalThis.document.body.append(zone.noeud);
-    const marques = () => tous(zone.noeud, "[data-focus]").map((n) => n.getAttribute("data-focus"));
+test("jet — un réglage qui ne fait pas avancer le geste demande à garder le focus (une caractéristique, la défense) le temps d'émettre ; tout autre émet sans rien garder", () => {
+  avecDom(() => {
     const options = [{ code: "force", nom: "Force", valeur: 4 }, { code: "agilite", nom: "Agilité", valeur: 5 }];
     const cible = { id: "adv3", libelle: "Marmiton de corvée n° 1", choisie: false, actif: true, raison: null, commande: regler("cible", "adv3") };
-    const avec = (choisies, defense, autres = {}) =>
-      vueDuGeste(
-        {
-          caracteristiques: { choisies, de: "d8", gabarit: { evenement: { type: "regler", champ: "caracteristiques" } }, options },
-          cibles: [cible],
-          contexte: { ...CONTEXTE_NU, defense: DEFENSE(defense) },
-        },
-        { focus: "cible:adv3", ...autres },
-      );
-    const caracteristique = (nom) => leBouton(zone.noeud.querySelector(".combat-caracteristiques"), nom);
-    const liste = () => zone.noeud.querySelector(".combat-defense select");
+    const vue = vueDuGeste(
+      {
+        caracteristiques: { choisies: ["force"], de: "d8", gabarit: { evenement: { type: "regler", champ: "caracteristiques" } }, options },
+        cibles: [cible],
+        contexte: { ...CONTEXTE_NU, defense: DEFENSE("lourde") },
+      },
+      { focus: "cible:adv3" },
+    );
+    const { lieu, appels, gardes } = composer(composerGeste, vue);
+    assert.deepEqual(tous(lieu, "[data-focus]").map((n) => n.getAttribute("data-focus")), ["cible:adv3"], "la commande qui attend, tant que rien n'est actionné");
 
-    zone.rendre(avec(["force"], "lourde"), { etroit: true });
-    assert.deepEqual(marques(), ["cible:adv3"], "la commande qui attend, tant que rien n'est actionné");
-
-    // Une caractéristique de plus : la commande qui attend reste la cible, mais on y revient d'un geste.
-    suivante = avec(["force", "agilite"], "lourde");
-    caracteristique("Agilité").click();
-    assert.deepEqual(marques(), ["caracteristique:agilite"]);
-    assert.equal(caracteristique("Agilité").getAttribute("aria-pressed"), "true");
-    // Un rendu de plus, sans geste de la personne : le focus désigné redevient celui de la vue.
-    zone.rendre(avec(["force"], "lourde"), { etroit: true });
-    assert.deepEqual(marques(), ["cible:adv3"]);
-
-    // La défense : le choix fait, le focus reste sur la liste.
-    suivante = avec(["force"], "agile");
-    liste().value = "agile";
-    liste().declencher("change");
-    assert.deepEqual(marques(), ["defense"]);
-    assert.equal(liste().value, "agile");
-
-    // Tout autre réglage rend le focus à la commande qui attend : choisir la cible mène au dé.
-    suivante = avec(["force"], "agile", { focus: "caracteristique:force" });
-    leBouton(zone.noeud.querySelector(".combat-cibles"), "Marmiton").click();
-    assert.deepEqual(marques(), ["caracteristique:force"], "la clé de la vue, non celle du bouton actionné");
-
-    // Refusé, l'écran ne redessine pas : rien ne bouge, et la clé ne passe pas au rendu suivant.
-    suivante = null;
-    caracteristique("Agilité").click();
-    assert.deepEqual(marques(), ["caracteristique:force"]);
-    zone.rendre(avec(["agilite"], "lourde"), { etroit: true });
-    assert.deepEqual(marques(), ["cible:adv3"]);
-
-    // Le bouton actionné n'est plus dans le corps refait : la commande qui attend, comme toujours.
-    suivante = vueDuGeste({ cibles: [cible] }, { focus: "cible:adv3" });
-    caracteristique("Force").click();
-    assert.deepEqual(marques(), ["cible:adv3"]);
-  } finally {
-    retirer();
-  }
-});
-
-test("zone — sa mémoire (réglages dépliés, explication des causes) tient le temps du geste et retombe quand il change ; un corps refait vide la couche et efface les hachures", () => {
-  avecLeTelephone(({ noeud, rendre, hachures, couche }) => {
-    const avecReglages = (bilan, autres = {}) => vueJet({ geste: gesteVu({ bilan, contexte: { ...gesteVu().contexte, reglages: REGLAGES } }), ...autres });
-    const details = () => noeud.querySelector("details.combat-reglages");
-    const cause = () => noeud.querySelector("button.combat-cause");
-
-    rendre(avecReglages("Avant le premier dé."));
-    assert.equal(details().hasAttribute("open"), false, "repliés");
-    details().setAttribute("open", "");
-    details().declencher("toggle");
-    appuyer(cause(), "touch");
-    assert.equal(cause().getAttribute("aria-expanded"), "true");
-
-    // Le corps refait, dans le même geste : dépliés, l'explication montrée.
-    assert.equal(rendre(avecReglages("Toujours avant le premier dé.")), true);
-    assert.equal(details().hasAttribute("open"), true);
-    assert.equal(cause().getAttribute("aria-expanded"), "true");
-    assert.equal(noeud.querySelector(".combat-cause-explication").hidden, false);
-
-    // Ce que la couche porte part avec le corps d'avant ; les hachures aussi.
-    couche.append(globalThis.document.createElement("div"));
-    hachures.length = 0;
-    rendre(avecReglages("Encore avant le premier dé."));
-    assert.equal(couche.childNodes.length, 0, "les infobulles du corps d'avant ne restent pas");
-    assert.deepEqual(hachures, [null]);
-
-    // Le geste finit (la liste revient) : la mémoire retombe.
-    rendre(vueListe());
-    rendre(avecReglages("Un autre geste."));
-    assert.equal(details().hasAttribute("open"), false);
-    assert.equal(cause().getAttribute("aria-expanded"), "false");
-    assert.equal(noeud.querySelector(".combat-cause-explication").hidden, true);
-
-    // Un autre protagoniste : de même.
-    details().setAttribute("open", "");
-    details().declencher("toggle");
-    rendre(avecReglages("Le Chef joue.", { nom: "Chef de partie : ses actions", entete: { titre: "Frappe contre Aubépine Crèmebrûlée", sous: "Chef · dernière action · souffle 6/7" } }));
-    assert.equal(details().hasAttribute("open"), false);
+    // Une caractéristique de plus : garder sa clé, émettre, puis ne plus rien garder.
+    leBouton(lieu.querySelector(".combat-caracteristiques"), "Agilité").click();
+    assert.deepEqual(gardes, ["caracteristique:agilite", null]);
+    assert.deepEqual(appels, [{ commande: { evenement: { type: "regler", champ: "caracteristiques", valeur: ["force", "agilite"] } }, origine: "bulle" }]);
+    // La défense : de même, sous sa clé.
+    const liste = lieu.querySelector(".combat-defense select");
+    liste.value = "agile";
+    liste.declencher("change");
+    assert.deepEqual(gardes, ["caracteristique:agilite", null, "defense", null]);
+    // Choisir la cible fait avancer le geste : rien n'est gardé.
+    leBouton(lieu.querySelector(".combat-cibles"), "Marmiton").click();
+    assert.equal(gardes.length, 4);
+    assert.deepEqual(appels.at(-1), { commande: regler("cible", "adv3"), origine: "bulle" });
   });
 });
 
-test("zone — deux zones ne se mêlent pas ; la bulle et la zone, dans la page en même temps, n'ont aucun identifiant en commun", () => {
+test("jet — sa mémoire (réglages dépliés, explication des causes) tient d'une composition à l'autre, par r.memoire ; c'est la bulle qui la remet à zéro", () => {
+  avecLeJet(
+    ({ noeud, rendre, memoire }) => {
+      const avecReglages = (bilan) => vueJet({ geste: gesteVu({ bilan, contexte: { ...gesteVu().contexte, reglages: REGLAGES } }) });
+      const details = () => noeud.querySelector("details.combat-reglages");
+      const cause = () => noeud.querySelector("button.combat-cause");
+
+      rendre(avecReglages("Avant le premier dé."));
+      assert.equal(details().hasAttribute("open"), false, "repliés");
+      details().setAttribute("open", "");
+      details().declencher("toggle");
+      appuyer(cause(), "touch");
+      assert.equal(cause().getAttribute("aria-expanded"), "true");
+      assert.deepEqual([memoire.reglagesOuverts, memoire.causesOuvertes], [true, true]);
+
+      // Le corps refait, la même mémoire : dépliés, l'explication montrée.
+      rendre(avecReglages("Toujours avant le premier dé."));
+      assert.equal(details().hasAttribute("open"), true);
+      assert.equal(cause().getAttribute("aria-expanded"), "true");
+      assert.equal(noeud.querySelector(".combat-cause-explication").hidden, false);
+
+      // La mémoire remise à zéro (la bulle le fait quand le geste change) : repliés.
+      Object.assign(memoire, { reglagesOuverts: false, apercu: null, causesOuvertes: false });
+      rendre(avecReglages("Un autre geste."));
+      assert.equal(details().hasAttribute("open"), false);
+      assert.equal(cause().getAttribute("aria-expanded"), "false");
+      assert.equal(noeud.querySelector(".combat-cause-explication").hidden, true);
+    },
+    { modeMj: true },
+  );
+});
+
+test("contenu — deux zones ne se mêlent pas ; la bulle et un contenu hors d'elle, dans la page en même temps, n'ont aucun identifiant en commun", () => {
   avecDom(() => {
     const appelsA = [];
     const appelsB = [];
     const a = creer({ executer: (commande) => appelsA.push(commande), lancerLeDe: () => {}, hachurer: () => {} });
     const b = creer({ executer: (commande) => appelsB.push(commande), lancerLeDe: () => {}, hachurer: () => {} });
     globalThis.document.body.append(a.noeud, b.noeud);
-    a.rendre(vueJet(), { etroit: true });
-    b.rendre(vueListe(), { etroit: true });
-    leBouton(a.noeud, "Garder ce dé").click();
+    a.rendre(QUI_JOUE);
+    b.rendre({ ...QUI_JOUE, candidats: QUI_JOUE.candidats.slice(1) });
+    leBouton(a.noeud, "Aubépine Crèmebrûlée").click();
     assert.equal(appelsA.length, 1);
     assert.equal(appelsB.length, 0);
-    assert.equal(b.noeud.querySelector(".combat-des"), null);
     assert.notEqual(a.listeDeCase, b.listeDeCase);
     assert.notEqual(a.annonce, b.annonce);
 
-    // Sur un téléphone, la zone montre le jet pendant que la bulle, cachée, garde sa liste.
+    // Un jet composé hors de la bulle (origine « panneau ») et la liste de la bulle : leurs identifiants partent de mots distincts.
     const geste = vueDuGeste({
       x: { valeur: 0, min: 0, max: 5, gabarit: { evenement: { type: "regler", champ: "x" } } },
       cibles: [{ id: "adv2", libelle: "Chef de partie", choisie: false, actif: false, raison: "hors de portée", commande: regler("cible", "adv2") }],
     });
-    a.rendre(geste, { etroit: true });
+    composer(composerGeste, geste, { origine: undefined });
     composer(composerListe, vueListe());
     const ids = tous(globalThis.document.body, "[id]").map((n) => n.id);
-    assert.equal(ids.length, 4, "trois dans la zone (une raison, une rangée, un refus), une dans la bulle (une raison)");
+    assert.equal(ids.length, 4, "trois hors de la bulle (une raison, une rangée, un refus), une dans la bulle (une raison)");
     assert.equal(new Set(ids).size, ids.length, `aucun identifiant en double : ${ids.join(", ")}`);
   });
 });
@@ -1156,13 +1177,13 @@ test("jet — des nœuds sans en-tête ni conteneur, dans l'ordre de la vue 2 bi
         natures: [{ libelle: "Dégâts normaux", choisie: true, commande }],
         saisie: { valeur: null, raison: null, raisonParDefaut: "Taloche", min: 0, max: 999, gabarit: { evenement: { type: "degats", base: "aucun", nature: "normaux" } } },
       },
-      localisation: [{ brut: 14, face: 14, zone: "jambe droite", decaler: { min: -13, max: 5, raisonParDefaut: "Taloche", gabarit: { evenement: { type: "decaler", de: 0 } } } }],
+      localisation: [{ brut: 14, face: 14, zone: "jambe droite", decaler: { min: -13, max: 5, raisonParDefaut: "Taloche", gabarit: { evenement: { type: "decaler", de: 0 } }, mj: true } }],
       esquive: { libelle: "Pas de côté", min: 1, max: 6, gabarit: { evenement: { type: "esquive" } } },
       detail: [{ zone: "Jambe droite", texte: "armure 10 → 1" }],
       appliquer: { libelle: "Appliquer", commande: { evenement: { type: "appliquer" } } },
       revenir: { commande: { evenement: { type: "revenir" } } },
     });
-    const { noeuds, lieu } = composer(composerGeste, vueJet({ geste: complet, defenseur: "Aubépine lance sa défense · souffle 6/10" }));
+    const { noeuds, lieu } = composer(composerGeste, vueJet({ geste: complet, defenseur: "Aubépine lance sa défense · souffle 6/10" }), { modeMj: true });
 
     // Un bloc se dit par sa balise et sa dernière classe ; une rangée sans classe propre, par le texte de ses boutons.
     const dit = (bloc) => {
@@ -1294,7 +1315,7 @@ test("jet — la cible : un bouton par cible possible ; « choisie sur la carte 
     { id: "adv2", libelle: "Chef de partie", choisie: false, actif: false, raison: "hors de portée", commande: regler("cible", "adv2") },
   ];
   const vue = vueDuGeste({ cibles });
-  avecLeTelephone(({ noeud, rendre, appels }) => {
+  avecLeJet(({ noeud, rendre, appels }) => {
     rendre(vue, { origineDeLaCible: "plateau" });
     const rangee = noeud.querySelector(".combat-cibles");
     const lesBoutons = tous(rangee, "button");
@@ -1342,7 +1363,7 @@ test("jet — la cible : un bouton par cible possible ; « choisie sur la carte 
 });
 
 test("jet — une capacité sans jet offre « Sans cible » ; sans cible ni « Sans cible », pas de rangée", () => {
-  avecLeTelephone(({ noeud, rendre, appels }) => {
+  avecLeJet(({ noeud, rendre, appels }) => {
     rendre(vueDuGeste({ cibles: [{ id: "pj1", libelle: "Aubépine Crèmebrûlée", choisie: false, actif: true, raison: null, commande: regler("cible", "pj1") }], sansCible: { choisie: true, commande: regler("cible", null) } }), { origineDeLaCible: "panneau" });
     const sans = leBouton(noeud, "Sans cible");
     assert.equal(sans.getAttribute("aria-pressed"), "true");
@@ -1356,7 +1377,7 @@ test("jet — une capacité sans jet offre « Sans cible » ; sans cible ni « S
 });
 
 test("jet — un déplacement : un double de 44 px par case d'arrivée, nommé comme sa case ; sa commande part telle quelle, à un ou deux événements", () => {
-  avecLeTelephone(({ noeud, rendre, appels }) => {
+  avecLeJet(({ noeud, rendre, appels }) => {
     // La commande à deux événements : des événements nus, comme les rend lecture.js (commandeDArrivee ; contrat, § 0.2, règle 7, et § 6.3).
     const deux = { evenements: [{ type: "regler", champ: "facon", valeur: 0 }, { type: "regler", champ: "arrivee", valeur: "C3" }] };
     rendre(vueDuGeste({ cases: [{ case: "C3", nom: "Case C3 : s'y déplacer", choisie: false, commande: deux }, { case: "D4", nom: "Case D4 : s'y déplacer", choisie: true, commande: regler("arrivee", "D4") }] }));
@@ -1376,7 +1397,7 @@ test("jet — un déplacement : un double de 44 px par case d'arrivée, nommé c
 });
 
 test("jet — chaque rangée de choix est un groupe que son intitulé nomme", () => {
-  avecLeTelephone(({ noeud, rendre }) => {
+  avecLeJet(({ noeud, rendre }) => {
     const choix = (libelle) => ({ libelle, choisie: false, commande: regler("x", 0) });
     rendre(
       vueDuGeste({
@@ -1414,7 +1435,7 @@ test("jet — chaque rangée de choix est un groupe que son intitulé nomme", ()
 });
 
 test("jet — les caractéristiques d'un dé au choix : une ou deux, émises par le gabarit de la vue", () => {
-  avecLeTelephone(({ noeud, rendre, appels }) => {
+  avecLeJet(({ noeud, rendre, appels }) => {
     const options = [{ code: "force", nom: "Force", valeur: 4 }, { code: "agilite", nom: "Agilité", valeur: 5 }, { code: "sens", nom: "Sens", valeur: 3 }];
     const gabarit = { evenement: { type: "regler", champ: "caracteristiques" } };
     const avec = (choisies) => vueDuGeste({ caracteristiques: { choisies, de: "d8", gabarit, options } });
@@ -1445,7 +1466,7 @@ test("jet — les caractéristiques d'un dé au choix : une ou deux, émises par
 });
 
 test("jet — la difficulté et la jauge de lien : un bouton par option, la choisie enfoncée", () => {
-  avecLeTelephone(({ noeud, rendre, appels }) => {
+  avecLeJet(({ noeud, rendre, appels }) => {
     rendre(
       vueDuGeste({
         difficultes: [{ valeur: 5, libelle: "moyen", choisie: false, commande: regler("difficulte", 5) }, { valeur: 6, libelle: "compliqué", choisie: true, commande: regler("difficulte", 6) }],
@@ -1467,7 +1488,7 @@ test("jet — la difficulté et la jauge de lien : un bouton par option, la choi
 });
 
 test("jet — X : la saisie porte ses bornes, émet le gabarit complété, se tait hors de ses bornes, et met le focus au champ refusé sans faire défiler", () => {
-  avecLeTelephone(({ noeud, rendre, appels }) => {
+  avecLeJet(({ noeud, rendre, appels }) => {
     rendre(vueDuGeste({ x: { valeur: 2, min: 0, max: 5, gabarit: { evenement: { type: "regler", champ: "x" } } } }));
     const champ = noeud.querySelector("input[type=number]");
     assert.equal(champ.value, "2");
@@ -1654,7 +1675,7 @@ test("jet — le texte de la capacité, toujours : « Effets de capacité (mode 
 test("jet — les réglages à la main : repliés sous « Réglages à la main (avant le premier dé) », ils se déplient d'un clic et gardent leur état le temps du geste ; un nombre et sa raison, jamais une raison vide", () => {
   avecDom(() => {
     const vue = vueJet({ geste: gesteVu({ contexte: { ...gesteVu().contexte, reglages: REGLAGES } }) });
-    const { lieu, appels, r } = composer(composerGeste, vue);
+    const { lieu, appels, r } = composer(composerGeste, vue, { modeMj: true });
     const details = lieu.querySelector(".combat-des details.combat-reglages");
     assert.equal(details.hasAttribute("open"), false, "repliés");
     const resume = details.children[0];
@@ -1664,7 +1685,7 @@ test("jet — les réglages à la main : repliés sous « Réglages à la main (
     details.setAttribute("open", "");
     details.declencher("toggle");
     assert.equal(r.memoire.reglagesOuverts, true);
-    assert.equal(composer(composerGeste, vue, { memoire: r.memoire }).lieu.querySelector("details.combat-reglages").hasAttribute("open"), true, "un dé refait le corps sans les refermer");
+    assert.equal(composer(composerGeste, vue, { memoire: r.memoire, modeMj: true }).lieu.querySelector("details.combat-reglages").hasAttribute("open"), true, "un dé refait le corps sans les refermer");
     details.removeAttribute("open");
     details.declencher("toggle");
     assert.equal(r.memoire.reglagesOuverts, false);
@@ -1720,7 +1741,7 @@ test("jet — les réglages à la main : repliés sous « Réglages à la main (
 });
 
 test("jet — la chaîne : un dé par entrée, son état en classe, en signe et en nom ; seul le dé attendu se lance", () => {
-  avecLeTelephone(({ noeud, rendre, appels }) => {
+  avecLeJet(({ noeud, rendre, appels }) => {
     rendre(vueJet());
     let des = tous(noeud, ".combat-chaine button.combat-de");
     assert.deepEqual(des.map((de) => de.className), ["combat-de reussi", "combat-de echoue", "combat-de a-venir"]);
@@ -1772,7 +1793,7 @@ test("jet — la chaîne : un dé par entrée, son état en classe, en signe et 
 });
 
 test("jet — le dé attendu que la chaîne ne montre pas reste cliquable ; une entrée « à lancer » sans dé attendu ne lance rien", () => {
-  avecLeTelephone(({ noeud, rendre, appels }) => {
+  avecLeJet(({ noeud, rendre, appels }) => {
     rendre(vueJet({ geste: gesteVu({ chaine: [], aLancer: { faces: 8, combien: 2, libelle: "d8", motif: "chaine" }, choix: [] }) }));
     const des = tous(noeud, ".combat-chaine button.combat-de");
     assert.equal(des.length, 1);
@@ -1791,7 +1812,7 @@ test("jet — le dé attendu que la chaîne ne montre pas reste cliquable ; une 
 });
 
 test("jet — le bilan visible, à part de l'annonce ; les rangs de dégâts, le rang atteint en évidence ; les choix du moment", () => {
-  avecLeTelephone(({ noeud, rendre, appels }) => {
+  avecLeJet(({ noeud, rendre, appels }) => {
     rendre(vueJet());
     assert.equal(texteDe(noeud.querySelector("p.combat-bilan")), "1 réussite pour l'instant. Le 2e dé échoue : il reste 1 avantage.");
     assert.equal(noeud.querySelector("p.combat-bilan").hasAttribute("aria-live"), false);
@@ -1815,17 +1836,17 @@ test("jet — le bilan visible, à part de l'annonce ; les rangs de dégâts, le
 });
 
 test("jet — fixer les dégâts : la base, la nature, et un nombre avec sa raison, rangés dans l'opération « ajuster »", () => {
-  avecLeTelephone(({ noeud, rendre, appels }) => {
+  avecLeJet(({ noeud, rendre, appels }) => {
     const degats = {
       bases: [
         { libelle: "Sans dégâts", choisie: true, commande: { evenement: { type: "degats", base: "aucun", operations: [], nature: "normaux" } } },
         { libelle: "Dégâts de l'arme", choisie: false, commande: { evenement: { type: "degats", base: "arme", operations: [], nature: "normaux" } } },
       ],
       natures: [
-        { libelle: "Normaux", choisie: true, commande: { evenement: { type: "degats", base: "aucun", operations: [], nature: "normaux" } } },
-        { libelle: "Directs, à l'endurance", choisie: false, commande: { evenement: { type: "degats", base: "aucun", operations: [], nature: "resistance" } } },
+        { libelle: "Normaux", choisie: true, commande: { evenement: { type: "degats", base: "aucun", operations: [], nature: "normaux" } }, mj: true },
+        { libelle: "Directs, à l'endurance", choisie: false, commande: { evenement: { type: "degats", base: "aucun", operations: [], nature: "resistance" } }, mj: true },
       ],
-      saisie: { valeur: null, raison: null, raisonParDefaut: "Fournaise", min: 0, max: 999, gabarit: { evenement: { type: "degats", base: "aucun", nature: "normaux" } } },
+      saisie: { valeur: null, raison: null, raisonParDefaut: "Fournaise", min: 0, max: 999, gabarit: { evenement: { type: "degats", base: "aucun", nature: "normaux" } }, mj: true },
     };
     rendre(vueJet({ geste: gesteVu({ choix: [], degats }) }));
     assert.deepEqual(tous(noeud, ".combat-degats-bases button").map((b) => [texteDe(b), b.getAttribute("aria-pressed")]), [["Sans dégâts", "true"], ["Dégâts de l'arme", "false"]]);
@@ -1861,13 +1882,22 @@ test("jet — fixer les dégâts : la base, la nature, et un nombre avec sa rais
 
     rendre(vueJet({ geste: gesteVu({ degats: null }) }));
     assert.equal(boutons(noeud, "Fixer les dégâts").length, 0);
-  });
+
+    // Mode MJ éteint : la base reste (la règle la demande), la nature et la saisie, réservées au MJ, ne paraissent pas.
+    rendre(vueJet({ geste: gesteVu({ choix: [], degats }) }), { modeMj: false });
+    assert.equal(tous(noeud, ".combat-degats-bases button").length, 2);
+    assert.equal(noeud.querySelector(".combat-degats-natures"), null);
+    assert.equal(boutons(noeud, "Fixer les dégâts").length, 0);
+    // La saisie que la règle demande (des dégâts qu'elle ne donne pas) n'est pas marquée : elle reste.
+    rendre(vueJet({ geste: gesteVu({ choix: [], degats: { ...degats, saisie: { ...degats.saisie, mj: false } } }) }), { modeMj: false });
+    assert.equal(boutons(noeud, "Fixer les dégâts").length, 1);
+  }, { modeMj: true });
 });
 
 test("jet — « ajusté à » la valeur calculée ne change rien (lot 4.3) : sans ajustement, rien ne part ; avec, la commande de la vue, sans raison ; un autre nombre, l'opération « ajuster »", () => {
-  avecLeTelephone(({ noeud, rendre, appels }) => {
+  avecLeJet(({ noeud, rendre, appels }) => {
     const gabarit = { evenement: { type: "degats", base: "lettre", nature: "normaux" } };
-    const saisie = { valeur: 8, raison: null, raisonParDefaut: "Frappe", min: 0, max: 999, gabarit, sansEffet: { valeur: 8, commande: null } };
+    const saisie = { valeur: 8, raison: null, raisonParDefaut: "Frappe", min: 0, max: 999, gabarit, sansEffet: { valeur: 8, commande: null }, mj: true };
     const champs = () => tous(leBouton(noeud, "Fixer les dégâts").parentNode, "input");
     rendre(vueJet({ geste: gesteVu({ choix: [], degats: { bases: [], natures: [], saisie } }) }));
     let [nombre, raison] = champs();
@@ -1897,11 +1927,11 @@ test("jet — « ajusté à » la valeur calculée ne change rien (lot 4.3) : sa
     rendre(vueJet({ geste: gesteVu({ choix: [], degats: { bases: [], natures: [], saisie: { ...saisie, sansEffet: null, gabarit: { evenement: { ...gabarit.evenement, nature: "corps" } } } } }) }));
     leBouton(noeud, "Fixer les dégâts").click();
     assert.deepEqual(appels.map((appel) => appel.commande.evenement.operations), [[{ op: "ajuster", valeur: 8, raison: "Frappe" }]]);
-  });
+  }, { modeMj: true });
 });
 
 test("jet — les choix du lot 4.3 : garder ou tenter le critique, laisser passer la contre-attaque ; « Terminer » à la place d'« Appliquer »", () => {
-  avecLeTelephone(({ noeud, rendre, appels }) => {
+  avecLeJet(({ noeud, rendre, appels }) => {
     const critique = (tenter) => ({ evenement: { type: "critique", tenter } });
     rendre(
       vueJet({
@@ -1924,7 +1954,7 @@ test("jet — les choix du lot 4.3 : garder ou tenter le critique, laisser passe
 });
 
 test("jet — la capacité gardée d'attendre (lot 4.3) : « Garder : » et un bouton par ligne, la choisie enfoncée ; un clic émet sa commande", () => {
-  avecLeTelephone(({ noeud, rendre, appels }) => {
+  avecLeJet(({ noeud, rendre, appels }) => {
     const gardes = [
       { libelle: "Frappe", choisie: true, commande: regler("garde", { capacite: 0, facon: 0 }) },
       { libelle: "Taloche [1]", choisie: false, commande: regler("garde", { capacite: 15, facon: 0 }) },
@@ -1944,7 +1974,7 @@ test("jet — la capacité gardée d'attendre (lot 4.3) : « Garder : » et un b
 });
 
 test("jet — la blessure (lot 4.3) : son titre, une option par capacité et son texte, la phrase d'une banque sans bloc, puis l'état libre, nommé de 1 à 40 signes", () => {
-  avecLeTelephone(({ noeud, rendre, appels }) => {
+  avecLeJet(({ noeud, rendre, appels }) => {
     const main = { evenement: { type: "blessure", capacite: { nom: "Main brûlée" } } };
     const cotes = { evenement: { type: "blessure", capacite: { nom: "Côtes froissées" } } };
     const PHOTO_PLEINE = "La photographie compterait plus de 200 capacités.";
@@ -1994,7 +2024,7 @@ test("jet — la blessure (lot 4.3) : son titre, une option par capacité et son
 });
 
 test("jet — la localisation : les d20 lancés, le d20 attendu à cliquer, et la face à décaler avec sa raison", () => {
-  avecLeTelephone(({ noeud, rendre, appels }) => {
+  avecLeJet(({ noeud, rendre, appels }) => {
     rendre(vueJet({ geste: gesteVu({ choix: [], aLancer: { faces: 20, combien: 1, libelle: "d20", motif: "localisation" }, localisation: [] }), focus: "de" }));
     assert.equal(tous(noeud, ".combat-chaine").length, 2);
     assert.equal(tous(noeud, ".combat-chaine")[0].querySelector(".a-lancer"), null, "la chaîne du jet ne reçoit pas le d20");
@@ -2010,7 +2040,7 @@ test("jet — la localisation : les d20 lancés, le d20 attendu à cliquer, et l
         geste: gesteVu({
           choix: [],
           localisation: [
-            { brut: 14, face: 14, zone: "jambe droite", decaler: { min: -13, max: 5, raisonParDefaut: "Taloche", gabarit: { evenement: { type: "decaler", de: 0 } } } },
+            { brut: 14, face: 14, zone: "jambe droite", decaler: { min: -13, max: 5, raisonParDefaut: "Taloche", gabarit: { evenement: { type: "decaler", de: 0 } }, mj: true } },
             { brut: 6, face: 12, zone: "jambe gauche", decaler: null },
           ],
         }),
@@ -2046,16 +2076,22 @@ test("jet — la localisation : les d20 lancés, le d20 attendu à cliquer, et l
 
     rendre(vueJet({ geste: gesteVu({ localisation: null }) }));
     assert.equal(noeud.querySelector(".combat-localisation"), null);
-  });
+
+    // Mode MJ éteint : le d20 se montre, son décalage, réservé au MJ, non.
+    rendre(vueJet({ geste: gesteVu({ choix: [], localisation: [{ brut: 14, face: 14, zone: "jambe droite", decaler: { min: -13, max: 5, raisonParDefaut: "Taloche", gabarit: { evenement: { type: "decaler", de: 0 } }, mj: true } }] }) }), { modeMj: false });
+    assert.equal(tous(noeud, ".combat-localisation button.combat-de").length, 1);
+    assert.equal(boutons(noeud, "Décaler").length, 0);
+  }, { modeMj: true });
 });
 
 test("jet — l'esquive : combien, dans les bornes de la vue, rangé dans « x » ; le détail des dégâts ; « Appliquer »", () => {
-  avecLeTelephone(({ noeud, rendre, appels }) => {
+  avecLeJet(({ noeud, rendre, appels }) => {
     rendre(
       vueJet({
         geste: gesteVu({
           choix: [],
-          esquive: { libelle: "Pas de côté", min: 1, max: 6, gabarit: { evenement: { type: "esquive" } } },
+          // La forme de la vue (vague 3) : « raison » est celle d'un objet inactif, et ne demande pas de raison saisie.
+          esquive: { libelle: "Pas de côté", min: 1, max: 6, actif: true, raison: null, gabarit: { evenement: { type: "esquive" } } },
           detail: [{ zone: "Jambe gauche", texte: "armure 10 → 1" }, { zone: null, texte: "corps 10 → 8" }],
           appliquer: { libelle: "Appliquer", commande: { evenement: { type: "appliquer" } } },
         }),
@@ -2087,7 +2123,7 @@ test("jet — l'esquive : combien, dans les bornes de la vue, rangé dans « x �
 });
 
 test("jet — « Confirmer » d'une capacité sans jet, inactif tant que le geste n'est pas prêt ; « Revenir » avant le premier dé", () => {
-  avecLeTelephone(({ noeud, rendre, appels }) => {
+  avecLeJet(({ noeud, rendre, appels }) => {
     const confirmer = { libelle: "Confirmer", actif: false, raison: "Choisissez une case d'arrivée.", commande: { evenement: { type: "confirmer" } } };
     rendre(vueDuGeste({ confirmer, revenir: { commande: { evenement: { type: "revenir" } } } }));
     const bouton = leBouton(noeud, "Confirmer");
@@ -2106,13 +2142,312 @@ test("jet — « Confirmer » d'une capacité sans jet, inactif tant que le gest
   });
 });
 
+// ——— f) Le volet du téléphone et les morceaux de la vague 3 (contrat, § 3.2, § 4.2) ———
+
+const SOURCE_FRAPPE = { genre: "capacite", qui: "pj1", capacite: 0 };
+const INTERVENIR = { evenement: { type: "intervenir", qui: "pj1", capacite: 4, facon: 0 } };
+/** L'étape des interventions (F2) : Aubépine, attaquée, peut esquiver et intervenir. */
+const INTERVENTIONS = {
+  tete: "Le coup porte : C = 10 sur la jambe droite (d20 → 15). Avant les dégâts, qui intervient ?",
+  intervenants: [
+    {
+      id: "pj1",
+      nom: "Aubépine Crèmebrûlée",
+      initiales: "A",
+      sous: "1 action · souffle 5/10 · la cible",
+      options: [{ cle: "intervention:pj1:4:0", libelle: "Dressage minute", texte: "Une intervention.", cout: "1 action · gratuit", actif: true, raison: null, commande: INTERVENIR }],
+    },
+  ],
+  passer: "Passer : appliquer les dégâts",
+};
+const ESQUIVE = { libelle: "Pas de côté", qui: "pj1", cout: "1 action + X souffle", texte: "annule X dégâts, X souffle", min: 1, max: 6, gabarit: { evenement: { type: "esquive" } } };
+/** La contre-attaque (F3) : les attaques du Couteau d'office, puis « Laisser passer » dans les choix. */
+const CONTRE = {
+  titre: "20 : contre-attaque !",
+  texte: "L'attaque est annulée. Aubépine peut contre-attaquer Marmiton n° 3, à la portée 1 de Couteau d'office. Une action ; il en reste 2.",
+  groupes: [{ titre: "Couteau d'office (précise)", lignes: [ligneVue({ commande: { evenement: { type: "contre_attaquer", capacite: 0, facon: 0 } } })] }],
+};
+const LAISSER = { cle: "laisser", libelle: "Laisser passer", commande: { evenement: { type: "laisser" } } };
+/** Le coup critique possible (F6) et ses deux choix. */
+const CRITIQUE = { texte: "Trois réussites, et 1 avantage non dépensé.", detail: "Un 4e dé réussi double les dégâts : C = 8 → 16.", rang: "critique : 16" };
+const CHOIX_DU_CRITIQUE = [
+  { cle: "critique_garde", libelle: "Garder C = 8", commande: { evenement: { type: "critique", tenter: false } } },
+  { cle: "critique_tente", libelle: "Tenter le critique", commande: { evenement: { type: "critique", tenter: true } } },
+];
+/** Les passifs non câblés d'Aubépine pendant son jet (F5) : Nez fin, payant ; Maîtrise de l'agile, déjà servi. */
+const PASSIFS_DU_JET = [
+  { cle: "passif:pj1:7", qui: "pj1", libelle: "Nez fin · 1 souffle", texte: null, actif: true, raison: null, source: { genre: "capacite", qui: "pj1", capacite: 7 } },
+  { cle: "passif:pj1:5", qui: "pj1", libelle: "Maîtrise de l'agile · gratuit", texte: null, actif: false, raison: "Ce passif a déjà servi pour ce jet.", source: { genre: "capacite", qui: "pj1", capacite: 5 } },
+];
+const APPLIQUER_EFFET = { libelle: `Appliquer l'effet de Frappe${String.fromCodePoint(0x2026)}`, texte: "Une attaque qui inflige 3/8/20.", source: SOURCE_FRAPPE };
+const APPLIQUER = { libelle: "Appliquer", commande: { evenement: { type: "appliquer" } } };
+/** Un genre de la palette (contrat, § 3.6), son gabarit complet. */
+const genreDeLaPalette = (genre, libelle, champs = {}) => ({ genre, libelle, actif: true, raison: null, mj: false, champs: [], gabarit: { evenement: { type: "effet", genre, source: SOURCE_FRAPPE } }, ...champs });
+/** La palette ouverte, réduite à son onglet Dés : de quoi poser « Inverser » et « Relancer » sous le dernier dé. */
+const paletteDes = (genres) => ({ onglets: [{ cle: "des", libelle: "Dés", genres }, { cle: "duree", libelle: "Durée", genres: [], champ: null }] });
+/** Plusieurs cibles (F10) : la façon Centrée en préparation, deux cochées. */
+const CENTREE = {
+  cibles: [
+    { id: "adv4", libelle: "Marmiton de corvée n° 2", choisie: true, actif: true, raison: null, commande: null },
+    { id: "adv5", libelle: "Marmiton de corvée n° 3", choisie: true, actif: true, raison: null, commande: regler("cibles", ["adv4"]) },
+  ],
+  ciblesDetail: [
+    { id: "adv4", initiales: "M2", detail: "D4 · défense 5 · corps 10/10" },
+    { id: "adv5", initiales: "M3", detail: "D4 · défense 5 · corps 10/10" },
+  ],
+  progression: [
+    { libelle: "1 · Marmiton n° 2", etat: "en_cours", detail: null },
+    { libelle: "2 · Marmiton n° 3", etat: "a_venir", detail: null },
+  ],
+  jetsParCible: { libelle: "Un jet par cible : 2 cibles" },
+};
+/** Le volet d'un geste à une étape : sa vue, à la main. */
+const vueDuVolet = (etape, geste, autres = {}) => vueJet({ etape, fil: filDeLAttaque(Math.min(etape, 3)), geste: gesteVu(geste), focus: null, annonce: null, ...autres });
+
+test("volet — au téléphone, une étape à la fois sous le fil (« 2 · Cible ») : l'étape 1, la consigne, les cibles et ce qu'on en sait, l'avancement, « Un jet par cible » qui mène aux dés sans rien émettre, « ‹ Changer de capacité », « Confirmer »", () => {
+  avecLeJet(
+    ({ noeud, rendre, appels }) => {
+      const geste = { ...CENTREE, chaine: [], bilan: null, lettres: [], choix: [], dernierDe: null, revenir: { commande: { evenement: { type: "revenir" } } }, confirmer: { libelle: "Confirmer", actif: false, raison: "Choisissez une cible.", commande: { evenement: { type: "confirmer" } } } };
+      rendre(vueDuVolet(1, geste, { consigne: "Toute la case D4 : qui est visé ?" }));
+      // Le fil : l'étape en cours numérotée, les autres à leur nom ; le chevron caché aux lecteurs d'écran.
+      const fil = noeud.querySelector("ol.combat-fil");
+      assert.equal(texteDe(fil), "Capacité › 2 · Cible › Dés › Zone et dégâts");
+      assert.deepEqual(tous(fil, "li").map((li) => [li.className, li.getAttribute("aria-current")]), [["fait", null], ["en-cours", "step"], ["", null], ["", null]]);
+      assert.ok(tous(fil, "span").every((s) => s.getAttribute("aria-hidden") === "true"));
+      assert.equal(texteDe(noeud.querySelector("p.combat-consigne")), "Toute la case D4 : qui est visé ?");
+      memeOrdre(noeud.children.map(forme), ["ol.combat-fil", "p.combat-consigne", "div.combat-cibles", "ol.combat-progression", "button.bouton combat-jets-par-cible", "button.bouton secondaire", "button.bouton", "span.combat-raison"]);
+      // Ce qu'on sait de chaque cible, après son bouton.
+      assert.deepEqual(tous(noeud, ".combat-cible-detail").map(texteDe), ["D4 · défense 5 · corps 10/10", "D4 · défense 5 · corps 10/10"]);
+      assert.deepEqual(tous(noeud, ".combat-progression li").map((li) => [texteDe(li), li.className]), [["1 · Marmiton n° 2", "en-cours"], ["2 · Marmiton n° 3", "a-venir"]]);
+      // Rien des étapes 2 et 3 ; ni étapes du PC, ni texte de la capacité.
+      for (const classe of ["combat-des", "combat-chaine", "combat-etapes", "combat-assiste", "combat-interventions", "combat-pied"]) assert.equal(noeud.querySelector(`.${classe}`), null, classe);
+      // « Un jet par cible » : sans événement, le volet passe aux dés.
+      leBouton(noeud, "Un jet par cible").click();
+      assert.deepEqual(appels, [{ passerAuxDes: true }]);
+      leBouton(noeud, `${String.fromCodePoint(0x2039)} Changer de capacité`).click();
+      assert.deepEqual(appels.at(-1), { commande: { evenement: { type: "revenir" } }, origine: "panneau" });
+      assert.equal(leBouton(noeud, "Confirmer").getAttribute("aria-disabled"), "true");
+      // L'étape montrée est celle que la bulle dit (r.etapeVue) : après « Un jet par cible », les dés.
+      rendre(vueDuVolet(1, { ...geste, aLancer: { faces: 8, combien: 1, libelle: "d8", motif: "jet" } }, { consigne: "Toute la case D4 : qui est visé ?" }), { etapeVue: 2 });
+      assert.equal(noeud.querySelector(".combat-cibles"), null);
+      assert.equal(noeud.querySelector(".combat-consigne"), null, "la consigne est celle de l'étape 1");
+      assert.deepEqual(tous(noeud, ".combat-chaine button.combat-de").map((de) => tous(de, "span").map(texteDe)), [["Dé", "d8", "touchez"]]);
+    },
+    { etroit: true },
+  );
+});
+
+/** Deux listes de textes égales, dites en une ligne si elles diffèrent. */
+function memeOrdre(vus, attendus) {
+  if (JSON.stringify(vus) !== JSON.stringify(attendus)) assert.fail(`${JSON.stringify(vus)} au lieu de ${JSON.stringify(attendus)}`);
+}
+
+test("volet — l'étape 2 : qui se défend, le contexte, la chaîne et « touchez », le bilan au doigt, les rangs et celui du critique, le critique et ses choix, les passifs (qui ouvrent la palette), « Inverser » et « Relancer » sous le dernier dé quand la palette est ouverte", () => {
+  avecLeJet(
+    ({ noeud, rendre, appels }) => {
+      const chaine = [
+        { titre: "1er dé", etat: "reussi", valeur: 8, detail: "7 + 1" },
+        { titre: "2e dé", etat: "reussi", valeur: 8, detail: "7 + 1" },
+        { titre: "3e dé", etat: "reussi", valeur: 7, detail: "6 + 1" },
+        { titre: "4e dé", etat: "a_lancer", de: "d8" },
+      ];
+      const geste = { chaine, aLancer: { faces: 8, combien: 1, libelle: "d8", motif: "jet" }, bilan: "Trois réussites. Cliquez sur le d8 pour tenter le critique.", bilanAuDoigt: "Trois réussites. Touchez le d8 pour tenter le critique.", critique: CRITIQUE, choix: CHOIX_DU_CRITIQUE, passifs: PASSIFS_DU_JET, dernierDe: 2, lettres: [{ texte: "1 : 2" }, { texte: "2 : 4" }, { texte: "3 réussites : 8", atteinte: true }] };
+      rendre(vueDuVolet(2, geste, { defenseur: "Aubépine lance sa défense · souffle 6/10" }));
+      memeOrdre(noeud.children.map(forme), ["ol.combat-fil", "p.combat-defenseur", "div.combat-contexte", "div.combat-chaine", "p.combat-bilan", "ul.combat-lettres", "div.combat-critique", "div.combat-choix", "div."]);
+      assert.equal(texteDe(noeud.querySelector("ol.combat-fil li.en-cours")), "› 3 · Dés");
+      // « touchez » sous le dé, et le bilan au doigt.
+      assert.equal(texteDe(noeud.querySelector(".combat-de.a-lancer .combat-de-detail")), "touchez");
+      assert.equal(texteDe(noeud.querySelector("p.combat-bilan")), "Trois réussites. Touchez le d8 pour tenter le critique.");
+      assert.deepEqual(tous(noeud, "ul.combat-lettres li").map(texteDe), ["1 : 2", "2 : 4", "3 réussites : 8", "critique : 16"]);
+      assert.deepEqual(tous(noeud, ".combat-critique p").map(texteDe), ["Trois réussites, et 1 avantage non dépensé.", "Un 4e dé réussi double les dégâts : C = 8 → 16."]);
+      leBouton(noeud, "Tenter le critique").click();
+      assert.deepEqual(appels, [{ commande: { evenement: { type: "critique", tenter: true } }, origine: "panneau" }]);
+      // Les passifs : un bouton chacun, qui ouvre la palette à son nom, lui pour ancre ; l'inactif dit pourquoi et ne fait rien.
+      const [nezFin, maitrise] = tous(noeud, "button.combat-passif-bouton");
+      assert.deepEqual([texteDe(nezFin), texteDe(maitrise)], ["Nez fin · 1 souffle", "Maîtrise de l'agile · gratuit"]);
+      nezFin.click();
+      assert.deepEqual(appels.at(-1).ouvrirPalette, { genre: "capacite", qui: "pj1", capacite: 7 });
+      assert.ok(appels.at(-1).ancre === nezFin, "l'ancre est le bouton : le focus y revient");
+      maitrise.click();
+      assert.equal(appels.length, 2);
+      assert.equal(texteDe(noeud.querySelector(`#${maitrise.getAttribute("aria-describedby")}`)), "Ce passif a déjà servi pour ce jet.");
+      // Sans palette ouverte, rien sous le dernier dé.
+      assert.equal(noeud.querySelector(".combat-de-outils"), null);
+
+      // La palette ouverte : « Inverser » et « Relancer », les genres de son onglet Dés, leur actif et leur raison ; un appui émet leur gabarit depuis la palette.
+      const inverser = genreDeLaPalette("inverser", "Inverser", { gabarit: { evenement: { type: "effet", genre: "inverser", source: { genre: "capacite", qui: "pj1", capacite: 7 }, x: null } } });
+      const relancer = genreDeLaPalette("relancer", "Relancer", { actif: false, raison: "Ce dé est déjà inversé." });
+      const reussite = genreDeLaPalette("reussite", "+1 réussite");
+      rendre(vueDuVolet(2, { ...geste, critique: null, choix: [] }), { palette: paletteDes([inverser, reussite, relancer]) });
+      const outils = noeud.querySelector(".combat-de-outils");
+      assert.ok(outils.parentNode === noeud && noeud.children[noeud.children.indexOf(outils) - 1].className === "combat-chaine", "sous la chaîne du dernier dé");
+      assert.deepEqual(tous(outils, "button").map((b) => [texteDe(b), b.getAttribute("aria-disabled")]), [["Inverser", null], ["Relancer", "true"]], "ni « +1 réussite », ni d'autre genre");
+      assert.ok(texteDe(outils).includes("Ce dé est déjà inversé."));
+      leBouton(outils, "Inverser").click();
+      leBouton(outils, "Relancer").click();
+      assert.deepEqual(appels.at(-1), { commande: { evenement: inverser.gabarit.evenement }, origine: "palette" });
+      assert.equal(appels.length, 3, "l'outil inactif ne fait rien");
+      // Sans dernier dé (aucun dé lancé), rien ; un outil réservé au Mode MJ ne paraît pas sans lui.
+      rendre(vueDuVolet(2, { ...geste, dernierDe: null }), { palette: paletteDes([inverser, relancer]) });
+      assert.equal(noeud.querySelector(".combat-de-outils"), null);
+      rendre(vueDuVolet(2, geste), { palette: paletteDes([{ ...inverser, mj: true }, relancer]) });
+      assert.deepEqual(tous(noeud.querySelector(".combat-de-outils"), "button").map(texteDe), ["Relancer"]);
+      rendre(vueDuVolet(2, geste), { palette: paletteDes([{ ...inverser, mj: true }, relancer]), modeMj: true });
+      assert.deepEqual(tous(noeud.querySelector(".combat-de-outils"), "button").map(texteDe), ["Inverser", "Relancer"]);
+    },
+    { etroit: true },
+  );
+});
+
+test("volet — l'étape 3 : l'avis de la cible précédente et « Aucune intervention possible. » au-dessus de tout, la face, les dégâts, la contre-attaque et « Laisser passer », les interventions (l'esquive sous l'attaquée), le détail, la blessure et ce que le coup a fait ; « Passer : … » puis « Terminer » au pied", () => {
+  avecLeJet(
+    ({ noeud, rendre, appels }) => {
+      const base = { chaine: [], bilan: null, lettres: [], choix: [], dernierDe: null, cibles: [] };
+      // Les interventions : la tête, l'intervenante et ses options, l'esquive sous elle, et « Passer : appliquer les dégâts ».
+      rendre(vueDuVolet(3, { ...base, interventions: INTERVENTIONS, esquive: ESQUIVE, appliquer: APPLIQUER, detail: [{ zone: "Jambe droite", texte: "armure 2 → 0" }] }, { focus: "appliquer" }));
+      memeOrdre(noeud.children.map(forme), ["ol.combat-fil", "div.combat-interventions", "ul.combat-detail", "div.combat-pied"]);
+      const bloc = noeud.querySelector(".combat-interventions");
+      assert.equal(texteDe(bloc.children[0]), INTERVENTIONS.tete);
+      const intervenante = bloc.querySelector(".combat-intervenant");
+      assert.equal(texteDe(intervenante.children[0]), "A Aubépine Crèmebrûlée · 1 action · souffle 5/10 · la cible");
+      assert.equal(intervenante.children[0].children[0].getAttribute("aria-hidden"), "true", "l'initiale, que le nom dit déjà");
+      assert.ok(texteDe(intervenante).includes("annule X dégâts, X souffle · 1 action + X souffle"), "l'esquive, sous l'attaquée");
+      assert.equal(texteDe(leBouton(intervenante, "Dressage minute")), "Dressage minute 1 action · gratuit Une intervention.");
+      leBouton(intervenante, "Dressage minute").click();
+      assert.deepEqual(appels, [{ commande: INTERVENIR, origine: "panneau" }]);
+      const passer = leBouton(noeud.querySelector(".combat-pied"), "Passer : appliquer les dégâts");
+      assert.equal(passer.getAttribute("data-focus"), "appliquer");
+      passer.click();
+      assert.deepEqual(appels.at(-1), { commande: APPLIQUER.commande, origine: "panneau" }, "« Passer » émet la commande d'« Appliquer »");
+      assert.equal(boutons(noeud, "Terminer").length, 0);
+
+      // Un intervenant inactif éteint ses options, avec sa raison (contrat, § 3).
+      appels.length = 0;
+      const eteint = { ...INTERVENTIONS, intervenants: [{ ...INTERVENTIONS.intervenants[0], actif: false, raison: "Le geste en cours se finit d'abord." }] };
+      rendre(vueDuVolet(3, { ...base, interventions: eteint, appliquer: APPLIQUER }));
+      const option = leBouton(noeud, "Dressage minute");
+      assert.equal(option.getAttribute("aria-disabled"), "true");
+      assert.equal(texteDe(noeud.querySelector(`#${option.getAttribute("aria-describedby")}`)), "Le geste en cours se finit d'abord.");
+      option.click();
+      assert.deepEqual(appels, []);
+
+      // Aucune intervention possible : la ligne au-dessus de tout ; « Terminer » au pied, quel que soit le libellé de la vue.
+      rendre(vueDuVolet(3, { ...base, aucuneIntervention: "Aucune intervention possible.", avis: "Marmiton n° 3 est à 2 cases, au-delà de la portée 1 de Couteau d'office : pas de contre-attaque.", appliquer: APPLIQUER }));
+      memeOrdre(noeud.children.slice(0, 3).map((n) => [forme(n), texteDe(n)].join(" = ")), [
+        "p.combat-geste-avis = Marmiton n° 3 est à 2 cases, au-delà de la portée 1 de Couteau d'office : pas de contre-attaque.",
+        "p.combat-geste-avis = Aucune intervention possible.",
+        `ol.combat-fil = Capacité › Cible › Dés › 4 · Zone et dégâts`,
+      ]);
+      assert.deepEqual(tous(noeud.querySelector(".combat-pied"), "button").map(texteDe), ["Terminer"]);
+      assert.equal(boutons(noeud, "Appliquer").length, 0);
+
+      // La contre-attaque : son titre, sa phrase, ses lignes (une contre-attaque), puis « Laisser passer ».
+      appels.length = 0;
+      rendre(vueDuVolet(3, { ...base, contre: CONTRE, choix: [LAISSER] }, { focus: "choix:laisser" }));
+      const contre = noeud.querySelector(".combat-contre-attaque");
+      assert.deepEqual(contre.children.slice(0, 2).map(texteDe), ["20 : contre-attaque !", CONTRE.texte]);
+      assert.equal(texteDe(contre.querySelector(".combat-groupe-titre")), "Couteau d'office (précise)");
+      laLigne(contre, "0:0").click();
+      leBouton(noeud, "Laisser passer").click();
+      assert.deepEqual(appels.map((appel) => appel.commande.evenement.type), ["contre_attaquer", "laisser"]);
+      assert.equal(leBouton(noeud, "Laisser passer").getAttribute("data-focus"), "choix:laisser");
+
+      // La blessure : ce que le coup a fait, sous son titre.
+      const blessure = { titre: "Blessure : Aubépine, jambe droite", detail: "C = 10 : armure 2 → 0, endurance 5 → 0, corps 10 → 7.", options: [], vide: "La banque n'a pas de bloc de blessure.", libre: { libelle: `Une autre${String.fromCodePoint(0x2026)}`, max: 40, gabarit: { evenement: { type: "blessure" } } } };
+      rendre(vueDuVolet(3, { ...base, blessure }));
+      assert.deepEqual(noeud.querySelector(".combat-blessure").children.slice(0, 3).map(forme), ["p.combat-blessure-titre", "p.combat-blessure-detail", "p."]);
+      assert.equal(texteDe(noeud.querySelector(".combat-blessure-detail")), "C = 10 : armure 2 → 0, endurance 5 → 0, corps 10 → 7.");
+      // L'esquive seule (personne d'autre) : sous la tête des interventions.
+      rendre(vueDuVolet(3, { ...base, interventions: { ...INTERVENTIONS, intervenants: [] }, esquive: ESQUIVE, appliquer: APPLIQUER }));
+      assert.equal(boutons(noeud.querySelector(".combat-interventions"), "Pas de côté").length, 1);
+    },
+    { etroit: true },
+  );
+});
+
+test("volet — le pied, de l'étape 1 à la fin du geste : « Appliquer l'effet de… » (qui ouvre la palette à la capacité jouée), « Palette » en Mode MJ seulement, puis le dernier bouton ; rien de mj: true sans le Mode MJ", () => {
+  avecLeJet(
+    ({ noeud, rendre, appels }) => {
+      const geste = { chaine: [], bilan: null, lettres: [], choix: [], dernierDe: null, appliquerEffet: APPLIQUER_EFFET, appliquer: APPLIQUER, contexte: { ...gesteVu().contexte, reglages: REGLAGES } };
+      rendre(vueDuVolet(2, geste));
+      const pied = () => noeud.querySelector(".combat-pied");
+      assert.ok(pied() === noeud.children.at(-1), "le pied, en dernier");
+      assert.deepEqual(tous(pied(), "button").map(texteDe), [APPLIQUER_EFFET.libelle, "Terminer"], "sans le Mode MJ : ni « Palette », ni réglages");
+      assert.equal(noeud.querySelector(".combat-reglages"), null);
+      leBouton(pied(), "Appliquer l'effet").click();
+      assert.deepEqual(appels.at(-1).ouvrirPalette, SOURCE_FRAPPE);
+      assert.ok(appels.at(-1).ancre === leBouton(pied(), "Appliquer l'effet"));
+      // Ouverte à un nom, la palette n'est pas libre ; son bouton garde un repère d'un rendu à l'autre, où l'écran rend le focus.
+      assert.deepEqual(appels.at(-1).options, { libre: false });
+      assert.equal(leBouton(pied(), "Appliquer l'effet").getAttribute("data-repere"), "appliquer_effet");
+      // En Mode MJ : « Palette », au nom de la capacité jouée ; les réglages à la main.
+      rendre(vueDuVolet(2, geste), { modeMj: true });
+      assert.deepEqual(tous(pied(), "button").map(texteDe), [APPLIQUER_EFFET.libelle, "Palette", "Terminer"]);
+      leBouton(pied(), "Palette").click();
+      assert.deepEqual(appels.at(-1).ouvrirPalette, { genre: "capacite", qui: "pj1", capacite: 15 });
+      // « Palette » l'ouvre libre (Mode MJ : tout genre, la source au choix), et le dit à l'écran.
+      assert.deepEqual(appels.at(-1).options, { libre: true });
+      assert.equal(leBouton(pied(), "Palette").getAttribute("data-repere"), "palette");
+      assert.notEqual(noeud.querySelector(".combat-reglages"), null);
+      // Sans geste payé ni capacité de rôle nul : pas de pied du tout.
+      rendre(vueDuVolet(2, { ...geste, appliquerEffet: null, appliquer: null, palette: null }), { modeMj: true });
+      assert.equal(pied(), null);
+    },
+    { etroit: true },
+  );
+});
+
+test("jet (PC) — les morceaux de la vague 3 dans le jet entier : l'avis, ce qu'on sait des cibles, leur avancement, « Un jet par cible » en phrase, les passifs, le critique, la contre-attaque, les interventions et l'esquive, la ligne sans intervention, « Passer : … » à la place d'« Appliquer », « Appliquer l'effet de… » au pied des dés ; ni fil, ni consigne, ni « Palette »", () => {
+  avecDom(() => {
+    const geste = gesteVu({
+      ...CENTREE,
+      avis: "Aubépine n'a plus d'action : pas de contre-attaque.",
+      passifs: PASSIFS_DU_JET,
+      critique: CRITIQUE,
+      contre: CONTRE,
+      interventions: INTERVENTIONS,
+      esquive: ESQUIVE,
+      aucuneIntervention: "Aucune intervention possible.",
+      appliquer: APPLIQUER,
+      appliquerEffet: APPLIQUER_EFFET,
+    });
+    const { noeuds, lieu, appels } = composer(composerGeste, vueJet({ geste, consigne: "Que fait Aubépine ?" }), { modeMj: true });
+    memeOrdre(noeuds.map(forme), ["ol.combat-etapes", "p.combat-geste-avis", "div.combat-cibles", "ol.combat-progression", "p.combat-jets-par-cible", "div.combat-des"]);
+    const des = noeuds.at(-1);
+    memeOrdre(des.children.map(forme), ["div.combat-contexte", "div.combat-jet", "div.combat-pied", "div.combat-assiste"]);
+    memeOrdre(des.querySelector(".combat-jet").children.map(forme), ["div.combat-chaine", "div.", "p.combat-bilan", "ul.combat-lettres", "div.combat-critique", "div.combat-choix", "p.combat-geste-avis", "div.combat-contre-attaque", "div.combat-interventions", "div.combat-choix"]);
+    assert.deepEqual(tous(des.querySelector(".combat-jet").children.at(-1), "button").map(texteDe), ["Passer : appliquer les dégâts"]);
+    assert.deepEqual(tous(des.querySelector(".combat-pied"), "button").map(texteDe), [APPLIQUER_EFFET.libelle], "ni « Palette » : sur PC, elle est une colonne de la bulle");
+    assert.equal(lieu.querySelector(".combat-fil"), null);
+    assert.equal(lieu.querySelector(".combat-consigne"), null);
+    // « cliquez » sur PC, et le bilan de la souris.
+    leBouton(lieu, "Passer").click();
+    assert.deepEqual(appels.at(-1), { commande: APPLIQUER.commande, origine: "bulle" });
+    // Sans interventions, le libellé de la vue : « Appliquer ».
+    const { lieu: sans } = composer(composerGeste, vueJet({ geste: gesteVu({ choix: [], appliquer: APPLIQUER }) }));
+    assert.deepEqual(tous(sans.querySelector(".combat-jet").children.at(-1), "button").map(texteDe), ["Appliquer"]);
+  });
+});
+
+test("liste — au téléphone, le fil et la consigne la précèdent ; sur PC, non", () => {
+  avecDom(() => {
+    const { noeuds } = composer(composerListe, vueListe(), { etroit: true });
+    memeOrdre(noeuds.slice(0, 3).map(forme), ["ol.combat-fil", "p.combat-consigne", "div.combat-groupe"]);
+    assert.equal(texteDe(noeuds[0]), "1 · Capacité › Cible › Dés › Zone et dégâts");
+    assert.equal(texteDe(noeuds[1]), "Que fait Aubépine ?");
+    assert.equal(forme(composer(composerListe, vueListe()).noeuds[0]), "div.combat-groupe");
+    // Sans fil ni consigne, rien de plus.
+    assert.equal(forme(composer(composerListe, vueListe({ fil: [], consigne: null }), { etroit: true }).noeuds[0]), "div.combat-groupe");
+  });
+});
+
 // ——— Les données hostiles ———
 
 test("contenu — un nom hostile reste du texte ; un signe qui renverse l'écriture ne s'affiche pas, et n'entre dans aucun attribut", () => {
   const balise = "<img src=x onerror=alert(1)>";
   const renverse = String.fromCodePoint(0x202e);
   const attributsAvecLeSigne = (racine) => [racine, ...racine.descendants()].flatMap((n) => [...n.attributs].filter(([, valeur]) => valeur.includes(renverse)).map(([nom]) => `${n.tagName}@${nom}`));
-  avecLeTelephone(({ noeud, rendre, annonce }) => {
+  avecLeJet(({ noeud, rendre }) => {
     rendre(
       vueJet({
         entete: { titre: `${balise} contre ${renverse}Marmiton`, sous: balise },
@@ -2125,16 +2460,20 @@ test("contenu — un nom hostile reste du texte ; un signe qui renverse l'écrit
           // Un nom de zone vient de la banque : il entre dans le nom accessible du d20, et dans celui de sa saisie.
           localisation: [{ brut: 5, face: 7, zone: `${renverse}eton`, decaler: { min: -4, max: 14, raisonParDefaut: "Taloche", gabarit: { evenement: { type: "decaler", de: 0 } } } }],
           cases: [{ case: "C3", nom: `Case C3 : ${renverse}s'y déplacer`, choisie: false, commande: regler("arrivee", "C3") }],
+          // Les morceaux de la vague 3 : des noms venus de la banque, des phrases écrites d'eux.
+          avis: `${renverse}${balise}`,
+          interventions: { tete: balise, intervenants: [{ id: "pj1", nom: `${renverse}${balise}`, initiales: balise, sous: balise, options: [{ cle: "intervention:pj1:4:0", libelle: balise, texte: balise, cout: balise, actif: true, raison: null, commande: regler("x", 0) }] }], passer: balise },
+          contre: { titre: balise, texte: `${renverse}${balise}`, groupes: [{ titre: balise, lignes: [ligneVue({ libelle: `${renverse}${balise}` })] }] },
         }),
-        annonce: { pas: 1, texte: `${renverse}${balise}` },
       }),
+      { modeMj: true },
     );
     assert.equal(tous(noeud, "img").length, 0);
     assert.equal(tous(noeud, "script").length, 0);
-    assert.equal(texteDe(noeud.querySelector("h2.combat-qui")), `${balise} contre Marmiton`);
     assert.equal(texteDe(noeud.querySelector(".combat-cibles button")), balise);
     assert.equal(noeud.textContent.includes(renverse), false);
-    assert.equal(annonce.textContent, balise);
+    assert.equal(texteDe(noeud.querySelector(".combat-geste-avis")), balise);
+    assert.ok(texteDe(noeud.querySelector(".combat-intervenant")).startsWith(`${balise} ${balise} · ${balise}`));
     assert.equal(noeud.querySelector("button.combat-cause").getAttribute("aria-label"), "1 avantage : voir la cause");
     assert.equal(noeud.querySelector(".combat-localisation button.combat-de").getAttribute("aria-label"), "Localisation : 7, dé 5, eton");
     assert.equal(noeud.querySelector(".combat-arrivees button").getAttribute("aria-label"), "Case C3 : s'y déplacer");
@@ -2182,8 +2521,14 @@ test("combat_action.js — dom.js seul ; aucun focus qui fasse défiler, aucun d
   assert.doesNotMatch(source, /\bdisabled\s*:/, "un bouton inactif garde le focus : aria-disabled, jamais disabled");
   for (const code of [0xa0, 0x202f]) assert.equal(source.includes(String.fromCodePoint(code)), false, "aucune espace insécable");
   // Les signes neufs (contrat, § 0.2, règle 5) s'écrivent par leur code.
-  for (const code of [0x24d8, 0x21b6, 0x2013, 0x2715]) assert.equal(source.includes(String.fromCodePoint(code)), false, `U+${code.toString(16)} par son code`);
+  for (const code of [0x24d8, 0x21b6, 0x2013, 0x2715, 0x203a, 0x2039]) assert.equal(source.includes(String.fromCodePoint(code)), false, `U+${code.toString(16)} par son code`);
   assert.ok(source.includes(`"${"\\"}u24d8"`), "« ⓘ » écrit par son code");
+  // Le volet de la vague 3 : le chevron du fil et celui de « Changer de capacité », par leur code.
+  assert.ok(source.includes(`" ${"\\"}u203a "`), "« › » écrit par son code");
+  assert.ok(source.includes(`"${"\\"}u2039 Changer de capacité"`), "« ‹ » écrit par son code");
+  // Ce que seul le Mode MJ montre se lit à un seul endroit (montre) ; la palette s'ouvre par une action de l'écran, jamais par une importation.
+  assert.match(source, /^const montre = \(r, objet\) => present\(objet\) && !\(objet\.mj === true && r\.modeMj !== true\);$/m);
+  assert.doesNotMatch(source, /combat_palette|lecture_mj/);
   // Ce qui quitte le code au groupe 2 : le titre à tiret, les pas de la puissance, la ligne des mentions.
   assert.doesNotMatch(source, /combat-qui-suite|bouton-pas|combat-puissance|combat-passifs|Interventions :/);
 });

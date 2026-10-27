@@ -20,6 +20,14 @@
 // déclenche blur et focus comme un navigateur : sans cela, le focus que pose
 // l'écran n'ouvrait aucune infobulle, et un défaut s'y cachait (lot 4,
 // groupe 2, relecture, C-02).
+//
+// Au lot 4.3 (contrat de la vague 3, § 5.6), deux ajouts, sans rien changer
+// au reste : document.querySelectorAll et querySelector, qui cherchent dans
+// toute la page ; et la navigation de index.html (l'en-tête du site et ses
+// liens a[data-route]), qu'un contrôle pose quand il en a besoin
+// (poserLaNavigation) : le menu ☰ de l'écran du combat la relit.
+
+import { readFileSync } from "node:fs";
 
 // Ce que rend querySelectorAll dans un navigateur : une NodeList, qui se
 // parcourt (for…of, forEach, un indice, length, item) mais n'a ni filter, ni
@@ -330,6 +338,10 @@ export function installerDom({ focusFidele: fidele = false } = {}) {
     createElement: (balise) => new Element(balise),
     createElementNS: (_espace, balise) => new Element(balise),
     getElementById: (id) => document.body.querySelector(`#${id}`),
+    // Toute la page, comme dans un navigateur : sous html (contrat de la
+    // vague 3, § 5.6).
+    querySelectorAll: (selecteur) => document.documentElement.querySelectorAll(selecteur),
+    querySelector: (selecteur) => document.documentElement.querySelector(selecteur),
   };
   const avant = { document: globalThis.document, Node: globalThis.Node };
   globalThis.document = document;
@@ -340,6 +352,42 @@ export function installerDom({ focusFidele: fidele = false } = {}) {
     document = null;
     focusFidele = false;
   };
+}
+
+// Les liens de la navigation du site, lus dans index.html tels qu'ils y sont
+// écrits : { href, route, texte }, dans l'ordre.
+const LIEN_DE_NAVIGATION = /<a href="([^"]*)" data-route="([^"]*)">([^<]*)<\/a>/g;
+
+/** Les liens de la navigation de index.html : [{ href, route, texte }]. */
+export function liensDeNavigation() {
+  const page = readFileSync(new URL("../../index.html", import.meta.url), "utf8");
+  const debut = page.indexOf('<ul class="navigation">');
+  const fin = page.indexOf("</ul>", debut);
+  if (debut < 0 || fin < 0) throw new Error("index.html n'a plus sa navigation (ul.navigation)");
+  return [...page.slice(debut, fin).matchAll(LIEN_DE_NAVIGATION)].map(([, href, route, texte]) => ({ href, route, texte }));
+}
+
+/**
+ * Pose l'en-tête du site de index.html au bout de body : header.entete, sa
+ * marque, puis nav > ul.navigation > li > a[data-route], chaque lien tel
+ * qu'il y est écrit ; « courante » reçoit aria-current="page", comme le
+ * marque js/application.js. Rend l'en-tête. Le document doit être installé.
+ */
+export function poserLaNavigation({ courante = null } = {}) {
+  if (!document) throw new Error("poserLaNavigation : le document simulé n'est pas installé");
+  const creer = (balise, attributs = {}, ...enfants) => {
+    const noeud = new Element(balise);
+    for (const [nom, valeur] of Object.entries(attributs)) if (valeur !== null) noeud.setAttribute(nom, valeur);
+    noeud.append(...enfants);
+    return noeud;
+  };
+  const liste = creer("ul", { class: "navigation" });
+  for (const { href, route, texte } of liensDeNavigation()) {
+    liste.append(creer("li", {}, creer("a", { href, "data-route": route, "aria-current": route === courante ? "page" : null }, texte)));
+  }
+  const entete = creer("header", { class: "entete" }, creer("a", { class: "marque", href: "#/" }, "L'Atelier des Arpenteurs"), creer("nav", { "aria-label": "Navigation principale" }, liste));
+  document.body.append(entete);
+  return entete;
 }
 
 /** Le texte d'un nœud, espaces resserrées. */

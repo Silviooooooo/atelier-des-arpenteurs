@@ -68,6 +68,9 @@ const RENVERSE = String.fromCodePoint(0x202e);
 const MARQUE_D_ORDRE = String.fromCodePoint(0xfeff);
 // Les signes de l'écran, par leur code.
 const ANNULER_LE_DERNIER = `${String.fromCodePoint(0x21b6)} Annuler le dernier geste`;
+// Au lot 4.3 : ☰, qui ouvre les entrées du site ; « Intervenir… ».
+const SIGNE_DU_SITE = String.fromCodePoint(0x2630);
+const INTERVENIR = `Intervenir${String.fromCodePoint(0x2026)}`;
 const POINTS = String.fromCodePoint(0x2026);
 
 const NE_SE_LIT_PLUS = "Le combat gardé ne se lit plus (mot de passe de table changé, ou donnée abîmée).";
@@ -281,18 +284,24 @@ async function ouvrirLEcran(
   return { ecran, contexte, services, des: source, telecharges, etagere, requetes };
 }
 
-/** Joue un contrôle dans un document simulé, la rencontre oubliée, puis range tout. focusFidele : focus() y déclenche blur et focus. */
-function dansUnePage(titre, corps, { focusFidele = false } = {}) {
+/**
+ * Joue un contrôle dans un document simulé, la rencontre oubliée, puis range tout. focusFidele : focus() y déclenche blur et focus.
+ * modeMj : l'appareil garde le Mode MJ allumé (lot 4.3 : les réglages à la main, « ajusté à », les dégâts directs et la face décalée ne
+ * se montrent qu'en Mode MJ) ; le stockage espionné est rendu ensuite.
+ */
+function dansUnePage(titre, corps, { focusFidele = false, modeMj = false } = {}) {
   test(titre, async () => {
+    const stockage = modeMj ? simulerStockage({ "atelier.mode-mj": "1" }) : null;
     const retirer = installerDom({ focusFidele });
     // La rencontre vit dans la mémoire de son module : elle repart de zéro.
     rencontre.oublier();
     const page = await pageNeuve();
     try {
-      await corps(page);
+      await corps(page, stockage);
     } finally {
       page.oublier();
       retirer();
+      stockage?.retirer();
     }
   });
 }
@@ -368,7 +377,10 @@ const cadre = (ecran) => un(ecran, ".combat-cadre");
 /** Ce que porte le cadre, dans l'ordre : la première classe de chacun. */
 const formeDuCadre = (ecran) => cadre(ecran).children.map((noeud) => noeud.className.split(" ")[0]);
 /** La partie qui tient la place sous la carte : la zone, la préparation ou le bloc d'arrêt. */
-const sousLaCarte = (ecran) => cadre(ecran).children[4];
+// Au lot 4.3, les vignettes passent entre le bandeau et la carte : la zone sous la carte est le sixième enfant du cadre.
+const sousLaCarte = (ecran) => cadre(ecran).children[5];
+// La barre de titre, dans l'ordre du document (lot 4.3, contrat de la vague 3, § 2.2 et § 5.1).
+const BARRE = ["H1", "bouton secondaire combat-site", "combat-etat", "combat-etat-court", "combat-commandes", "combat-autres", "combat-garde"];
 const laBulle = (ecran) => un(ecran, "div.combat-bulle");
 const onglet = (ecran) => un(ecran, "button.combat-onglet");
 const bulleMontree = (ecran) => !cache(laBulle(ecran));
@@ -513,6 +525,8 @@ async function choisirQuiJoue(ecran, entier) {
     // Un autre a encore la main : on en change par « Jouer », sur la fiche.
     const laFiche = tous(ecran, "details").find((noeud) => texteDe(un(noeud, ".combat-nom")) === entier);
     assert.ok(laFiche, `la fiche de ${entier}`);
+    // Sans « Jouer », le message dit où en est l'écran : la bulle, et la dernière ligne du journal.
+    if (laFiche.querySelector("[data-repere=jouer]") === null) assert.fail(`pas de « Jouer » pour ${entier} : bulle « ${bulleMontree(ecran) ? nomDeLaBulle(ecran) : "cachée"} » (${texteDe(corps(ecran)).slice(0, 300)}) ; journal : ${journal(ecran).at(-1)}`);
     await cliquer(repere(laFiche, "jouer"));
   }
   assert.equal(bulleMontree(ecran), true, `la bulle de ${entier} est montrée`);
@@ -524,23 +538,36 @@ async function choisirQuiJoue(ecran, entier) {
  * l'autre. « apresChaqueDe » est appelé après chaque dé cliqué, avec ce que
  * disaient les régions de l'écran juste avant.
  */
-async function jouerLeGeste(ecran, geste, { apresChaqueDe = () => {} } = {}) {
+async function jouerLeGeste(ecran, geste, { apresChaqueDe = () => {}, reglerAvantLaCible = false } = {}) {
   if (geste.finDeTour) return cliquer(boutonDit(barre(ecran), "Fin de tour"));
   await choisirQuiJoue(ecran, ENTIERS[geste.qui]);
   if (geste.passe) return cliquer(boutonDit(corps(ecran), "Passer son tour"));
   await cliquer(boutonDeCapacite(ecran, geste.puissance ? `${geste.joue} [${geste.puissance}]` : geste.joue));
   if (geste.pret) await cliquer(boutonCommencant(un(corps(ecran), ".combat-jet-prete"), "Jet d'attaque"));
+  // Au téléphone (lot 4.3), ce qui se règle avant le jet est à l'étape 1 du volet, qui cède la place aux dés dès que le jet est
+  // prêt, la cible posée : on le règle donc avant elle (reglerAvantLaCible). Sur PC, tout le jet se montre à la fois.
+  const reglerLeJet = async () => {
+    for (const code of geste.caracteristiques ?? []) await cliquer(boutonCommencant(un(corps(ecran), ".combat-caracteristiques"), `${NOM_DE_CARACTERISTIQUE[code]} `));
+    if (geste.difficulte) await cliquer(boutonCommencant(un(corps(ecran), ".combat-difficultes"), `${geste.difficulte} (`));
+  };
+  if (reglerAvantLaCible) await reglerLeJet();
   if (geste.contre) await cliquer(boutonDit(un(corps(ecran), ".combat-cibles"), ENTIERS[geste.contre]));
   if (geste.vers) {
     await cliquer(boutonDit(un(corps(ecran), ".combat-arrivees"), geste.vers));
     return cliquer(boutonDit(corps(ecran), "Confirmer"));
   }
-  for (const code of geste.caracteristiques ?? []) await cliquer(boutonCommencant(un(corps(ecran), ".combat-caracteristiques"), `${NOM_DE_CARACTERISTIQUE[code]} `));
-  if (geste.difficulte) await cliquer(boutonCommencant(un(corps(ecran), ".combat-difficultes"), `${geste.difficulte} (`));
+  if (!reglerAvantLaCible) await reglerLeJet();
 
   let degatsFixes = false;
   for (let pas = 0; pas < 60; pas += 1) {
-    const jet = corps(ecran).querySelector(".combat-jet");
+    // Au téléphone (lot 4.3), le volet montre une étape à la fois, sans le cadre du jet : tant qu'un dé y est, c'est lui.
+    const jet = corps(ecran).querySelector(".combat-jet") ?? (tous(corps(ecran), "button.combat-de").length > 0 ? corps(ecran) : null);
+    // Au téléphone, une façon Centrée reste à l'étape de ses cibles : « Un jet par cible » mène le volet aux dés (lot 4.3).
+    const parCible = jet === null ? corps(ecran).querySelector("button.combat-jets-par-cible") : null;
+    if (parCible !== null) {
+      await cliquer(parCible);
+      continue;
+    }
     if (jet === null) break;
     const choix = tous(jet, ".combat-choix button");
     const exploser = choix.find((b) => texteDe(b) === "Faire exploser");
@@ -574,8 +601,11 @@ async function jouerLeGeste(ecran, geste, { apresChaqueDe = () => {} } = {}) {
     await cliquer(bouton);
   }
   // « Appliquer » les dégâts ; « Terminer » un manqué ou un jet de
-  // caractéristique, qui ne clôt plus le geste de lui-même (lot 4.3).
-  const appliquer = tous(corps(ecran), "button").find((b) => texteDe(b) === "Appliquer" || texteDe(b) === "Terminer");
+  // caractéristique, qui ne clôt plus le geste de lui-même (lot 4.3) ;
+  // « Passer : … » quand un allié de la cible peut intervenir (lot 4.3,
+  // l'étape « Interventions » : passer applique les dégâts, sans rien
+  // écrire de plus au journal).
+  const appliquer = tous(corps(ecran), "button").find((b) => texteDe(b) === "Appliquer" || texteDe(b) === "Terminer" || texteDe(b).startsWith("Passer : "));
   if (appliquer) await cliquer(appliquer);
   // La blessure se choisit après les dégâts, parmi les capacités du bloc de blessure.
   if (geste.blessure) await cliquer(boutonDit(un(corps(ecran), ".combat-blessure"), geste.blessure));
@@ -660,10 +690,17 @@ test("le module — un en-tête qui dit le pourquoi et le § 17 ; rien de ce que
   // Le clic au-dehors se voit en capture, sur l'écran ; Échap aussi.
   assert.match(SOURCE, /racine\.addEventListener\("click", \(evenement\) => auClicDansLaPage\(evenement\), true\);/);
   assert.match(SOURCE, /racine\.addEventListener\("keydown", /);
-  // Ni « Intervenir… », ni palette, ni menu du clic droit : au groupe 3. La
-  // souche de la palette s'importe déjà (contrat de la vague 3, § 8.0) ; la
-  // part C1 ôte cette règle quand l'écran s'en sert.
-  assert.doesNotMatch(SOURCE.replace(/^import \* as partiePalette from "\.\/combat_palette\.js";$/m, ""), /Intervenir|contextmenu|palette/i);
+  // Au lot 4.3, vague 3 (contrat, § 4.3) : l'écran se sert de ses parties
+  // neuves, prend ses vues d'un service quand un contrôle lui en donne, et ne
+  // lit le Mode MJ que par mode_mj.js ; il demande la simulation au moteur.
+  for (const module of ["./combat_menus.js", "./combat_palette.js", "./combat_vignettes.js", "./mode_mj.js"]) assert.match(SOURCE, new RegExp(`from "${module.replace(".", "\\.")}";`), module);
+  for (const partie of ["partieMenus.creer(", "partiePalette.creer(", "partieVignettes.creer("]) assert.ok(SOURCE.includes(partie), partie);
+  assert.match(SOURCE, /vues: services\.vues \?\? vuesDuCombat,/);
+  assert.match(SOURCE, /let modeMj = lireModeMj\(\);/);
+  assert.match(SOURCE, /ecrireModeMj\(modeMj\);/);
+  assert.match(SOURCE, /import \{ appliquer \} from "\.\.\/combat\/moteur\.js";/);
+  // Aucune vue ne s'appelle sans passer par le service.
+  assert.doesNotMatch(SOURCE, /[^.\w]vue(?:Barre|Plateau|Fiche|Panneau|Preparation|Bandeau|Journal|Vignettes|DuDe|Palette|MenuMj)\(/, "une vue appelée hors de services.vues");
 
   // Ni signe invisible, ni espace insécable ; des fins de ligne d'un seul genre.
   for (const code of [0xa0, 0x202f, 0xad, 0xfeff, 0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x2028, 0x2029, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2060, 0x21b6]) {
@@ -699,14 +736,16 @@ dansUnePage("ouverture — afficher() rend son nœud tout de suite : le titre et
   assert.equal(tous(ecran, "[role=status]").length, 0, "l'attente a quitté la page : elle ne côtoie pas la région d'annonce");
   assert.equal(tous(ecran, "[data-chargement]").length, 0);
   assert.equal(etatDuCombat(ecran), "Préparation");
-  // L'arbre du contrat (§ 9.1), dans l'ordre du téléphone : la barre, la limite, l'aide, l'avis, la fiche complète, le cadre, le journal, puis la région polie.
-  assert.deepEqual(ecran.children.map((noeud) => noeud.className), ["combat-barre", "combat-limite", "combat-aide", "combat-avis", "combat-panneau", "combat-cadre", "combat-journal", "combat-annonce"]);
+  // L'arbre du contrat (§ 9.1), dans l'ordre du téléphone : la barre, la limite, l'aide, l'avis, la fiche complète, le cadre, le journal, puis la région polie ;
+  // au lot 4.3, la couche des menus et des feuilles en dernier, sans classe (contrat de la vague 3, § 4.1).
+  assert.deepEqual(ecran.children.map((noeud) => noeud.className), ["combat-barre", "combat-limite", "combat-aide", "combat-avis", "combat-panneau", "combat-cadre", "combat-journal", "combat-annonce", ""]);
+  assert.equal(ecran.className, "combat ne-pas-imprimer", "en préparation, la racine n'est pas « en jeu » : l'en-tête du site reste");
   assert.equal(cache(un(ecran, "p.combat-limite")), true, "la limite est cachée tant qu'elle est vide");
   // La région polie est là dès le premier rendu, vide : un lecteur d'écran la connaît avant qu'elle parle.
   const region = un(ecran, "p.combat-annonce");
   assert.deepEqual([region.getAttribute("aria-live"), region.parentNode, region.childNodes.length], ["polite", ecran, 0]);
-  // La barre, dans l'ordre du téléphone : l'état et les commandes sur une ligne, ce que « ⋯ » ouvre, puis l'enregistrement.
-  assert.deepEqual(barre(ecran).children.map((noeud) => noeud.className || noeud.tagName), ["H1", "combat-etat", "combat-commandes", "combat-autres", "combat-garde"]);
+  // La barre, dans l'ordre du téléphone : ☰ (lot 4.3), l'état et l'état court, les commandes sur une ligne, ce que « ⋯ » ouvre, puis l'enregistrement.
+  assert.deepEqual(barre(ecran).children.map((noeud) => noeud.className || noeud.tagName), BARRE);
   // Le journal est une région que son titre nomme ; le titre reçoit le focus sans entrer dans l'ordre du clavier.
   const zoneDuJournal = un(ecran, "section.combat-journal");
   const titreDuJournal = un(ecran, `#${zoneDuJournal.getAttribute("aria-labelledby")}`);
@@ -716,7 +755,7 @@ dansUnePage("ouverture — afficher() rend son nœud tout de suite : le titre et
   const lignes = un(zoneDuJournal, "ol.combat-lignes");
   assert.deepEqual([lignes.getAttribute("tabindex"), lignes.getAttribute("aria-label")], ["0", "Journal du combat"]);
   // Le cadre : le bandeau, la carte, la bulle et son onglet juste après elle, la préparation, puis les camps.
-  assert.deepEqual(formeDuCadre(ecran), ["combat-bandeau", "combat-plateau", "combat-bulle", "combat-onglet", "combat-preparation", "combat-camps"]);
+  assert.deepEqual(formeDuCadre(ecran), ["combat-bandeau", "combat-vignettes", "combat-plateau", "combat-bulle", "combat-onglet", "combat-preparation", "combat-camps"]);
   assert.deepEqual([cache(un(ecran, "div.combat-bandeau")), cache(laBulle(ecran)), cache(onglet(ecran))], [true, true, true], "avant le lancement, ni bandeau, ni bulle, ni onglet");
   assert.equal(laBulle(ecran).getAttribute("role"), "dialog");
   assert.equal(laBulle(ecran).hasAttribute("aria-modal"), false, "un dialogue non modal");
@@ -942,7 +981,7 @@ dansUnePage("préparation — ajouter, poser, retirer, qui commence, lancer : ch
   assert.equal(etatDuCombat(ecran), "Tour 1 · camp des adversaires");
   assert.deepEqual(journal(ecran), ["Combat lancé : 1 personnage contre 2 adversaires. Les adversaires commencent.", "— Tour 1 · camp des adversaires —"]);
   // Le combat lancé, la préparation a laissé la place à la zone sous la carte, et les fiches n'ont plus ni champ ni « Retirer ».
-  assert.deepEqual(formeDuCadre(ecran), ["combat-bandeau", "combat-plateau", "combat-bulle", "combat-onglet", "combat-action", "combat-camps"]);
+  assert.deepEqual(formeDuCadre(ecran), ["combat-bandeau", "combat-vignettes", "combat-plateau", "combat-bulle", "combat-onglet", "combat-action", "combat-camps"]);
   assert.equal(tous(ecran, "[data-repere=case]").length, 0);
   assert.equal(tous(ecran, "[data-repere=retirer]").length, 0);
   assert.equal(titreDeLaZone(ecran), "Qui joue ?");
@@ -1251,9 +1290,11 @@ dansUnePage("combat — le combat de référence, joué par la bulle du premier 
   const finDeTour = boutonDit(barre(ecran), "Fin de tour");
   assert.equal(finDeTour.hidden, false);
   assert.equal(inactif(finDeTour), false);
-  // Le bouton principal de la barre (mission § 10.3) : lui seul n'est pas « secondaire ».
+  // Le bouton principal de la barre (mission § 10.3) : lui seul n'est pas « secondaire » (au lot 4.3 : ☰, « Intervenir… » de la barre et du menu, « ⋯ », l'annulation et « Nouveau combat »).
   assert.equal(finDeTour.className, "bouton");
-  assert.deepEqual(tous(barre(ecran), "button").filter((b) => b !== finDeTour).map((b) => b.className.split(" ").includes("secondaire")), [true, true, true]);
+  assert.deepEqual(tous(barre(ecran), "button").filter((b) => b !== finDeTour).map((b) => b.className.split(" ").includes("secondaire")), [true, true, true, true, true, true]);
+  // En jeu, la racine le dit à la feuille de style : au téléphone, l'en-tête du site cède sa place (contrat de la vague 3, D2).
+  assert.equal(ecran.className, "combat ne-pas-imprimer combat-en-jeu");
   // « Jouer » : sur la fiche du camp qui a la main, et sur elle seule.
   assert.deepEqual(tous(ecran, "[data-repere=jouer]").map((b) => b.getAttribute("aria-label")), ["Jouer : Aubépine Crèmebrûlée"]);
 
@@ -1262,8 +1303,12 @@ dansUnePage("combat — le combat de référence, joué par la bulle du premier 
   lignes.scrollHeight = 480;
   lignes.scrollTop = 0;
   const [premiereLigneDuJournal] = tous(lignes, "li");
-  // Le groupe 1 n'a pas d'« Intervenir… » dans sa barre ; le groupe 2 y ajoute « Annuler le dernier geste ».
-  assert.deepEqual(tous(barre(ecran), "button").map(texteDe), ["Fin de tour", "⋯", ANNULER_LE_DERNIER, "Nouveau combat"]);
+  // Le groupe 2 ajoute « Annuler le dernier geste » à la barre ; le lot 4.3, ☰ (le menu du site, au téléphone) et « Intervenir… » : au tour
+  // des PJ, il est dans le menu (la rangée des autres commandes, sur PC), inactif quand aucun adversaire n'a d'intervention.
+  assert.deepEqual(tous(barre(ecran), "button").filter((b) => !cache(b)).map(texteDe), [SIGNE_DU_SITE, "Fin de tour", "⋯", ANNULER_LE_DERNIER, "Nouveau combat", INTERVENIR]);
+  const intervenirDuMenu = boutonDit(un(barre(ecran), "div.combat-autres"), INTERVENIR);
+  assert.equal(inactif(intervenirDuMenu), true);
+  assert.equal(raisonDe(ecran, intervenirDuMenu), "Personne ne peut intervenir.");
 
   // Le premier geste, pas à pas : Aubépine frappe le Marmiton n° 1, dans la bulle.
   const premier = scenario.gestes[0];
@@ -1284,10 +1329,19 @@ dansUnePage("combat — le combat de référence, joué par la bulle du premier 
         focusSur(deACliquer(ecran), "le focus va au dé suivant, dans la bulle");
         assert.equal(bulleMontree(ecran), true, "le jet se joue dans la bulle");
         assert.equal(texteDe(zone(ecran)), PHRASE_DE_LA_ZONE);
+        // Le dé en surimpression, de la vraie vue (lot 4.3) : lu sur l'état d'avant le dé et sur l'événement tiré.
+        const sur = un(ecran, "div.combat-surimpression");
+        assert.equal(cache(sur), false);
+        assert.ok(sur.className.split(" ").includes("reussi"), sur.className);
+        assert.deepEqual(sur.children.map((noeud) => noeud.className), ["combat-surimpression-titre", "combat-surimpression-valeur", "combat-surimpression-verdict"]);
+        assert.match(texteDe(sur.children[0]), /^1er dé/);
       }
       if (desCliques === 2) assert.equal(annonce(ecran), "2e dé : 9 et 3, on garde 3, échec. 1 réussite, A = 3, +1 contre l'armure (Réduction).");
       if (desCliques === 3) {
         assert.equal(annonce(ecran), "Localisation : 16, bras gauche.");
+        // Le d20 qui finit le jet se montre aussi : la vue lit l'état d'avant lui.
+        assert.ok(un(ecran, "div.combat-surimpression").className.split(" ").includes("localisation"));
+        assert.equal(texteDe(un(ecran, "p.combat-surimpression-valeur")), "16");
         focusSur(boutonDit(corps(ecran), "Appliquer"));
       }
     },
@@ -1390,7 +1444,38 @@ dansUnePage("combat — le combat de référence, joué par la bulle du premier 
   const { ecran: rechargee } = await ouvrirLEcran(await pageNeuve(), { magasin: await lieu.onglet() });
   assert.deepEqual(journal(rechargee), journalAttendu);
   assert.equal(etatDuCombat(rechargee), "Combat terminé");
-});
+}, { modeMj: true });
+
+dansUnePage("téléphone — le combat de référence entier, joué par les vignettes et le volet (lot 4.3, vues et parties réelles, Mode MJ allumé) : le journal mot pour mot, la zone sous la carte vide, sans jamais défiler", async (page) => {
+  const { ecran, des } = await ouvrirLEcran(page, { magasin: magasinCombatMemoire(), etroit: true, des: desDe(scenario.gestes) });
+  await preparerLaReference(ecran);
+  await lancerLeCombat(ecran);
+  const vignettes = un(ecran, "div.combat-vignettes");
+  assert.equal(cache(vignettes), false, "en jeu, les vignettes se montrent");
+  let parLesVignettes = 0;
+  for (const geste of scenario.gestes) {
+    if (geste.finDeTour) {
+      // Au tour adverse, au téléphone, la barre porte « Intervenir… » à la place de « Fin de tour », qui reste au volet, au repos (A7).
+      assert.equal(cache(boutonDit(barre(ecran), "Fin de tour")), true, "« Fin de tour » quitte la barre");
+      await cliquer(boutonDit(laBulle(ecran), "Fin de tour"));
+      continue;
+    }
+    // Au téléphone, on choisit qui joue d'un appui sur sa vignette (A1) : le volet s'ouvre sur ses actions.
+    const entier = ENTIERS[geste.qui];
+    if (!(bulleMontree(ecran) && nomDeLaBulle(ecran) === `${entier} : ses actions`)) {
+      await cliquer(boutonOu(vignettes, (b) => (b.getAttribute("aria-label") ?? "").split(", ")[0] === entier, `la vignette de ${entier}`));
+      parLesVignettes += 1;
+    }
+    await jouerLeGeste(ecran, geste, { reglerAvantLaCible: true });
+    assert.equal(zone(ecran).children.length, 0, "au téléphone, la zone sous la carte reste vide");
+  }
+  assert.ok(parLesVignettes > 5, `${parLesVignettes} choix par les vignettes`);
+  assert.deepEqual(journal(ecran), journalAttendu);
+  assert.deepEqual(des.reste(), [], "tous les dés du scénario sont tombés, et aucun autre");
+  assert.equal(etatDuCombat(ecran), "Combat terminé");
+  assert.deepEqual(defilementsDits(), [], "aucun scrollIntoView");
+  assert.deepEqual(focusQuiDefilent(), [], "chaque focus est posé sans faire défiler la page");
+}, { modeMj: true });
 
 dansUnePage("combat — la cible : « choisie sur la carte », « choisie ici » ; un rechargement en plein geste retrouve le moment, sans relancer un dé ni redire l'origine", async (page) => {
   const lieu = lieuSimule();
@@ -1481,6 +1566,8 @@ dansUnePage("combat — sur un téléphone, la liste « +k » d'une case reste s
   // Aubépine a rejoint les deux Marmitons : trois jetons sur D4, dont un derrière « +1 » sur un téléphone.
   const liste = un(un(ecran, "section.combat-action"), ".combat-case-liste");
   const plus = () => un(laCase(ecran, "D4"), "button.combat-plus-etroit");
+  // Au téléphone (lot 4.3), la zone sous la carte est vide entre deux gestes : le volet est au repos (A7).
+  const auRepos = () => bulleMontree(ecran) && nomDeLaBulle(ecran) === "Le MJ joue ses adversaires.";
   assert.equal(texteDe(plus()), "+1");
 
   // Qui joue se choisit aussi par « Jouer », sur sa fiche, et par son jeton ; on en change tant que rien n'est payé.
@@ -1495,12 +1582,12 @@ dansUnePage("combat — sur un téléphone, la liste « +k » d'une case reste s
   assert.deepEqual(enTete(ecran), ["Marmiton de corvée n° 2", "actions restantes : 1 sur 1 · souffle 5/5"]);
   // Revenir à « Qui joue ? » : le Marmiton n° 2 passe son tour.
   await cliquer(boutonDit(corps(ecran), "Passer son tour"));
-  assert.equal(titreDeLaZone(ecran), "Qui joue ?");
+  assert.ok(auRepos(), "le volet au repos");
 
   // Rien n'est en cours : la liste choisit qui joue.
   await cliquer(plus());
   assert.equal(texteDe(un(liste, "h3")), "Case D4");
-  assert.equal(bulleMontree(ecran), false, "sur un téléphone, la liste reste sous la carte");
+  assert.equal(tous(laBulle(ecran), ".combat-case-liste button").length, 0, "sur un téléphone, la liste reste sous la carte");
   const dansLaListe = () => tous(liste, "button").map((b) => [texteDe(b), inactif(b)]);
   assert.deepEqual(dansLaListe(), [
     ["Aubépine Crèmebrûlée", true],
@@ -1510,10 +1597,10 @@ dansUnePage("combat — sur un téléphone, la liste « +k » d'une case reste s
   ]);
   // Le Marmiton n° 2 a joué : son bouton ne fait rien non plus.
   await cliquer(boutonDit(liste, "Marmiton de corvée n° 2"));
-  assert.equal(titreDeLaZone(ecran), "Qui joue ?");
+  assert.ok(auRepos(), "le volet au repos");
   // Aubépine ne joue pas pendant le tour des adversaires : son bouton ne fait rien.
   await cliquer(boutonDit(liste, "Aubépine Crèmebrûlée"));
-  assert.equal(titreDeLaZone(ecran), "Qui joue ?");
+  assert.ok(auRepos(), "le volet au repos");
   assert.equal(liste.children.length, 5, "la liste reste ouverte");
   await cliquer(boutonDit(liste, "Marmiton de corvée n° 1"));
   assert.deepEqual(enTete(ecran), ["Marmiton de corvée n° 1", "actions restantes : 1 sur 1 · souffle 5/5"]);
@@ -1531,7 +1618,9 @@ dansUnePage("combat — sur un téléphone, la liste « +k » d'une case reste s
   await cliquer(boutonDit(liste, "Marmiton de corvée n° 2"));
   memesNoeuds(tous(corps(ecran), ".combat-origine"), [], "un jeton écarté ne se choisit pas");
   await cliquer(boutonDit(liste, "Aubépine Crèmebrûlée"));
-  assert.deepEqual(tous(corps(ecran), ".combat-origine").map(texteDe), ["choisie ici"]);
+  // Au téléphone (lot 4.3), la cible posée, le volet passe aux dés (l'étape 2) : la cible est dans son titre.
+  assert.deepEqual(enTete(ecran)[0], "Frappe contre Aubépine Crèmebrûlée");
+  assert.ok(deACliquer(ecran), "le dé attend, dans le volet");
   assert.equal(liste.children.length, 0);
 
   // « Fermer » vide la liste sans rien choisir, et rend le focus au « +1 ».
@@ -1539,7 +1628,7 @@ dansUnePage("combat — sur un téléphone, la liste « +k » d'une case reste s
   await cliquer(boutonDit(liste, "Fermer"));
   assert.equal(liste.children.length, 0);
   focusSur(plus());
-  assert.deepEqual(tous(corps(ecran), ".combat-origine").map(texteDe), ["choisie ici"]);
+  assert.deepEqual(enTete(ecran)[0], "Frappe contre Aubépine Crèmebrûlée", "rien n'a changé");
 });
 
 dansUnePage("combat — ce que le combat de référence ne joue pas : une ligne par puissance, les réglages à la main, un refus du moteur, les dégâts directs, la face décalée, deux armes, sans arme, X", async (page) => {
@@ -1578,15 +1667,16 @@ dansUnePage("combat — ce que le combat de référence ne joue pas : une ligne 
   // Le dé nu, puis chaque modificateur avec sa source, une seule fois : « d10+3 » devant eux se lisait d10+3+3.
   assert.match(contexte, /Dé d10 \(Précision \d \+ Agilité \d\) \+1 \(Vif\) \+2 \(à la main : Inspiration\) · difficulté /);
   assert.doesNotMatch(contexte, /d10\+/);
-  // Le pied du jet : le texte de la capacité, toujours, puis les réglages à la main tant qu'ils existent.
-  assert.deepEqual(un(corps(ecran), ".combat-des").children.map((bloc) => bloc.className), ["combat-contexte", "combat-jet", "combat-assiste", "combat-reglages"]);
+  // Le pied du jet : le texte de la capacité, toujours, puis les réglages à la main tant qu'ils existent ; au lot 4.3, le pied du
+  // geste (« Appliquer l'effet de… », la palette) vient juste après les dés.
+  assert.deepEqual(un(corps(ecran), ".combat-des").children.map((bloc) => bloc.className), ["combat-contexte", "combat-jet", "combat-pied", "combat-assiste", "combat-reglages"]);
   // Le nombre des avantages porte sa cause : la main en est une.
   const cause = un(corps(ecran), "button.combat-cause");
   assert.equal(cause.getAttribute("aria-label"), "1 avantage : voir la cause");
   assert.ok(tous(un(corps(ecran), ".combat-cause-explication"), "p").map(texteDe).includes("À la main : Minutie."));
   for (let lance = 0; lance < 3; lance += 1) await cliquer(deACliquer(ecran));
   // Pendant le jet : plus de réglage, et la cible, choisie par son bouton, reste montrée avec son origine.
-  assert.deepEqual(un(corps(ecran), ".combat-des").children.map((bloc) => bloc.className), ["combat-contexte", "combat-jet", "combat-assiste"]);
+  assert.deepEqual(un(corps(ecran), ".combat-des").children.map((bloc) => bloc.className), ["combat-contexte", "combat-jet", "combat-pied", "combat-assiste"]);
   assert.deepEqual(tous(un(corps(ecran), ".combat-cibles"), "button").map((b) => [texteDe(b), b.getAttribute("aria-pressed"), inactif(b)]), [["Marmiton de corvée", "true", true]]);
   assert.deepEqual(tous(corps(ecran), ".combat-origine").map(texteDe), ["choisie ici"]);
   // Trois réussites et un avantage encore là : le coup critique s'offre (lot 4.3). On garde C.
@@ -1628,8 +1718,8 @@ dansUnePage("combat — ce que le combat de référence ne joue pas : une ligne 
   assert.deepEqual(enTete(ecran), ["Frappe contre Aubépine Crèmebrûlée", "Homard · action 1 sur 2 · souffle 4/4"]);
   assert.equal(texteDe(un(corps(ecran), "p.combat-defenseur")), "Aubépine lance sa défense · souffle 5/10");
   for (let lance = 0; lance < 3; lance += 1) await cliquer(deACliquer(ecran));
-  // Aucun dégât : le geste attend « Terminer » (lot 4.3).
-  await cliquer(boutonDit(corps(ecran), "Terminer"));
+  // Aucun dégât : le geste attend « Terminer » (lot 4.3) ; Aubépine, attaquée, pouvant intervenir, c'est « Passer : terminer ».
+  await cliquer(boutonDit(corps(ecran), "Passer : terminer"));
   assert.match(journal(ecran).at(-1), /^Homard : Frappe \(Pinces de homard\) contre Aubépine\. .* : 3 réussites, aucun dégât\.$/);
 
   // La Mouette chapardeuse n'a pas d'arme : le jet se prête « sans arme », et les dégâts se saisissent à la main.
@@ -1643,7 +1733,8 @@ dansUnePage("combat — ce que le combat de référence ne joue pas : une ligne 
   await cliquer(deACliquer(ecran));
   await regler("Fixer les dégâts", 4, "Frappe");
   await cliquer(deACliquer(ecran));
-  await cliquer(boutonDit(corps(ecran), "Appliquer"));
+  // Aubépine, attaquée, peut intervenir : « Passer » applique les dégâts (lot 4.3).
+  await cliquer(boutonDit(corps(ecran), "Passer : appliquer les dégâts"));
   assert.match(journal(ecran).at(-1), /^Mouette : Frappe contre Aubépine\. .*aucune réussite, Aubépine reçoit 4 \(à la main : Frappe\)\. Localisation d20 → 12 : jambe gauche\. Armure 10 → 6\.$/);
   assert.deepEqual(des.reste(), []);
 
@@ -1656,7 +1747,7 @@ dansUnePage("combat — ce que le combat de référence ne joue pas : une ligne 
   await cliquer(boutonDit(corps(ecran), "Confirmer"));
   assert.equal(journal(ecran).at(-1), "Aubépine : Pas de côté (2 souffle).");
   assert.deepEqual(enTete(ecran), ["Aubépine Crèmebrûlée", "actions restantes : 1 sur 2 · souffle 3/10"]);
-});
+}, { modeMj: true });
 
 dansUnePage("combat — le lien se paie sur une jauge au choix ; un adversaire à deux armes choisit celle qui prête son jet", async (page) => {
   // La démonstration n'a pas de personnage à deux jauges : un combat est posé en base, sur un
@@ -1717,7 +1808,8 @@ dansUnePage("combat — le lien se paie sur une jauge au choix ; un adversaire �
   assert.equal(texteDe(un(un(corps(second), ".combat-jet-prete"), "button")), "Jet d'attaque (Couteau d'office)");
   await cliquer(boutonDit(un(corps(second), ".combat-cibles"), "Aubépine Crèmebrûlée"));
   for (let lance = 0; lance < 3; lance += 1) await cliquer(deACliquer(second));
-  await cliquer(boutonDit(corps(second), "Terminer"));
+  // Aubépine, attaquée, peut intervenir (Dressage minute) : l'étape « Interventions » (lot 4.3), que l'on passe.
+  await cliquer(boutonDit(corps(second), "Passer : terminer"));
   assert.match(journal(second).at(-1), /^Homard : Dressage minute \(Couteau d'office\) contre Aubépine\. .* : 3 réussites, aucun dégât\.$/);
 });
 
@@ -1776,15 +1868,23 @@ dansUnePage("téléphone — seule la fiche de qui joue est ouverte ; le menu «
   assert.equal(plus.getAttribute("aria-label"), "Autres commandes");
   assert.equal(plus.getAttribute("aria-controls"), autres.id);
   assert.deepEqual([plus.getAttribute("aria-expanded"), autres.className], ["false", "combat-autres"]);
-  assert.deepEqual(tous(autres, "button").map(texteDe), [ANNULER_LE_DERNIER, "Nouveau combat"]);
+  // La rangée des autres commandes (sur PC) : au tour des PJ, « Intervenir… » s'y ajoute (lot 4.3).
+  assert.deepEqual(tous(autres, "button").map(texteDe), [ANNULER_LE_DERNIER, "Nouveau combat", INTERVENIR]);
   assert.equal(boutonDit(barre(ecran), "Fin de tour").parentNode.className, "combat-commandes");
   // L'état, puis « Fin de tour » et « ⋯ », ce que « ⋯ » ouvre, puis l'enregistrement : l'ordre du document est celui du téléphone.
-  assert.deepEqual(tous(un(barre(ecran), ".combat-commandes"), "button").map(texteDe), ["Fin de tour", "⋯"], "le menu n'est pas dans la rangée des commandes : l'ouvrir ne les déplace pas");
-  assert.deepEqual(barre(ecran).children.map((noeud) => noeud.className || noeud.tagName), ["H1", "combat-etat", "combat-commandes", "combat-autres", "combat-garde"]);
+  assert.deepEqual(tous(un(barre(ecran), ".combat-commandes"), "button").filter((b) => !cache(b)).map(texteDe), ["Fin de tour", "⋯"], "le menu n'est pas dans la rangée des commandes : l'ouvrir ne les déplace pas");
+  assert.deepEqual(barre(ecran).children.map((noeud) => noeud.className || noeud.tagName), BARRE);
+  // Au lot 4.3 (F13), « ⋯ » ouvre la feuille du combat, par-dessus lui ; la rangée des autres commandes reste fermée.
   await cliquer(plus);
-  assert.deepEqual([plus.getAttribute("aria-expanded"), autres.className], ["true", "combat-autres ouvert"]);
-  await cliquer(plus);
-  assert.deepEqual([plus.getAttribute("aria-expanded"), autres.className], ["false", "combat-autres"]);
+  const feuille = un(ecran, "section.combat-feuille");
+  assert.deepEqual([plus.getAttribute("aria-expanded"), autres.className, cache(feuille)], ["true", "combat-autres", false]);
+  assert.deepEqual([feuille.getAttribute("role"), feuille.getAttribute("aria-modal"), texteDe(un(ecran, `#${feuille.getAttribute("aria-labelledby")}`))], ["dialog", "true", "Le combat"]);
+  assert.deepEqual(tous(feuille, ".combat-menu-ligne").map((b) => texteDe(b.children[0])), [INTERVENIR, "Fiches", "Journal", "Nouveau combat"]);
+  const croix = un(feuille, "[data-repere=fermer]");
+  assert.equal(croix.getAttribute("aria-label"), "Fermer");
+  await cliquer(croix);
+  assert.deepEqual([plus.getAttribute("aria-expanded"), autres.className, cache(feuille)], ["false", "combat-autres", true]);
+  focusSur(plus, "le focus revient à « ⋯ »");
 
   // Sur un grand écran, toutes les fiches des vivants sont ouvertes.
   const { ecran: large } = await ouvrirLEcran(page, { magasin: magasinCombatMemoire(), etroit: false });
@@ -1871,6 +1971,55 @@ dansUnePage("journal — le presse-papiers qui refuse, ou qui manque : le texte 
     assert.match(texteDe(un(zoneDuJournal, `#${champ.getAttribute("aria-describedby")}`)), /^Copie refusée par le navigateur/);
     assert.doesNotMatch(texteDe(zoneDuJournal), /Journal copié/);
   }
+});
+
+dansUnePage("journal — les pages de 500 (lot 4.3) : « Lignes précédentes », caché quand rien ne précède, pose 500 lignes au-dessus à chaque appui puis se cache, le focus à la liste ; « Copier » rend tout le journal ; au téléphone, il suit la liste en plein écran", async (page) => {
+  const lieu = lieuEnMemoire();
+  const [lancer] = contenuDuCombat(1).evenements;
+  // Chaque fin de tour écrit deux lignes : 1 202 lignes, celles du lancement comprises.
+  const finsDeTour = Array.from({ length: 600 }, () => ({ type: "fin_de_tour" }));
+  await poserEnBase(lieu, JSON.stringify({ ...contenuDuCombat(0), evenements: [lancer, ...finsDeTour], revision: 3 }));
+  const copies = [];
+  const { ecran } = await ouvrirLEcran(page, { magasin: await lieu.onglet(), navigateur: { clipboard: { writeText: async (texte) => copies.push(texte) } } });
+  const zoneDuJournal = un(ecran, "section.combat-journal");
+  const lignes = un(zoneDuJournal, "ol.combat-lignes");
+  const precedentes = un(zoneDuJournal, "button.combat-precedentes");
+  // Le bouton est au-dessus de la liste, un bouton secondaire ; les 500 dernières lignes sont montrées.
+  assert.deepEqual(zoneDuJournal.children.map((noeud) => noeud.className.split(" ").at(-1)), ["combat-journal-tete", "combat-precedentes", "combat-lignes", "combat-copie"]);
+  assert.deepEqual([texteDe(precedentes), precedentes.className, cache(precedentes)], ["Lignes précédentes", "bouton secondaire combat-precedentes", false]);
+  assert.equal(journal(ecran).length, 500);
+  // « Copier » rend le journal entier, et non les seules lignes montrées.
+  await cliquer(boutonDit(zoneDuJournal, "Copier"));
+  await laisserFiler(0);
+  const copiees = copies[0].split("\n").slice(5);
+  assert.equal(copiees.length, 1202);
+  assert.equal(copiees[0], journalAttendu[0]);
+  assert.deepEqual(copiees.slice(-500), journal(ecran));
+  // Un appui : 500 de plus, au-dessus ; les lignes posées restent les mêmes.
+  const premiere = tous(lignes, "li")[0];
+  await cliquer(precedentes);
+  assert.equal(journal(ecran).length, 1000);
+  memeNoeud(tous(lignes, "li")[500], premiere, "les lignes déjà posées restent");
+  assert.equal(cache(precedentes), false);
+  focusSur(precedentes);
+  // Le dernier appui pose les 202 qui restent ; rien ne précède plus : le bouton se cache, le focus va à la liste.
+  await cliquer(precedentes);
+  assert.deepEqual(journal(ecran), copiees);
+  assert.equal(cache(precedentes), true);
+  focusSur(lignes);
+  assert.deepEqual(document.defilements, [], "aucun défilement de la page");
+
+  // Au téléphone : le bouton suit la liste dans le plein écran, et revient avec elle.
+  const { ecran: etroit } = await ouvrirLEcran(await pageNeuve(), { magasin: await lieu.onglet(), etroit: true });
+  await cliquer(un(etroit, "button.combat-bandeau-journal"));
+  const plein = un(etroit, "section.combat-plein");
+  const auTelephone = un(plein, "button.combat-precedentes");
+  assert.ok(plein.contains(un(etroit, "ol.combat-lignes")), "la liste, dans le plein écran");
+  assert.equal(cache(auTelephone), false);
+  await cliquer(auTelephone);
+  assert.equal(journal(etroit).length, 1000);
+  await cliquer(boutonOu(plein, (b) => b.getAttribute("data-repere") === "fermer", "« Fermer »"));
+  assert.deepEqual(un(etroit, "section.combat-journal").children.map((noeud) => noeud.className.split(" ").at(-1)), ["combat-journal-tete", "combat-precedentes", "combat-lignes", "combat-copie"]);
 });
 
 dansUnePage("un nom hostile reste du texte : à l'écran, dans le journal, et sans son signe de sens dans ce qui sort", async (page) => {
@@ -2061,7 +2210,7 @@ dansUnePage("« Nouveau combat » — la confirmation dans la page ; « Annuler 
   assert.deepEqual([un(barre(ecran), "button.combat-plus-bouton").getAttribute("aria-expanded"), autres.className], ["false", "combat-autres"]);
   assert.deepEqual(tous(autres, "button").map(texteDe), [ANNULER_LE_DERNIER, "Nouveau combat"]);
   assert.equal(cache(boutonDit(autres, ANNULER_LE_DERNIER)), true, "avant le lancement, « Annuler le dernier geste » se cache");
-  assert.deepEqual(formeDuCadre(ecran), ["combat-bandeau", "combat-plateau", "combat-bulle", "combat-onglet", "combat-preparation", "combat-camps"]);
+  assert.deepEqual(formeDuCadre(ecran), ["combat-bandeau", "combat-vignettes", "combat-plateau", "combat-bulle", "combat-onglet", "combat-preparation", "combat-camps"]);
   focusSur(un(ecran, "h1"));
   assert.equal(inactif(boutonDit(un(ecran, ".combat-journal"), "Copier")), true);
   // La base garde le combat vide, à une révision plus haute : elle ne redescend jamais.
@@ -2180,7 +2329,8 @@ dansUnePage("oublier() — le combat quitte la mémoire, l'écran d'avant ne ré
     const ecrit = JSON.stringify(lieu.fabrique.contenu(NOM_BASE));
     for (const mot of ["Aubépine", "Marmiton", "Chef de partie", "Frappe", "Réduction", "evenements", "miseEnPlace"]) assert.equal(ecrit.includes(mot), false, `« ${mot} » en clair dans la base`);
     assert.ok((await lireLaBase(lieu)).texte.includes("Marmiton de corvée"), "le chiffré, lui, porte le combat");
-    assert.deepEqual([stockage.lus, stockage.ecrits], [[], []], "ni localStorage ni sessionStorage ne sont touchés");
+    // Au lot 4.3, une seule lecture permise : le Mode MJ (atelier.mode-mj), relu à chaque visite ; rien ne s'écrit.
+    assert.deepEqual([[...new Set(stockage.lus)], stockage.ecrits], [["atelier.mode-mj"], []], "ni localStorage ni sessionStorage ne gardent rien du combat");
 
     // « Oublier le mot de passe » : la page appelle oublier().
     page.oublier();
@@ -2296,7 +2446,7 @@ dansUnePage("enregistrement — sans IndexedDB : « Ce navigateur ne garde pas l
     await attendre(() => apresOubli.ecran.querySelector(".attente") === null, "la réouverture");
     assert.deepEqual(fiches(apresOubli.ecran), [["pj1", "Aubépine Crèmebrûlée"]]);
     assert.equal(stockage.ouvertures, 1);
-    assert.deepEqual([stockage.lus, stockage.ecrits], [[], []]);
+    assert.deepEqual([[...new Set(stockage.lus)], stockage.ecrits], [["atelier.mode-mj"], []], "le Mode MJ seul est lu (lot 4.3)");
     page.oublier();
   } finally {
     delete subtil.encrypt;
@@ -2353,7 +2503,7 @@ dansUnePage("enregistrement — « Combat ouvert ailleurs » : on ne joue plus, 
   // L'état passe par la zone d'avis, avec son bouton ; la zone sous la carte cède la place au bloc d'arrêt, et la bulle se cache.
   assert.deepEqual(tous(avis(ecran), "p").map(texteDe), ["Combat ouvert ailleurs"]);
   assert.deepEqual(tous(avis(ecran), "button").map(texteDe), ["Reprendre le combat le plus récent"]);
-  assert.deepEqual(formeDuCadre(ecran), ["combat-bandeau", "combat-plateau", "combat-bulle", "combat-onglet", "combat-action", "combat-camps"]);
+  assert.deepEqual(formeDuCadre(ecran), ["combat-bandeau", "combat-vignettes", "combat-plateau", "combat-bulle", "combat-onglet", "combat-action", "combat-camps"]);
   const bloc = sousLaCarte(ecran);
   assert.equal(bloc.getAttribute("aria-label"), "Combat arrêté");
   assert.deepEqual([bulleMontree(ecran), cache(onglet(ecran))], [false, true]);
@@ -2405,7 +2555,7 @@ dansUnePage("enregistrement — « Combat ouvert ailleurs » : on ne joue plus, 
   await cliquer(boutonDit(bloc, "Reprendre le combat le plus récent"));
   await attendre(() => garde(ecran) === PHRASES_DE_GARDE.garde, "la reprise");
   assert.equal(avis(ecran).children.length, 0);
-  assert.deepEqual(formeDuCadre(ecran), ["combat-bandeau", "combat-plateau", "combat-bulle", "combat-onglet", "combat-action", "combat-camps"]);
+  assert.deepEqual(formeDuCadre(ecran), ["combat-bandeau", "combat-vignettes", "combat-plateau", "combat-bulle", "combat-onglet", "combat-action", "combat-camps"]);
   assert.equal(sousLaCarte(ecran).getAttribute("aria-label"), "Action en cours");
   assert.deepEqual(journal(ecran), [...journalAttendu.slice(0, 2), "Aubépine passe son tour.", "Fin du tour des PJ : ils retrouvent leurs actions.", "— Tour 1 · camp des adversaires —"]);
   assert.equal(etatDuCombat(ecran), "Tour 1 · camp des adversaires");
@@ -2805,7 +2955,7 @@ dansUnePage("la bulle — « Qui joue ? », le jeton et « Jouer » l'ouvrent co
   assert.equal(texteDe(zone(ecran)), PHRASE_DE_LA_ZONE, "la zone sous la carte ne dit plus que la phrase");
   focusSur(premiereLigne(ecran));
   assert.equal(document.activeElement.getAttribute("data-ligne"), "0:0", "la première ligne : Frappe");
-  assert.deepEqual(bulle.style.ecritures.slice(ecrituresAvant).map(([nom]) => nom), ["--bulle-gauche", "--bulle-haut", "--bulle-fleche"], "placée une fois, à son ouverture");
+  assert.deepEqual(bulle.style.ecritures.slice(ecrituresAvant).map(([nom]) => nom), ["--bulle-gauche", "--bulle-haut", "--bulle-fleche", "--bulle-hauteur"], "placée une fois, à son ouverture");
   assert.ok(bulle.className.split(" ").some((classe) => /^combat-bulle-(droite|gauche|dessous|dessus)$/.test(classe)), bulle.className);
   assert.ok(un(laCase(ecran, "C3"), ".combat-jeton").className.split(" ").includes("joue"));
   // Un rendu qui ne change pas ce qu'elle montre ne la replace pas.
@@ -3052,7 +3202,8 @@ dansUnePage("la bulle — fermée, elle rend le focus au jeton s'il se voit à c
     await cliquer(repere(fiche(ecran, "adv4"), "jouer"));
     assert.equal(nomDeLaBulle(ecran), "Marmiton de corvée n° 2 : ses actions", quand);
     await cliquer(un(laBulle(ecran), "button.combat-bulle-fermer"));
-    assert.equal(bulleMontree(ecran), false);
+    // Au téléphone (lot 4.3, A7), le volet ne se ferme pas : il revient au repos.
+    assert.equal(bulleMontree(ecran), etroit, quand);
     memeNoeud(tous(laCase(ecran, "D4"), ".combat-jeton")[2], jeton(ecran, "Marmiton de corvée n° 2"), `${quand} : le Marmiton n° 2, troisième`);
     focusSur(etroit ? un(laCase(ecran, "D4"), "button.combat-plus-etroit") : jeton(ecran, "Marmiton de corvée n° 2"), quand);
   }
@@ -3182,14 +3333,14 @@ dansUnePage("la bulle — rouverte d'elle-même au rechargement en plein jet, el
   assert.ok(bulle.className.split(" ").includes("combat-bulle-jet"), `sur le jet : ${bulle.className}`);
   assert.ok(un(laCase(ecran, "C3"), ".combat-jeton").className.split(" ").includes("joue"), "C3 est la case de qui joue");
   assert.equal(cache(un(ecran, "div.combat-bandeau")), false, "le bandeau paraît au même rendu, au-dessus de la carte");
-  assert.deepEqual(bulle.style.ecritures.map(([nom]) => nom), ["--bulle-gauche", "--bulle-haut", "--bulle-fleche"], "placée une fois, au rendu qui l'ouvre");
+  assert.deepEqual(bulle.style.ecritures.map(([nom]) => nom), ["--bulle-gauche", "--bulle-haut", "--bulle-fleche", "--bulle-hauteur"], "placée une fois, au rendu qui l'ouvre");
   assert.ok(bulle.className.split(" ").includes("combat-bulle-droite"), bulle.className);
   assert.deepEqual(viseeDeLaBulle(ecran, "C3"), { ecartDeLaFleche: 0, entiere: true }, "la flèche vise le milieu de la case, sous le bandeau ; placée avant lui, l'écart valait sa hauteur");
   // Le dé suivant refait le corps de la bulle sans la replacer : jamais à un dé (contrat, § 9.3).
   await cliquer(deACliquer(ecran));
   assert.deepEqual(des.reste(), [], "le troisième dé est tombé");
   assert.equal(bulleMontree(ecran), true);
-  assert.equal(bulle.style.ecritures.length, 3, "un dé ne replace pas la bulle");
+  assert.equal(bulle.style.ecritures.length, 4, "un dé ne replace pas la bulle (quatre propriétés au lot 4.3 : la hauteur bornée sous le bandeau)");
 });
 
 dansUnePage("la bulle — rouverte au rechargement à 13 500 événements, elle se place après la zone d'avis qui dit la limite au même rendu : entière dans la fenêtre, sa flèche au milieu de la case", async (page) => {
@@ -3202,7 +3353,7 @@ dansUnePage("la bulle — rouverte au rechargement à 13 500 événements, elle 
   assert.deepEqual(tous(avis(ecran), "p").map(texteDe), [LIMITE], "la limite, dite dans la zone d'avis au même rendu : elle pousse le cadre");
   assert.equal(bulleMontree(ecran), true, "la bulle se rouvre d'elle-même");
   assert.ok(bulle.className.split(" ").includes("combat-bulle-jet"), `sur le jet : ${bulle.className}`);
-  assert.deepEqual(bulle.style.ecritures.map(([nom]) => nom), ["--bulle-gauche", "--bulle-haut", "--bulle-fleche"], "placée une fois, au rendu qui l'ouvre");
+  assert.deepEqual(bulle.style.ecritures.map(([nom]) => nom), ["--bulle-gauche", "--bulle-haut", "--bulle-fleche", "--bulle-hauteur"], "placée une fois, au rendu qui l'ouvre");
   assert.deepEqual(viseeDeLaBulle(ecran, "C3"), { ecartDeLaFleche: 0, entiere: true }, "placée après l'avis, la bulle tient dans la fenêtre ; avant lui, l'avis la poussait sous son bord");
 });
 
@@ -3333,7 +3484,8 @@ dansUnePage(
       assert.equal(montrees(), 0, `${quand} : aucune infobulle au doigt`);
       assert.equal(portees(), 0, `${quand} : aucune hachure au doigt`);
       await cliquer(un(laBulle(ecran), "button.combat-bulle-fermer"));
-      assert.equal(bulleMontree(ecran), false);
+      // Au téléphone (lot 4.3, A1), le volet ne se ferme pas : il revient au repos.
+      assert.equal(bulleMontree(ecran), etroit, quand);
       // Entrée sur le jeton : le clavier.
       ecran.declencher("keydown", { key: "Enter", target: jeton(ecran, "Aubépine Crèmebrûlée"), preventDefault() {} });
       await cliquer(jeton(ecran, "Aubépine Crèmebrûlée"));
@@ -3391,14 +3543,15 @@ dansUnePage("le bandeau — caché avant le lancement ; la dernière ligne ; pen
   focusSur(un(ecran, "#combat-journal-titre"));
   assert.deepEqual(document.focalisations.at(-1).options, { preventScroll: true });
   assert.equal(bulleMontree(ecran), false, "un clic hors de la bulle l'a fermée");
-  // Un clic à la souris sur le reste du bandeau fait de même ; au doigt, rien : un doigt qui balaie la page n'y saute pas.
+  // Un clic à la souris sur le reste du bandeau fait de même ; au lot 4.3 (contrat de la vague 3, § 4.2), un appui au doigt aussi : au
+  // téléphone, la page ne défile plus, et la dernière ligne ouvre le journal. Sur un grand écran, c'est « Journal ↓ ».
   const texte = un(bandeau, ".combat-bandeau-texte");
   bandeau.declencher("pointerdown", { pointerType: "touch" });
   bandeau.declencher("click", { target: texte });
-  assert.equal(document.defilements.length, 1, "au doigt, rien");
+  assert.equal(document.defilements.length, 2, "au doigt, le journal");
   bandeau.declencher("pointerdown", { pointerType: "mouse" });
   bandeau.declencher("click", { target: texte });
-  assert.equal(document.defilements.length, 2, "à la souris, le journal");
+  assert.equal(document.defilements.length, 3, "à la souris, le journal");
   focusSur(un(ecran, "#combat-journal-titre"));
   assert.deepEqual(focusQuiDefilent(), []);
 });
@@ -3452,7 +3605,7 @@ dansUnePage("annuler — le bouton et ses trois raisons ; la question dans la pa
   const barrees = () => tous(un(ecran, "ol.combat-lignes"), "li").map((li) => li.className.split(" ").includes("combat-annulee"));
   // Le bouton : « ↶ » caché aux lecteurs d'écran, une espace, le libellé ; à gauche de « Nouveau combat ».
   assert.equal(cache(bouton()), false, "montré dès le lancement");
-  assert.deepEqual(tous(autres, "button").map(texteDe), [ANNULER_LE_DERNIER, "Nouveau combat"]);
+  assert.deepEqual(tous(autres, "button").map(texteDe), [ANNULER_LE_DERNIER, "Nouveau combat", INTERVENIR], "au lot 4.3, « Intervenir… » du tour des PJ les suit");
   const signe = un(bouton(), "span.combat-signe");
   assert.deepEqual([signe.getAttribute("aria-hidden"), texteDe(signe)], ["true", String.fromCodePoint(0x21b6)]);
   assert.equal(bouton().className, "bouton secondaire combat-annuler-geste");
@@ -3539,39 +3692,46 @@ dansUnePage("annuler — le bouton et ses trois raisons ; la question dans la pa
   assert.deepEqual(focusQuiDefilent(), []);
 });
 
-dansUnePage("annuler — une question ouverte se ferme quand il n'y a plus rien à annuler ; « Passer son tour » et la fin du tour se défont ; sur un téléphone, « ⋯ » reste ouvert", async (page) => {
+dansUnePage("annuler — une question ouverte se ferme quand il n'y a plus rien à annuler ; « Passer son tour » et la fin du tour se défont ; sur un téléphone, la question s'ouvre depuis le volet au repos, et la rangée se referme avec elle", async (page) => {
   const { ecran } = await combatLance(page, { etroit: true });
   const autres = un(barre(ecran), "div.combat-autres");
   const plus = un(barre(ecran), "button.combat-plus-bouton");
   const bouton = () => un(barre(ecran), "button.combat-annuler-geste");
+  // Au téléphone (lot 4.3, A1 et A7), « Annuler le dernier geste » est dans le volet au repos.
+  const duVolet = () => boutonOu(laBulle(ecran), (b) => texteDe(b).endsWith("Annuler le dernier geste"), "« Annuler le dernier geste » du volet");
   // Aubépine passe son tour : le tour des PJ finit de lui-même.
   await cliquer(jeton(ecran, "Aubépine Crèmebrûlée"));
   await cliquer(boutonDit(corps(ecran), "Passer son tour"));
   assert.equal(etatDuCombat(ecran), "Tour 1 · camp des adversaires");
-  // Sur un téléphone, le bouton est dans « ⋯ ».
-  await cliquer(plus);
-  assert.equal(autres.className, "combat-autres ouvert");
-  await cliquer(bouton());
+  await cliquer(duVolet());
+  assert.equal(autres.className, "combat-autres ouvert", "la question se voit");
   assert.equal(texteDe(un(autres, "#combat-question-annuler")), "Annuler ce geste : Aubépine — passer son tour ?");
+  // « Garder » : la rangée se referme, le focus revient à ce qui avait posé la question, ou à « ⋯ ».
+  const ouvreur = duVolet();
+  await cliquer(boutonDit(un(autres, ".confirmation"), "Garder"));
+  assert.equal(autres.className, "combat-autres", "au téléphone, la rangée se referme avec la question");
+  assert.ok(document.activeElement === ouvreur || document.activeElement === plus, "le focus revient au volet, ou à « ⋯ »");
+  await cliquer(duVolet());
   // Pendant la question, un geste commence (le Chef choisit une capacité) : plus rien à annuler, la question se ferme.
   await cliquer(repere(fiche(ecran, "adv2"), "jouer"));
   await cliquer(boutonDeCapacite(ecran, "Frappe"));
   assert.equal(tous(ecran, ".confirmation").length, 0, "la question s'est fermée");
   assert.equal(raisonDe(ecran, bouton()), "Revenez d'abord sur le geste en cours.");
-  await cliquer(boutonDit(corps(ecran), "Revenir"));
+  // Au téléphone, « Revenir » se dit « ‹ Changer de capacité » (A4).
+  await cliquer(boutonDit(corps(ecran), `${String.fromCodePoint(0x2039)} Changer de capacité`));
   await cliquer(un(laBulle(ecran), "button.combat-bulle-fermer"));
 
-  // « Annuler le geste » : la passe et la fin de tour qu'elle a entraînée se défont ; « ⋯ » reste ouvert, le bouton s'y voit.
-  await cliquer(bouton());
+  // « Annuler le geste » : la passe et la fin de tour qu'elle a entraînée se défont ; la rangée se referme.
+  await cliquer(duVolet());
   await cliquer(boutonDit(un(autres, ".confirmation"), "Annuler le geste"));
   assert.equal(etatDuCombat(ecran), "Tour 1 · camp des PJ");
   assert.equal(journal(ecran).at(-1), "Annulé : Aubépine — passer son tour.");
   assert.deepEqual(tous(un(ecran, "ol.combat-lignes"), "li").map((li) => li.className.split(" ").includes("combat-annulee")), [false, false, true, true, true, false], "la passe, la fin du tour et le tour, barrés");
-  assert.equal(autres.className, "combat-autres ouvert", "« ⋯ » reste ouvert sur un téléphone");
-  focusSur(bouton());
+  assert.equal(autres.className, "combat-autres", "au téléphone, la rangée se referme avec la question");
+  assert.ok(document.activeElement === plus || laBulle(ecran).contains(document.activeElement), "le focus revient au volet, ou à « ⋯ »");
   // « Fin de tour » se défait de même.
   await cliquer(boutonDit(barre(ecran), "Fin de tour"));
-  await cliquer(bouton());
+  await cliquer(duVolet());
   assert.equal(texteDe(un(autres, "#combat-question-annuler")), "Annuler la fin du tour des PJ ?");
   await cliquer(boutonDit(un(autres, ".confirmation"), "Annuler le geste"));
   assert.equal(journal(ecran).at(-1), "Annulé : la fin du tour des PJ.");
@@ -3612,30 +3772,28 @@ dansUnePage("limite — à 13 500 événements, la phrase sous la barre, et une 
 
 // ─── Au groupe 2 : le téléphone ─────────────────────────────────────────────
 
-dansUnePage("téléphone — le volet porte la liste seule ; « Jouer » le ferme et le jet se joue sous la carte, sans ✕ ; la fenêtre élargie, le jet passe dans la bulle", async (page) => {
+dansUnePage("téléphone — le volet porte tout le geste, une étape à la fois, et la zone sous la carte reste vide (lot 4.3) ; la fenêtre élargie, le jet passe dans la bulle", async (page) => {
   const fenetre = guetterLaFenetre();
   try {
     let largeur = 390;
     globalThis.document.documentElement.clientWidth = largeur;
     const { ecran } = await combatLance(page, { etroit: () => largeur < 896, des: desDe(scenario.gestes.slice(0, 1)) });
-    // Le volet : la liste seule, avec sa poignée, ✕ en dernier.
+    // Le volet : la liste, avec sa poignée.
     await cliquer(jeton(ecran, "Aubépine Crèmebrûlée"));
     const bulle = laBulle(ecran);
     assert.equal(bulleMontree(ecran), true);
-    assert.deepEqual(bulle.children.map((noeud) => noeud.className.split(" ")[0]), ["combat-bulle-poignee", "combat-bulle-tete", "combat-bulle-defile", "combat-infobulles", "combat-bulle-fermer"]);
     assert.equal(un(bulle, ".combat-bulle-poignee").getAttribute("aria-hidden"), "true");
     focusSur(premiereLigne(ecran));
     assert.equal(zone(ecran).children.length, 0, "le volet ouvert, la zone sous la carte est vide");
-    // « Jouer » (la ligne) : le volet se ferme, le jet se joue sous la carte, avec l'en-tête de la bulle, sans ✕ ni « – ».
+    // « Jouer » (la ligne) : au lot 4.3, le volet reste ouvert, et passe à l'étape de la cible ; la zone sous la carte reste vide.
     await cliquer(boutonDeCapacite(ecran, "Frappe"));
-    assert.equal(bulleMontree(ecran), false);
-    assert.deepEqual(enTete(ecran), ["Frappe", "Aubépine · action 1 sur 2 · souffle 10/10"]);
-    assert.equal(tous(sousLaCarte(ecran), "button.combat-bulle-fermer").length, 0);
-    assert.ok(tous(zone(ecran), ".combat-cibles button").length > 0, "les doubles des cibles, sous la carte");
-    await cliquer(boutonDit(un(zone(ecran), ".combat-cibles"), "Marmiton de corvée n° 1"));
-    focusSur(deACliquer(ecran), "le focus au dé, sous la carte");
+    assert.equal(bulleMontree(ecran), true, "le geste se joue dans le volet");
+    assert.equal(zone(ecran).children.length, 0, "rien sous la carte");
+    await cliquer(boutonDit(un(corps(ecran), ".combat-cibles"), "Marmiton de corvée n° 1"));
+    assert.ok(deACliquer(ecran), "le dé attend, dans le volet");
     await cliquer(deACliquer(ecran));
-    assert.equal(bulleMontree(ecran), false, "après le premier dé, le jet reste sous la carte");
+    assert.equal(bulleMontree(ecran), true, "après le premier dé, le jet reste dans le volet");
+    assert.equal(zone(ecran).children.length, 0);
 
     // La fenêtre s'élargit : l'écran se refait à la largeur, et le jet passe dans la bulle, réductible.
     largeur = 1280;
@@ -3661,23 +3819,21 @@ dansUnePage("téléphone — le volet porte la liste seule ; « Jouer » le ferm
   }
 });
 
-dansUnePage("téléphone — sous la carte, Échap ferme l'infobulle d'une cause, sans bouger le focus ; l'écran ne pose aucun écouteur global", async (page) => {
+dansUnePage("téléphone — dans le volet, Échap ferme d'abord l'infobulle d'une cause, sans bouger le focus", async (page) => {
   const { ecran } = await combatLance(page, { etroit: true });
   await cliquer(jeton(ecran, "Aubépine Crèmebrûlée"));
   await cliquer(boutonDeCapacite(ecran, "Frappe"));
-  await cliquer(boutonDit(un(zone(ecran), ".combat-cibles"), "Marmiton de corvée n° 1"));
-  // Le nombre des avantages et des désavantages, sous la carte : son focus ouvre l'infobulle de ses causes.
-  const cause = un(zone(ecran), "button.combat-cause");
+  await cliquer(boutonDit(un(corps(ecran), ".combat-cibles"), "Marmiton de corvée n° 1"));
+  // Le nombre des avantages et des désavantages, dans le volet (lot 4.3) : son focus ouvre l'infobulle de ses causes.
+  const cause = un(corps(ecran), "button.combat-cause");
   cause.declencher("focus");
-  const ouvertes = () => tous(sousLaCarte(ecran), "div.combat-infobulle").filter((noeud) => !cache(noeud));
-  assert.equal(ouvertes().length, 1, "l'infobulle de la cause, dans la couche de la zone");
-  assert.equal(ouvertes()[0].parentNode.className, "combat-infobulles");
+  const ouvertes = () => tous(ecran, "div.combat-infobulle").filter((noeud) => !cache(noeud));
+  assert.equal(ouvertes().length, 1, "l'infobulle de la cause");
   const focusAvant = document.focalisations.length;
   assert.equal(echap(ecran), true);
   assert.equal(ouvertes().length, 0);
   assert.equal(document.focalisations.length, focusAvant, "le focus ne bouge pas");
-  // Rien d'autre à fermer : la bulle est cachée, Échap n'est plus pris.
-  assert.equal(echap(ecran), false);
+  assert.equal(bulleMontree(ecran), true, "le volet reste ouvert");
 });
 
 // ─── Au groupe 2 : les services de la page ──────────────────────────────────

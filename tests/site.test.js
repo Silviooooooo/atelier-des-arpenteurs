@@ -1,8 +1,9 @@
 // Contrôles du site (SPECIFICATION.md, § 7, § 9, § 10.1 et § 11, domaine
 // « Site ») : la page et sa politique de sécurité, le graphe de ses modules,
 // le manifeste et les icônes de l'écran d'accueil, les jetons et leurs
-// contrastes, dont les quinze couleurs du simulateur de combat (§ 17 ; lot 4,
-// groupe 2, complément § 4.12), la banque de démonstration et le chargement.
+// contrastes, dont les dix-huit couleurs du simulateur de combat (§ 17 ; lot
+// 4, groupe 2, complément § 4.12 ; lot 4.3, les trois du jeu en cours), la
+// banque de démonstration et le chargement.
 // Les écrans eux-mêmes s'essaient à la main, dans le navigateur.
 
 import { test } from "node:test";
@@ -145,6 +146,8 @@ test("site — le graphe des modules de la page se résout, et atteint les dix-s
     // son enregistrement, ses dés.
     "js/ecrans/combat_plateau.js", "js/ecrans/combat_fiches.js", "js/ecrans/combat_action.js", "js/ecrans/combat_preparation.js",
     "js/ecrans/combat_bulle.js", "js/ecrans/combat_journal.js",
+    // Au lot 4.3 : les vignettes, la palette, les menus et le Mode MJ de l'écran, et la palette et le menu du MJ des vues.
+    "js/ecrans/combat_vignettes.js", "js/ecrans/combat_palette.js", "js/ecrans/combat_menus.js", "js/ecrans/mode_mj.js", "js/combat/lecture_mj.js",
     "js/combat/moteur.js", "js/combat/offre.js", "js/combat/lecture.js", "js/combat/journal.js", "js/combat/seance.js", "js/combat/enregistrement.js",
     "js/combat/photographie.js", "js/combat/roles.js", "js/combat/des.js", "js/personnage/disponibles.js",
   ];
@@ -242,13 +245,15 @@ test("jetons — le texte contraste d'au moins 4,5:1, les bordures de 3:1, dans 
   }
 });
 
-// Les quinze couleurs du simulateur de combat (§ 17), l'exception à la
+// Les dix-huit couleurs du simulateur de combat (§ 17), l'exception à la
 // couleur d'accent unique (§ 9) : les onze du lot 4, puis, au groupe 2, la
-// hachure de la portée, son bord, le bord et le fond du cadre d'un jet. Trois
+// hachure de la portée, son bord, le bord et le fond du cadre d'un jet ; au
+// lot 4.3, qui peut encore agir, son fond doux, et qui a tout joué. Trois
 // fonds peuvent porter une case de la carte.
 const COULEURS_DU_COMBAT = [
   "combat-pj", "combat-pj-doux", "combat-pj-texte", "combat-adv", "combat-adv-doux", "combat-adv-texte", "combat-sur-jeton", "combat-mort", "combat-reussite", "combat-echec", "combat-alerte",
   "combat-portee", "combat-portee-bord", "combat-cadre-jet", "combat-cadre-jet-fond",
+  "combat-a-jouer", "combat-a-jouer-doux", "combat-epuise",
 ];
 const FONDS_DE_CASE = ["fond", "fond-2", "accent-doux"];
 // Ce qui s'écrit, à 4,5:1 : [avant, fond].
@@ -264,6 +269,11 @@ const TEXTES_DU_COMBAT = [
   ...["texte", "texte-2", "accent"].flatMap((avant) => ["combat-pj-doux", "combat-adv-doux"].map((fond) => [avant, fond])),
   // Dans le cadre d'un jet : ✓, ✗ et les chiffres.
   ...["combat-reussite", "combat-echec", "texte"].map((avant) => [avant, "combat-cadre-jet-fond"]),
+  // Au lot 4.3 : qui peut encore agir (un bord et un texte) sur les fonds et son fond doux ; le texte d'une vignette sur ce
+  // fond doux ; le nom d'un jeton qui a tout joué, sur le second fond de son rond.
+  ...["fond", "fond-2", "combat-a-jouer-doux"].map((fond) => ["combat-a-jouer", fond]),
+  ["texte", "combat-a-jouer-doux"],
+  ["texte", "fond-2"],
 ];
 // Les ronds, à 3:1 sur le fond des cases.
 const RONDS_DU_COMBAT = ["combat-pj", "combat-adv", "combat-mort"].flatMap((avant) => FONDS_DE_CASE.map((fond) => [avant, fond]));
@@ -272,6 +282,9 @@ const RONDS_DU_COMBAT = ["combat-pj", "combat-adv", "combat-mort"].flatMap((avan
 const TRAITS_DU_COMBAT = [
   ...["fond", "fond-2", "combat-cadre-jet-fond"].map((fond) => ["combat-cadre-jet", fond]),
   ...["combat-portee", "combat-portee-bord"].flatMap((avant) => FONDS_DE_CASE.map((fond) => [avant, fond])),
+  // Au lot 4.3 : le gris de qui a tout joué, un bord et un anneau, sur les deux fonds.
+  ["combat-epuise", "fond"],
+  ["combat-epuise", "fond-2"],
 ];
 
 // Les paires trop faibles d'une feuille de jetons, dans les deux thèmes : vide quand tout tient.
@@ -282,15 +295,15 @@ function contrastesFaibles(css, paires, seuil) {
   });
 }
 
-test("jetons — les quinze couleurs du combat : le texte contraste d'au moins 4,5:1, les ronds et les traits de 3:1 sur le fond des cases, dans les deux thèmes (§ 17)", () => {
-  assert.equal(COULEURS_DU_COMBAT.length, 15);
+test("jetons — les dix-huit couleurs du combat : le texte contraste d'au moins 4,5:1, les ronds et les traits de 3:1 sur le fond des cases, dans les deux thèmes (§ 17)", () => {
+  assert.equal(COULEURS_DU_COMBAT.length, 18);
   assert.deepEqual(contrastesFaibles(JETONS, TEXTES_DU_COMBAT, 4.5), []);
   assert.deepEqual(contrastesFaibles(JETONS, RONDS_DU_COMBAT, 3), []);
   assert.deepEqual(contrastesFaibles(JETONS, TRAITS_DU_COMBAT, 3), []);
-  // Chacune des quinze est mesurée, comme couleur ou comme fond.
+  // Chacune des dix-huit est mesurée, comme couleur ou comme fond.
   const mesurees = new Set([...TEXTES_DU_COMBAT, ...RONDS_DU_COMBAT, ...TRAITS_DU_COMBAT].flat());
   assert.deepEqual(COULEURS_DU_COMBAT.filter((nom) => !mesurees.has(nom)), []);
-  // Ces quinze-là, et aucune autre : une couleur ajoutée sans mesure se verrait.
+  // Ces dix-huit-là, et aucune autre : une couleur ajoutée sans mesure se verrait.
   for (const theme of ["clair", "sombre"]) {
     assert.deepEqual(Object.keys(jetons(JETONS, theme)).filter((nom) => nom.startsWith("combat-")), COULEURS_DU_COMBAT, theme);
   }
@@ -300,6 +313,9 @@ test("jetons — les quinze couleurs du combat : le texte contraste d'au moins 4
   assert.match(contrastesFaibles(JETONS.replace("--combat-portee: #d9534f;", "--combat-portee: #e8776e;"), TRAITS_DU_COMBAT, 3).join("\n"), /^clair : --combat-portee sur --accent-doux, /m);
   assert.match(contrastesFaibles(JETONS.replace("--combat-cadre-jet-fond: #262a30;", "--combat-cadre-jet-fond: #3a3f46;"), TRAITS_DU_COMBAT, 3).join("\n"), /^sombre : --combat-cadre-jet sur --combat-cadre-jet-fond, /m);
   assert.match(contrastesFaibles(JETONS.replace("--combat-cadre-jet-fond: #262a30;", "--combat-cadre-jet-fond: #3a3f46;"), TEXTES_DU_COMBAT, 4.5).join("\n"), /^sombre : --combat-echec sur --combat-cadre-jet-fond, /m);
+  // Le lot 4.3 : un vert du jeu en cours trop clair pour s'écrire ; un gris d'épuisé qui se perd sur le second fond sombre.
+  assert.match(contrastesFaibles(JETONS.replace("--combat-a-jouer: #1e7a3c;", "--combat-a-jouer: #3fae62;"), TEXTES_DU_COMBAT, 4.5).join("\n"), /^clair : --combat-a-jouer sur --fond, /m);
+  assert.match(contrastesFaibles(JETONS.replace("--combat-epuise: #6b717b;", "--combat-epuise: #3a3f46;"), TRAITS_DU_COMBAT, 3).join("\n"), /^sombre : --combat-epuise sur --fond-2, /m);
   // Le contrôle refuse : des initiales blanches sur le vert du thème sombre, un rouge trop pâle pour s'écrire sur le clair.
   const blanches = contrastesFaibles(JETONS.replace("--combat-sur-jeton: #0b1722;", "--combat-sur-jeton: #ffffff;"), [["combat-sur-jeton", "combat-pj"]], 4.5);
   assert.equal(blanches.length, 1, "le thème clair, lui, garde ses initiales blanches");
@@ -350,14 +366,15 @@ function proprietesDePlacerBulle(source) {
 
 test("jetons — ecran.css, personnage.css et combat.css tirent toutes leurs valeurs de jetons.css, hors les largeurs des @media ; aucune police téléchargée", () => {
   const definis = new Set(Object.keys(jetons(JETONS, "clair")));
-  // La feuille du combat lit aussi les trois propriétés de la place de la bulle, et elles seules.
+  // La feuille du combat lit aussi les quatre propriétés de la place de la bulle (au lot 4.3, sa plus grande hauteur),
+  // et elles seules.
   const deLaBulle = proprietesDePlacerBulle(lire("js/ecrans/echelle.js"));
-  assert.deepEqual(deLaBulle, ["bulle-gauche", "bulle-haut", "bulle-fleche"]);
+  assert.deepEqual(deLaBulle, ["bulle-gauche", "bulle-haut", "bulle-fleche", "bulle-hauteur"]);
   assert.deepEqual([...definis].filter((nom) => nom.startsWith("bulle-")), [], "la place de la bulle n'est pas un jeton");
   const definisPour = (feuille) => (feuille === "css/combat.css" ? new Set([...definis, ...deLaBulle]) : definis);
   for (const feuille of FEUILLES_A_JETONS) assert.deepEqual(valeursEnDur(lire(feuille), definisPour(feuille)), [], feuille);
   assert.doesNotMatch(JETONS, /@font-face|@import|url\(/);
-  // La feuille du combat est bien lue : elle emploie ses jetons et les trois propriétés de la bulle, et ses deux largeurs
+  // La feuille du combat est bien lue : elle emploie ses jetons et les quatre propriétés de la bulle, et ses deux largeurs
   // sont écrites là où elles sont permises ; sa troisième condition, la souris, n'en a pas.
   const combat = lire("css/combat.css");
   for (const nom of [...COULEURS_DU_COMBAT, "largeur-combat", ...deLaBulle]) assert.ok(combat.includes(`var(--${nom})`), `--${nom} ne sert pas dans css/combat.css`);
@@ -385,7 +402,7 @@ test("jetons — ecran.css, personnage.css et combat.css tirent toutes leurs val
   const couleurs = ["fond", "fond-2", "texte", "texte-2", "bordure", "separateur", "accent", "texte-sur-accent", "accent-doux", ...COULEURS_DU_COMBAT.filter((nom) => nom !== EXEMPTE)];
   assert.deepEqual(sansValeurSombre(JETONS, couleurs), []);
   assert.deepEqual(sansValeurSombre(JETONS, [EXEMPTE]), [EXEMPTE], "l'exemption sert : sa valeur sombre est la claire");
-  assert.deepEqual(COULEURS_DU_COMBAT.filter((nom) => !declaresEnSombre(JETONS).has(nom)), [], "le bloc sombre déclare les quinze");
+  assert.deepEqual(COULEURS_DU_COMBAT.filter((nom) => !declaresEnSombre(JETONS).has(nom)), [], "le bloc sombre déclare les dix-huit");
   assert.deepEqual(sansValeurSombre(JETONS.replace(/\s*--combat-alerte: #e6a85a;/, ""), couleurs), ["combat-alerte"], "un jeton resté à sa valeur claire");
   assert.deepEqual(sansValeurSombre(JETONS.replace("--combat-mort: #7d838d;", "--combat-mort: var(--bordure);"), couleurs), ["combat-mort"], "une valeur sombre qui ne se mesure pas");
   assert.deepEqual(sansValeurSombre(JETONS.replace("--combat-cadre-jet-fond: #262a30;", "--combat-cadre-jet-fond: #ffffff;"), couleurs), ["combat-cadre-jet-fond"], "le fond du cadre resté blanc");

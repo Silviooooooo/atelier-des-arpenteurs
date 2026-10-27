@@ -31,6 +31,25 @@
 // Ce qu'elle garde pour elle : le jeton « en main », le jeton qu'on fait
 // glisser, les cases hachurées, le jeton dont le texte caché dit la raison,
 // et le texte de ce que montre chaque case et chaque jeton.
+//
+// Au lot 4.3, vague 3 (contrat de la vague, § 3.4, § 4.2 et § 5.2) :
+// - un jeton pâlit quand son protagoniste a tout joué (« epuise »), et porte
+//   une pastille quand il porte un état (« blessure » ou « alerte ») ;
+// - le menu du MJ : en Mode MJ, le clic droit l'ouvre près du jeton ; l'appui
+//   long d'une demi-seconde aussi, au minuteur de la page ; hors Mode MJ, le
+//   clic droit garde le menu du navigateur, et l'appui long dit où le trouver.
+//   Un menu inactif dit sa raison ;
+// - un jeton actionné sans choix le dit à l'écran (« jetonSansChoix ») : après
+//   le premier dé, Entrée sur le jeton de qui joue rend le focus à la bulle ;
+// - la légende dit « a tout joué », et, au téléphone, « portée de la
+//   capacité choisie » ;
+// - « demanderUneCase » fait choisir une case (un déplacement du MJ ou de la
+//   palette), nommée par qui la demande ; Échap ou « finirLaDemande » y met
+//   fin ;
+// - deux places que l'écran remplit, que le plateau crée une fois et ne
+//   touche plus : « surimpression », le dé tiré, dernier enfant de la grille
+//   et caché aux lecteurs d'écran ; « emplacementMj », dans l'en-tête, où
+//   l'écran pose l'interrupteur du Mode MJ.
 
 import { el, sansSensForce } from "./dom.js";
 import { COLONNES, COTE } from "../combat/regles.js";
@@ -51,9 +70,21 @@ const LEGENDE = [
   ["combat-adv", "adversaire"],
   ["joue", "joue"],
   ["cible", "cible"],
+  ["epuise", "a tout joué"],
   ["mort", "mort, barré"],
   ["portee", "portée de la capacité survolée"],
 ];
+// Au téléphone, la portée hachurée est celle de la capacité touchée
+// (mission du lot 4.3, § 6, point 4).
+const PORTEE_AU_DOIGT = "portée de la capacité choisie";
+// Les pastilles qu'un jeton peut porter (contrat de la vague 3, § 5.2).
+const PASTILLES = ["blessure", "alerte"];
+// L'appui long qui ouvre le menu du MJ : une demi-seconde (mission du lot
+// 4.3, § 4.8).
+const APPUI_LONG = 500;
+const MENU_EN_MODE_MJ = `Le menu du MJ s'ouvre en Mode MJ (menu ${String.fromCodePoint(0x22ef)}).`;
+// Le minuteur de la page, quand l'écran n'en donne pas.
+const MINUTEUR_DE_LA_PAGE = { poser: (faire, ms) => setTimeout(faire, ms), retirer: (numero) => clearTimeout(numero) };
 // Le texte caché qui dit la raison d'un jeton : un seul pour la carte, que
 // chaque jeton à raison nomme par aria-describedby.
 const RAISON = "combat-plateau-raison";
@@ -93,19 +124,34 @@ function attribuer(noeud, nom, valeur) {
 
 /**
  * La partie « plateau » de l'écran du combat : { noeud, rendre(vue, ecran),
- * prendre(id), enMain(), hachurer(noms) }.
+ * prendre(id), enMain(), hachurer(noms), surimpression, emplacementMj,
+ * demanderUneCase(options, rappel), finirLaDemande() }.
  *
  * « actions » vient de l'écran : executer(commande, origine), toujours avec
  * l'origine "plateau", et ouvrirCase(nomDeCase) pour la liste « +k ».
  * « prendre » et « enMain » servent à cette liste, que l'écran tient : avant
  * le lancement, elle prend un jeton en main sans passer par la grille.
  * « hachurer » sert aux infobulles et à l'aperçu d'une ligne (contrat du
- * groupe 2, § 9.5).
+ * groupe 2, § 9.5). À la vague 3 : ouvrirMenuMj(id, ancre), dire(texte) et
+ * jetonSansChoix(id). « minuteur » est celui de la page, { poser(faire, ms) →
+ * n, retirer(n) }.
  */
-export function creer(actions) {
+export function creer(actions, { minuteur = MINUTEUR_DE_LA_PAGE } = {}) {
   let vue = null;
   // Vrai quand on ne joue pas : la carte ne porte alors aucune commande.
   let arrete = false;
+  // Ce que l'écran dit de lui : le Mode MJ, et le téléphone (la légende).
+  let modeMj = false;
+  let etroit = false;
+  // L'appui en cours sur un jeton ({ id, numero } de son minuteur) ; le jeton
+  // dont l'appui long vient d'ouvrir le menu du MJ (ou de dire sa phrase) :
+  // le clic qui suit (« avaler ») et le clic droit d'un téléphone
+  // (« parLAppui ») n'y ajoutent rien.
+  let appui = null;
+  let avaler = null;
+  let parLAppui = null;
+  // La case que l'écran demande : { exclue, nommer, rappel }, ou null.
+  let demande = null;
   // Le jeton touché, qui attend sa case ; et celui qu'on fait glisser.
   let enMain = null;
   let glisse = null;
@@ -146,18 +192,91 @@ export function creer(actions) {
   }
 
   function auClicDuJeton(fiche) {
-    if (fiche.etat === null || !fiche.etat.agit) return;
+    // Le clic qui suit l'appui long qui a ouvert le menu du MJ : déjà servi.
+    if (avaler === fiche.id) {
+      avaler = null;
+      return;
+    }
+    if (fiche.etat === null) return;
     if (preparation()) {
+      if (!fiche.etat.agit) return;
       enMain = enMain === fiche.id ? null : fiche.id;
       dessiner();
       return;
     }
-    actions.executer(fiche.etat.commande, "plateau");
+    if (fiche.etat.commande !== null) {
+      actions.executer(fiche.etat.commande, "plateau");
+      return;
+    }
+    // Un jeton sans choix : l'écran sait s'il rend le focus à la bulle
+    // (mission du lot 4.3, § 6, point 6b). Quand on ne joue pas, rien.
+    if (!arrete) actions.jetonSansChoix?.(fiche.id);
+  }
+
+  /**
+   * Le menu du MJ d'un jeton (mission du lot 4.3, § 4.8) : en Mode MJ, il
+   * s'ouvre près du jeton, ou dit pourquoi il ne s'ouvre pas (un geste en
+   * cours) ; hors Mode MJ, l'appui long dit où le trouver. Rien pour un jeton
+   * sans menu (un mort, avant le lancement), ni quand on ne joue pas.
+   */
+  function ouvrirLeMenu(fiche) {
+    const menu = fiche.etat?.menuMj ?? null;
+    if (menu === null) return;
+    if (!modeMj) actions.dire?.(MENU_EN_MODE_MJ);
+    else if (menu.actif === false) actions.dire?.(menu.raison);
+    else actions.ouvrirMenuMj?.(fiche.id, fiche.noeud);
+  }
+
+  function finirLAppui() {
+    if (appui === null) return;
+    minuteur.retirer(appui.numero);
+    appui = null;
+  }
+
+  // L'appui se pose au pointerdown du bouton principal, et s'oublie au
+  // pointerup, au pointercancel et au pointerleave (contrat de la vague 3,
+  // § 4.2). L'appui long qui aboutit avale le clic qui le suit, et le clic
+  // droit qu'un téléphone envoie après lui.
+  function auDebutDeLAppui(fiche, evenement) {
+    finirLAppui();
+    avaler = null;
+    parLAppui = null;
+    if ((evenement?.button ?? 0) !== 0 || (fiche.etat?.menuMj ?? null) === null) return;
+    appui = {
+      id: fiche.id,
+      numero: minuteur.poser(() => {
+        appui = null;
+        avaler = fiche.id;
+        parLAppui = fiche.id;
+        ouvrirLeMenu(fiche);
+      }, APPUI_LONG),
+    };
+  }
+
+  // Le clic droit : en Mode MJ seulement, le menu du MJ au lieu de celui du
+  // navigateur ; hors Mode MJ, rien ne change.
+  function auClicDroit(fiche, evenement) {
+    if (!modeMj || (fiche.etat?.menuMj ?? null) === null) return;
+    evenement.preventDefault();
+    finirLAppui();
+    if (parLAppui === fiche.id) {
+      parLAppui = null;
+      return;
+    }
+    ouvrirLeMenu(fiche);
   }
 
   function auClicDeLaCase(fiche) {
     const choix = fiche.etat === null ? null : fiche.etat.choix;
     if (!choix) return;
+    if (choix.demandee === true && demande !== null) {
+      // La demande finit d'abord : l'écran redessine pendant le rappel.
+      const { rappel } = demande;
+      demande = null;
+      dessiner();
+      rappel(fiche.nom);
+      return;
+    }
     if (preparation()) poser(choix.commande.preparer.id, fiche.nom);
     else actions.executer(choix.commande, "plateau");
   }
@@ -174,13 +293,20 @@ export function creer(actions) {
       etat: null,
       initiales: el("span", { classe: "combat-initiales" }),
       nomCourt: el("span", { classe: "combat-nom-court" }),
+      pastille: null,
     };
+    fiche.rond = el("span", { classe: "combat-rond" }, fiche.initiales);
     fiche.noeud = el(
       "button",
       {
         type: "button",
         classe: "combat-jeton",
         onclick: () => auClicDuJeton(fiche),
+        oncontextmenu: (evenement) => auClicDroit(fiche, evenement),
+        onpointerdown: (evenement) => auDebutDeLAppui(fiche, evenement),
+        onpointerup: finirLAppui,
+        onpointercancel: finirLAppui,
+        onpointerleave: finirLAppui,
         // Le texte caché dit la raison du jeton focalisé ou survolé.
         onfocus: () => montrerLaRaison(fiche),
         onpointerenter: () => montrerLaRaison(fiche),
@@ -202,7 +328,7 @@ export function creer(actions) {
           glisse = null;
         },
       },
-      el("span", { classe: "combat-rond" }, fiche.initiales),
+      fiche.rond,
       fiche.nomCourt,
     );
     return fiche;
@@ -265,6 +391,11 @@ export function creer(actions) {
       tenu: avant ? tenu : null,
       agit: avant ? !ecarte : commande !== null,
       commande,
+      // La vague 3 : qui a tout joué pâlit ; l'état porté, une pastille ; le
+      // menu du MJ, que rien n'offre quand on ne joue pas.
+      epuise: !avant && v.epuise === true,
+      pastille: PASTILLES.includes(v.pastille) ? v.pastille : null,
+      menuMj: avant || arrete ? null : (v.menuMj ?? null),
     };
   }
 
@@ -277,7 +408,14 @@ export function creer(actions) {
     if (etat.marque) classes.push(etat.marque);
     if (etat.mort) classes.push("mort");
     if (etat.inactif) classes.push("inactif");
+    if (etat.epuise) classes.push("epuise");
     fiche.noeud.className = classes.join(" ");
+    // La pastille d'un état porté : un enfant du jeton, qu'un lecteur d'écran
+    // n'entend pas (la fiche dit chaque état), et qui ne paraît qu'avec lui.
+    const pastille = etat.pastille === null ? null : (fiche.pastille ??= el("span", { "aria-hidden": "true" }));
+    if (pastille !== null) pastille.className = `combat-pastille-etat ${etat.pastille}`;
+    const enfants = [fiche.rond, fiche.nomCourt, pastille].filter(Boolean);
+    if (!memesNoeuds(enfants, fiche.noeud.children)) fiche.noeud.replaceChildren(...enfants);
     // Le titre et le nom accessible s'affichent ou se lisent : comme tout
     // texte montré, ils perdent les signes qui commandent le sens. Une
     // raison s'écrit sur une seconde ligne du titre, et se lit par le texte
@@ -312,7 +450,15 @@ export function creer(actions) {
 
     const enfants = [];
     if (etat.choix) {
-      fiche.choix ??= el("button", { type: "button", classe: "combat-case-choix", onclick: () => auClicDeLaCase(fiche) });
+      fiche.choix ??= el("button", {
+        type: "button",
+        classe: "combat-case-choix",
+        onclick: () => auClicDeLaCase(fiche),
+        // Échap met fin à une case demandée (contrat de la vague 3, § 4.2).
+        onkeydown: (evenement) => {
+          if (evenement.key === "Escape" && demande !== null) finirLaDemande();
+        },
+      });
       fiche.choix.setAttribute("aria-label", sansSensForce(etat.choix.nom));
       enfants.push(fiche.choix);
     }
@@ -387,6 +533,10 @@ export function creer(actions) {
         if (enMain !== null && fiche.nom !== caseTenue) {
           choix = { nom: `Case ${fiche.nom} : y poser ${vue.jetons[enMain].entier}`, commande: { preparer: { type: "poser", id: enMain, case: fiche.nom } } };
         }
+      } else if (demande !== null && !arrete) {
+        // Une case demandée par l'écran : toute case, sauf l'exclue, nommée
+        // par qui la demande.
+        if (fiche.nom !== demande.exclue) choix = { nom: String(demande.nommer(fiche.nom)), commande: null, demandee: true };
       } else if (v && v.choix && !arrete) {
         choix = { nom: String(v.choix.nom), commande: v.choix.commande };
       }
@@ -422,22 +572,57 @@ export function creer(actions) {
       grille.append(fiche.noeud);
     }
   }
+  // Le dé tiré, au-dessus des cases (contrat de la vague 3, § 4.2, R n° 40) :
+  // créé une fois, dernier enfant de la grille ; l'écran le remplit et lui
+  // pose ses classes, le plateau n'y touche plus.
+  const surimpression = el("div", { classe: "combat-surimpression", "aria-hidden": "true" });
+  grille.append(surimpression);
+  const portee = el("li", { classe: "portee" }, el("span", { classe: "combat-rond" }), LEGENDE.at(-1)[1]);
   const legende = el(
     "ul",
     { classe: "combat-legende" },
-    LEGENDE.map(([classe, texte]) => el("li", { classe }, el("span", { classe: "combat-rond" }), texte)),
+    LEGENDE.slice(0, -1).map(([classe, texte]) => el("li", { classe }, el("span", { classe: "combat-rond" }), texte)),
+    portee,
   );
-  const tete = el("p", { classe: "combat-plateau-tete" }, el("span", {}, EN_TETE), " ", el("span", { classe: "combat-plateau-survol" }, AU_SURVOL));
+  // La place de l'interrupteur du Mode MJ, sur PC : l'écran l'y pose.
+  const emplacementMj = el("span", { classe: "combat-plateau-mj" });
+  const tete = el("p", { classe: "combat-plateau-tete" }, el("span", {}, EN_TETE), " ", el("span", { classe: "combat-plateau-survol" }, AU_SURVOL), emplacementMj);
   const noeud = el("section", { classe: "combat-plateau", "aria-label": TITRE }, tete, grille, legende, raison);
 
   /**
    * Montre la vue. De la mémoire de l'écran, le plateau ne lit que
-   * « arrete » (on ne joue pas : rien ne s'offre) ; ce qu'il a en main, il le
+   * « arrete » (on ne joue pas : rien ne s'offre), « modeMj » (le menu du MJ)
+   * et « etroit » (la légende du téléphone) ; ce qu'il a en main, il le
    * tient lui-même.
    */
   function rendre(vueNeuve, ecran) {
     vue = vueNeuve;
     arrete = ecran?.arrete === true;
+    modeMj = ecran?.modeMj === true;
+    if (etroit !== (ecran?.etroit === true)) {
+      etroit = ecran?.etroit === true;
+      portee.replaceChildren(portee.children[0], etroit ? PORTEE_AU_DOIGT : LEGENDE.at(-1)[1]);
+    }
+    if (arrete) finirLAppui();
+    dessiner();
+  }
+
+  /**
+   * Fait choisir une case (contrat de la vague 3, § 4.2) : chaque case, sauf
+   * « exclue », devient un bouton nommé par « nommer(nomDeCase) » ; un appui
+   * met fin à la demande, puis appelle « rappel(nomDeCase) ». Échap, ou
+   * « finirLaDemande », y met fin sans rien appeler. Avant le lancement, et
+   * quand on ne joue pas, rien ne se demande.
+   */
+  function demanderUneCase({ exclue = null, nommer }, rappel) {
+    if (vue === null || preparation() || arrete) return;
+    demande = { exclue, nommer, rappel };
+    dessiner();
+  }
+
+  function finirLaDemande() {
+    if (demande === null) return;
+    demande = null;
     dessiner();
   }
 
@@ -466,5 +651,5 @@ export function creer(actions) {
     dessiner();
   }
 
-  return { noeud, rendre, prendre, enMain: () => enMain, hachurer };
+  return { noeud, rendre, prendre, enMain: () => enMain, hachurer, surimpression, emplacementMj, demanderUneCase, finirLaDemande };
 }

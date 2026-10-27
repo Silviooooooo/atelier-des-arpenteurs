@@ -36,18 +36,16 @@ function majuscule(signe) {
 }
 
 /**
- * La suite d'un nom, que lisent ses initiales : ses signes à partir de sa
- * première lettre ou de son premier chiffre, chacun avec sa clé (cle(), la
- * comparaison du § 6.3 : sans casse, accents, espaces ni signe invisible).
- * Les signes de clé vide sont ôtés ; tout autre compte, tirets et
- * apostrophes compris. Vide pour un nom sans lettre ni chiffre.
+ * La suite d'un nom, que lisent ses initiales : ses lettres et ses chiffres
+ * seuls, dans l'ordre, chacun avec sa clé (cle(), la comparaison du § 6.3 :
+ * sans casse, accents, espaces ni signe invisible). Tout autre signe est ôté,
+ * tirets et apostrophes compris (mission du lot 4.3, § 6, point 3 :
+ * « Chef-de-partie » ne donne plus « C- ») ; les signes de clé vide aussi.
+ * Vide pour un nom sans lettre ni chiffre.
  */
 function suiteDe(nom) {
-  const signes = [...nom];
-  const debut = signes.findIndex((signe) => LETTRE_OU_CHIFFRE.test(signe));
-  if (debut < 0) return [];
-  return signes
-    .slice(debut)
+  return [...nom]
+    .filter((signe) => LETTRE_OU_CHIFFRE.test(signe))
     .map((signe) => ({ signe, cle: cle(signe) }))
     .filter((entree) => entree.cle !== "");
 }

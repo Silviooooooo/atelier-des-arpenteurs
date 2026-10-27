@@ -64,7 +64,15 @@
      journal, et l'écart entre le nom d'un passif et son trait pointillé
      (une part de la taille de son texte, qu'il suit). Aucun de ces noms ne
      porte « combat » : les contrôles le réservent aux couleurs. La dernière
-     largeur est celle d'une vignette du créateur de personnage (§ 15). */
+     largeur est celle d'une vignette du créateur de personnage (§ 15).
+
+     Au lot 4.3 : la hauteur de la fenêtre, où l'écran du combat en jeu tient
+     sur un téléphone sans que la page défile. 100vh ici, en repli ; 100dvh
+     (la hauteur que laissent les barres du navigateur) là où il est connu,
+     par la seule règle @supports de la feuille, juste après ce bloc et avant
+     le thème sombre, qu'elle ne touche pas. Puis le voile sous une feuille
+     du combat : le fond de la page, qui laisse voir ce qu'il couvre, sans
+     opacité ; il suit le thème. */
   --largeur-bulle: 20rem;
   --largeur-bulle-jet: 29.5rem;
   --largeur-infobulle: 18rem;
@@ -80,6 +88,8 @@
   --marge-cadre: 3px;
   --decalage-soulignement: 0.2em;
   --largeur-vignette: 180px;
+  --hauteur-fenetre: 100vh;
+  --voile: color-mix(in srgb, var(--fond) 60%, transparent);
 
   --fond: #ffffff;
   --fond-2: #f3f4f6;
@@ -112,7 +122,10 @@
      porte seule une information : initiales, noms et signes la doublent.
      Les « -texte » se lisent sur les « -doux » et sur les fonds ; les ronds
      tiennent 3:1 sur le fond d'une case ; « mort » est une couleur de rond,
-     trop pâle pour un texte sur le second fond. */
+     trop pâle pour un texte sur le second fond. Au lot 4.3, les trois
+     couleurs du jeu en cours (celles du catalogue pour « Atelier ») : qui
+     peut encore agir (un texte et un bord à 4,5:1, sur les fonds et sur son
+     fond doux), et qui a tout joué (un bord à 3:1, jamais un texte). */
   --combat-pj: #1e7a3c;
   --combat-pj-doux: #e2f2e7;
   --combat-pj-texte: #1e7a3c;
@@ -133,6 +146,9 @@
   --combat-portee-bord: #c8372d;
   --combat-cadre-jet: #7d838d;
   --combat-cadre-jet-fond: #ffffff;
+  --combat-a-jouer: #1e7a3c;
+  --combat-a-jouer-doux: #e2f2e7;
+  --combat-epuise: #7d838d;
 
   /* La fiche de personnage (§ 15.4) : le noir et blanc et les polices de
      la maquette du 26/10/2026. Elle est du papier : elle garde ces couleurs
@@ -183,6 +199,12 @@
   --carte-filet-fin: rgba(163, 144, 112, 0.13);
 }
 
+@supports (height: 100dvh) {
+  :root {
+    --hauteur-fenetre: 100dvh;
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --fond: #15171a;
@@ -211,5 +233,8 @@
     --combat-portee-bord: #f19a92;
     --combat-cadre-jet: #7d838d;
     --combat-cadre-jet-fond: #262a30;
+    --combat-a-jouer: #5cc38a;
+    --combat-a-jouer-doux: #163222;
+    --combat-epuise: #6b717b;
   }
 }

@@ -11,8 +11,8 @@
 // Le navigateur peut refuser le stockage (navigation privée) : le Mode MJ est
 // alors éteint, et ne se garde pas.
 //
-// Posé en souche avant le départ de la vague 3 (contrat, § 8.0) ; l'écran ne
-// l'appelle pas encore.
+// L'écran du combat le lit à chaque visite et l'écrit à chaque bascule de
+// l'interrupteur (le menu ⋯ au téléphone, l'en-tête de la carte sur PC).
 
 export const CLE_MODE_MJ = "atelier.mode-mj";
 

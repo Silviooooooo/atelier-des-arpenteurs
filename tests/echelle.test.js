@@ -30,28 +30,31 @@ const nomsPoses = (texte) => [...texte.matchAll(/setProperty\(([^,]+),/g)].map((
 
 // ─── L'unique écriture de style du code ─────────────────────────────────────
 
-test("échelle — un seul module de js/ écrit un style : l'échelle d'un papier et la place de la bulle, quatre propriétés, rien d'autre", () => {
+test("échelle — un seul module de js/ écrit un style : l'échelle d'un papier et la place de la bulle, cinq propriétés, rien d'autre", () => {
   // Tout ce par quoi un script pose un style : la propriété style d'un nœud,
   // son attribut, une feuille fabriquée.
   const ECRITURE = /\.style\s*(?:\?\.|\.|\[|=(?!=))|\bsetProperty\s*\(|\bcssText\b|setAttribute\(\s*["'`]style|\binsertRule\b|\bCSSStyleSheet\b|adoptedStyleSheets|createElement(?:NS)?\([^)]*["'`]style["'`]/g;
   const fichiers = readdirSync(new URL("js/", RACINE), { recursive: true }).map((chemin) => `js/${chemin.replaceAll("\\", "/")}`).filter((chemin) => chemin.endsWith(".js"));
   assert.ok(fichiers.length > 40, `${fichiers.length} modules lus`);
   const ecritures = fichiers.flatMap((chemin) => [...lire(chemin).matchAll(ECRITURE)].map(([trouve]) => [chemin, trouve]));
-  // Dans echelle.js seul : poserEchelle, puis les trois écritures de placerBulle.
+  // Dans echelle.js seul : poserEchelle, puis les quatre écritures de placerBulle.
   const bulle = [[ECHELLE, ".style."], [ECHELLE, "setProperty("]];
-  assert.deepEqual(ecritures, [[ECHELLE, ".style?."], [ECHELLE, "setProperty("], ...bulle, ...bulle, ...bulle]);
+  assert.deepEqual(ecritures, [[ECHELLE, ".style?."], [ECHELLE, "setProperty("], ...bulle, ...bulle, ...bulle, ...bulle]);
 
-  // Quatre .style, chacun suivi de setProperty( : aucun alias ne garde le
+  // Cinq .style, chacun suivi de setProperty( : aucun alias ne garde le
   // style d'un nœud pour l'écrire ailleurs.
   const source = lire(ECHELLE);
   const styles = [...source.matchAll(/\.style\b(\??\.setProperty\()?/g)];
-  assert.equal(styles.length, 4, "quatre .style");
-  assert.deepEqual(styles.map(([, suite]) => suite), ["?.setProperty(", ".setProperty(", ".setProperty(", ".setProperty("]);
-  assert.equal([...source.matchAll(/setProperty\(/g)].length, 4);
-  // Les noms : --echelle par poserEchelle ; les trois de la bulle par placerBulle, et nulle part ailleurs.
-  assert.deepEqual(nomsPoses(source), ['"--echelle"', '"--bulle-gauche"', '"--bulle-haut"', '"--bulle-fleche"']);
+  assert.equal(styles.length, 5, "cinq .style");
+  assert.deepEqual(styles.map(([, suite]) => suite), ["?.setProperty(", ".setProperty(", ".setProperty(", ".setProperty(", ".setProperty("]);
+  assert.equal([...source.matchAll(/setProperty\(/g)].length, 5);
+  // Les noms : --echelle par poserEchelle ; les quatre de la bulle par placerBulle, et nulle part ailleurs.
+  assert.deepEqual(nomsPoses(source), ['"--echelle"', '"--bulle-gauche"', '"--bulle-haut"', '"--bulle-fleche"', '"--bulle-hauteur"']);
   const placer = corpsDe(source, "placerBulle");
-  assert.deepEqual(nomsPoses(placer), ['"--bulle-gauche"', '"--bulle-haut"', '"--bulle-fleche"']);
+  assert.deepEqual(nomsPoses(placer), ['"--bulle-gauche"', '"--bulle-haut"', '"--bulle-fleche"', '"--bulle-hauteur"']);
+  // Le plafond (le bas du bandeau) passe de placerBulle à calculerPlace.
+  assert.match(source, /^export function calculerPlace\(\{ ancre, taille, fenetre, cotes, ecart, pointe, marge = 16, coin = 12, plafond = marge \}\) \{/m);
+  assert.match(source, /^export function placerBulle\(noeud, \{ ancre, repere, fenetre, cotes, ecart, pointe, plafond \}\) \{/m);
   assert.deepEqual(nomsPoses(corpsDe(source, "poserEchelle")), ['"--echelle"']);
   assert.deepEqual(nomsPoses(source.replace(placer, "")), ['"--echelle"']);
 
@@ -88,7 +91,12 @@ const QUATRE = ["droite", "gauche", "dessous", "dessus"];
 const TAILLE = { largeur: 320, hauteur: 400 };
 const ECART = 48 + FLECHE;
 const caseEn = (gauche, haut, cote = 48) => ({ gauche, haut, droite: gauche + cote, bas: haut + cote });
-const placer = (ancre, autres = {}) => calculerPlace({ ancre, taille: TAILLE, fenetre: FENETRE, cotes: QUATRE, ecart: ECART, pointe: 60, ...autres });
+// La place sans sa hauteur, que les contrôles du plafond regardent à part.
+const sansHauteur = ({ hauteur, ...place }) => {
+  assert.ok(Number.isInteger(hauteur), "une hauteur en px entiers, toujours rendue");
+  return place;
+};
+const placer = (ancre, autres = {}) => sansHauteur(calculerPlace({ ancre, taille: TAILLE, fenetre: FENETRE, cotes: QUATRE, ecart: ECART, pointe: 60, ...autres }));
 const ETROITE = { largeur: 700, hauteur: 800 };
 
 test("calculerPlace — à droite, à gauche, dessous, dessus : le premier côté où la bulle tient entière, à 16 px des bords", () => {
@@ -159,20 +167,43 @@ test("calculerPlace — des px entiers, sans rien changer à ce qu'on lui donne"
   const fenetre = Object.freeze({ largeur: 1280, hauteur: 800 });
   const cotes = Object.freeze([...QUATRE]);
   const place = calculerPlace({ ancre, taille, fenetre, cotes, ecart: 56.5, pointe: 60 });
-  assert.deepEqual(place, { cote: "droite", gauche: 505, haut: 264, fleche: 60, entiere: true });
-  for (const cle of ["gauche", "haut", "fleche"]) assert.ok(Number.isInteger(place[cle]), cle);
+  // La hauteur : du haut (264,45 px) au bas de la fenêtre, marge ôtée, arrondie vers le bas.
+  assert.deepEqual(place, { cote: "droite", gauche: 505, haut: 264, fleche: 60, entiere: true, hauteur: 519 });
+  for (const cle of ["gauche", "haut", "fleche", "hauteur"]) assert.ok(Number.isInteger(place[cle]), cle);
   assert.deepEqual(calculerPlace({ ancre, taille, fenetre, cotes, ecart: 56.5, pointe: 60 }), place, "pure");
   // Collée en haut, la pointe en face d'un milieu à 64,45 px : 48 px.
-  assert.deepEqual(calculerPlace({ ancre: { gauche: 400, haut: 40.3, droite: 448, bas: 88.6 }, taille: TAILLE, fenetre, cotes, ecart: 56, pointe: 60 }), { cote: "droite", gauche: 504, haut: 16, fleche: 48, entiere: true });
+  assert.deepEqual(calculerPlace({ ancre: { gauche: 400, haut: 40.3, droite: 448, bas: 88.6 }, taille: TAILLE, fenetre, cotes, ecart: 56, pointe: 60 }), { cote: "droite", gauche: 504, haut: 16, fleche: 48, entiere: true, hauteur: 768 });
   // Dessous, ramenée : la flèche horizontale entière elle aussi.
   const dessous = calculerPlace({ ancre, taille, fenetre, cotes: ["dessous"], ecart: 56.5, pointe: 60 });
-  assert.deepEqual(dessous, { cote: "dessous", gauche: 364, haut: 385, fleche: 60, entiere: true });
+  assert.deepEqual(dessous, { cote: "dessous", gauche: 364, haut: 385, fleche: 60, entiere: true, hauteur: 399 });
   assert.deepEqual([ancre, taille, cotes], [{ gauche: 400.4, haut: 300.3, droite: 448.4, bas: 348.6 }, { largeur: 320.6, hauteur: 399.5 }, QUATRE]);
+});
+
+test("calculerPlace — le plafond (le bas du bandeau) : la bulle ne monte jamais au-dessus ; plus haute que l'espace, elle s'y tient ; sa plus grande hauteur va de son haut au bas de la fenêtre", () => {
+  const aPlafond = (ancre, plafond, autres = {}) => calculerPlace({ ancre, taille: TAILLE, fenetre: FENETRE, cotes: QUATRE, ecart: 56, pointe: 60, plafond, ...autres });
+  // Sans plafond : la marge, comme avant ; la hauteur, de son haut (64) au bas de la fenêtre (784).
+  assert.deepEqual(calculerPlace({ ancre: caseEn(400, 100), taille: TAILLE, fenetre: FENETRE, cotes: QUATRE, ecart: 56, pointe: 60 }), { cote: "droite", gauche: 504, haut: 64, fleche: 60, entiere: true, hauteur: 720 });
+  // Sous un bandeau qui finit à 120 px : collée sous lui, la flèche bornée au coin, la hauteur jusqu'en bas.
+  assert.deepEqual(aPlafond(caseEn(400, 100), 120), { cote: "droite", gauche: 504, haut: 120, fleche: 12, entiere: true, hauteur: 664 });
+  // Le plafond est compris : une case plus bas, la bulle tient sans y toucher.
+  assert.deepEqual(aPlafond(caseEn(400, 300), 120), { cote: "droite", gauche: 504, haut: 264, fleche: 60, entiere: true, hauteur: 520 });
+  // Plus haute que l'espace sous le plafond : à la hauteur de l'espace, et non entière ; elle défilera en elle.
+  const haute = aPlafond(caseEn(400, 100), 120, { taille: { largeur: 320, hauteur: 900 } });
+  assert.deepEqual(haute, { cote: "droite", gauche: 504, haut: 120, fleche: 12, entiere: false, hauteur: 664 });
+  assert.ok(haute.haut >= 120 && haute.haut + haute.hauteur <= FENETRE.hauteur - 16, "entre le bandeau et le bas de la fenêtre");
+  // Dessus ne tient plus sous le plafond : aucun côté ne tient, le premier, ramené sous lui.
+  assert.equal(placer(caseEn(300, 600), { fenetre: ETROITE }).cote, "dessus", "sans plafond, dessus tient");
+  assert.deepEqual(aPlafond(caseEn(300, 600), 200, { fenetre: ETROITE, ecart: ECART }), { cote: "droite", gauche: 364, haut: 384, fleche: 240, entiere: true, hauteur: 400 });
+  // Un bandeau sorti de la fenêtre (un plafond au-dessus de la marge) : la marge.
+  assert.deepEqual(aPlafond(caseEn(400, 100), -40), aPlafond(caseEn(400, 100), 16));
+  assert.equal(aPlafond(caseEn(400, 100), -40).haut, 64);
+  // Une fenêtre plus basse que le bandeau : rien de négatif.
+  assert.equal(aPlafond(caseEn(400, 100), 900).hauteur, 0);
 });
 
 // ─── L'écriture de la place ─────────────────────────────────────────────────
 
-test("placerBulle — trois propriétés, en px entiers relatifs au repère, d'après les boîtes mesurées ; ni classe ni autre style", () => {
+test("placerBulle — quatre propriétés, en px entiers : la place relative au repère, puis la plus grande hauteur, d'après les boîtes mesurées et le plafond ; ni classe ni autre style", () => {
   const retirer = installerDom();
   try {
     const boite = (balise, rectangle) => Object.assign(document.createElement(balise), { rectangle });
@@ -185,18 +216,23 @@ test("placerBulle — trois propriétés, en px entiers relatifs au repère, d'a
     document.body.append(cadre);
     const usage = { ancre: laCase, repere: cadre, fenetre: FENETRE, cotes: QUATRE, ecart: 48 + FLECHE, pointe: 60 };
 
-    // À droite de la case, collée au bas de la fenêtre : 504 et 384 dans la fenêtre, la pointe à 240 px.
+    // À droite de la case, collée au bas de la fenêtre : 504 et 384 dans la fenêtre, la pointe à 240 px, 400 px jusqu'en bas.
     assert.deepEqual(placerBulle(bulle, usage), { cote: "droite", entiere: true });
-    assert.deepEqual(bulle.style.ecritures, [["--bulle-gauche", "404px"], ["--bulle-haut", "334px"], ["--bulle-fleche", "240px"]]);
+    assert.deepEqual(bulle.style.ecritures, [["--bulle-gauche", "404px"], ["--bulle-haut", "334px"], ["--bulle-fleche", "240px"], ["--bulle-hauteur", "400px"]]);
     // L'appelant pose la classe du côté : placerBulle n'y touche pas.
     assert.equal(bulle.className, "combat-bulle");
     assert.deepEqual([...bulle.attributs], [["class", "combat-bulle"], ["role", "dialog"]]);
     assert.deepEqual([laCase.style.ecritures, cadre.style.ecritures], [[], []], "rien d'écrit sur l'ancre ni sur le repère");
 
-    // Une fenêtre trop basse : collée en haut (au-dessus du repère : une valeur négative), non entière.
+    // Une fenêtre trop basse : collée en haut (au-dessus du repère : une valeur négative), non entière ; à la hauteur de la fenêtre, marges ôtées, la pointe dans ses 268 px.
     assert.deepEqual(placerBulle(bulle, { ...usage, fenetre: { largeur: 1280, hauteur: 300 } }), { cote: "droite", entiere: false });
-    assert.deepEqual(bulle.style.ecritures.slice(3), [["--bulle-gauche", "404px"], ["--bulle-haut", "-34px"], ["--bulle-fleche", "388px"]]);
-    assert.deepEqual(["--bulle-gauche", "--bulle-haut", "--bulle-fleche"].map((nom) => bulle.style.getPropertyValue(nom)), ["404px", "-34px", "388px"]);
+    assert.deepEqual(bulle.style.ecritures.slice(4), [["--bulle-gauche", "404px"], ["--bulle-haut", "-34px"], ["--bulle-fleche", "256px"], ["--bulle-hauteur", "268px"]]);
+    assert.deepEqual(["--bulle-gauche", "--bulle-haut", "--bulle-fleche", "--bulle-hauteur"].map((nom) => bulle.style.getPropertyValue(nom)), ["404px", "-34px", "256px", "268px"]);
+    // Sous un bandeau qui finit à 450 px : la bulle descend sous lui ; un plafond qui n'est pas un nombre vaut la marge.
+    assert.deepEqual(placerBulle(bulle, { ...usage, plafond: 450 }), { cote: "droite", entiere: false });
+    assert.deepEqual(bulle.style.ecritures.slice(8), [["--bulle-gauche", "404px"], ["--bulle-haut", "400px"], ["--bulle-fleche", "174px"], ["--bulle-hauteur", "334px"]]);
+    placerBulle(bulle, { ...usage, plafond: null });
+    assert.deepEqual(bulle.style.ecritures.slice(12), bulle.style.ecritures.slice(0, 4));
     for (const [, valeur] of bulle.style.ecritures) assert.match(valeur, /^-?\d+px$/);
 
     // L'infobulle d'une ligne : son ancre, les bords de la bulle et ceux de la ligne ; son repère, la bulle.
@@ -211,16 +247,16 @@ test("placerBulle — trois propriétés, en px entiers relatifs au repère, d'a
     };
     const vers = { ancre, repere: bulle, fenetre: FENETRE, cotes: ["droite", "gauche", "dessous"], ecart: FLECHE, pointe: 14 };
     assert.deepEqual(placerBulle(infobulle, vers), { cote: "droite", entiere: true });
-    assert.deepEqual(infobulle.style.ecritures, [["--bulle-gauche", "328px"], ["--bulle-haut", "120px"], ["--bulle-fleche", "14px"]]);
+    assert.deepEqual(infobulle.style.ecritures, [["--bulle-gauche", "328px"], ["--bulle-haut", "120px"], ["--bulle-fleche", "14px"], ["--bulle-hauteur", "400px"]]);
     // La bulle contre le bord droit : l'infobulle passe à gauche ; sa taille est celle qu'elle a, mesurée.
     bulle.rectangle = { left: 944, top: 264, width: 320, height: 400 };
     infobulle.rectangle = { left: 0, top: 0, width: 288, height: 200 };
     assert.deepEqual(placerBulle(infobulle, vers), { cote: "gauche", entiere: true });
-    assert.deepEqual(infobulle.style.ecritures.slice(3), [["--bulle-gauche", "-296px"], ["--bulle-haut", "120px"], ["--bulle-fleche", "14px"]]);
+    assert.deepEqual(infobulle.style.ecritures.slice(4), [["--bulle-gauche", "-296px"], ["--bulle-haut", "120px"], ["--bulle-fleche", "14px"], ["--bulle-hauteur", "400px"]]);
     infobulle.rectangle = { left: 0, top: 0, width: 288, height: 300 };
     ligne.rectangle = { left: 960, top: 600, width: 288, height: 36 };
     assert.deepEqual(placerBulle(infobulle, vers), { cote: "gauche", entiere: true });
-    assert.deepEqual(infobulle.style.ecritures.slice(6), [["--bulle-gauche", "-296px"], ["--bulle-haut", "220px"], ["--bulle-fleche", "134px"]]);
+    assert.deepEqual(infobulle.style.ecritures.slice(8), [["--bulle-gauche", "-296px"], ["--bulle-haut", "220px"], ["--bulle-fleche", "134px"], ["--bulle-hauteur", "300px"]]);
   } finally {
     retirer();
   }

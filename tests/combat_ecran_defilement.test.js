@@ -9,11 +9,14 @@
 // - tout focus s'écrit .focus({ preventScroll: true }) ;
 // - un seul scrollIntoView, dans montrerLeJournal() (combat.js), demandé
 //   par un clic : { block: "start" } sur le journal, puis le focus sur son
-//   titre, sans défiler de nouveau ;
+//   titre, sans défiler de nouveau ; au lot 4.3 (contrat de la vague 3, D4),
+//   sur PC seulement : au téléphone, montrerLeJournal() ouvre le journal en
+//   plein écran, sans rien faire défiler ;
 // - ni scrollTo, ni scrollBy, ni window.scroll, ni scroll() d'un élément ;
-// - un seul « scrollTop = » hors de la bulle, celui de la liste du journal
-//   (creerListe, combat_journal.js), qui défile en elle-même pour montrer sa
-//   dernière ligne ;
+// - hors de la bulle, un ou deux « scrollTop = », tous dans la liste du
+//   journal (creerListe, combat_journal.js), qui défile en elle-même pour
+//   montrer sa dernière ligne, et, au lot 4.3, garde la ligne lue à sa place
+//   quand « Lignes précédentes » en pose 500 au-dessus (contrat, § 5.5) ;
 // - dans la bulle, les seules écritures de defile.scrollTop, dans
 //   montrerDansLaBulle (combat_bulle.js) : ce qui défile en elle repart du
 //   haut à chaque ouverture et y amène le focus et l'aperçu (relecture du
@@ -107,9 +110,9 @@ function defautsDuDefilement(sources) {
     if (!ecritCeQuiDefileDansLaBulle(sources[chemin], position)) defauts.push(`${chemin}, ligne ${ligneDe(sources[chemin], position)} : ${DEFILEMENT_DE_LA_BULLE}() fait défiler autre chose que la bulle`);
   }
   const horsDeLaBulle = ecritures.filter((ecriture) => !dansLaBulle(ecriture));
-  if (horsDeLaBulle.length !== 1) defauts.push(`${horsDeLaBulle.length} « scrollTop = » hors de ${DEFILEMENT_DE_LA_BULLE}() au lieu d'un seul`);
-  else {
-    const [{ chemin, position }] = horsDeLaBulle;
+  // Au lot 4.3 : un ou deux, la liste du journal gardant la ligne lue à sa place quand « Lignes précédentes » en pose au-dessus.
+  if (horsDeLaBulle.length < 1 || horsDeLaBulle.length > 2) defauts.push(`${horsDeLaBulle.length} « scrollTop = » hors de ${DEFILEMENT_DE_LA_BULLE}() au lieu d'un ou deux`);
+  for (const { chemin, position } of horsDeLaBulle) {
     if (chemin !== JOURNAL || !dansLaFonction(sources[chemin], "creerListe", position)) defauts.push(`le « scrollTop = » est hors de la liste du journal (${chemin}, ligne ${ligneDe(sources[chemin], position)})`);
   }
   return defauts;
@@ -133,8 +136,11 @@ test("défilement — la règle porte sur chaque partie de l'écran du combat et
     "js/ecrans/combat_bulle.js",
     "js/ecrans/combat_fiches.js",
     "js/ecrans/combat_journal.js",
+    "js/ecrans/combat_menus.js",
+    "js/ecrans/combat_palette.js",
     "js/ecrans/combat_plateau.js",
     "js/ecrans/combat_preparation.js",
+    "js/ecrans/combat_vignettes.js",
     "js/ecrans/echelle.js",
   ]) {
     assert.ok(CHEMINS.includes(chemin), chemin);
@@ -146,15 +152,19 @@ test("défilement — la règle porte sur chaque partie de l'écran du combat et
   assert.ok(etendueDe(SOURCES[BULLE], DEFILEMENT_DE_LA_BULLE), `${DEFILEMENT_DE_LA_BULLE}() existe dans ${BULLE}`);
 });
 
-test("défilement — les sources tiennent la règle : chaque focus sans défiler, un seul scrollIntoView (montrerLeJournal), aucun scrollTo ni scrollBy, un seul « scrollTop = » hors de la bulle (la liste du journal) ; dans la bulle, defile.scrollTop, dans montrerDansLaBulle seule", () => {
+test("défilement — les sources tiennent la règle : chaque focus sans défiler, un seul scrollIntoView (montrerLeJournal), aucun scrollTo ni scrollBy, un ou deux « scrollTop = » hors de la bulle (la liste du journal) ; dans la bulle, defile.scrollTop, dans montrerDansLaBulle seule", () => {
   assert.deepEqual(defautsDuDefilement(SOURCES), []);
 });
 
-test("défilement — montrerLeJournal() : le journal se montre par le haut, puis son titre reçoit le focus, sans défiler de nouveau", () => {
+test("défilement — montrerLeJournal() : au téléphone, le journal en plein écran, sans défiler (lot 4.3, D4) ; sur PC, il se montre par le haut, puis son titre reçoit le focus, sans défiler de nouveau", () => {
   const etendue = etendueDe(SOURCES[ECRAN], "montrerLeJournal");
   assert.ok(etendue, "montrerLeJournal() existe");
   const corps = SOURCES[ECRAN].slice(etendue.debut, etendue.fin);
-  assert.match(corps, /journal\.scrollIntoView\(\{ block: "start" \}\);\s*titreDuJournal\.focus\(\{ preventScroll: true \}\);/);
+  assert.match(corps, /if \(estEtroit\(\)\) return ouvrirLeJournalEnPlein\(\);\s*journal\.scrollIntoView\(\{ block: "start" \}\);\s*titreDuJournal\.focus\(\{ preventScroll: true \}\);/);
+  // Le plein écran ne fait rien défiler : il prête la liste à la couche des menus.
+  const plein = etendueDe(SOURCES[ECRAN], "ouvrirLeJournalEnPlein");
+  assert.ok(plein, "ouvrirLeJournalEnPlein() existe");
+  assert.match(SOURCES[ECRAN].slice(plein.debut, plein.fin), /menus\.ouvrir\("journal", \{/);
   // Elle est le seul moyen du bandeau : « Journal ↓ », ou un clic à la souris sur lui.
   assert.match(SOURCES[ECRAN], /creerBandeau\(\{ montrerLeJournal, tient: services\.tient, surveiller: services\.surveiller \}\)/);
   // Le titre qu'elle focalise ne prend le focus que s'il le peut, sans entrer dans l'ordre du clavier.
@@ -182,8 +192,13 @@ test("défilement — le contrôle voit chaque faute, une à la fois, sur des so
     ["scrollBy", fautive("js/ecrans/combat_preparation.js", "?.focus({ preventScroll: true });", "?.focus({ preventScroll: true });\n      noeud.scrollBy(0, 40);"), /scrollBy fait défiler la page/],
     ["window.scroll", fautive("js/ecrans/combat_action.js", "champ.focus({ preventScroll: true });", "champ.focus({ preventScroll: true });\n    window.scroll(0, 0);"), /window\.scroll fait défiler la page/],
     ["scroll() d'un élément", fautive("js/ecrans/echelle.js", "export const FLECHE = 8;", "export const FLECHE = 8;\nexport const remonter = (noeud) => noeud.scroll({ top: 0 });"), /\.scroll\( fait défiler la page/],
-    ["un second « scrollTop = »", fautive(ECRAN, "    journal.scrollIntoView", "    liste.noeud.scrollTop = 0;\n    journal.scrollIntoView"), /2 « scrollTop = » hors de montrerDansLaBulle\(\) au lieu d'un seul/],
-    ["un « scrollTop += » de la bulle hors de montrerDansLaBulle (focaliser)", fautive(BULLE, "cible.focus({ preventScroll: true });", "cible.focus({ preventScroll: true });\n    defile.scrollTop += 10;"), /2 « scrollTop = » hors de montrerDansLaBulle\(\) au lieu d'un seul/],
+    ["un second « scrollTop = », dans l'écran", fautive(ECRAN, "    journal.scrollIntoView", "    liste.noeud.scrollTop = 0;\n    journal.scrollIntoView"), /le « scrollTop = » est hors de la liste du journal \(js\/ecrans\/combat\.js/],
+    ["un « scrollTop += » de la bulle hors de montrerDansLaBulle (focaliser)", fautive(BULLE, "cible.focus({ preventScroll: true });", "cible.focus({ preventScroll: true });\n    defile.scrollTop += 10;"), /le « scrollTop = » est hors de la liste du journal \(js\/ecrans\/combat_bulle\.js/],
+    [
+      "des « scrollTop = » de trop dans la liste du journal",
+      fautive(JOURNAL, "    if (ajoutees > 0 || !suite) noeud.scrollTop = noeud.scrollHeight;\n", "    if (ajoutees > 0 || !suite) noeud.scrollTop = noeud.scrollHeight;\n    noeud.scrollTop = 0;\n    noeud.scrollTop = 1;\n"),
+      /[34] « scrollTop = » hors de montrerDansLaBulle\(\) au lieu d'un ou deux/,
+    ],
     ["montrerDansLaBulle qui fait défiler la page", fautive(BULLE, "    if (duHaut) defile.scrollTop = 0;", "    if (duHaut) globalThis.document.documentElement.scrollTop = 0;"), /combat_bulle\.js, ligne \d+ : montrerDansLaBulle\(\) fait défiler autre chose que la bulle/],
     [
       "le « scrollTop = » déplacé dans l'écran",
@@ -201,9 +216,9 @@ test("défilement — le contrôle voit chaque faute, une à la fois, sur des so
       ]),
       /le « scrollTop = » est hors de la liste du journal \(js\/ecrans\/combat_journal\.js/,
     ],
-    ["aucun « scrollTop = »", fautive(JOURNAL, "noeud.scrollTop = noeud.scrollHeight;", "noeud.scrollHeight;"), /0 « scrollTop = » hors de montrerDansLaBulle\(\) au lieu d'un seul/],
+    ["aucun « scrollTop = »", { ...SOURCES, [JOURNAL]: SOURCES[JOURNAL].replace(/\bscrollTop(\s*[-+*/]?=(?!=))/g, "hauteurLue$1") }, /0 « scrollTop = » hors de montrerDansLaBulle\(\) au lieu d'un ou deux/],
   ];
-  assert.equal(FAUTES.length, 18, "les dix-sept sources fautives d'É5, et celle de la bulle qui ferait défiler la page");
+  assert.equal(FAUTES.length, 19, "les dix-sept sources fautives d'É5, celle de la bulle qui ferait défiler la page, et (lot 4.3) des « scrollTop = » de trop dans la liste");
   for (const [quoi, sources, attendu] of FAUTES) {
     const defauts = defautsDuDefilement(sources);
     assert.ok(defauts.some((defaut) => attendu.test(defaut)), `${quoi} : ${JSON.stringify(defauts)}`);

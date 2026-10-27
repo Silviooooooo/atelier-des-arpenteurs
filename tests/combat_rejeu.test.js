@@ -19,7 +19,8 @@
 //    toute suite acceptée se rejoue à l'identique ;
 // 8. un dé lancé n'est jamais redemandé ;
 // 9. l'offre et le réducteur concordent : ce que portent les vues est accepté,
-//    tout autre type d'événement est refusé.
+//    tout autre type d'événement est refusé ; depuis la vague 3 du lot 4.3, la
+//    palette et le menu du MJ compris, Mode MJ allumé comme éteint.
 //
 // Au groupe 2 (contrat du groupe, § 0.2, règle 6, § 4.3, § 6.3) : chaque état
 // porte sa pile d'annulation, une liste chaînée de maillons gelés qui ne
@@ -39,12 +40,14 @@ import { readdirSync, readFileSync } from "node:fs";
 import { indexerAdversaires } from "../js/adversaire/resolution.js";
 import { MOT_DE_PASSE_DEMO } from "../js/banque/chargement.js";
 import { sourceAleatoire } from "../js/combat/des.js";
+import { passifDe } from "../js/combat/effets.js";
 import { validerContenu, validerEvenement } from "../js/combat/forme.js";
 import { texteDuJournal } from "../js/combat/journal.js";
-import { vueBarre, vueFiche, vuePanneau, vuePlateau } from "../js/combat/lecture.js";
+import { vueBarre, vueFiche, vueMenuMj, vuePalette, vuePanneau, vuePlateau, vueVignettes } from "../js/combat/lecture.js";
 import { appliquer, gesteEnCours, ouvrirCombat, rejeu, rejouer } from "../js/combat/moteur.js";
 import { boutons, candidats, offre } from "../js/combat/offre.js";
 import { etatsDeLaBanque, photographierAdversaire, photographierPersonnage } from "../js/combat/photographie.js";
+import { BORNES_MJ, COLONNES, COTE } from "../js/combat/regles.js";
 import { tableDesRoles } from "../js/combat/roles.js";
 import { indexerCreation } from "../js/personnage/calcul.js";
 import { accepter, lirePersonnage } from "../js/personnage/format.js";
@@ -394,6 +397,8 @@ test("ni heure ni hasard : le piège lève sur chaque lecture, puis rend tout co
 });
 
 test("ni heure ni hasard : sous le piège, le combat se rejoue au même état ; l'offre, les vues et le texte du journal se lisent", () => {
+  // À la vague 3 du lot 4.3 : les vignettes, la palette du MJ et le menu du MJ aussi.
+  const { blocs } = etatsDeLaBanque(BANQUE);
   const { rejoue, texte } = sansHeureNiHasard(() => {
     const rendu = rejouer(CONTENU);
     for (const etat of TENUS) {
@@ -402,7 +407,12 @@ test("ni heure ni hasard : sous le piège, le combat se rejoue au même état ; 
       vueBarre(etat);
       vuePlateau(etat, choisi);
       vuePanneau(etat, choisi);
-      for (const id of etat.ordre) vueFiche(etat, id, choisi);
+      vueVignettes(etat, choisi);
+      vuePalette(etat, { genre: "mj" }, { etats: blocs, libre: true });
+      for (const id of etat.ordre) {
+        vueFiche(etat, id, choisi);
+        vueMenuMj(etat, id, { etats: blocs });
+      }
     }
     return { rejoue: rendu, texte: texteDuJournal(rendu.etat) };
   });
@@ -504,8 +514,9 @@ const NOYAU = {
   // d'une capacité de blessure inactive (effets.js, refusDeLaBlessure).
   // À la vague 3 du lot 4.3 (contrat de la vague, § 8.0), la palette et le menu du MJ, que lecture.js réexporte.
   "lecture.js": ["offre.js", "circonstances.js", "valeurs.js", "degats.js", "effets.js", "jet.js", "journal.js", "preparation.js", "plateau.js", "noms.js", "regles.js", "../personnage/regles.js", "lecture_mj.js"],
-  // Posé en souche : il n'importe encore rien ; sa part y range ses imports, jamais le moteur.
-  "lecture_mj.js": [],
+  // La palette et le menu du MJ (contrat de la vague 3, § 3.6, § 3.7 et D10 bis) : le juge des effets et du MJ, la forme
+  // des valeurs choisies, les phrases du journal pour l'aperçu, la case voisine ; jamais le moteur.
+  "lecture_mj.js": ["degats.js", "effets.js", "forme.js", "journal.js", "plateau.js", "regles.js", "valeurs.js"],
 };
 // Le bord : ce qui touche la banque, le hasard, la clé ou l'appareil.
 const BORD = ["des.js", "enregistrement.js", "photographie.js", "roles.js", "seance.js"];
@@ -967,14 +978,20 @@ test("un dé n'est jamais relancé : hors d'un geste, aucun dé n'est attendu, a
 // ─── 9. La concordance de l'offre et du réducteur ───────────────────────────
 
 // Tout ce que portent des vues : les commandes de leurs boutons, avec ce que
-// dit leur porteur, et leurs saisies, avec leur gabarit.
-function relever(valeur, trouves = { commandes: [], saisies: [] }) {
+// dit leur porteur, et leurs saisies, avec leur gabarit. Depuis la vague 3 du
+// lot 4.3 (contrat de la vague, § 3), deux marques s'héritent : un objet
+// « actif: false » rend inactif tout ce qu'il contient, et « mj: true »
+// marque ce que le Mode MJ seul montre, avec tout ce qu'il contient.
+function relever(valeur, trouves = { commandes: [], saisies: [] }, herite = { actif: true, mj: false }) {
   if (valeur === null || typeof valeur !== "object") return trouves;
+  let ici = herite;
   if (!Array.isArray(valeur)) {
-    if (valeur.commande) trouves.commandes.push({ commande: valeur.commande, actif: valeur.actif !== false && valeur.inactif !== true });
-    if (valeur.gabarit?.evenement) trouves.saisies.push(valeur);
+    ici = { actif: herite.actif && valeur.actif !== false, mj: herite.mj || valeur.mj === true };
+    if (valeur.commande) trouves.commandes.push({ commande: valeur.commande, actif: ici.actif && valeur.inactif !== true, mj: ici.mj });
+    if (valeur.gabarit?.evenement) trouves.saisies.push({ saisie: valeur, actif: ici.actif, mj: ici.mj });
   }
-  for (const enfant of Object.values(valeur)) relever(enfant, trouves);
+  // Un événement ne porte pas de vue : ni commande ni gabarit ne se fouillent.
+  for (const [cle, enfant] of Object.entries(valeur)) if (cle !== "commande" && cle !== "gabarit") relever(enfant, trouves, ici);
   return trouves;
 }
 
@@ -998,6 +1015,146 @@ function valeursDEpreuve(saisie) {
   const bornes = [saisie.min, saisie.max];
   if (saisie.min < 0 && saisie.max > 0) bornes.push(0);
   return [...new Set(bornes)];
+}
+
+// ─── La palette et le menu du MJ, complétés comme le fait l'écran ───────────
+//
+// Contrat de la vague 3 du lot 4.3, § 3.6, § 3.7 et § 7. Un genre de la
+// palette se complète de Choisi.valeurs, champ par champ ; un geste du MJ, de
+// ce que son entrée demande. Les deux bouts de chaque champ l'éprouvent : la
+// première et la dernière option active, la borne basse et la borne haute d'un
+// nombre (jamais une valeur exclue, le 0 d'un ±N), une case à chaque bout de
+// la carte qui n'est pas la sienne ; « toute la case » coche une autre cible,
+// puis toutes ; un état se prend au classeur, ou se nomme (le plus long nom
+// permis).
+
+// Les blocs d'états de la banque, que l'écran donne à la palette et au menu.
+const ETATS = etatsDeLaBanque(BANQUE).blocs;
+// ±N et un état ont leur durée à l'onglet Durée (§ 3.6).
+const A_DUREE = ["attaque", "defense", "etat"];
+const NOM_LIBRE = "Dans la fumée";
+const CASES_AUX_BOUTS = { premier: [`${COLONNES[0]}1`, `${COLONNES[1]}1`], dernier: [`${COLONNES.at(-1)}${COTE}`, `${COLONNES.at(-2)}${COTE}`] };
+
+const present = (valeur) => valeur !== null && valeur !== undefined;
+const optionsDuChamp = (champ) => champ.options ?? (champ.blocs ?? []).flatMap((bloc) => bloc.options);
+
+// Un événement écrit clés rangées : deux écritures du même événement se comparent.
+const canonique = (valeur) => JSON.stringify(valeur, (cle, ici) => (ici !== null && typeof ici === "object" && !Array.isArray(ici) ? Object.fromEntries(Object.entries(ici).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : ici));
+
+// La valeur d'un champ de la palette au bout « premier » ou « dernier » ;
+// undefined quand il n'a rien d'actif à choisir.
+function valeurDuChamp(champ, bout) {
+  const premier = bout === "premier";
+  if (champ.sorte === "nombre") {
+    let valeur = premier ? champ.min : champ.max;
+    while ((champ.exclus ?? []).includes(valeur)) valeur += premier ? 1 : -1;
+    return valeur;
+  }
+  if (champ.sorte === "case") return CASES_AUX_BOUTS[bout].find((nom) => nom !== champ.exclue);
+  if (champ.sorte === "cibles") {
+    // La cible en cours, en tête, cochée et fixe ; puis une autre, ou toutes les autres.
+    const [cible, ...autres] = champ.options;
+    const cochees = autres.filter((option) => option.actif).map((option) => option.valeur);
+    return cible === undefined || cochees.length === 0 ? undefined : [cible.valeur, ...(premier ? cochees.slice(0, 1) : cochees)];
+  }
+  const actives = optionsDuChamp(champ).filter((option) => option.actif);
+  if (actives.length === 0) return undefined;
+  return (premier ? actives[0] : actives.at(-1)).valeur;
+}
+
+// Choisi.valeurs d'un genre, chaque champ à ce bout (« libre » : le premier
+// bout, l'état nommé plutôt que pris au classeur) ; le tuple d'une ressource
+// s'étale (§ 3.6). null quand un champ n'a rien à choisir.
+function valeursChoisies(champs, bout) {
+  let valeurs = {};
+  for (const champ of champs) {
+    if (champ.sorte === "texte" || (bout === "libre" && champ.nom === "capacite")) continue;
+    const valeur = valeurDuChamp(champ, bout === "libre" ? "premier" : bout);
+    if (valeur === undefined) return null;
+    valeurs = champ.nom === "ressource" ? { ...valeurs, ...valeur } : { ...valeurs, [champ.nom]: valeur };
+  }
+  if (bout === "libre") {
+    const texte = champs.find((champ) => champ.sorte === "texte") ?? null;
+    if (texte === null) return null;
+    valeurs.libre = NOM_LIBRE.padEnd(texte.max, ".");
+  }
+  return valeurs;
+}
+
+// Choisi.valeurs d'un genre tel que la palette le montre, chaque champ à sa
+// valeur par défaut ; la case d'arrivée, qu'aucun défaut ne pose, au premier bout.
+function valeursParDefaut(champs) {
+  let valeurs = {};
+  for (const champ of champs) {
+    if (champ.nom === "ressource" && present(champ.valeur)) valeurs = { ...valeurs, ...champ.valeur };
+    else valeurs = { ...valeurs, [champ.nom]: champ.valeur ?? (champ.sorte === "case" ? valeurDuChamp(champ, "premier") : null) };
+  }
+  return valeurs;
+}
+
+// L'événement « effet » de Choisi : le gabarit, les valeurs, X ; un état du
+// classeur (« 1:0 », le bloc et son rang dans ETATS) devient sa capacité figée.
+function evenementDeLaPalette(gabarit, valeurs, x) {
+  const { capacite = null, libre = null, ...reste } = valeurs;
+  const evenement = { ...gabarit.evenement, ...reste };
+  if (present(x)) evenement.x = x;
+  if (present(libre)) evenement.libre = libre;
+  else if (present(capacite)) {
+    const [bloc, rang] = capacite.split(":").map(Number);
+    evenement.capacite = ETATS[bloc]?.capacites?.[rang] ?? null;
+  }
+  return evenement;
+}
+
+// Les événements qui éprouvent un genre de la palette : les deux bouts (et
+// l'état nommé) quand il est actif ; sinon un seul, ses valeurs par défaut.
+// « duree » : le champ de l'onglet Durée ; « x » : celui de la palette.
+function epreuvesDeLEffet(saisie, actif, { duree = null, x = null } = {}) {
+  const champs = A_DUREE.includes(saisie.genre) && duree !== null ? [...saisie.champs, duree] : saisie.champs;
+  if (!actif) return [evenementDeLaPalette(saisie.gabarit, valeursParDefaut(champs), x?.valeur ?? null)];
+  const evenements = new Map();
+  for (const bout of saisie.genre === "etat" ? ["premier", "dernier", "libre"] : ["premier", "dernier"]) {
+    const valeurs = valeursChoisies(champs, bout);
+    if (valeurs === null) continue;
+    const leX = x === null ? null : bout === "dernier" ? x.max : x.min;
+    evenements.set(JSON.stringify([valeurs, leX]), evenementDeLaPalette(saisie.gabarit, valeurs, leX));
+  }
+  return [...evenements.values()];
+}
+
+// Les événements qui éprouvent une saisie du menu du MJ (§ 3.7) : chaque
+// valeur à sa borne basse, puis à sa borne haute, quand elle change (jamais
+// plus de BORNES_MJ.valeurs entrées par geste) ; un état ajouté, de chaque
+// durée du menu (« tour » d'abord), et nommé d'un nom court ou du plus long
+// permis ; une case d'arrivée à chaque bout de la carte.
+function epreuvesDuMj(saisie, { durees = ["tour"] } = {}) {
+  const { evenement } = saisie.gabarit;
+  const [premiere, derniere] = [durees[0], durees.at(-1)];
+  if (evenement.genre === "valeurs") {
+    const gestes = [];
+    for (const borne of ["min", "max"]) {
+      const entrees = saisie.champs.filter((champ) => champ[borne] !== champ.valeur).map((champ) => ({ ...champ.entree, valeur: champ[borne] }));
+      for (let debut = 0; debut < entrees.length; debut += BORNES_MJ.valeurs) gestes.push({ ...evenement, valeurs: entrees.slice(debut, debut + BORNES_MJ.valeurs) });
+    }
+    return gestes;
+  }
+  // L'état libre a un ajout vide, que l'écran complète du nom ; un état du classeur, de sa seule durée.
+  const libre = evenement.genre === "etat" && Object.keys(evenement.ajout ?? {}).length === 0;
+  if (libre) return [{ ...evenement, ajout: { libre: NOM_LIBRE, duree: premiere } }, { ...evenement, ajout: { libre: NOM_LIBRE.padEnd(saisie.max, "."), duree: derniere } }];
+  if (evenement.genre === "etat") return [premiere, derniere].map((duree) => ({ ...evenement, ajout: { ...evenement.ajout, duree } }));
+  if (evenement.genre === "deplacer") return ["premier", "dernier"].map((bout) => ({ ...evenement, vers: valeurDuChamp({ sorte: "case", exclue: saisie.exclue }, bout) }));
+  return [evenement];
+}
+
+// Les événements qui éprouvent une saisie, complétée comme le fait l'écran ;
+// une saisie inactive ne s'éprouve que d'un seul, refusé.
+function epreuvesDe({ saisie, actif }, contexte = {}) {
+  const { type } = saisie.gabarit.evenement;
+  let evenements;
+  if (type === "effet") evenements = epreuvesDeLEffet(saisie, actif, contexte);
+  else if (type === "mj") evenements = epreuvesDuMj(saisie, contexte);
+  else evenements = valeursDEpreuve(saisie).map((valeur) => completer(saisie, valeur));
+  return actif ? evenements : evenements.slice(0, 1);
 }
 
 // Un événement bien fait de chaque type, plausible à cet instant : s'il est
@@ -1025,13 +1182,22 @@ function unDeChaqueType(etat) {
   };
 }
 
-// Le panneau reçoit, comme à l'écran, les capacités du bloc de blessure de la banque (lot 4.3).
+// Le panneau reçoit, comme à l'écran, les capacités du bloc de blessure de la banque (lot 4.3). À la vague 3
+// du lot (contrat de la vague, § 7), les vignettes du téléphone s'y ajoutent ; « Intervenir… » vit dans la
+// barre.
 const BLESSURES = etatsDeLaBanque(BANQUE).blessure;
-const vuesDe = (etat, choisi) => ({ barre: vueBarre(etat), plateau: vuePlateau(etat, choisi), fiches: etat.ordre.map((id) => vueFiche(etat, id, choisi)), panneau: vuePanneau(etat, choisi, { blessures: BLESSURES }) });
+const vuesDe = (etat, choisi) => ({
+  barre: vueBarre(etat),
+  plateau: vuePlateau(etat, choisi),
+  fiches: etat.ordre.map((id) => vueFiche(etat, id, choisi)),
+  panneau: vuePanneau(etat, choisi, { blessures: BLESSURES }),
+  vignettes: vueVignettes(etat, choisi),
+});
 
-// Les événements du lot 4.3 que l'offre annonce, et qu'aucune vue ne porte encore. La blessure et la
-// contre-attaque laissée ont la leur (lecture.js).
-const SANS_VUE_ENCORE = ["intervenir", "contre_attaquer", "critique", "effet", "mj"];
+// Ce que le Mode MJ éteint n'a pas à porter (contrat de la vague 3, § 7, R n° 3) : les gestes du MJ, les
+// effets (la palette, sauf au nom de la capacité jouée, d'un passif ou d'un état), le décalage d'un d20 ; et le
+// lancement, commande de la préparation.
+const SANS_LE_MODE_MJ = ["lancer", "mj", "effet", "decaler"];
 
 test("concordance : les événements d'épreuve sont bien faits, un de chaque type", () => {
   for (const etat of [TENUS[0], TENUS[1], TENUS[52], FINAL]) {
@@ -1049,12 +1215,12 @@ test("concordance : les événements d'épreuve sont bien faits, un de chaque ty
 // (contrat du groupe 2, § 6.3) : { refus, rang, etat } au premier refus
 // (« etat », celui qu'a reçu l'événement refusé), sinon { refus: null,
 // types }, avec le type de chacun, et pour chacun si l'offre l'annonçait à
-// son moment.
-function jouerLaCommande(etat, evenements) {
+// son moment (« offertIci » : l'offre de l'état reçu, déjà lue).
+function jouerLaCommande(etat, evenements, offertIci = offre(etat)) {
   let courant = etat;
   const types = [];
   for (const [rang, evenement] of evenements.entries()) {
-    const offert = offre(courant).types.includes(evenement.type);
+    const offert = (rang === 0 ? offertIci : offre(courant)).types.includes(evenement.type);
     const rendu = appliquer(courant, evenement);
     if (rendu.refus) return { refus: rendu.refus, rang, recu: courant, rendu: rendu.etat };
     types.push({ type: evenement.type, offert });
@@ -1063,9 +1229,207 @@ function jouerLaCommande(etat, evenements) {
   return { refus: null, types };
 }
 
-test("concordance : à chaque pas du combat de référence, tout ce que porte une vue est accepté, et un événement de tout autre type est refusé, l'état rendu étant l'objet reçu", (t) => {
-  const compte = { acceptes: 0, saisies: 0, refuses: 0, inactifs: 0, multiples: 0 };
+// Ce qu'une source de palette peut être quand le Mode MJ est éteint (contrat
+// de la vague 3, § 7) : la capacité jouée, un passif, ou un état.
+function sourceSansLeModeMj(etat, source) {
+  if (source?.genre === "etat") return true;
+  if (source?.genre !== "capacite") return false;
+  const geste = gesteEnCours(etat);
+  return (geste !== null && source.qui === geste.acteur && source.capacite === geste.capacite) || passifDe(etat, source) !== null;
+}
+
+/**
+ * Joue les événements d'un élément de vue et en tient le bilan. Mode MJ
+ * allumé : actif, le moteur les accepte, et l'offre annonçait chacun à son
+ * moment ; inactif, il les refuse, et l'état rendu est l'objet reçu. Mode MJ
+ * éteint, sur ce même jeu, sans rien appliquer de plus : seuls comptent les
+ * éléments sans « mj » ; aucun ne porte un geste du MJ, et un effet n'y a
+ * pour source que la capacité jouée, un passif ou un état.
+ */
+function jouerLElement(etat, ou, offert, evenements, { actif, mj }, bilan) {
+  const joue = jouerLaCommande(etat, evenements, offert);
+  if (!actif) {
+    assert.notEqual(joue.refus, null, `${ou} : un élément inactif porte ${JSON.stringify(evenements)}, que le moteur accepte`);
+    assert.equal(joue.rendu, joue.recu, `${ou} : un refus rend l'état reçu`);
+    bilan.compte.inactifs += 1;
+    return;
+  }
+  assert.equal(joue.refus, null, `${ou} : une vue porte ${JSON.stringify(evenements)}, que le moteur refuse (${joue.refus?.message})`);
+  joue.types.forEach(({ type, offert: annonce }, rang) => {
+    assert.ok(annonce, `${ou} : une vue porte un « ${type} » que l'offre n'annonce pas à son moment`);
+    bilan.allume.add(type);
+    if (mj) return;
+    assert.notEqual(type, "mj", `${ou} : le Mode MJ éteint montre un geste du MJ : ${JSON.stringify(evenements[rang])}`);
+    if (type === "effet") {
+      assert.ok(sourceSansLeModeMj(etat, evenements[rang].source), `${ou} : le Mode MJ éteint montre un effet au nom de ${JSON.stringify(evenements[rang].source)}`);
+      bilan.compte.effetsSansLeModeMj += 1;
+    }
+    bilan.eteint.add(type);
+  });
+}
+
+// Éprouve tout ce que porte un relevé : ses commandes, puis ses saisies,
+// complétées comme le fait l'écran (« contexte » : la durée et X d'une
+// palette, les durées d'un menu du MJ).
+function eprouverLeReleve(etat, ou, offert, { commandes, saisies }, bilan, contexte = {}) {
+  for (const { commande, actif, mj } of commandes) {
+    // { evenement } ou { evenements } : les autres commandes (choisir, préparer) ne sont pas des événements.
+    const evenements = commande.evenements ?? (commande.evenement === undefined ? null : [commande.evenement]);
+    if (evenements === null) continue;
+    if (commande.evenements !== undefined) {
+      assert.ok(Array.isArray(evenements) && evenements.length >= 1 && evenements.length <= 4, `${ou} : une commande porte ${JSON.stringify(commande)}, qui n'a pas de 1 à 4 événements`);
+      bilan.compte.multiples += 1;
+    }
+    jouerLElement(etat, ou, offert, evenements, { actif, mj }, bilan);
+    if (actif) bilan.compte.acceptes += 1;
+  }
+  for (const releve of saisies) {
+    // Un genre de la palette inactif pour la même raison qu'à une autre palette de cet état (son moment, le
+    // plus souvent, qui ne tient pas à la source) ne s'éprouve qu'une fois.
+    if (!releve.actif && releve.saisie.gabarit.evenement.type === "effet") {
+      const raison = `${releve.saisie.genre} ${releve.saisie.raison}`;
+      if (bilan.refusDesGenres.has(raison)) continue;
+      bilan.refusDesGenres.add(raison);
+    }
+    const evenements = epreuvesDe(releve, contexte);
+    assert.ok(evenements.length > 0, `${ou} : une saisie ne se complète d'aucune valeur : ${JSON.stringify(releve.saisie.gabarit)}`);
+    for (const evenement of evenements) {
+      jouerLElement(etat, ou, offert, [evenement], releve, bilan);
+      if (!releve.actif) continue;
+      bilan.compte.saisies += 1;
+      if (evenement.type === "effet") bilan.compte.effets += 1;
+      if (evenement.type === "mj") bilan.compte.mj += 1;
+    }
+  }
+}
+
+// Les sources de la palette que portent les vues (contrat de la vague 3, § 7),
+// chacune avec ce qui l'ouvre : « Palette », que le Mode MJ seul montre (la
+// palette libre, au nom de la capacité jouée) ; « Appliquer l'effet de… » ; un
+// passif du jet qui peut servir ; l'étiquette d'un état ; et le MJ, que la
+// palette libre propose toujours. Une source ouverte par un élément sans
+// « mj » se voit Mode MJ éteint.
+function sourcesDesVues(vues, sources) {
+  const ouvrir = (source, { libre = false, mj = false } = {}) => {
+    const cle = canonique(source);
+    const deja = sources.get(cle) ?? { source, libre: false, mjSeul: true };
+    sources.set(cle, { source, libre: deja.libre || libre, mjSeul: deja.mjSeul && mj });
+  };
+  const geste = vues.panneau.geste;
+  if (geste?.palette) ouvrir(geste.palette.source, { libre: true, mj: geste.palette.mj === true });
+  if (geste?.appliquerEffet) ouvrir(geste.appliquerEffet.source);
+  for (const passif of geste?.passifs ?? []) if (passif.actif !== false) ouvrir(passif.source);
+  for (const fiche of vues.fiches) for (const etiquette of fiche?.effets ?? []) if (etiquette.appliquer) ouvrir(etiquette.appliquer.source);
+  ouvrir({ genre: "mj" }, { libre: true, mj: true });
+  return sources;
+}
+
+const LE_JOURNAL_ECRIRA = "Le journal écrira : ";
+
+// Les genres qui ont leur phrase au journal (journal.js, ecrireEffet) : leur aperçu ne manque jamais.
+const AVEC_SA_PHRASE = ["rendre", "attaque", "defense", "etat", "deplacer"];
+
+/**
+ * Le chemin entier de « Appliquer » (D10 bis), pour un genre choisi : la
+ * palette rendue avec ce choix et la simulation du vrai moteur porte un
+ * « Appliquer » actif, dont la commande est l'événement que l'écran complète,
+ * et un aperçu (« Le journal écrira : … »), que rendre, ±N, un état et un
+ * déplacement ont toujours (journal.js, ecrireEffet ; contrat, § 7) ; la
+ * commande se joue. Rend la palette rendue.
+ */
+function appliquerLeChoix(etat, ou, offert, { source, apports, mj }, genre, valeurs, x, bilan) {
+  const choisi = { genre: genre.genre, valeurs, x };
+  const vue = vuePalette(etat, source, { ...apports, choisi });
+  const duree = vue.onglets.at(-1).champ;
+  const ici = `${ou}, « Appliquer » ${JSON.stringify(choisi)} au nom de ${JSON.stringify(source)}`;
+  assert.equal(vue.appliquer?.actif, true, `${ici} : inactif (${vue.appliquer?.raison})`);
+  const attendu = evenementDeLaPalette(genre.gabarit, A_DUREE.includes(genre.genre) ? { duree: duree?.valeur, ...valeurs } : valeurs, x);
+  assert.equal(canonique(vue.appliquer.commande?.evenement), canonique(attendu), `${ici} : sa commande n'est pas l'événement que l'écran complète`);
+  if (AVEC_SA_PHRASE.includes(genre.genre)) assert.ok(vue.apercu?.startsWith(LE_JOURNAL_ECRIRA), `${ici} : aucun aperçu (${vue.apercu})`);
+  else assert.ok(vue.apercu === null || vue.apercu.startsWith(LE_JOURNAL_ECRIRA), `${ici} : l'aperçu ${vue.apercu}`);
+  jouerLElement(etat, ou, offert, [vue.appliquer.commande.evenement], { actif: true, mj: mj || genre.mj }, bilan);
+  bilan.compte.simules += 1;
+  if (vue.apercu !== null) bilan.compte.apercus += 1;
+  return vue;
+}
+
+/**
+ * Les palettes d'un état, une par source, rendues une fois sans choix
+ * (contrat de la vague 3, § 7) : tout ce qu'elles portent s'éprouve. Avant,
+ * deux chemins entiers de « Appliquer », une fois par état, chacun à tour de
+ * rôle d'un pas à l'autre, de genre comme de source : un genre actif de
+ * l'onglet Cible, choisi à ses valeurs par défaut, dont l'onglet Durée donne
+ * sa durée à ±N et à un état de toutes les palettes de l'état (la durée ne se
+ * juge qu'au moment, jamais à la source : js/combat/effets.js, raisonDuMoment) ;
+ * puis un autre genre actif, choisi à un bout de ses champs.
+ */
+function eprouverLesPalettes(etat, ou, offert, sources, bilan, n) {
+  const simuler = (evenement) => appliquer(etat, evenement);
+  const palettes = [...sources.values()].map(({ source, libre, mjSeul }) => {
+    const apports = { etats: ETATS, libre, choisi: null, simuler };
+    const palette = vuePalette(etat, source, apports);
+    assert.notEqual(palette, null, `${ou} : une vue porte la source ${JSON.stringify(source)}, que la palette ne trouve pas`);
+    bilan.compte.palettes += 1;
+    const actifs = palette.onglets.flatMap((onglet) => onglet.genres).filter((genre) => genre.actif);
+    return { palette, ouverte: { source, apports, mj: mjSeul }, aDuree: actifs.filter((genre) => A_DUREE.includes(genre.genre)), autres: actifs.filter((genre) => !A_DUREE.includes(genre.genre)) };
+  });
+  const aTourDeRole = (liste) => (liste.length === 0 ? null : liste[n % liste.length]);
+
+  let duree = null;
+  const avecDuree = aTourDeRole(palettes.filter((une) => une.aDuree.length > 0));
+  if (avecDuree !== null) {
+    const genre = aTourDeRole(avecDuree.aDuree);
+    const { x } = avecDuree.palette;
+    duree = appliquerLeChoix(etat, ou, offert, avecDuree.ouverte, genre, valeursParDefaut(genre.champs), x?.valeur ?? null, bilan).onglets.at(-1).champ;
+    assert.equal(duree?.nom, "duree", `${ou} : l'onglet Durée porte la durée de « ${genre.genre} »`);
+  }
+  const avecAutres = aTourDeRole(palettes.filter((une) => une.autres.length > 0));
+  if (avecAutres !== null) {
+    const genre = aTourDeRole(avecAutres.autres);
+    const { x } = avecAutres.palette;
+    const bout = n % 2 === 0 ? "premier" : "dernier";
+    const valeurs = valeursChoisies(genre.champs, bout);
+    assert.notEqual(valeurs, null, `${ou} : « ${genre.genre} », actif, n'a rien à choisir`);
+    appliquerLeChoix(etat, ou, offert, avecAutres.ouverte, genre, valeurs, x === null ? null : x[bout === "premier" ? "min" : "max"], bilan);
+    bilan.compte.genresChoisis.add(genre.genre);
+  }
+
+  for (const { palette, ouverte } of palettes) eprouverLeReleve(etat, ou, offert, relever(palette, undefined, { actif: true, mj: ouverte.mj }), bilan, { duree, x: palette.x });
+}
+
+/**
+ * Le menu du MJ d'un vivant, une fois par état (contrat de la vague 3, § 7) :
+ * inactif, il l'est tout entier (§ 3) et un seul refus l'éprouve ; actif, tout
+ * ce qu'il porte s'éprouve, puis le chemin entier d'« Enregistrer » (D10 bis) :
+ * sa première valeur saisie à l'autre bout, avec la simulation du vrai moteur.
+ */
+function eprouverLeMenu(etat, ou, offert, id, bilan) {
+  const apports = { etats: ETATS, saisies: null, simuler: (evenement) => appliquer(etat, evenement) };
+  const menu = vueMenuMj(etat, id, apports);
+  if (menu === null) return;
+  bilan.compte.menus += 1;
+  assert.equal(menu.mj, true, `${ou} : le menu du MJ de ${id} ne se montre qu'en Mode MJ`);
+  if (menu.actif === false) {
+    assert.ok(typeof menu.raison === "string" && menu.raison.length > 0, `${ou} : le menu inactif de ${id} dit pourquoi`);
+    jouerLElement(etat, ou, offert, [menu.retirer.commande.evenement], { actif: false, mj: true }, bilan);
+    bilan.compte.menusInactifs += 1;
+    return;
+  }
+  eprouverLeReleve(etat, ou, offert, relever(menu), bilan, { durees: menu.etats.durees.map((duree) => duree.valeur) });
+  const [champ] = menu.valeurs.champs;
+  const saisies = { [champ.cle]: champ.valeur === champ.max ? champ.min : champ.max };
+  const { valeurs } = vueMenuMj(etat, id, { ...apports, saisies });
+  const ici = `${ou}, « Enregistrer » ${JSON.stringify(saisies)} pour ${id}`;
+  assert.equal(valeurs.enregistrer.actif, true, `${ici} : inactif (${valeurs.enregistrer.raison})`);
+  assert.ok(valeurs.apercu?.startsWith(LE_JOURNAL_ECRIRA), `${ici} : aucun aperçu (${valeurs.apercu})`);
+  jouerLElement(etat, ou, offert, [valeurs.enregistrer.commande.evenement], { actif: true, mj: true }, bilan);
+  bilan.compte.simules += 1;
+}
+
+test("concordance : à chaque pas du combat de référence, Mode MJ allumé puis éteint, tout ce que porte une vue est accepté, tout ce qu'elle dit inactif est refusé, et un événement de tout autre type est refusé, l'état rendu étant l'objet reçu", (t) => {
+  const compte = { acceptes: 0, saisies: 0, refuses: 0, inactifs: 0, multiples: 0, palettes: 0, effets: 0, effetsSansLeModeMj: 0, menus: 0, menusInactifs: 0, mj: 0, simules: 0, apercus: 0, genresChoisis: new Set() };
   const typesPortes = new Set();
+  const typesEteints = new Set();
   const typesRefuses = new Set();
 
   TENUS.forEach((etat, n) => {
@@ -1074,55 +1438,33 @@ test("concordance : à chaque pas du combat de référence, tout ce que porte un
     // Hors d'un geste, l'écran a choisi celui qui joue : celui que le scénario fait jouer ensuite, sinon le premier qui le peut.
     const suivant = CONTENU.evenements[n];
     const choisi = suivant?.qui ?? candidats(etat)[0] ?? null;
-    const portes = new Set();
+    const bilan = { compte, allume: new Set(), eteint: new Set(), refusDesGenres: new Set() };
+    const sources = new Map();
 
     for (const lu of new Set([choisi, null])) {
-      const { commandes, saisies } = relever(vuesDe(etat, lu));
-      for (const { commande, actif } of commandes) {
-        // { evenement } ou { evenements } : les autres commandes (choisir, préparer) ne sont pas des événements.
-        const evenements = commande.evenements ?? (commande.evenement === undefined ? null : [commande.evenement]);
-        if (evenements === null) continue;
-        if (commande.evenements !== undefined) {
-          assert.ok(Array.isArray(evenements) && evenements.length >= 1 && evenements.length <= 4, `${ou} : une commande porte ${JSON.stringify(commande)}, qui n'a pas de 1 à 4 événements`);
-          compte.multiples += 1;
-        }
-        const joue = jouerLaCommande(etat, evenements);
-        if (actif) {
-          assert.equal(joue.refus, null, `${ou} : une vue porte ${JSON.stringify(commande)}, que le moteur refuse (${joue.refus?.message})`);
-          for (const { type, offert: annonce } of joue.types) {
-            assert.ok(annonce, `${ou} : une vue porte un « ${type} » que l'offre n'annonce pas à son moment`);
-            portes.add(type);
-          }
-          compte.acceptes += 1;
-        } else {
-          assert.notEqual(joue.refus, null, `${ou} : un bouton inactif porte ${JSON.stringify(commande)}, que le moteur accepte`);
-          assert.equal(joue.rendu, joue.recu, `${ou} : un refus rend l'état reçu`);
-          compte.inactifs += 1;
-        }
-      }
-      for (const saisie of saisies) {
-        for (const valeur of valeursDEpreuve(saisie)) {
-          const evenement = completer(saisie, valeur);
-          const rendu = appliquer(etat, evenement);
-          assert.equal(rendu.refus, undefined, `${ou} : une saisie porte ${JSON.stringify(evenement)}, que le moteur refuse (${rendu.refus?.message})`);
-          portes.add(evenement.type);
-          compte.saisies += 1;
-        }
-      }
+      const vues = vuesDe(etat, lu);
+      eprouverLeReleve(etat, ou, offert, relever(vues), bilan);
+      sourcesDesVues(vues, sources);
     }
+    // Une fois par état, hors de la boucle de « choisi » (contrat de la vague 3, § 7, R n° 29) : la palette de
+    // chaque source que portent les vues, et le menu du MJ de chaque vivant.
+    eprouverLesPalettes(etat, ou, offert, sources, bilan, n);
+    for (const id of etat.ordre) eprouverLeMenu(etat, ou, offert, id, bilan);
 
     // Le dé n'est pas une commande : l'écran lance celui que le panneau dit attendre.
     const aLancer = vuePanneau(etat, choisi).geste?.aLancer ?? null;
     assert.deepEqual(aLancer === null ? null : [aLancer.faces, aLancer.combien, aLancer.motif], offert.de === null ? null : [offert.de.faces, offert.de.combien, offert.de.motif], `${ou} : le dé du panneau est celui de l'offre`);
-    if (aLancer !== null) portes.add("de");
+    if (aLancer !== null) for (const portes of [bilan.allume, bilan.eteint]) portes.add("de");
 
-    // Tout ce que l'offre annonce se joue depuis une vue : l'écran ne laisse aucun geste hors d'atteinte.
-    // Les types neufs du lot 4.3 n'ont pas encore de vue (la vague 3 du lot les leur donne).
+    // Tout ce que l'offre annonce se joue depuis une vue : l'écran ne laisse aucun geste hors d'atteinte, Mode MJ
+    // allumé ; éteint, rien de ce que le Mode MJ ne montre pas seul.
     for (const type of offert.types) {
-      if (type === "lancer" || SANS_VUE_ENCORE.includes(type)) continue;
-      assert.ok(portes.has(type), `${ou} : l'offre annonce « ${type} », qu'aucune vue ne porte`);
+      if (type === "lancer") continue;
+      assert.ok(bilan.allume.has(type), `${ou} : l'offre annonce « ${type} », qu'aucune vue ne porte`);
+      if (!SANS_LE_MODE_MJ.includes(type)) assert.ok(bilan.eteint.has(type), `${ou} : l'offre annonce « ${type} », que le Mode MJ éteint ne montre pas`);
     }
-    for (const type of portes) typesPortes.add(type);
+    for (const type of bilan.allume) typesPortes.add(type);
+    for (const type of bilan.eteint) typesEteints.add(type);
 
     // Un événement de chaque autre type est refusé, et l'état rendu est l'objet reçu.
     const echantillons = unDeChaqueType(etat);
@@ -1141,19 +1483,27 @@ test("concordance : à chaque pas du combat de référence, tout ce que porte un
   });
 
   // Le contrôle ne passe pas à vide.
-  t.diagnostic(`${compte.acceptes} commandes acceptées, dont ${compte.multiples} à plusieurs événements, ${compte.saisies} saisies complétées, ${compte.inactifs} boutons inactifs refusés, ${compte.refuses} événements d'un autre type refusés`);
+  t.diagnostic(
+    `${compte.acceptes} commandes acceptées, dont ${compte.multiples} à plusieurs événements ; ${compte.saisies} saisies complétées, dont ${compte.effets} effets de ${compte.palettes} palettes (${compte.effetsSansLeModeMj} Mode MJ éteint) et ${compte.mj} gestes de ${compte.menus} menus du MJ (${compte.menusInactifs} inactifs) ; ${compte.simules} « Appliquer » et « Enregistrer » simulés, ${compte.apercus} aperçus, ${compte.genresChoisis.size} genres choisis hors de l'onglet Cible (${[...compte.genresChoisis].sort().join(", ")}) ; ${compte.inactifs} éléments inactifs refusés ; ${compte.refuses} événements d'un autre type refusés`,
+  );
   assert.ok(compte.acceptes > 1000, `${compte.acceptes} commandes acceptées`);
   // Le Chef qui avance d'une case depuis Pas chassé [2] la paie de [1] : la case porte deux événements.
   assert.ok(compte.multiples > 0, "des cases d'arrivée portent deux événements");
   assert.ok(compte.saisies > 100, `${compte.saisies} saisies complétées`);
-  assert.ok(compte.inactifs > 50, `${compte.inactifs} boutons inactifs refusés`);
+  assert.ok(compte.inactifs > 50, `${compte.inactifs} éléments inactifs refusés`);
   assert.ok(compte.refuses > 1000, `${compte.refuses} événements d'un autre type refusés`);
+  // La vague 3 du lot 4.3 : la palette (Mode MJ éteint compris), le menu du MJ, actif et inactif, et les chemins
+  // entiers de « Appliquer » et d'« Enregistrer ».
+  assert.ok(compte.effets > 1000 && compte.effetsSansLeModeMj > 1000, `${compte.effets} effets, dont ${compte.effetsSansLeModeMj} Mode MJ éteint`);
+  assert.ok(compte.mj > 100 && compte.menusInactifs > 100, `${compte.mj} gestes du MJ, ${compte.menusInactifs} menus inactifs`);
+  assert.ok(compte.simules > 100 && compte.genresChoisis.size >= 10, `${compte.simules} simulés, ${compte.genresChoisis.size} genres choisis hors de l'onglet Cible`);
   assert.deepEqual([...typesRefuses].sort(), [...TYPES].sort(), "chaque type a été refusé à un moment où il ne s'offrait pas");
   // Le lancement est une commande de la préparation ; le combat de référence n'explose plus (mission du lot 4.3,
   // § 10), et « exploser » se voit porté dans les contrôles de l'écran. Les types du lot 4.3 que ce combat
-  // traverse et qu'une vue porte déjà : la blessure, la contre-attaque laissée ; les autres viendront avec leurs
-  // vues (vague 3).
-  const ATTENDUS = [...TYPES.filter((type) => type !== "lancer" && type !== "exploser"), "blessure", "laisser"];
+  // traverse : la blessure, la contre-attaque laissée ou jouée, l'intervention, l'effet, le geste du MJ. Le
+  // critique, qu'il ne traverse pas, se voit porté dans les contrôles de la lecture (combat_lecture).
+  const ATTENDUS = [...TYPES.filter((type) => type !== "lancer" && type !== "exploser"), "blessure", "laisser", "intervenir", "contre_attaquer", "effet", "mj"];
   assert.deepEqual(ATTENDUS.filter((type) => !typesPortes.has(type)), [], "chaque type d'événement est porté par une vue à un moment du combat");
-  assert.deepEqual([...typesPortes].filter((type) => !TYPES.includes(type) && !SANS_VUE_ENCORE.includes(type) && !ATTENDUS.includes(type)), [], "une vue ne porte rien d'autre");
+  assert.deepEqual(ATTENDUS.filter((type) => !SANS_LE_MODE_MJ.includes(type) && !typesEteints.has(type)), [], "le Mode MJ éteint porte chaque type qu'il doit montrer");
+  assert.deepEqual([...typesPortes].filter((type) => !TYPES.includes(type) && !ATTENDUS.includes(type) && type !== "critique"), [], "une vue ne porte rien d'autre");
 });

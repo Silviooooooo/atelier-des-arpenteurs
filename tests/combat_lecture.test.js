@@ -35,7 +35,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import * as lecture from "../js/combat/lecture.js";
-import { questionDAnnulation, vueBandeau, vueBarre, vueFiche, vueJournal, vuePanneau, vuePlateau, vuePreparation } from "../js/combat/lecture.js";
+import { questionDAnnulation, vueBandeau, vueBarre, vueDuDe, vueFiche, vueJournal, vuePanneau, vuePlateau, vuePreparation, vueVignettes } from "../js/combat/lecture.js";
 import { ligneEnCours, lignes as fabriques } from "../js/combat/journal.js";
 import { appliquer, gesteEnCours, ouvrirCombat } from "../js/combat/moteur.js";
 import { candidats } from "../js/combat/offre.js";
@@ -158,8 +158,11 @@ test("barre : l'état et la ligne d'aide de chacune des quatre phases ; « Annul
   const avant = ouvrirCombat(miseEnPlaceEssai([{ photo: pjEssai() }, { photo: adversaireEssai() }]));
   assert.deepEqual(vueBarre(avant), {
     etat: "Préparation",
+    etatCourt: "Préparation",
+    camp: null,
     aide: "Un protagoniste ajouté se pose d'office : un personnage sur la colonne A, un adversaire sur la colonne J. Déplacez-le en le faisant glisser, en touchant son jeton puis une case, ou par le champ « Case » de sa fiche.",
     finDeTour: null,
+    intervenir: null,
     annuler: null,
     limite: null,
   });
@@ -167,14 +170,21 @@ test("barre : l'état et la ligne d'aide de chacune des quatre phases ; « Annul
   const tourDesPj = jouer(avant, LANCER);
   assert.deepEqual(vueBarre(tourDesPj), {
     etat: "Tour 1 · camp des PJ",
+    etatCourt: "Tour 1 · PJ",
+    camp: "pj",
     aide: "Les PJ jouent dans l'ordre de leur choix. Le tour des adversaires commence quand tous ont joué, ou sur « Fin de tour ».",
     finDeTour: { actif: true, raison: null, commande: { evenement: { type: "fin_de_tour" } } },
+    // Le Marmiton d'essai n'a aucune intervention : personne ne peut intervenir (vague 3, § 3.1).
+    intervenir: { libelle: "Intervenir…", place: "menu", actif: false, raison: "Personne ne peut intervenir.", intervenants: [] },
     annuler: BOUTON_D_ANNULATION(false, RIEN_A_ANNULER),
     limite: null,
   });
 
   const tourDesAdversaires = jouer(tourDesPj, FIN_DE_TOUR);
   assert.equal(vueBarre(tourDesAdversaires).etat, "Tour 1 · camp des adversaires");
+  assert.equal(vueBarre(tourDesAdversaires).etatCourt, "Tour 1 · adversaires");
+  assert.equal(vueBarre(tourDesAdversaires).camp, "adv");
+  assert.equal(vueBarre(tourDesAdversaires).intervenir.place, "barre", "au tour adverse, « Intervenir… » est dans la barre");
   assert.equal(
     vueBarre(tourDesAdversaires).aide,
     "Les adversaires jouent dans l'ordre de votre choix. Le tour des PJ commence quand tous ont joué, ou sur « Fin de tour ».",
@@ -185,8 +195,11 @@ test("barre : l'état et la ligne d'aide de chacune des quatre phases ; « Annul
   assert.equal(fini.phase, "termine");
   assert.deepEqual(vueBarre(fini), {
     etat: "Combat terminé",
+    etatCourt: "Combat terminé",
+    camp: null,
     aide: "Le combat est terminé. Le journal se copie et se télécharge toujours.",
     finDeTour: null,
+    intervenir: null,
     annuler: BOUTON_D_ANNULATION(true, null, { texte: "Annuler ce geste : Aubépine — Frappe contre Chef ? Ses dés seront perdus.", confirmer: "Annuler le geste", garder: "Garder" }),
     limite: null,
   });
@@ -279,6 +292,10 @@ test("plateau : avant le lancement, des jetons sans choix ni marque ni raison, e
     choix: null,
     inactif: false,
     raison: null,
+    // Avant le lancement, personne ne joue : ni épuisé, ni menu du MJ (vague 3, § 3.4).
+    epuise: false,
+    pastille: null,
+    menuMj: null,
   });
   assert.equal(vue.jetons.adv2.nom, "Marmiton, adversaire, case J1");
 });
@@ -610,7 +627,8 @@ test("fiche : le texte de chacun des huit passifs câblés, actif puis inactif a
 
 // ─── La bulle : qui joue, son en-tête, ses lignes ───────────────────────────
 
-const VIDE = { candidats: [], nom: null, entete: null, defenseur: null, fermeture: null, etapes: [], groupes: [], passer: null, passifs: [], geste: null, vainqueur: null, focus: null };
+// Les clés de la vague 3 (contrat de la vague, § 3.2) : le camp, l'étape et le fil du volet, la consigne.
+const VIDE = { candidats: [], nom: null, entete: null, defenseur: null, fermeture: null, etapes: [], groupes: [], passer: null, passifs: [], geste: null, vainqueur: null, focus: null, camp: null, etape: null, fil: [], consigne: null };
 const FERMER = { genre: "fermer", libelle: "Fermer", commande: { choisir: null } };
 
 test("bulle : avant le lancement elle ne montre rien ; « Qui joue ? » propose chaque candidat par son nom entier", () => {
@@ -623,7 +641,7 @@ test("bulle : avant le lancement elle ne montre rien ; « Qui joue ? » propose 
 
   const etat = jouer(ouvrirCombat(mep), LANCER);
   const qui = vuePanneau(etat, null);
-  assert.deepEqual(qui, { genre: "qui_joue", ...VIDE, candidats: [{ id: "pj1", nom: "Aubépine Crèmebrûlée", commande: { choisir: "pj1" } }], annonce: etat.annonce, focus: "candidat:pj1" });
+  assert.deepEqual(qui, { genre: "qui_joue", ...VIDE, candidats: [{ id: "pj1", nom: "Aubépine Crèmebrûlée", commande: { choisir: "pj1" } }], annonce: etat.annonce, focus: "candidat:pj1", camp: "pj" });
   assert.equal(vuePanneau(etat, "adv2").genre, "qui_joue", "un choisi qui ne peut pas jouer ne joue pas");
 
   const tourAdverse = vuePanneau(jouer(etat, FIN_DE_TOUR), null);
@@ -1243,6 +1261,8 @@ test("bulle : une attaque d'un PJ, étape par étape, jusqu'au détail des dég�
     reglages: {
       modificateur: { valeur: 0, raison: null, min: -20, max: 20, raisonParDefaut: "Frappe", gabarit: { evenement: { type: "regler", champ: "modificateur" } } },
       avantages: { valeur: 0, raison: null, min: -20, max: 20, raisonParDefaut: "Frappe", gabarit: { evenement: { type: "regler", champ: "avantages" } } },
+      // Les réglages à la main ne se montrent qu'en Mode MJ (vague 3, § 3.2).
+      mj: true,
     },
   });
   assert.deepEqual(vue.geste.chaine, [
@@ -1299,15 +1319,18 @@ test("bulle : une attaque d'un PJ, étape par étape, jusqu'au détail des dég�
       gabarit: { evenement: { type: "degats", base: "lettre", nature: "normaux" } },
       // « Ajusté à » 5, la valeur calculée, sans ajustement à défaire : rien ne part (mission du lot 4.3, § 6).
       sansEffet: { valeur: 5, commande: null },
+      // Ajuster ce que la règle a calculé, et les dégâts directs : au Mode MJ seulement (vague 3, § 3.2).
+      mj: true,
     },
     natures: [
-      { libelle: "Dégâts normaux", choisie: true, commande: { evenement: { type: "degats", base: "lettre", operations: [], nature: "normaux" } } },
+      { libelle: "Dégâts normaux", choisie: true, commande: { evenement: { type: "degats", base: "lettre", operations: [], nature: "normaux" } }, mj: true },
       {
         libelle: "Directs, à l'endurance",
         choisie: false,
         commande: { evenement: { type: "degats", base: "lettre", operations: [{ op: "ajuster", valeur: 5, raison: "Frappe" }], nature: "resistance" } },
+        mj: true,
       },
-      { libelle: "Directs, au corps", choisie: false, commande: { evenement: { type: "degats", base: "lettre", operations: [{ op: "ajuster", valeur: 5, raison: "Frappe" }], nature: "corps" } } },
+      { libelle: "Directs, au corps", choisie: false, commande: { evenement: { type: "degats", base: "lettre", operations: [{ op: "ajuster", valeur: 5, raison: "Frappe" }], nature: "corps" } }, mj: true },
     ],
   });
   assert.equal(vue.geste.localisation, null);
@@ -1338,7 +1361,8 @@ test("bulle : une attaque d'un PJ, étape par étape, jusqu'au détail des dég�
       brut: 12,
       face: 12,
       zone: "jambe gauche",
-      decaler: { valeur: null, raison: null, min: -10, max: 8, raisonParDefaut: "Frappe", gabarit: { evenement: { type: "decaler", de: 0 } } },
+      // Décaler la face d'un d20 : au Mode MJ seulement (vague 3, § 3.2).
+      decaler: { valeur: null, raison: null, min: -10, max: 8, raisonParDefaut: "Frappe", gabarit: { evenement: { type: "decaler", de: 0 } }, mj: true },
     },
   ]);
   assert.deepEqual([vue.geste.degats, vue.geste.esquive, vue.geste.aLancer], [null, null, null]);
@@ -1445,8 +1469,19 @@ test("bulle : un adversaire attaque : le jet de défense du PJ, les rangs à l'e
   etat = jouer(etat, de(20, 5));
   vue = vuePanneau(etat, null);
   assert.equal(etapesDites(vue), "Capacité:faite Cible:faite Jet de défense:faite Localisation:faite Interventions:en_cours Dégâts:a_venir");
-  assert.deepEqual(vue.geste.esquive, { libelle: "Pas de côté", min: 1, max: 10, gabarit: { evenement: { type: "esquive" } } });
-  assert.equal("raison" in vue.geste.esquive || "raisonParDefaut" in vue.geste.esquive, false, "l'esquive ne demande pas de raison");
+  // La vague 3 (§ 3.2) : qui esquive, son coût et ce qu'elle fait ; elle porte un gabarit, donc « actif » et « raison ».
+  assert.deepEqual(vue.geste.esquive, {
+    libelle: "Pas de côté",
+    qui: "pj1",
+    cout: "1 action + X souffle",
+    texte: "annule X dégâts, X souffle",
+    min: 1,
+    max: 10,
+    gabarit: { evenement: { type: "esquive" } },
+    actif: true,
+    raison: null,
+  });
+  assert.equal(vue.geste.esquive.raison === null && !("raisonParDefaut" in vue.geste.esquive), true, "l'esquive ne demande pas de raison");
   assert.deepEqual(vue.geste.detail, [{ zone: "Torse", texte: "armure 10 → 0" }]);
   assert.notEqual(vue.geste.localisation[0].decaler, null, "le décalage reste offert");
   assert.deepEqual([vue.geste.localisation[0].decaler.min, vue.geste.localisation[0].decaler.max], [-4, 14], "la face reste de 1 à 19 sur un PJ");
@@ -1642,6 +1677,8 @@ test("bulle : le jet prêté d'un adversaire : « sans arme », sans hachure, ou
     max: 999,
     gabarit: { evenement: { type: "degats", base: "aucun", nature: "normaux" } },
     sansEffet: { valeur: 0, commande: null },
+    // La règle ne donne pas ces dégâts : la saisie reste hors du Mode MJ (vague 3, § 3.2).
+    mj: false,
   });
   assert.equal(vue.geste.bilan, "1 réussite, touché.");
 
@@ -2468,6 +2505,8 @@ test("lot 4.3 : la blessure, une capacité du bloc de blessure ou un état libre
   const vue = vuePanneau(etat, null, { blessures: bloc });
   assert.deepEqual(vue.geste.blessure, {
     titre: "Blessure : Aubépine, torse",
+    // Ce que le coup a fait (vague 3, § 3.2) : 20 portés, 10 d'armure, 5 d'endurance, 5 de corps.
+    detail: "C = 20 : armure 10 → 0, endurance 5 → 0, corps 10 → 5.",
     options: [
       { cle: "blessure:0", libelle: "Cheville tordue", description: "Vos déplacements coûtent une action de plus.", actif: true, raison: null, commande: { evenement: { type: "blessure", capacite: bloc[0] } } },
       { cle: "blessure:1", libelle: "Main brûlée", description: "Désavantage avec une arme précise.", actif: true, raison: null, commande: { evenement: { type: "blessure", capacite: bloc[1] } } },
@@ -2522,12 +2561,13 @@ test("lot 4.3 : attendre se règle (la capacité gardée), puis se confirme", ()
   let vue = vuePanneau(etat, null);
   assert.deepEqual(vue.geste.gardes[0], { libelle: "Frappe", choisie: false, commande: { evenement: regler("garde", { capacite: 0, facon: 0 }) } });
   assert.equal(vue.geste.gardes.some((garde) => garde.libelle === "Guetter"), false, "attendre ne se garde pas lui-même");
-  assert.deepEqual(vue.geste.confirmer, { libelle: "Confirmer", actif: false, raison: "Choisissez la capacité à garder.", commande: { evenement: { type: "confirmer" } } });
+  // Attendre se confirme par « Garder » (vague 3, § 3.2), « Garder Frappe » une fois la capacité choisie.
+  assert.deepEqual(vue.geste.confirmer, { libelle: "Garder", actif: false, raison: "Choisissez la capacité à garder.", commande: { evenement: { type: "confirmer" } } });
   assert.deepEqual([vue.focus, etapesDites(vue)], ["garde:0", "Capacité:faite Garde:en_cours"]);
   eprouver(etat, null, "attendre");
   etat = jouer(etat, vue.geste.gardes[0].commande.evenement);
   vue = vuePanneau(etat, null);
-  assert.deepEqual([vue.geste.gardes[0].choisie, vue.geste.confirmer.actif, vue.focus], [true, true, "confirmer"]);
+  assert.deepEqual([vue.geste.gardes[0].choisie, vue.geste.confirmer.actif, vue.geste.confirmer.libelle, vue.focus], [true, true, "Garder Frappe", "confirmer"]);
   eprouver(etat, null, "attendre, réglé");
 });
 
@@ -2672,7 +2712,14 @@ function porte({ panneau, barre, plateau }, pas) {
  * compte de ce qui a été éprouvé.
  */
 function eprouver(etat, choisi, ou) {
-  const vues = { barre: vueBarre(etat), plateau: vuePlateau(etat, choisi), fiches: etat.ordre.map((id) => vueFiche(etat, id, choisi)), panneau: vuePanneau(etat, choisi, APPORTS_DU_PANNEAU) };
+  // La vague 3 du lot 4.3 (contrat, § 7) : les vignettes aussi.
+  const vues = {
+    barre: vueBarre(etat),
+    plateau: vuePlateau(etat, choisi),
+    fiches: etat.ordre.map((id) => vueFiche(etat, id, choisi)),
+    panneau: vuePanneau(etat, choisi, APPORTS_DU_PANNEAU),
+    vignettes: vueVignettes(etat, choisi),
+  };
   const { commandes, gabarits } = relever(vues);
   const compte = { acceptes: 0, refuses: 0, choisis: 0, saisies: 0, doubles: 0, annuler: 0 };
 
@@ -2892,4 +2939,574 @@ test("module : ses vues, et elles seules (vueLigne a disparu) ; il n'importe jam
   const entete = source.slice(0, source.search(/^import /m));
   assert.match(entete, /SPECIFICATION\.md,\s+\/\/\s+§ 17/);
   assert.match(entete, /§ 2\.7 et § 8/);
+});
+
+// ─── La vague 3 du lot 4.3 : les vues de l'écran (contrat de la vague, § 3.1 à § 3.5, § 7) ───
+
+const ETOURDI = () => etatsEssai().blocs.find((bloc) => bloc.nom === "Condition").capacites.find((capacite) => capacite.nom === "Étourdi");
+const LE_GESTE_D_ABORD = "Le geste en cours se finit d'abord.";
+const MODIFIER = (actif = true) => ({ libelle: "Modifier…", actif, raison: actif ? null : LE_GESTE_D_ABORD, mj: true });
+/** Le fil du volet, dit en une ligne : « nom:étape:état ». */
+const filDit = (vue) => vue.fil.map(({ nom, etape, etat }) => `${nom}:${etape}:${etat}`).join(" ");
+const CIBOULETTE = () => pjEssai((valeurs) => Object.assign(valeurs, { identifiant: "essai-ciboulette-0000000002", nom: "Ciboulette" }));
+const mj = (genre, qui, champs) => ({ type: "mj", genre, qui, ...champs });
+const valeurDuMj = (qui, champ, valeur) => mj("valeurs", qui, { valeurs: [{ champ, valeur }] });
+
+test("vague 3 — barre : l'état court du téléphone, le camp, et « Intervenir… » : Dressage minute au tour adverse, dans la barre ; inactif pendant un geste, sans intervenant ; une ligne gardée « (en guet) »", () => {
+  // Le tour 1 des adversaires du combat de référence, avant le geste du Marmiton n° 1.
+  let etat = reference(2);
+  const barre = vueBarre(etat);
+  assert.deepEqual([barre.etatCourt, barre.camp], ["Tour 1 · adversaires", "adv"]);
+  assert.deepEqual(barre.intervenir, {
+    libelle: "Intervenir…",
+    place: "barre",
+    actif: true,
+    raison: null,
+    intervenants: [
+      {
+        id: "pj1",
+        nom: "Aubépine Crèmebrûlée",
+        initiales: "A",
+        sous: "2 actions · Dressage minute",
+        options: [
+          {
+            cle: `intervention:pj1:${indiceDe(etat, "pj1", "Dressage minute")}:0`,
+            libelle: "Dressage minute",
+            texte: "Sert un allié avant son tour.",
+            cout: "1 action · gratuit",
+            actif: true,
+            raison: null,
+            commande: { evenement: { type: "intervenir", qui: "pj1", capacite: indiceDe(etat, "pj1", "Dressage minute"), facon: 0 } },
+          },
+        ],
+      },
+    ],
+  });
+  eprouver(etat, null, "« Intervenir… » au tour adverse");
+  // Le geste du Marmiton ouvert : inactif, sans intervenant.
+  etat = jouer(etat, capacite(etat, "adv3", "Frappe"));
+  assert.deepEqual(vueBarre(etat).intervenir, { libelle: "Intervenir…", place: "barre", actif: false, raison: ACTION_EN_COURS, intervenants: [] });
+
+  // Au tour des PJ, dans le menu ⋯, pour le camp adverse ; personne ici.
+  assert.deepEqual(vueBarre(reference(0)).intervenir, { libelle: "Intervenir…", place: "menu", actif: false, raison: "Personne ne peut intervenir.", intervenants: [] });
+  assert.deepEqual([vueBarre(reference(0)).etatCourt, vueBarre(reference(0)).camp], ["Tour 1 · PJ", "pj"]);
+
+  // Aubépine garde Frappe : au tour adverse, la ligne gardée s'offre, « (en guet) ».
+  let guet = combat([{ photo: aubepineEssai(), case: "D4" }, { photo: adversaireEssai(), case: "D4" }]);
+  guet = jouer(guet, capacite(guet, "pj1", "Guetter"), regler("garde", { capacite: indiceDe(guet, "pj1", "Frappe"), facon: 0 }), { type: "confirmer" });
+  assert.equal(guet.tour.camp, "adv", "après attendre, Aubépine a joué : le tour passe");
+  const options = vueBarre(guet).intervenir.intervenants[0].options;
+  assert.deepEqual(options.map((option) => [option.libelle, option.cout, option.actif]), [
+    ["Frappe (en guet)", "1 action · gratuit", true],
+    ["Dressage minute", "1 action · gratuit", true],
+  ]);
+  assert.equal(vueBarre(guet).intervenir.intervenants[0].sous, "2 actions · Frappe (en guet), Dressage minute");
+  eprouver(guet, null, "une ligne gardée");
+});
+
+test("vague 3 — le volet du téléphone : l'étape et le fil à chaque moment d'une attaque ; « Défense » quand le PJ visé lance", () => {
+  let etat = duel();
+  let vue = vuePanneau(etat, "pj1");
+  assert.deepEqual([vue.camp, vue.etape, vue.consigne], ["pj", 0, "Que fait Aubépine ?"]);
+  assert.equal(filDit(vue), "Capacité:0:en_cours Cible:1:a_venir Dés:2:a_venir Zone et dégâts:3:a_venir");
+  etat = jouer(etat, capacite(etat, "pj1", "Frappe"));
+  vue = vuePanneau(etat, null);
+  assert.deepEqual([vue.etape, vue.consigne], [1, "Contre qui ? (portée 1 : sa case et les huit voisines)"]);
+  assert.equal(filDit(vue), "Capacité:0:faite Cible:1:en_cours Dés:2:a_venir Zone et dégâts:3:a_venir");
+  etat = jouer(etat, regler("cible", "adv2"));
+  vue = vuePanneau(etat, null);
+  // La cible posée se change encore avant le premier dé : la consigne demeure (le volet ne la montre qu'aux étapes 0 et 1).
+  assert.deepEqual([vue.etape, vue.consigne], [2, "Contre qui ? (portée 1 : sa case et les huit voisines)"]);
+  assert.equal(filDit(vue), "Capacité:0:faite Cible:1:faite Dés:2:en_cours Zone et dégâts:3:a_venir");
+  etat = jouer(etat, de(8, 6));
+  assert.equal(vuePanneau(etat, null).etape, 2, "le jet");
+  etat = jouer(etat, de(8, 1));
+  vue = vuePanneau(etat, null);
+  assert.equal(gesteEnCours(etat).moment, "bilan");
+  assert.deepEqual([vue.etape, filDit(vue)], [3, "Capacité:0:faite Cible:1:faite Dés:2:faite Zone et dégâts:3:en_cours"]);
+  etat = jouer(etat, de(20, 5));
+  assert.deepEqual([gesteEnCours(etat).moment, vuePanneau(etat, null).etape], ["suites", 3]);
+  etat = jouer(etat, APPLIQUER);
+  vue = vuePanneau(etat, "pj1");
+  assert.deepEqual([vue.etape, vue.fil.find((entree) => entree.etat === "en_cours").nom], [0, "Capacité"], "le geste fini : le volet revient à la capacité");
+
+  // Un adversaire attaque : le PJ visé lance sa défense.
+  let defense = jouer(duel(), FIN_DE_TOUR);
+  defense = jouer(defense, capacite(defense, "adv2", "Frappe"));
+  vue = vuePanneau(defense, null);
+  // La Frappe du Marmiton d'essai porte à 0.
+  assert.deepEqual([vue.camp, vue.etape, vue.consigne], ["adv", 1, "Contre qui ? (portée 0 : sa case)"]);
+  assert.equal(filDit(vue), "Capacité:0:faite Cible:1:en_cours Défense:2:a_venir Zone et dégâts:3:a_venir");
+  assert.equal(vuePanneau(jouer(duel(), FIN_DE_TOUR), "adv2").consigne, "Que fait Marmiton ?");
+  // Avant le lancement, « Qui joue ? », la fin : pas de volet.
+  assert.deepEqual([vuePanneau(reference(), null).etape, vuePanneau(reference(), null).fil, vuePanneau(reference(), null).camp], [null, [], null]);
+  assert.deepEqual([vuePanneau(duel(), null).etape, vuePanneau(duel(), null).camp], [null, "pj"]);
+});
+
+test("vague 3 — le volet : le déplacement, attendre et le sans-jet restent à l'étape 1 et gardent « Confirmer » ; le jet de caractéristique passe à 2 une fois prêt ; une façon Centrée reste à 1", () => {
+  const depart = combat([{ photo: aubepineEssai(), case: "D4" }, { photo: adversaireEssai(), case: "D4" }]);
+  let etat = jouer(depart, capacite(depart, "pj1", "Pas chassé"));
+  assert.deepEqual([vuePanneau(etat, null).etape, filDit(vuePanneau(etat, null))], [1, "Capacité:0:faite Arrivée:1:en_cours"]);
+  etat = jouer(etat, regler("arrivee", "D5"));
+  let vue = vuePanneau(etat, null);
+  assert.deepEqual([vue.etape, vue.geste.confirmer.libelle, vue.geste.confirmer.actif, vue.consigne], [1, "Confirmer", true, null]);
+
+  etat = jouer(depart, capacite(depart, "pj1", "Fournaise"));
+  vue = vuePanneau(etat, null);
+  assert.deepEqual([vue.etape, filDit(vue), vue.geste.confirmer.libelle, vue.consigne], [1, "Capacité:0:faite Cible:1:en_cours", "Confirmer", null]);
+
+  etat = jouer(depart, capacite(depart, "pj1", "Guetter"));
+  vue = vuePanneau(etat, null);
+  assert.deepEqual([vue.etape, filDit(vue)], [1, "Capacité:0:faite Garde:1:en_cours"]);
+  assert.equal(vue.consigne, "Quelle capacité garder pour le tour adverse ? Elle s'y jouera en intervention, jusqu'au prochain tour des PJ.");
+  etat = jouer(etat, regler("garde", { capacite: indiceDe(etat, "pj1", "Frappe"), facon: 0 }));
+  assert.deepEqual([vuePanneau(etat, null).etape, vuePanneau(etat, null).geste.confirmer.libelle], [1, "Garder Frappe"]);
+
+  etat = jouer(depart, capacite(depart, "pj1", "Goûter"));
+  vue = vuePanneau(etat, null);
+  assert.deepEqual([vue.etape, filDit(vue)], [1, "Capacité:0:en_cours Dés:2:a_venir"], "l'étape 1 n'a pas d'entrée : la capacité reste en cours");
+  etat = jouer(etat, regler("caracteristiques", ["force"]), regler("difficulte", 5));
+  vue = vuePanneau(etat, null);
+  assert.deepEqual([vue.etape, filDit(vue)], [2, "Capacité:0:faite Dés:2:en_cours"]);
+
+  // Une façon Centrée : ses cibles, puis « Un jet par cible ».
+  let centree = combat([{ photo: aubepineEssai(), case: "D4" }, { photo: CIBOULETTE(), case: "D4" }, { photo: marmitonDeCorveeEssai(), case: "D4" }]);
+  centree = jouer(centree, FIN_DE_TOUR);
+  centree = jouer(centree, capacite(centree, "adv3", "Moulinet farineux"));
+  vue = vuePanneau(centree, null);
+  assert.equal(gesteEnCours(centree).moment, "preparation");
+  assert.deepEqual([vue.etape, vue.consigne, vue.geste.jetsParCible], [1, "Toute la case D4 : qui est visé ?", { libelle: "Un jet par cible : 2 cibles" }]);
+  assert.equal(vue.geste.aLancer?.faces, 8, "prête, elle reste pourtant à l'étape 1 : « Un jet par cible » passe aux dés");
+  eprouver(centree, null, "une façon Centrée, deux cibles cochées");
+  // Une seule cochée : une attaque ordinaire, sans « Un jet par cible » ; prête, elle passe aux dés (mission du lot 4.3, § 4.9),
+  // sans quoi le volet du téléphone n'aurait rien pour y mener.
+  const seule = jouer(centree, regler("cibles", ["pj1"]));
+  assert.deepEqual([vuePanneau(seule, null).geste.jetsParCible, vuePanneau(seule, null).geste.progression], [null, null]);
+  assert.deepEqual([vuePanneau(seule, null).etape, filDit(vuePanneau(seule, null))], [2, "Capacité:0:faite Cible:1:faite Défense:2:en_cours Zone et dégâts:3:a_venir"]);
+  eprouver(seule, null, "une façon Centrée, une seule cible cochée");
+});
+
+test("vague 3 — la consigne d'une cible dit la portée : 0, 1, P ; un adversaire qui attend garde pour le tour des PJ", () => {
+  const loin = aubepineEssai((valeurs) => {
+    valeurs.capacites.push(capaciteEssai({ nom: "Jet de louche", facons: [faconEssai({ arme: 0, description: "Lance la louche.", attaque: true, degats: [2, 4, 6], portee: 3 })] }));
+  });
+  const depart = combat([{ photo: loin, case: "D4" }, { photo: adversaireEssai(), case: "F6" }]);
+  // Sans geste : le nom court (« Aubépine », non « Aubépine Crèmebrûlée »).
+  assert.equal(vuePanneau(depart, "pj1").consigne, "Que fait Aubépine ?");
+  const consigne = (nom) => vuePanneau(jouer(depart, capacite(depart, "pj1", nom)), null).consigne;
+  assert.equal(consigne("Taloche"), "Contre qui ? (portée 0 : sa case)");
+  assert.equal(consigne("Frappe"), "Contre qui ? (portée 1 : sa case et les huit voisines)");
+  assert.equal(consigne("Jet de louche"), "Contre qui ? (portée 3 : à 3 cases au plus)");
+
+  const guetteur = adversaireEssai((valeurs) => {
+    valeurs.capacites.push(capaciteEssai({ nom: "Guetter", role: "attendre", groupe: { genre: "capacites", titre: "Capacités" }, facons: [faconEssai({ description: "Une capacité se joue en intervention." })] }));
+  });
+  let tourAdverse = jouer(combat([{ photo: aubepineEssai(), case: "D4" }, { photo: guetteur, case: "D4" }]), FIN_DE_TOUR);
+  tourAdverse = jouer(tourAdverse, capacite(tourAdverse, "adv2", "Guetter"));
+  assert.equal(vuePanneau(tourAdverse, null).consigne, "Quelle capacité garder pour le tour adverse ? Elle s'y jouera en intervention, jusqu'au prochain tour des adversaires.");
+});
+
+test("vague 3 — le détail des cibles : la case, la défense opposée et le corps ; hors de portée, la distance ; le PJ visé « lance sa défense » ; un mort", () => {
+  // Le premier geste du combat de référence : Aubépine en C3, le Chef en F6, les Marmitons en D4.
+  const etat = reference({ geste: 1, des: 0 });
+  const vue = vuePanneau(etat, null);
+  assert.deepEqual(vue.geste.ciblesDetail, [
+    { id: "adv2", initiales: "C", detail: "F6 · hors de portée : à 3 cases" },
+    { id: "adv3", initiales: "M1", detail: "D4 · défense 5 · corps 10/10" },
+    { id: "adv4", initiales: "M2", detail: "D4 · défense 5 · corps 10/10" },
+  ]);
+  assert.deepEqual(vue.geste.ciblesDetail.map(({ id }) => id), vue.geste.cibles.map(({ id }) => id), "dans l'ordre des cibles");
+
+  let defense = jouer(duel(), FIN_DE_TOUR);
+  defense = jouer(defense, capacite(defense, "adv2", "Frappe"));
+  assert.deepEqual(vuePanneau(defense, null).geste.ciblesDetail, [{ id: "pj1", initiales: "A", detail: "D4 · lance sa défense · corps 10/10" }]);
+  defense = jouer(defense, regler("cible", "pj1"), de(8, 6));
+  assert.deepEqual(vuePanneau(defense, null).geste.ciblesDetail, [{ id: "pj1", initiales: "A", detail: "D4 · lance sa défense · corps 10/10" }], "la seule cible, une fois payé");
+
+  // Le Marmiton n° 1 est mort à l'Émincer (geste 6) : une capacité sans jet le montre, mort.
+  let apres = reference(6);
+  apres = jouer(apres, capacite(apres, "pj1", "Fournaise"));
+  assert.equal(vuePanneau(apres, null).geste.ciblesDetail.find(({ id }) => id === "adv3").detail, "D4 · mort");
+  assert.equal(vuePanneau(apres, null).geste.ciblesDetail.find(({ id }) => id === "pj1").detail, "D4 · corps 10/10", "sans jet, rien ne s'oppose");
+});
+
+test("vague 3 — plusieurs cibles : l'ordre des jets, ce que chacune a donné ; l'avis de la contre-attaque que la précédente n'a pas pu jouer (les trois phrases de D9), tant que la suivante n'a aucun dé", () => {
+  let etat = combat([{ photo: aubepineEssai(), case: "D4" }, { photo: CIBOULETTE(), case: "D4" }, { photo: marmitonDeCorveeEssai(), case: "D4" }]);
+  etat = jouer(etat, FIN_DE_TOUR, valeurDuMj("pj1", "actions", 0));
+  etat = jouer(etat, capacite(etat, "adv3", "Moulinet farineux"));
+  // Les vivants de la case : les PJ visés lancent leur défense ; rien ne s'oppose à l'auteur, inactif.
+  assert.deepEqual(
+    vuePanneau(etat, null).geste.ciblesDetail.map(({ id, detail }) => [id, detail]),
+    [
+      ["pj1", "D4 · lance sa défense · corps 10/10"],
+      ["pj2", "D4 · lance sa défense · corps 10/10"],
+      ["adv3", "D4 · corps 10/10"],
+    ],
+  );
+  assert.deepEqual(vuePanneau(etat, null).geste.progression, [
+    { libelle: "1 · Aubépine", etat: "a_venir", detail: null },
+    { libelle: "2 · Ciboulette", etat: "a_venir", detail: null },
+  ]);
+  etat = jouer(etat, de(8, 1));
+  assert.deepEqual(vuePanneau(etat, null).geste.progression, [
+    { libelle: "1 · Aubépine", etat: "en_cours", detail: "en cours : jet de défense, attaque 4" },
+    { libelle: "2 · Ciboulette", etat: "a_venir", detail: null },
+  ]);
+  assert.equal(vuePanneau(etat, null).geste.avis, null);
+  // La face de contre-attaque d'Aubépine, qui n'a plus d'action : la cible suivante, sans dé.
+  etat = jouer(etat, de(20, 20));
+  let vue = vuePanneau(etat, null);
+  assert.deepEqual([gesteEnCours(etat).moment, gesteEnCours(etat).rang, vue.etape], ["jet", 1, 2]);
+  assert.equal(vue.geste.avis, "Aubépine n'a plus d'action : pas de contre-attaque.");
+  assert.deepEqual(vue.geste.progression, [
+    { libelle: "1 · Aubépine", etat: "faite", detail: "fait : aucune réussite, Aubépine reçoit C = 15, contre-attaque" },
+    { libelle: "2 · Ciboulette", etat: "en_cours", detail: "en cours : jet de défense, attaque 4" },
+  ]);
+  eprouver(etat, null, "la cible suivante, après une contre-attaque impossible");
+
+  // Les deux autres raisons, posées à la main sur la cible faite (la vue ne lit que l'état).
+  const autre = (contre) => {
+    const copie = structuredClone(sansPile(etat));
+    copie.pile.at(-1).faites[0].contre = contre;
+    return vuePanneau(copie, null).geste.avis;
+  };
+  assert.equal(autre({ statut: "impossible", raison: "arme", arme: null, portee: null, distance: null }), "Aubépine n'a aucune arme : pas de contre-attaque.");
+  assert.equal(
+    autre({ statut: "impossible", raison: "portee", arme: "Couteau d'office", portee: 1, distance: 2 }),
+    "Marmiton est à 2 cases, au-delà de la portée 1 de Couteau d'office : pas de contre-attaque.",
+  );
+  assert.equal(autre({ statut: "laissee" }), null, "une contre-attaque laissée n'a pas d'avis");
+  // Le premier dé de la cible suivante : l'avis s'en va.
+  etat = jouer(etat, de(8, 6));
+  assert.equal(vuePanneau(etat, null).geste.avis, null);
+});
+
+test("vague 3 — le dernier dé lancé, les passifs non câblés (Nez fin, Maîtrise de l'agile ; déjà servi, trop cher), « Appliquer l'effet de… » (Frappe, pas Taloche), « Palette »", () => {
+  const depart = combat([{ photo: aubepineEssai(), case: "D4" }, { photo: adversaireEssai(), case: "D4" }]);
+  const nez = indiceDe(depart, "pj1", "Nez fin");
+  const maitrise = indiceDe(depart, "pj1", "Maîtrise de l'agile");
+  const frappe = indiceDe(depart, "pj1", "Frappe");
+  let etat = jouer(depart, capacite(depart, "pj1", "Frappe"));
+  let vue = vuePanneau(etat, null);
+  // Dès l'ouverture du geste ; mais « Appliquer l'effet de… » attend la cible.
+  const passif = (indice, libelle, texte, actif = true, raison = null) => ({ cle: `passif:pj1:${indice}`, qui: "pj1", libelle, texte, actif, raison, source: { genre: "capacite", qui: "pj1", capacite: indice } });
+  const maitriseVue = passif(maitrise, "Maîtrise de l'agile · gratuit", "Sans désavantage pour 1 capacité d'un objet Agile, en commençant par la première.");
+  assert.deepEqual(vue.geste.passifs, [maitriseVue, passif(nez, "Nez fin · 1 souffle", "Retournez un dé devant un plat douteux.")]);
+  assert.deepEqual([vue.geste.appliquerEffet, vue.geste.dernierDe], [null, null]);
+  assert.deepEqual(vue.geste.palette, { libelle: "Palette", source: { genre: "capacite", qui: "pj1", capacite: frappe }, mj: true });
+  etat = jouer(etat, regler("cible", "adv2"));
+  assert.deepEqual(vuePanneau(etat, null).geste.appliquerEffet, {
+    libelle: "Appliquer l'effet de Frappe…",
+    texte: "Une attaque qui inflige 3/8/20.",
+    source: { genre: "capacite", qui: "pj1", capacite: frappe },
+  });
+  etat = jouer(etat, de(10, 9));
+  vue = vuePanneau(etat, null);
+  assert.deepEqual([vue.geste.dernierDe, vue.geste.chaine.length], [0, 3]);
+  etat = jouer(etat, de(10, 2));
+  assert.equal(vuePanneau(etat, null).geste.dernierDe, 1);
+  let relance = jouer(depart, capacite(depart, "pj1", "Frappe"), regler("cible", "adv2"), regler("avantages", 1, "Coup d'œil"), de(10, 2));
+  assert.equal(vuePanneau(relance, null).geste.dernierDe, 0);
+  relance = jouer(relance, { type: "relancer" });
+  assert.equal(vuePanneau(relance, null).geste.dernierDe, null, "la relance attend son dé : aucun dé n'est posé");
+  relance = jouer(relance, de(10, 9));
+  assert.deepEqual([vuePanneau(relance, null).geste.dernierDe, vuePanneau(relance, null).geste.chaine[1].titre], [1, "relance"], "le rang de la relance, dans la chaîne");
+  // Nez fin inverse le dernier dé : il a servi pour ce jet.
+  etat = jouer(etat, { type: "effet", genre: "inverser", source: { genre: "capacite", qui: "pj1", capacite: nez } });
+  vue = vuePanneau(etat, null);
+  assert.deepEqual(vue.geste.passifs, [maitriseVue, passif(nez, "Nez fin · 1 souffle", "Retournez un dé devant un plat douteux.", false, "Ce passif a déjà servi pour ce jet.")]);
+  eprouver(etat, null, "un passif qui a servi");
+  // Sans souffle, Nez fin ne se paie pas.
+  let pauvre = jouer(depart, valeurDuMj("pj1", "souffle", 0));
+  pauvre = jouer(pauvre, capacite(pauvre, "pj1", "Frappe"));
+  assert.deepEqual(
+    vuePanneau(pauvre, null).geste.passifs.map(({ actif, raison }) => [actif, raison]),
+    [
+      [true, null],
+      [false, "Pas assez de souffle : 1 demandé, 0 restant."],
+    ],
+  );
+  // Taloche (mains nues) a un rôle câblé : pas d'« Appliquer l'effet de… » ; un geste sans jet n'a pas de passifs.
+  const taloche = jouer(depart, capacite(depart, "pj1", "Taloche"), regler("cible", "adv2"));
+  assert.equal(vuePanneau(taloche, null).geste.appliquerEffet, null);
+  assert.deepEqual(vuePanneau(jouer(depart, capacite(depart, "pj1", "Pas chassé")), null).geste.passifs, []);
+  // Un adversaire qui attaque Aubépine : les passifs sont ceux du lanceur, Aubépine, dès que la cible est posée.
+  const flaireur = adversaireEssai((valeurs) => {
+    valeurs.capacites.push(capaciteEssai({ nom: "Flair", groupe: { genre: "capacites", titre: "Capacités" }, facons: [faconEssai({ elements: ["Passif"], passif: true, description: "Flaire le plat." })] }));
+  });
+  let defense = jouer(combat([{ photo: aubepineEssai(), case: "D4" }, { photo: flaireur, case: "D4" }]), FIN_DE_TOUR);
+  defense = jouer(defense, capacite(defense, "adv2", "Frappe"));
+  assert.deepEqual(vuePanneau(defense, null).geste.passifs, [], "avant la cible, le lanceur n'est pas connu ; un adversaire ne lance jamais");
+  defense = jouer(defense, regler("cible", "pj1"));
+  assert.deepEqual(vuePanneau(defense, null).geste.passifs.map(({ qui, libelle }) => [qui, libelle]), [["pj1", "Maîtrise de l'agile · gratuit"], ["pj1", "Nez fin · 1 souffle"]]);
+});
+
+test("vague 3 — l'étape « Interventions » : sa tête, ses intervenants, « Passer » ; l'esquive seule ; aucune, et la ligne qui le dit ; l'étape en cours sur PC", () => {
+  // Le Marmiton touche Aubépine (B = 10, au torse) : Dressage minute, et l'esquive.
+  let etat = jouer(combat([{ photo: aubepineEssai(), case: "D4" }, { photo: adversaireEssai(), case: "D4" }]), FIN_DE_TOUR);
+  etat = jouer(etat, capacite(etat, "adv2", "Frappe"), regler("cible", "pj1"), de(8, 5), de(8, 1), de(20, 5));
+  let vue = vuePanneau(etat, null);
+  const dressage = indiceDe(etat, "pj1", "Dressage minute");
+  assert.deepEqual(vue.geste.interventions, {
+    tete: "Le coup porte : B = 10, torse (d20 → 5). Avant les dégâts, qui intervient ?",
+    intervenants: [
+      {
+        id: "pj1",
+        nom: "Aubépine Crèmebrûlée",
+        initiales: "A",
+        sous: "2 actions · souffle 10/10 · la cible",
+        options: [
+          {
+            cle: `intervention:pj1:${dressage}:0`,
+            libelle: "Dressage minute",
+            texte: "Sert un allié avant son tour.",
+            cout: "1 action · gratuit",
+            actif: true,
+            raison: null,
+            commande: { evenement: { type: "intervenir", qui: "pj1", capacite: dressage, facon: 0 } },
+          },
+        ],
+      },
+    ],
+    passer: "Passer : appliquer les dégâts",
+  });
+  assert.deepEqual([vue.geste.aucuneIntervention, etapeDite(vue, 4), vue.geste.appliquer.commande], [null, "Interventions:en_cours", { evenement: APPLIQUER }]);
+  assert.deepEqual([vue.geste.esquive.qui, vue.geste.esquive.cout, vue.geste.esquive.texte], ["pj1", "1 action + X souffle", "annule X dégâts, X souffle"]);
+  eprouver(etat, null, "l'étape Interventions");
+
+  // Sans intervention, l'esquive seule : l'étape demeure, sans intervenant.
+  let esquive = jouer(duel(), FIN_DE_TOUR);
+  esquive = jouer(esquive, capacite(esquive, "adv2", "Frappe"), regler("cible", "pj1"), de(8, 5), de(8, 1), de(20, 5));
+  vue = vuePanneau(esquive, null);
+  assert.deepEqual([vue.geste.interventions.intervenants, vue.geste.interventions.passer, vue.geste.aucuneIntervention, etapeDite(vue, 4)], [[], "Passer : appliquer les dégâts", null, "Interventions:en_cours"]);
+
+  // Le coup manque : « Passer : terminer ».
+  let manque = jouer(combat([{ photo: aubepineEssai(), case: "D4" }, { photo: adversaireEssai(), case: "D4" }]), FIN_DE_TOUR);
+  manque = jouer(manque, capacite(manque, "adv2", "Frappe"), regler("cible", "pj1"), de(8, 6), de(8, 6), de(8, 6));
+  vue = vuePanneau(manque, null);
+  assert.deepEqual([vue.geste.interventions.tete, vue.geste.interventions.passer], ["Le coup manque. Avant de finir, qui intervient ?", "Passer : terminer"]);
+
+  // Personne ne peut intervenir (le Marmiton attaqué n'a ni intervention ni esquive) : pas d'étape, une ligne.
+  let aucune = duel();
+  aucune = jouer(aucune, capacite(aucune, "pj1", "Frappe"), regler("cible", "adv2"), de(8, 6), de(8, 1), de(20, 5));
+  vue = vuePanneau(aucune, null);
+  assert.deepEqual([vue.geste.interventions, vue.geste.aucuneIntervention, etapeDite(vue, 4), etapeDite(vue, 5)], [null, "Aucune intervention possible.", "Interventions:faite", "Dégâts:en_cours"]);
+  // Hors de l'étape : rien.
+  assert.deepEqual([vuePanneau(duel(), "pj1").geste, vuePanneau(jouer(duel(), capacite(duel(), "pj1", "Frappe")), null).geste.interventions], [null, null]);
+});
+
+test("vague 3 — l'étape « Contre-attaque » du combat de référence : son titre, sa phrase, les lignes de l'arme tenue ; « Laisser passer » reste un choix", () => {
+  // Le Moulinet farineux du Chef, au tour 3 (le onzième geste) : la face 20 d'Aubépine annule l'attaque.
+  const etat = reference({ geste: 11, des: 2 });
+  assert.equal(gesteEnCours(etat).moment, "contre_attaque");
+  const vue = vuePanneau(etat, null);
+  const frappe = indiceDe(etat, "pj1", "Frappe");
+  const emincer = indiceDe(etat, "pj1", "Émincer");
+  assert.deepEqual([vue.geste.contre.titre, vue.geste.contre.texte], [
+    "20 : contre-attaque !",
+    "L'attaque est annulée. Aubépine peut contre-attaquer Chef, à la portée 1 de Couteau d'office. Une action ; il en reste 2.",
+  ]);
+  assert.deepEqual(
+    vue.geste.contre.groupes.map(({ titre, lignes }) => [titre, lignes.map(({ cle, libelle, actif, raison, commande }) => [cle, libelle, actif, raison, commande])]),
+    [
+      [
+        "Couteau d'office (précise)",
+        [
+          [`contre:${frappe}:0`, "Frappe", true, null, { evenement: { type: "contre_attaquer", capacite: frappe, facon: 0 } }],
+          [`contre:${emincer}:0`, "Émincer", false, "Pas assez de souffle : 4 demandés, 3 restants.", { evenement: { type: "contre_attaquer", capacite: emincer, facon: 0 } }],
+        ],
+      ],
+    ],
+  );
+  assert.equal(vue.geste.contre.groupes[0].lignes[0].jouer, "Jouer Frappe");
+  assert.ok(vue.geste.choix.some(({ cle }) => cle === "laisser"));
+  assert.deepEqual([vue.etape, filDit(vue)], [3, "Capacité:0:faite Cible:1:faite Défense:2:faite Zone et dégâts:3:en_cours"]);
+  eprouver(etat, null, "la contre-attaque");
+  assert.equal(vuePanneau(reference({ geste: 11, des: 1 }), null).geste.contre, null, "hors du moment, rien");
+});
+
+test("vague 3 — le coup critique : trois réussites et l'avantage non dépensé, ce que ferait un 4e dé, le rang « critique » ; un jet de caractéristique n'a rien à doubler", () => {
+  let etat = duel();
+  etat = jouer(etat, capacite(etat, "pj1", "Frappe"), regler("cible", "adv2"), regler("avantages", 1, "Coup d'œil"), de(8, 6), de(8, 6), de(8, 6));
+  const vue = vuePanneau(etat, null);
+  assert.deepEqual(vue.geste.critique, { texte: "Trois réussites, et 1 avantage non dépensé.", detail: "Un 4e dé réussi double les dégâts : C = 15 → 30.", rang: "critique : 30" });
+  assert.equal(vue.etape, 2);
+  assert.equal(vuePanneau(jouer(etat, { type: "critique", tenter: false }), null).geste.critique, null, "hors du moment, rien");
+  let goute = duel();
+  goute = jouer(goute, capacite(goute, "pj1", "Goûter"), regler("caracteristiques", ["force"]), regler("difficulte", 2), regler("avantages", 2, "Nez au vent"), de(8, 5), de(8, 5), de(8, 5));
+  assert.deepEqual(vuePanneau(goute, null).geste.critique, { texte: "Trois réussites, et 2 avantages non dépensés.", detail: "Un 4e dé réussi fait un coup critique.", rang: null });
+});
+
+test("vague 3 — au doigt : « Touchez » où le bilan dit « Cliquez sur », le reste mot pour mot ; null avec le bilan", () => {
+  let etat = duel();
+  etat = jouer(etat, capacite(etat, "pj1", "Frappe"));
+  assert.deepEqual([vuePanneau(etat, null).geste.bilan, vuePanneau(etat, null).geste.bilanAuDoigt], ["Choisissez une cible.", "Choisissez une cible."]);
+  etat = jouer(etat, regler("cible", "adv2"));
+  assert.equal(vuePanneau(etat, null).geste.bilanAuDoigt, "Touchez le d8 pour lancer le 1er dé.");
+  etat = jouer(etat, de(8, 6));
+  assert.equal(vuePanneau(etat, null).geste.bilanAuDoigt, "1 réussite pour l'instant. Touchez le d8 pour lancer le 2e dé.");
+  let relance = duel();
+  relance = jouer(relance, capacite(relance, "pj1", "Frappe"), regler("cible", "adv2"), regler("avantages", 1, "Coup d'œil"), de(8, 1), { type: "relancer" });
+  assert.equal(vuePanneau(relance, null).geste.bilanAuDoigt, "Aucune réussite pour l'instant. Avantage dépensé : touchez le d8 pour relancer le 1er dé.");
+  let explose = duel();
+  explose = jouer(explose, capacite(explose, "pj1", "Goûter"), regler("caracteristiques", ["force"]), regler("difficulte", 10), de(8, 8), { type: "exploser" });
+  assert.equal(vuePanneau(explose, null).geste.bilanAuDoigt, "Touchez le d8 pour faire exploser le 1er dé.");
+  assert.equal(vuePanneau(jouer(duel(), capacite(duel(), "pj1", "Pas chassé"), regler("arrivee", "D5")), null).geste.bilanAuDoigt, null);
+});
+
+test("vague 3 — la fiche et le jeton : qui peut encore agir, les étiquettes (quatre genres, trois couleurs, la source d'une blessure, la durée d'une garde), ✕ et « Appliquer l'effet de… » pour un état seul, inactifs pendant un geste ; la pastille ; « Modifier… »", () => {
+  let etat = combat([{ photo: aubepineEssai(), case: "D4" }, { photo: adversaireEssai(), case: "D4" }]);
+  const pasDuMj = etat.pas + 1;
+  etat = jouer(etat, mj("etat", "adv2", { ajout: { capacite: ETOURDI(), duree: "tour" } }));
+  etat = jouer(etat, { type: "effet", genre: "defense", source: MJ, sur: "adv2", n: 1, duree: "tour" }, { type: "effet", genre: "attaque", source: MJ, sur: "adv2", n: -2, duree: "combat" });
+  let fiche = vueFiche(etat, "adv2", null);
+  assert.deepEqual(fiche.effets, [
+    {
+      id: pasDuMj,
+      genre: "etat",
+      nom: "Étourdi",
+      source: "MJ",
+      duree: "jusqu'au prochain tour des PJ",
+      couleur: "alerte",
+      texte: "Votre prochaine action coûte une action de plus.",
+      retirer: { libelle: "Retirer l'état Étourdi", actif: true, raison: null, commande: { evenement: { type: "mj", genre: "etat", qui: "adv2", retrait: pasDuMj } }, mj: true },
+      appliquer: { libelle: "Appliquer l'effet d'Étourdi…", source: { genre: "etat", effet: pasDuMj } },
+    },
+    { id: pasDuMj + 1, genre: "modif", nom: "Défense +1", source: "MJ", duree: "jusqu'au prochain tour des PJ", couleur: "favorable", texte: null, retirer: null, appliquer: null },
+    { id: pasDuMj + 2, genre: "modif", nom: "Attaque −2", source: "MJ", duree: "jusqu'à la fin du combat", couleur: "alerte", texte: null, retirer: null, appliquer: null },
+  ]);
+  assert.deepEqual([fiche.pastille, fiche.jeu, fiche.menuMj], ["alerte", null, MODIFIER()]);
+  assert.deepEqual([vuePlateau(etat, null).jetons.adv2.pastille, vuePlateau(etat, null).jetons.adv2.menuMj, vuePlateau(etat, null).jetons.adv2.epuise], ["alerte", MODIFIER(), false]);
+  assert.deepEqual([vueFiche(etat, "pj1", null).jeu, vueFiche(etat, "pj1", null).pastille, vueFiche(etat, "pj1", null).effets], ["peut_agir", null, []]);
+  eprouver(etat, null, "un état, deux ±N");
+
+  // Pendant un geste : ✕ et « Modifier… » inactifs, avec leur raison ; une attaque en plus, de sa source.
+  etat = jouer(etat, capacite(etat, "pj1", "Frappe"), regler("cible", "adv2"), de(10, 9), de(10, 9), de(10, 2));
+  etat = jouer(etat, { type: "effet", genre: "attaque_en_plus", source: { genre: "capacite", qui: "pj1", capacite: indiceDe(etat, "pj1", "Frappe") } });
+  fiche = vueFiche(etat, "adv2", null);
+  assert.deepEqual([fiche.effets[0].retirer.actif, fiche.effets[0].retirer.raison, fiche.menuMj], [false, LE_GESTE_D_ABORD, MODIFIER(false)]);
+  assert.deepEqual(
+    vueFiche(etat, "pj1", null).effets.map(({ genre, nom, source, duree, couleur, retirer, appliquer }) => [genre, nom, source, duree, couleur, retirer, appliquer]),
+    [["attaque_en_plus", "attaque en plus", "Frappe", "jusqu'au prochain tour d'Aubépine", "alerte", null, null]],
+  );
+  assert.equal(vueFiche(etat, "pj1", null).jeu, "peut_agir", "pendant son propre geste, il peut encore agir");
+  // Sa dernière action payée, au milieu de son geste : il n'a pas encore tout joué.
+  let derniere = duel();
+  derniere = jouer(derniere, capacite(derniere, "pj1", "Pas chassé"), regler("arrivee", "D5"), { type: "confirmer" });
+  derniere = jouer(derniere, capacite(derniere, "pj1", "Frappe"), regler("cible", "adv2"), de(8, 6));
+  assert.equal(vueFiche(derniere, "pj1", null).actions.reste, 0);
+  assert.deepEqual([vueFiche(derniere, "pj1", null).jeu, vuePlateau(derniere, null).jetons.pj1.epuise], ["peut_agir", false]);
+  eprouver(etat, null, "un état pendant un geste");
+
+  // Une garde : favorable, jusqu'au prochain tour du camp ; qui a joué pâlit.
+  let guet = combat([{ photo: aubepineEssai(), case: "D4" }, { photo: CIBOULETTE(), case: "A1" }, { photo: adversaireEssai(), case: "D4" }]);
+  guet = jouer(guet, capacite(guet, "pj1", "Guetter"), regler("garde", { capacite: indiceDe(guet, "pj1", "Frappe"), facon: 0 }), { type: "confirmer" });
+  assert.deepEqual(
+    vueFiche(guet, "pj1", null).effets.map(({ genre, nom, source, duree, couleur, texte }) => [genre, nom, source, duree, couleur, texte]),
+    [["guet", "en guet : Frappe", "Guetter", "jusqu'au prochain tour des PJ", "favorable", "Une attaque qui inflige 3/8/20."]],
+  );
+  assert.deepEqual([vueFiche(guet, "pj1", null).jeu, vuePlateau(guet, null).jetons.pj1.epuise, vueFiche(guet, "pj2", null).jeu, vueFiche(guet, "adv3", null).jeu], ["epuise", true, "peut_agir", null]);
+
+  // Une blessure : rouge, de la source de son bloc, jusqu'à la fin du combat ; la pastille d'une blessure passe avant l'alerte.
+  const fin = reference();
+  const blessure = vueFiche(fin, "pj1", null).effets[0];
+  assert.deepEqual([blessure.genre, blessure.nom, blessure.source, blessure.duree, blessure.couleur, blessure.appliquer.libelle], ["etat", "Main brûlée", "Blessure", "jusqu'à la fin du combat", "blessure", "Appliquer l'effet de Main brûlée…"]);
+  assert.deepEqual([vueFiche(fin, "pj1", null).pastille, vueFiche(fin, "pj1", null).menuMj, vueFiche(fin, "pj1", null).jeu], ["blessure", null, null], "le combat fini : plus de menu du MJ");
+  assert.equal(vueFiche(fin, "pj1", null).effets[0].retirer.raison, "Le combat est terminé.");
+  // Un mort n'a pas de menu du MJ ; avant le lancement non plus.
+  assert.equal(vueFiche(reference(6), "adv3", null).menuMj, null);
+  assert.equal(vuePlateau(reference(6), null).jetons.adv3.menuMj, null);
+  assert.equal(vueFiche(ouvrirCombat(miseEnPlaceEssai([{ photo: pjEssai() }, { photo: adversaireEssai() }])), "pj1", null).menuMj, null);
+});
+
+test("vague 3 — les vignettes : un vivant du camp qui joue, son nom court, son étiquette, sa garde ; le choix, l'inactif et la raison de son jeton, quels qu'ils soient", () => {
+  assert.equal(vueVignettes(ouvrirCombat(miseEnPlaceEssai([{ photo: pjEssai() }, { photo: adversaireEssai() }])), null), null, "avant le lancement");
+  assert.equal(vueVignettes(reference(), null), null, "le combat fini");
+  // Le tour 2 des adversaires : le Marmiton n° 1 est mort, il n'a plus de vignette.
+  const tour = reference(7);
+  assert.equal(tour.tour.camp, "adv");
+  const vue = vueVignettes(tour, "adv2");
+  assert.equal(vue.camp, "adv");
+  assert.deepEqual(vue.vignettes, [
+    {
+      id: "adv2",
+      initiales: "C",
+      nom: "Chef",
+      etiquette: "Chef de partie, actions restantes : 1 sur 1",
+      actions: { reste: 1, max: 1, texte: "actions restantes : 1 sur 1" },
+      jeu: "peut_agir",
+      choisie: true,
+      garde: null,
+      pastille: null,
+      choix: { commande: { choisir: "adv2" } },
+      inactif: false,
+      raison: null,
+      menuMj: MODIFIER(),
+    },
+    {
+      id: "adv4",
+      initiales: "M2",
+      nom: "Marmiton n° 2",
+      etiquette: "Marmiton de corvée n° 2, actions restantes : 1 sur 1",
+      actions: { reste: 1, max: 1, texte: "actions restantes : 1 sur 1" },
+      jeu: "peut_agir",
+      choisie: false,
+      garde: null,
+      pastille: null,
+      choix: { commande: { choisir: "adv4" } },
+      inactif: false,
+      raison: null,
+      menuMj: MODIFIER(),
+    },
+  ]);
+  // Pendant le choix d'une cible (R n° 22) : celle qui se cible porte le réglage, les autres sont écartées.
+  let choix = combat([{ photo: aubepineEssai(), case: "D4" }, { photo: CIBOULETTE(), case: "D4" }, { photo: adversaireEssai(), case: "D4" }]);
+  choix = jouer(choix, capacite(choix, "pj1", "Fournaise"));
+  const pendant = vueVignettes(choix, null);
+  const plateau = vuePlateau(choix, null);
+  for (const vignette of pendant.vignettes) {
+    assert.deepEqual([vignette.choix, vignette.inactif, vignette.raison], [plateau.jetons[vignette.id].choix, plateau.jetons[vignette.id].inactif, plateau.jetons[vignette.id].raison], vignette.id);
+  }
+  assert.deepEqual(pendant.vignettes[1].choix, { commande: { evenement: regler("cible", "pj2") } });
+  assert.deepEqual([pendant.vignettes[0].choisie, pendant.vignettes[1].choisie], [true, false]);
+  // Une garde : sur la vignette de qui a joué, jusqu'à la fin du tour de son camp.
+  let guet = combat([{ photo: aubepineEssai(), case: "D4" }, { photo: CIBOULETTE(), case: "A1" }, { photo: adversaireEssai(), case: "D4" }]);
+  guet = jouer(guet, capacite(guet, "pj1", "Guetter"), regler("garde", { capacite: indiceDe(guet, "pj1", "Frappe"), facon: 0 }), { type: "confirmer" });
+  const aubepine = vueVignettes(guet, null).vignettes[0];
+  assert.deepEqual([aubepine.garde, aubepine.etiquette, aubepine.jeu], ["en guet : Frappe", "Aubépine Crèmebrûlée, actions restantes : 1 sur 2, en guet : Frappe", "epuise"]);
+});
+
+test("vague 3 — le dé en surimpression, lu sur l'état d'avant : réussite, échec, désavantage, relance, explosion, critique, zone, contre-attaque, un d20 qui finit le geste ; rien d'autre", () => {
+  const de8 = jouer(duel(), capacite(duel(), "pj1", "Frappe"), regler("cible", "adv2"));
+  assert.deepEqual(vueDuDe(de8, de(8, 7)), { titre: "1er dé · d8", valeur: "7", verdict: "✓ réussite", genre: "reussite" });
+  assert.deepEqual(vueDuDe(de8, de(8, 2)), { titre: "1er dé · d8", valeur: "2", verdict: "✗ échec", genre: "echec" });
+  assert.equal(vueDuDe(de8, de(6, 2)), null, "un dé que l'état n'attend pas");
+  assert.equal(vueDuDe(de8, APPLIQUER), null);
+  assert.equal(vueDuDe(duel(), de(8, 2)), null, "sans geste");
+  // Le premier dé du combat de référence : d10 +1, sous désavantage, le pire gardé.
+  assert.deepEqual(vueDuDe(reference({ geste: 1, des: 0 }), de(10, 6, 9)), { titre: "1er dé · d10+1 (désavantage)", valeur: "7", verdict: "✓ réussite", genre: "reussite" });
+  // Une relance : « relance » ; le d20 de localisation et sa zone ; la face de contre-attaque.
+  const relance = jouer(de8, regler("avantages", 1, "Coup d'œil"), de(8, 1), { type: "relancer" });
+  assert.deepEqual(vueDuDe(relance, de(8, 6)), { titre: "relance · d8", valeur: "6", verdict: "✓ réussite", genre: "reussite" });
+  const d20 = jouer(de8, de(8, 6), de(8, 1));
+  assert.deepEqual(vueDuDe(d20, de(20, 5)), { titre: "Localisation · d20", valeur: "5", verdict: "torse", genre: "localisation" });
+  assert.deepEqual(vueDuDe(reference({ geste: 11, des: 1 }), de(20, 20)), { titre: "Localisation · d20", valeur: "20", verdict: "contre-attaque", genre: "localisation" });
+  // L'explosion : le dé qui peut exploser, puis le dé de l'explosion.
+  let goute = duel();
+  goute = jouer(goute, capacite(goute, "pj1", "Goûter"), regler("caracteristiques", ["force"]), regler("difficulte", 10));
+  assert.deepEqual(vueDuDe(goute, de(8, 8)), { titre: "1er dé · d8", valeur: "8", verdict: "peut exploser", genre: "localisation" });
+  goute = jouer(goute, de(8, 8), { type: "exploser" });
+  assert.deepEqual(vueDuDe(goute, de(8, 3)), { titre: "explosion · d8", valeur: "11", verdict: "✓ réussite", genre: "reussite" });
+  // Le 4e dé du critique.
+  const critique = jouer(de8, regler("avantages", 1, "Coup d'œil"), de(8, 6), de(8, 6), de(8, 6), { type: "critique", tenter: true });
+  assert.deepEqual(vueDuDe(critique, de(8, 7)), { titre: "4e dé · critique", valeur: "7", verdict: "✓ coup critique", genre: "reussite" });
+  assert.deepEqual(vueDuDe(critique, de(8, 1)), { titre: "4e dé · critique", valeur: "1", verdict: "✗ échec", genre: "echec" });
+  // Un d20 qui finit le geste : Aubépine, sans action, ne peut pas contre-attaquer ; la vue se lit sur l'état d'avant.
+  let finit = jouer(duel(), FIN_DE_TOUR, valeurDuMj("pj1", "actions", 0));
+  finit = jouer(finit, capacite(finit, "adv2", "Frappe"), regler("cible", "pj1"), de(8, 1));
+  assert.deepEqual(vueDuDe(finit, de(20, 20)), { titre: "Localisation · d20", valeur: "20", verdict: "contre-attaque", genre: "localisation" });
+  assert.equal(gesteEnCours(jouer(finit, de(20, 20))), null, "le geste a fini à ce d20");
+  // Sous désavantage : « (désavantage) ».
+  const desavantage = jouer(duel(), capacite(duel(), "pj1", "Frappe"), regler("cible", "adv2"), regler("avantages", -1, "Fumée"));
+  assert.deepEqual(vueDuDe(desavantage, de(8, 3, 7)), { titre: "1er dé · d8 (désavantage)", valeur: "3", verdict: "✗ échec", genre: "echec" });
 });

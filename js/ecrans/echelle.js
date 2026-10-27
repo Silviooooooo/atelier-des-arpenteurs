@@ -10,11 +10,17 @@
 //
 // La bulle du combat, son onglet et ses infobulles s'accrochent à une case
 // ou à une ligne : leur place se calcule ici, sans DOM (calculerPlace), puis
-// s'écrit en trois propriétés CSS (--bulle-gauche, --bulle-haut,
-// --bulle-fleche) que css/combat.css lit (placerBulle). L'ancrage CSS
-// (anchor-name) n'est pas employé : Firefox ne le garantit pas. La place se
-// refait à l'ouverture et quand la fenêtre change de taille, jamais au
-// défilement : la bulle ne fait jamais défiler la page.
+// s'écrit en quatre propriétés CSS (--bulle-gauche, --bulle-haut,
+// --bulle-fleche, --bulle-hauteur) que css/combat.css lit (placerBulle).
+// L'ancrage CSS (anchor-name) n'est pas employé : Firefox ne le garantit
+// pas. La place se refait à l'ouverture et quand la fenêtre change de taille,
+// jamais au défilement : la bulle ne fait jamais défiler la page.
+//
+// La bulle est bornée sous le bandeau (mission du lot 4.3, § 6, point 10 ;
+// contrat de la vague 3, § 4.2) : son haut ne monte jamais au-dessus du
+// plafond que l'écran donne (le bas du bandeau), et sa plus grande hauteur
+// (--bulle-hauteur, lue en max-height) s'arrête au bas de la fenêtre ; ce qui
+// dépasse défile à l'intérieur d'elle.
 //
 // Ce sont les seules écritures de style du code, et elles vivent ici :
 // poserEchelle et placerBulle, rien d'autre. Un contrôle vérifie qu'aucun
@@ -85,38 +91,48 @@ const ramener = (valeur, min, max) => Math.max(min, Math.min(valeur, max));
  * cotes : les côtés essayés dans l'ordre, parmi « droite », « gauche »,
  * « dessous », « dessus » ; ecart : la distance entre l'ancre et la bulle ;
  * pointe : la distance visée entre le bord de la bulle et le milieu de
- * l'ancre.
+ * l'ancre ; plafond : le haut le plus haut permis (le bas du bandeau),
+ * jamais à moins de « marge » du haut de la fenêtre.
  *
- * Un côté tient quand la bulle y est entière, à « marge » au moins des
- * bords de la fenêtre : le premier qui tient l'emporte. Si aucun ne tient,
- * le premier, ramené dans la fenêtre sur les deux axes (à « marge » si la
- * taille la dépasse). fleche : la place de la pointe le long du bord qui
- * regarde l'ancre, en face de son milieu, à « coin » au moins des coins.
- * Rend { cote, gauche, haut, fleche, entiere }.
+ * Plus haute que l'espace entre le plafond et le bas de la fenêtre (marge
+ * ôtée), la bulle se place à la hauteur de cet espace : elle défilera en
+ * elle. Un côté tient quand la bulle y est entière, sous le plafond et à
+ * « marge » au moins des autres bords : le premier qui tient l'emporte. Si
+ * aucun ne tient, le premier, ramené dans cet espace sur les deux axes
+ * (contre le plafond, ou à « marge », si la taille le dépasse). fleche : la
+ * place de la pointe le long du bord qui regarde l'ancre, en face de son
+ * milieu, à « coin » au moins des coins. hauteur : la plus grande hauteur de
+ * la bulle à cette place, de son haut au bas de la fenêtre (marge ôtée),
+ * arrondie vers le bas. entiere : sa taille tient sous le plafond.
+ * Rend { cote, gauche, haut, fleche, entiere, hauteur }.
  */
-export function calculerPlace({ ancre, taille, fenetre, cotes, ecart, pointe, marge = 16, coin = 12 }) {
-  const { largeur, hauteur } = taille;
+export function calculerPlace({ ancre, taille, fenetre, cotes, ecart, pointe, marge = 16, coin = 12, plafond = marge }) {
+  const haut = Math.max(marge, plafond);
+  const hauteurPermise = Math.max(0, fenetre.hauteur - marge - haut);
+  const largeur = taille.largeur;
+  const hauteur = Math.min(taille.hauteur, hauteurPermise);
   const xMax = fenetre.largeur - marge - largeur;
   const yMax = fenetre.hauteur - marge - hauteur;
   const milieuX = (ancre.gauche + ancre.droite) / 2;
   const milieuY = (ancre.haut + ancre.bas) / 2;
   const essayer = (cote) => {
-    if (cote === "droite") return { cote, x: ancre.droite + ecart, y: ramener(milieuY - pointe, marge, yMax) };
-    if (cote === "gauche") return { cote, x: ancre.gauche - ecart - largeur, y: ramener(milieuY - pointe, marge, yMax) };
+    if (cote === "droite") return { cote, x: ancre.droite + ecart, y: ramener(milieuY - pointe, haut, yMax) };
+    if (cote === "gauche") return { cote, x: ancre.gauche - ecart - largeur, y: ramener(milieuY - pointe, haut, yMax) };
     if (cote === "dessous") return { cote, x: ramener(milieuX - pointe, marge, xMax), y: ancre.bas + ecart };
     if (cote === "dessus") return { cote, x: ramener(milieuX - pointe, marge, xMax), y: ancre.haut - ecart - hauteur };
     throw new TypeError(`Côté inconnu : ${cote}.`);
   };
-  const tient = ({ x, y }) => x >= marge && x <= xMax && y >= marge && y <= yMax;
+  const tient = ({ x, y }) => x >= marge && x <= xMax && y >= haut && y <= yMax;
   const essais = cotes.map(essayer);
   const premier = essais[0];
-  const place = essais.find(tient) ?? { cote: premier.cote, x: ramener(premier.x, marge, xMax), y: ramener(premier.y, marge, yMax) };
-  // Un côté qui tient suppose la bulle plus petite que la fenêtre, marges
-  // ôtées : « entière » ne dépend que de sa taille.
-  const entiere = largeur <= fenetre.largeur - 2 * marge && hauteur <= fenetre.hauteur - 2 * marge;
+  const place = essais.find(tient) ?? { cote: premier.cote, x: ramener(premier.x, marge, xMax), y: ramener(premier.y, haut, yMax) };
+  // Un côté qui tient suppose la bulle plus petite que l'espace permis :
+  // « entière » ne dépend que de sa taille.
+  const entiere = largeur <= fenetre.largeur - 2 * marge && taille.hauteur <= hauteurPermise;
   const laterale = place.cote === "droite" || place.cote === "gauche";
   const fleche = laterale ? ramener(milieuY - place.y, coin, hauteur - coin) : ramener(milieuX - place.x, coin, largeur - coin);
-  return { cote: place.cote, gauche: Math.round(place.x), haut: Math.round(place.y), fleche: Math.round(fleche), entiere };
+  const hauteurDeLaPlace = Math.max(0, Math.floor(fenetre.hauteur - marge - place.y));
+  return { cote: place.cote, gauche: Math.round(place.x), haut: Math.round(place.y), fleche: Math.round(fleche), entiere, hauteur: hauteurDeLaPlace };
 }
 
 /**
@@ -125,10 +141,12 @@ export function calculerPlace({ ancre, taille, fenetre, cotes, ecart, pointe, ma
  * (getBoundingClientRect), un nœud ou une boîte composée par l'appelant
  * (l'infobulle d'une ligne : les bords gauche et droit de la bulle, le haut
  * et le bas de la ligne) ; repere : ce par rapport à quoi la bulle se pose
- * (position: absolute). Écrit trois propriétés, en px entiers relatifs au
- * repère, et rien d'autre : la classe du côté, c'est l'appelant qui la pose.
+ * (position: absolute) ; plafond : le bas du bandeau, en px de la fenêtre
+ * (absent : la marge). Écrit quatre propriétés, en px entiers : la place,
+ * relative au repère, puis la plus grande hauteur ; rien d'autre : la classe
+ * du côté, c'est l'appelant qui la pose.
  */
-export function placerBulle(noeud, { ancre, repere, fenetre, cotes, ecart, pointe }) {
+export function placerBulle(noeud, { ancre, repere, fenetre, cotes, ecart, pointe, plafond }) {
   const boite = noeud.getBoundingClientRect();
   const a = ancre.getBoundingClientRect();
   const r = repere.getBoundingClientRect();
@@ -139,10 +157,12 @@ export function placerBulle(noeud, { ancre, repere, fenetre, cotes, ecart, point
     cotes,
     ecart,
     pointe,
+    plafond: Number.isFinite(plafond) ? plafond : undefined,
   });
   noeud.style.setProperty("--bulle-gauche", `${Math.round(place.gauche - r.left)}px`);
   noeud.style.setProperty("--bulle-haut", `${Math.round(place.haut - r.top)}px`);
   noeud.style.setProperty("--bulle-fleche", `${place.fleche}px`);
+  noeud.style.setProperty("--bulle-hauteur", `${place.hauteur}px`);
   return { cote: place.cote, entiere: place.entiere };
 }
 

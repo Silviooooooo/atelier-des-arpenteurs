@@ -115,9 +115,11 @@ const ordinal = (place) => (place === 1 ? "1er" : `${place}e`);
 
 // L'élision devant une voyelle, accentuée ou non : « défense d'Aubépine »,
 // « attaque de Marmiton n° 3 ». Un h reste entier, faute de savoir s'il est
-// muet (comme js/adversaire/lecture.js).
+// muet (comme js/adversaire/lecture.js). Exportée pour les vues (contrat de
+// la vague 3 du lot 4.3, § 1) : « Appliquer l'effet d'Étourdi… », « la
+// portée 1 de Couteau d'office ».
 const VOYELLE = /^[aeiouàâäéèêëîïôöùûüœæ]/iu;
-const deNom = (nom) => (VOYELLE.test(nom) ? `d'${nom}` : `de ${nom}`);
+export const deNom = (nom) => (VOYELLE.test(nom) ? `d'${nom}` : `de ${nom}`);
 
 // Un état libre, nommé par le MJ : entre guillemets.
 const entreGuillemets = (texte) => `${OUVRANT} ${texte} ${FERMANT}`;
