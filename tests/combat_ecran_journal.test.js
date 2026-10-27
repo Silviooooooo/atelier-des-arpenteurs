@@ -8,7 +8,10 @@
 // et de vueBandeau (§ 8.7) : celles de js/combat/lecture.js s'écrivent dans
 // un autre lot. Les lignes sont celles du combat de référence fictif,
 // découpées comme js/combat/journal.js les découpe ; les noms viennent de la
-// démonstration, et des noms d'essai que le contrat permet.
+// démonstration, et des noms d'essai que le contrat permet. Depuis le lot 4.3,
+// le combat de référence n'a plus d'explosion ni de signe moins (le −1 des
+// blessures n'est plus) : le jet de caractéristique à explosions est écrit à
+// la main, tel que le journal l'écrirait.
 //
 // Ce fichier tient :
 // a) chaque segment et sa classe, et rien d'autre de coloré ; le texte des
@@ -98,13 +101,13 @@ const FIN = ligne("fin", [["fin", [texte("Combat terminé : victoire des PJ.")]]
 // Deux phrases : une Frappe manquée.
 const MANQUEE = ligne("geste", [
   ["ouverture", [acteur("Aubépine", "pj"), texte(" : "), capacite("Frappe"), texte(" contre "), cible("Chef", "adv"), texte(".")]],
-  ["jet", [texte("d10 contre 7 → "), de(0, "6", false), texte(" : aucune réussite, manqué.")]],
+  ["jet", [texte("d10+1 contre 7 → "), de(0, "6", false), texte(" : aucune réussite, manqué.")]],
 ]);
 
 // Trois phrases : la Fournaise du tour 4.
 const FOURNAISE = ligne("geste", [
   ["ouverture", [acteur("Aubépine", "pj"), texte(" : "), capacite("Fournaise [1]"), texte(" (1 souffle, 1 lien) contre "), cible("Chef", "adv"), texte(".")]],
-  ["jet", [texte("d10 contre 7, 1 avantage → "), de(0, "9", true), entre(), de(1, "5", false), texte(" : 1 réussite, touché.")]],
+  ["jet", [texte("d10+1 contre 7, 1 avantage → "), de(0, "9", true), entre(), de(1, "5", false), texte(" : 1 réussite, touché.")]],
   ["localisation", [texte("Localisation d20 → 6 : torse.")]],
 ]);
 
@@ -162,7 +165,9 @@ const DESAVANTAGE = ligne("geste", [
   ["degats", [texte("Armure 15 → 11.")]],
 ]);
 
-// Un jet de caractéristique, en une phrase, et ses explosions.
+// Un jet de caractéristique, en une phrase, et ses explosions : un d6 contre
+// 8, dont la face maximale explose (écrit à la main, hors du combat de
+// référence).
 const GOUTER = ligne("geste", [
   [
     "jet",
@@ -170,10 +175,10 @@ const GOUTER = ligne("geste", [
       acteur("Aubépine", "pj"),
       texte(" : "),
       capacite("Goûter"),
-      texte(", d6−1 (Savoir sauvage + Sens) contre 6 (compliqué) → "),
-      de(0, "5 explose, + 6 = 11", true),
+      texte(", d6 (Savoir sauvage + Sens) contre 8 (très difficile) → "),
+      de(0, "6 explose, + 6 = 12", true),
       entre(),
-      de(1, "5 explose, + 2 = 7", true),
+      de(1, "6 explose, + 2 = 8", true),
       entre(),
       de(2, "2", false),
       texte(" : 2 réussites."),
@@ -195,7 +200,7 @@ const TALOCHE_EN_COURS = ligne(
 // La ligne en cours du Goûter : un dé qui attend d'exploser, sans signe ni somme.
 const GOUTER_EN_COURS = ligne(
   "geste",
-  [["jet", [acteur("Aubépine", "pj"), texte(" : "), capacite("Goûter"), texte(", d6−1 (Savoir sauvage + Sens) contre 6 (compliqué) → "), de(0, "5 explose, + 6", null)]]],
+  [["jet", [acteur("Aubépine", "pj"), texte(" : "), capacite("Goûter"), texte(", d6 (Savoir sauvage + Sens) contre 8 (très difficile) → "), de(0, "6", null)]]],
   { enCours: true },
 );
 
@@ -343,7 +348,7 @@ test("chaque segment et sa classe, et rien d'autre de coloré ; le texte des nœ
       { "span.combat-seg-adv": ["Chef"] },
       ".",
       " ",
-      "d10 contre 7 → ",
+      "d10+1 contre 7 → ",
       { "span.combat-cadre-jet": [{ "span.combat-de-insecable": ["6 ", { "span.combat-seg-echec": ["✗"] }] }] },
       " : aucune réussite, manqué.",
     ]);
@@ -400,8 +405,8 @@ test("les cadres : un par jet, un dé d'un seul tenant par essai, les séparateu
     assert.deepEqual(cadreDe(EMINCER), [[reussi("5"), ", ", reussi("9"), ", ", echoue("4")]], "trois dés");
     assert.deepEqual(cadreDe(DESAVANTAGE), [[reussi("7/10 → 7"), ", ", echoue("9/3 → 3")]], "le désavantage : ses lancers et sa flèche dans le dé");
     assert.deepEqual(cadreDe(TALOCHE), [[reussi("8"), ", ", echoue("4"), ", relancé ", reussi("6"), ", ", reussi("9")]], "une relance : « relancé » entre deux dés");
-    assert.deepEqual(cadreDe(GOUTER), [[reussi("5 explose, + 6 = 11"), ", ", reussi("5 explose, + 2 = 7"), ", ", echoue("2")]], "une explosion : la valeur, l'ajout et la somme dans le même dé");
-    assert.deepEqual(cadreDe(GOUTER_EN_COURS), [[{ "span.combat-de-insecable": ["5 explose, + 6"] }]], "un dé qui attend : sans signe");
+    assert.deepEqual(cadreDe(GOUTER), [[reussi("6 explose, + 6 = 12"), ", ", reussi("6 explose, + 2 = 8"), ", ", echoue("2")]], "une explosion : la valeur, l'ajout et la somme dans le même dé");
+    assert.deepEqual(cadreDe(GOUTER_EN_COURS), [[{ "span.combat-de-insecable": ["6"] }]], "un dé qui attend : sans signe");
 
     // Chaque dé insécable porte un seul dé, et le dé de localisation n'est
     // pas encadré.
@@ -651,30 +656,30 @@ test("la coupe : la première phrase coupée par « … », en unités entières
   // Sous 125, le nom de qui agit ne se coupe pas : voir le contrôle « quand
   // même le minimum ne tient pas ».
 
-  // Deux phrases (30 et 45 signes) : la première et le jet sont toutes les
+  // Deux phrases (30 et 47 signes) : la première et le jet sont toutes les
   // phrases ; rien n'est ôté, aucune coupe « […] ».
   const manquee = (budget) => couperSous(MANQUEE, budget).morceaux;
-  assert.deepEqual(manquee(76), [P(0), P(1)]);
-  assert.deepEqual(manquee(75), [{ phrase: 0, jusqua: 28 }, P(1)], "« … contre Che… »");
-  assert.deepEqual(manquee(70), [{ phrase: 0, jusqua: 17 }, P(1)], "« contre » ne tient pas : « Aubépine : Frappe… »");
-  assert.deepEqual(manquee(60), [{ phrase: 0, jusqua: 13 }, P(1)], "« Aubépine : Fr… »");
+  assert.deepEqual(manquee(78), [P(0), P(1)]);
+  assert.deepEqual(manquee(77), [{ phrase: 0, jusqua: 28 }, P(1)], "« … contre Che… »");
+  assert.deepEqual(manquee(72), [{ phrase: 0, jusqua: 17 }, P(1)], "« contre » ne tient pas : « Aubépine : Frappe… »");
+  assert.deepEqual(manquee(62), [{ phrase: 0, jusqua: 13 }, P(1)], "« Aubépine : Fr… »");
 
-  // Trois phrases (57, 57 et 29) : la localisation ôtée, puis la première
+  // Trois phrases (57, 59 et 29) : la localisation ôtée, puis la première
   // coupée dans le nom de la cible.
   const fournaise = (budget) => couperSous(FOURNAISE, budget).morceaux;
-  assert.deepEqual(fournaise(145), [P(0), P(1), P(2)]);
-  assert.deepEqual(fournaise(144), [P(0), P(1), C]);
-  assert.deepEqual(fournaise(119), [P(0), P(1), C]);
-  assert.deepEqual(fournaise(118), [{ phrase: 0, jusqua: 55 }, P(1), C]);
+  assert.deepEqual(fournaise(147), [P(0), P(1), P(2)]);
+  assert.deepEqual(fournaise(146), [P(0), P(1), C]);
+  assert.deepEqual(fournaise(121), [P(0), P(1), C]);
+  assert.deepEqual(fournaise(120), [{ phrase: 0, jusqua: 55 }, P(1), C]);
 
   // Une phrase seule, celle d'un jet de caractéristique : coupée, jamais dans
-  // un dé (le deuxième dé, à 94 signes, ne tient pas entier en 99).
-  assert.deepEqual(couperSous(GOUTER, 134).morceaux, [P(0)]);
-  assert.deepEqual(couperSous(GOUTER, 100).morceaux, [{ phrase: 0, jusqua: 94 }]);
-  assert.deepEqual(couperSous(GOUTER, 113).morceaux, [{ phrase: 0, jusqua: 94 }]);
-  assert.deepEqual(couperSous(GOUTER, 114).morceaux, [{ phrase: 0, jusqua: 94 }], "un dé ne se sépare pas de son signe");
-  assert.deepEqual(couperSous(GOUTER, 115).morceaux, [{ phrase: 0, jusqua: 114 }]);
-  assert.deepEqual(couperSous(GOUTER, 116).morceaux, [{ phrase: 0, jusqua: 114 }], "un séparateur du cadre ne se coupe pas");
+  // un dé (le deuxième dé, à 97 signes, ne tient pas entier en 102).
+  assert.deepEqual(couperSous(GOUTER, 137).morceaux, [P(0)]);
+  assert.deepEqual(couperSous(GOUTER, 103).morceaux, [{ phrase: 0, jusqua: 97 }]);
+  assert.deepEqual(couperSous(GOUTER, 116).morceaux, [{ phrase: 0, jusqua: 97 }]);
+  assert.deepEqual(couperSous(GOUTER, 117).morceaux, [{ phrase: 0, jusqua: 97 }], "un dé ne se sépare pas de son signe");
+  assert.deepEqual(couperSous(GOUTER, 118).morceaux, [{ phrase: 0, jusqua: 117 }]);
+  assert.deepEqual(couperSous(GOUTER, 119).morceaux, [{ phrase: 0, jusqua: 117 }], "un séparateur du cadre ne se coupe pas");
 
   // Une ligne sans phrase n'a rien à couper.
   assert.deepEqual(couperLaLigne({ segments: [], phrases: [] }, () => false), []);
@@ -702,18 +707,18 @@ test("le bandeau coupé à 2, 3 et 6 phrases : « […] » entouré d'une espace
 
     const coupee = montrer(EMINCER, 140);
     assert.equal(coupee.textContent, `Aubépine : Émincer (4${SUITE} ${COUPE} d10+1 contre 5 → 5 ✓, 9 ✓, 4 ✗ : 2 réussites, B = 8, ajusté à 20 (Émincer), +2 contre l'armure (Réduction). ${COUPE}`);
-    const trois = montrer(FOURNAISE, 118);
-    assert.equal(trois.textContent, `Aubépine : Fournaise [1] (1 souffle, 1 lien) contre Che${SUITE} d10 contre 7, 1 avantage → 9 ✓, 5 ✗ : 1 réussite, touché. ${COUPE}`);
+    const trois = montrer(FOURNAISE, 120);
+    assert.equal(trois.textContent, `Aubépine : Fournaise [1] (1 souffle, 1 lien) contre Che${SUITE} d10+1 contre 7, 1 avantage → 9 ✓, 5 ✗ : 1 réussite, touché. ${COUPE}`);
     assert.deepEqual(arbre(trois).slice(4, 7), [{ "span.combat-seg-adv": ["Che"] }, SUITE, " "], "un nom coupé garde sa couleur");
 
-    const deux = montrer(MANQUEE, 70);
-    assert.equal(deux.textContent, `Aubépine : Frappe${SUITE} d10 contre 7 → 6 ✗ : aucune réussite, manqué.`);
+    const deux = montrer(MANQUEE, 72);
+    assert.equal(deux.textContent, `Aubépine : Frappe${SUITE} d10+1 contre 7 → 6 ✗ : aucune réussite, manqué.`);
     assert.equal(deux.querySelectorAll(".combat-bandeau-coupe").length, 0);
 
     // Le jet de caractéristique : le deuxième dé ne tient pas, il part entier.
-    const gouter = montrer(GOUTER, 100);
-    assert.equal(gouter.textContent, `Aubépine : Goûter, d6−1 (Savoir sauvage + Sens) contre 6 (compliqué) → 5 explose, + 6 = 11 ✓, ${SUITE}`);
-    assert.deepEqual([...gouter.querySelectorAll(".combat-de-insecable")].map((noeud) => noeud.textContent), ["5 explose, + 6 = 11 ✓"]);
+    const gouter = montrer(GOUTER, 103);
+    assert.equal(gouter.textContent, `Aubépine : Goûter, d6 (Savoir sauvage + Sens) contre 8 (très difficile) → 6 explose, + 6 = 12 ✓, ${SUITE}`);
+    assert.deepEqual([...gouter.querySelectorAll(".combat-de-insecable")].map((noeud) => noeud.textContent), ["6 explose, + 6 = 12 ✓"]);
 
     // La ligne en cours : son « … » reste en dernier, après la coupe.
     const enCours = montrer(TALOCHE_EN_COURS, 80, true);

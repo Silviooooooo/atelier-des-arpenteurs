@@ -211,7 +211,22 @@ test("la table des événements : dans chaque colonne, chaque type est accepté 
 
 test("l'offre nomme, dans chaque colonne, les types qu'elle accepte, et eux seuls", () => {
   for (const [colonne, temoin] of Object.entries(temoins())) {
-    assert.deepEqual([...offre(temoin.etat).types].sort(), [...temoin.admis].sort(), colonne);
+    const types = offre(temoin.etat).types;
+    assert.deepEqual(types.filter((type) => TYPES.includes(type)).sort(), [...temoin.admis].sort(), colonne);
+    // Au lot 4.3 : la palette s'offre dans toute colonne d'un combat en cours (un
+    // effet sur une cible a toujours prise), sauf à la préparation d'un geste
+    // sans jet (contrat, § 12, choix 11 : rien n'y est payé, et seuls les effets
+    // « pour ce jet » s'y offrent) ; le menu du MJ entre deux gestes seulement ;
+    // les autres types neufs ont leurs témoins dans combat_g3_pile.test.js et
+    // combat_g3_regles.test.js.
+    const enCours = !["avant", "termine", "preparation, une capacité sans jet"].includes(colonne);
+    assert.equal(types.includes("effet"), enCours, `${colonne} : « effet »`);
+    assert.equal(types.includes("mj"), colonne === "sans_geste", `${colonne} : « mj »`);
+    assert.deepEqual(
+      types.filter((type) => !TYPES.includes(type) && type !== "effet" && type !== "mj"),
+      [],
+      colonne,
+    );
   }
 });
 
@@ -372,6 +387,13 @@ test("ouvrirCombat : la préparation, personne n'a joué, rien n'est au journal"
   assert.deepEqual(etat.protagonistes.pj1.liens, [{ points: 2, max: 2 }]);
 });
 
+// Les deux champs que le groupe 3 ajoute à chacun (contrat de la vague 1,
+// § 3), que l'état écrit à la main n'a pas : personne n'est retiré du combat,
+// aucun bouclier n'est changé.
+function avecLesChampsDuGroupe3(etat) {
+  for (const id of etat.ordre) Object.assign(etat.protagonistes[id], { retire: false, bouclier: null });
+}
+
 test("ouvrirCombat puis lancer égale l'état écrit à la main, champ pour champ et dans l'ordre", () => {
   for (const quiCommence of ["pj", "adv"]) {
     const mep = miseEnPlaceEssai(
@@ -382,7 +404,7 @@ test("ouvrirCombat puis lancer égale l'état écrit à la main, champ pour cham
       { quiCommence },
     );
     const lance = jouer(ouvrirCombat(mep), LANCER);
-    const attendu = etatEssai(mep);
+    const attendu = etatEssai(mep, { retoucher: avecLesChampsDuGroupe3 });
     assert.deepEqual(comparable(lance), comparable(attendu));
     assert.equal(JSON.stringify(comparable(lance)), JSON.stringify(comparable(attendu)), "le même ordre des clés");
     assert.deepEqual(Object.keys(lance), Object.keys(attendu), "l'annulation comprise, en dernier");
@@ -391,8 +413,9 @@ test("ouvrirCombat puis lancer égale l'état écrit à la main, champ pour cham
 
     // Par « Fin de tour », personne n'ayant joué : le tour 2 du même camp.
     const fin = { type: "fin_de_tour" };
-    assert.deepEqual(comparable(jouer(lance, fin)), comparable(etatEssai(mep, { tour: { numero: 1, camp: quiCommence === "pj" ? "adv" : "pj" } })));
-    assert.deepEqual(comparable(jouer(lance, fin, fin)), comparable(etatEssai(mep, { tour: { numero: 2, camp: quiCommence } })));
+    const retoucher = avecLesChampsDuGroupe3;
+    assert.deepEqual(comparable(jouer(lance, fin)), comparable(etatEssai(mep, { tour: { numero: 1, camp: quiCommence === "pj" ? "adv" : "pj" }, retoucher })));
+    assert.deepEqual(comparable(jouer(lance, fin, fin)), comparable(etatEssai(mep, { tour: { numero: 2, camp: quiCommence }, retoucher })));
   }
 });
 
@@ -745,12 +768,20 @@ test("le premier dé fige les circonstances du jet : ce qui change ensuite n'y r
   assert.deepEqual({ genre: defense.genre, lanceur: defense.lanceur, difficulte: defense.difficulte }, { genre: "defense", lanceur: "pj1", difficulte: 4 });
 });
 
-test("la fin de la chaîne : manqué, c'est fini ; touché, le bilan s'ouvre avec ses dégâts par défaut", () => {
+test("la fin de la chaîne : manqué, le geste attend « Appliquer » ; touché, le bilan s'ouvre avec ses dégâts par défaut", () => {
   const depart = combat(surD4(AUBEPINE, MARMITON));
   const frappe = jouer(depart, capacite(depart, "pj1", "Frappe"), viser("adv2"));
 
-  // Aucune réussite : manqué. Le geste se clôt sur ce dé, sans d20.
-  const manque = jouer(frappe, d8(4));
+  // Aucune réussite : manqué. Depuis le lot 4.3, un jet ne clôt jamais le
+  // geste de lui-même (contrat de la vague 1, § 4.1 et § 12, choix 1) : il
+  // attend aux suites, sans d20 ni dégâts, et « Appliquer » le finit.
+  const attend = jouer(frappe, d8(4));
+  assert.equal(gesteEnCours(attend).moment, "suites");
+  assert.equal(gesteEnCours(attend).degats, null);
+  assert.equal(attend.journal, frappe.journal, "rien n'est écrit avant « Appliquer »");
+  assert.equal(offre(attend).types.includes("appliquer"), true);
+  assert.equal(offre(attend).de, null, "aucun d20");
+  const manque = jouer(attend, APPLIQUER);
   assert.deepEqual(manque.pile, []);
   assert.match(derniereLigne(manque), /^Aubépine : Frappe contre Marmiton\. d8 contre 5 → 4 ✗ : aucune réussite, manqué\.$/);
   assert.deepEqual(manque.protagonistes.adv2, depart.protagonistes.adv2);
@@ -770,25 +801,28 @@ test("la fin de la chaîne : manqué, c'est fini ; touché, le bilan s'ouvre ave
   // En défense : trois réussites, aucun dégât, l'attaque n'a pas touché ; deux, elle touche.
   const adverse = combat(surD4(AUBEPINE, MARMITON), { quiCommence: "adv" });
   const attaque = jouer(adverse, capacite(adverse, "adv2", "Frappe"), viser("pj1"));
-  const paree = jouer(attaque, d8(4), d8(5), d8(6));
+  const paree = jouer(attaque, d8(4), d8(5), d8(6), APPLIQUER);
   assert.deepEqual(paree.pile, []);
   assert.match(derniereLigne(paree), /Aubépine lance sa défense, d8 contre 4 → 4 ✓, 5 ✓, 6 ✓ : 3 réussites, aucun dégât\.$/);
   assert.equal(gesteEnCours(jouer(attaque, d8(4), d8(5), d8(3))).moment, "bilan");
 
-  // Un jet de caractéristique se clôt sur son dernier dé, réussi ou non.
+  // Un jet de caractéristique attend aussi, après son dernier dé, réussi ou
+  // non : « Appliquer » (« Terminer ») le clôt.
   const gouter = jouer(depart, capacite(depart, "pj1", "Goûter"), regler("caracteristiques", ["sens", "parole"]), regler("difficulte", 6));
-  const reussi = jouer(gouter, d8(7), d8(4));
+  assert.equal(gesteEnCours(jouer(gouter, d8(7), d8(4))).moment, "suites");
+  const reussi = jouer(gouter, d8(7), d8(4), APPLIQUER);
   assert.deepEqual(reussi.pile, []);
   assert.equal(derniereLigne(reussi), "Aubépine : Goûter, d8 (Parole + Sens) contre 6 (compliqué) → 7 ✓, 4 ✗ : 1 réussite.");
-  assert.equal(derniereLigne(jouer(gouter, d8(5))), "Aubépine : Goûter, d8 (Parole + Sens) contre 6 (compliqué) → 5 ✗ : aucune réussite.");
+  assert.equal(derniereLigne(jouer(gouter, d8(5), APPLIQUER)), "Aubépine : Goûter, d8 (Parole + Sens) contre 6 (compliqué) → 5 ✗ : aucune réussite.");
 });
 
 test("relancer, garder, exploser : chacun à son attente, et le geste suit", () => {
   const t = temoins();
   const choix = t["jet, relancer ou garder"].etat;
 
-  // Garder arrête la chaîne : aucune réussite, manqué.
-  const garde = jouer(choix, { type: "garder" });
+  // Garder arrête la chaîne : aucune réussite, manqué ; « Appliquer » le clôt.
+  assert.equal(gesteEnCours(jouer(choix, { type: "garder" })).moment, "suites");
+  const garde = jouer(choix, { type: "garder" }, APPLIQUER);
   assert.deepEqual(garde.pile, []);
   assert.match(derniereLigne(garde), /d8 contre 5, 1 avantage \(à la main : Minutie\) → 2 ✗ : aucune réussite, manqué\.$/);
 
@@ -855,7 +889,8 @@ test("une capacité sans dégâts qui touche se localise : le d20 se lance, « A
   assert.deepEqual(offre(touche).de, { faces: 20, combien: 1, motif: "localisation", place: 1 });
   const localise = jouer(touche, d20(5));
   assert.equal(gesteEnCours(localise).moment, "suites");
-  assert.deepEqual(offre(localise).types, ["decaler", "appliquer"], "« Appliquer », toujours, même sans dégâts");
+  // « effet » : la palette (lot 4.3).
+  assert.deepEqual(offre(localise).types, ["decaler", "appliquer", "effet"], "« Appliquer », toujours, même sans dégâts");
   const fini = jouer(localise, APPLIQUER);
   assert.deepEqual(fini.protagonistes.adv2, depart.protagonistes.adv2, "aucune zone ne perd rien");
   assert.equal(derniereLigne(fini), "Aubépine : Flambage [1] (5 souffle) contre Marmiton. d8 contre 5 → 8 ✓, 2 ✗ : 1 réussite, touché. Localisation d20 → 5 : torse.");
@@ -866,7 +901,7 @@ test("une capacité sans dégâts qui touche se localise : le d20 se lance, « A
   assert.match(derniereLigne(armee), /1 réussite, touché, dégâts de l'arme : A = 5\. Localisation d20 → 5 : torse\. Armure 10 → 5\.$/);
 
   // Manqué, rien ne se localise ; confirmée sans jet, rien non plus.
-  const manque = jouer(prete, d8(2));
+  const manque = jouer(prete, d8(2), APPLIQUER);
   assert.deepEqual(manque.pile, []);
   assert.doesNotMatch(derniereLigne(manque), /Localisation/);
   const sansJet = jouer(depart, capacite(depart, "pj1", "Flambage"), viser("adv2"), { type: "confirmer" });
@@ -903,27 +938,32 @@ test("la localisation : autant de d20 que le dit la capacité, puis les suites",
   assert.equal(gesteEnCours(seul).moment, "suites");
 });
 
-test("la face de contre-attaque clôt le geste et arrête les d20 ; l'action et le coût restent payés", () => {
-  // Sur un adversaire, c'est la face 1 : au deuxième d20 de trois, tout s'arrête.
+test("la face de contre-attaque annule l'attaque et arrête les d20 ; l'action et le coût restent payés", () => {
+  // Sur un adversaire, c'est la face 1 : au deuxième d20 de trois, tout
+  // s'arrête. Depuis le lot 4.3, le Marmiton, à portée et avec son action,
+  // peut contre-attaquer : il laisse passer, et le geste se clôt.
   const depart = combat(surD4(AUBEPINE_A_TROIS_D20, MARMITON));
   const premier = jouer(depart, capacite(depart, "pj1", "Frappe"), viser("adv2"), d8(8), d8(2), d20(5));
-  const annule = jouer(premier, d20(1));
-  assert.deepEqual(annule.pile, [], "le geste se clôt sur ce dé");
+  const contre = jouer(premier, d20(1));
+  assert.equal(gesteEnCours(contre).moment, "contre_attaque");
+  refuse(contre, d20(7), "hors_moment", "Le geste en cours n'en est pas là.");
+  const annule = jouer(contre, { type: "laisser" });
+  assert.deepEqual(annule.pile, [], "le geste se clôt");
   refuse(annule, d20(7), "hors_moment", "Aucun geste n'est en cours.");
   assert.deepEqual(annule.protagonistes.adv2, depart.protagonistes.adv2, "rien n'est appliqué, pas même le premier d20");
   assert.equal(annule.protagonistes.pj1.actions, 1);
-  assert.match(derniereLigne(annule), /1 réussite, A = 5\. Localisation 3 d20 → 5 : torse ; 1 : contre-attaque, l'attaque est annulée\.$/);
+  assert.match(derniereLigne(annule), /1 réussite, A = 5\. Localisation 3 d20 → 5 : torse ; 1 : contre-attaque, l'attaque est annulée\./);
   // La face 20, sur un adversaire, n'est que sa tête.
   assert.equal(gesteEnCours(jouer(premier, d20(20))).moment, "localisation");
 
   // Sur un PJ, c'est la face 20 ; la face 1 n'est que sa tête.
   const adverse = combat(surD4(AUBEPINE, MARMITON), { quiCommence: "adv" });
   const bilan = jouer(adverse, capacite(adverse, "adv2", "Moulinet farineux"), viser("pj1"), d8(2), { type: "garder" });
-  const pare = jouer(bilan, d20(20));
+  const pare = jouer(bilan, d20(20), { type: "laisser" });
   assert.deepEqual(pare.pile, []);
   assert.deepEqual(pare.protagonistes.pj1, adverse.protagonistes.pj1);
   assert.equal(pare.protagonistes.adv2.souffle, 0, "les 5 points de souffle du Moulinet restent payés");
-  assert.match(derniereLigne(pare), /Aubépine reçoit C = 15\. Localisation d20 → 20 : contre-attaque, l'attaque est annulée\.$/);
+  assert.match(derniereLigne(pare), /Aubépine reçoit C = 15\. Localisation d20 → 20 : contre-attaque, l'attaque est annulée\./);
   assert.equal(gesteEnCours(jouer(bilan, d20(1))).moment, "suites");
 });
 
@@ -933,7 +973,9 @@ test("décaler la face : aux suites, tant qu'aucune esquive n'est jouée, et san
   assert.deepEqual(gesteEnCours(decale).localisation, [{ brut: 5, decalage: { valeur: 9, raison: "Coup d'œil" } }]);
   assert.equal(gesteEnCours(decale).moment, "suites", "il n'y a pas d'étape de validation");
   const fini = jouer(decale, APPLIQUER);
-  assert.match(derniereLigne(fini), /Localisation d20 → 5, décalée à 14 \(Coup d'œil\) : jambe droite\. Armure 10 → 0, endurance 5 → 0\. Blessure/);
+  // L'endurance tombe à 0 sans ôter de corps : ce n'est plus une blessure
+  // (mission du lot 4.3, § 4.10).
+  assert.match(derniereLigne(fini), /Localisation d20 → 5, décalée à 14 \(Coup d'œil\) : jambe droite\. Armure 10 → 0, endurance 5 → 0\.$/);
   // 0 retire le décalage.
   assert.deepEqual(gesteEnCours(jouer(decale, { type: "decaler", de: 0, valeur: 0 })).localisation, [{ brut: 5, decalage: null }]);
 
@@ -961,7 +1003,7 @@ test("l'esquive : offerte au PJ visé, de 1 au plus petit du souffle et des dég
   assert.deepEqual(gesteEnCours(esquive).interventions, [{ qui: "pj1", capacite: 7, prix: { actions: 1, souffle: 3 }, effet: { genre: "annuler", x: 3 } }]);
   assert.equal(offre(esquive).esquive, null);
   refuse(esquive, { type: "esquive", x: 1 }, "hors_moment", "L'esquive ne s'offre pas à cet instant.");
-  assert.deepEqual(offre(esquive).types, ["appliquer"], "après une esquive, il ne reste qu'« Appliquer »");
+  assert.deepEqual(offre(esquive).types, ["appliquer", "effet"], "après une esquive, il ne reste qu'« Appliquer » (et la palette)");
   const fini = jouer(esquive, APPLIQUER);
   assert.equal(fini.protagonistes.pj1.zones[1].armure, 0);
   assert.equal(fini.protagonistes.pj1.zones[1].resistance, 3, "15 − 3 = 12 : l'armure tombe, 2 passent à l'endurance");
@@ -1379,6 +1421,14 @@ test("le lecteur de scénario lève, en citant le geste : un dé de trop, un dé
   assert.throws(jouerAvec(0, { joue: "Fricassée" }), /Aubépine n'a pas de capacité « Fricassée »\./);
   assert.throws(jouerAvec(0, { sur: "Marmiton n° 1", contre: undefined }), /« sur » vise un allié ou soi/);
   assert.throws(jouerAvec(1, { vers: "D4", puissance: 3 }), /0 façon\(s\) de « Pas chassé » répondent/);
+  // Le lot 4.3 : une façon Centrée coche ses cibles d'office, et ne se règle ni contre un adversaire ni sur un allié.
+  assert.throws(jouerAvec(8, { contre: "Aubépine" }), /^Error: Geste n° 9 \(Marmiton n° 2, Moulinet farineux\) : « Moulinet farineux » est Centrée : ses cibles se cochent d'office, sans « contre » ni « sur »\.$/);
+  assert.throws(jouerAvec(8, { sur: "Chef" }), /« Moulinet farineux » est Centrée : ses cibles se cochent d'office/);
+  // Une blessure par zone blessée que le moteur demande, ni plus ni moins : contre un adversaire, il n'en demande aucune.
+  assert.throws(jouerAvec(0, { blessure: "Main brûlée" }), /^Error: Geste n° 1 \(Aubépine, Frappe\) : « blessure » en écrit 1, et le moteur n'en a demandé que 0\.$/);
+  assert.throws(jouerAvec(14, { blessure: ["Main brûlée", "Cheville tordue"] }), /^Error: Geste n° 15 \(Chef, Frappe\) : « blessure » en écrit 2, et le moteur n'en a demandé que 1\.$/);
+  assert.throws(jouerAvec(14, { blessure: undefined }), /Geste n° 15 \(Chef, Frappe\) : une blessure est à choisir, et « blessure » n'en écrit aucune\./);
+  assert.throws(jouerAvec(14, { blessure: "Recette introuvable" }), /Geste n° 15 .* le bloc de blessure n'a pas de capacité « Recette introuvable »/);
   assert.throws(() => versContenu(scenario, { ...PHOTOS_DE_REFERENCE, "Chef de partie": undefined }), /La mise en place : /);
   assert.throws(() => versContenu({ ...scenario, ajouts: [["pj", "Ciboulette"]] }, PHOTOS_DE_REFERENCE), /La mise en place : aucune photographie pour « Ciboulette »\./);
 });
@@ -1424,7 +1474,8 @@ test("le lecteur de scénario s'arrête après tant de gestes, ou en plein geste
 
   // Un geste qui ne lance pas tant de dés, ou que ce dé finit : on ne s'y arrête pas.
   assert.throws(() => versContenu(scenario, PHOTOS_DE_REFERENCE, { jusqua: { geste: 7, des: 6 } }), /Geste n° 7 \(Aubépine, Taloche\) : le geste a fini avant qu'on s'y arrête \(6 dé\(s\) demandé\(s\)\)\./);
-  assert.throws(() => versContenu(scenario, PHOTOS_DE_REFERENCE, { jusqua: { geste: 14, des: 1 } }), /Geste n° 14 \(Aubépine, Frappe\) : le geste a fini avant qu'on s'y arrête/);
+  // Depuis le lot 4.3, aucun dé ne finit un geste : le manqué du quatorzième attend « Appliquer ».
+  assert.equal(gesteEnCours(versContenu(scenario, PHOTOS_DE_REFERENCE, { jusqua: { geste: 14, des: 1 } }).etat).moment, "suites");
   assert.throws(() => versContenu(scenario, PHOTOS_DE_REFERENCE, { jusqua: { geste: 12, des: 0 } }), /Geste n° 12 \(Marmiton n° 2, passe\) : le geste a fini avant qu'on s'y arrête/);
   assert.throws(() => versContenu(scenario, PHOTOS_DE_REFERENCE, { jusqua: 99 }), /« jusqua » est un nombre de gestes \(de 0 à 18\)/);
   assert.throws(() => versContenu(scenario, PHOTOS_DE_REFERENCE, { jusqua: { geste: 0, des: 1 } }), /« jusqua »/);
@@ -1574,25 +1625,43 @@ const lire = (chemin) => readFileSync(new URL(chemin, import.meta.url), "utf8");
 const importsDe = (texte) => [...texte.matchAll(/^(?:import|export)\s[^;]*?from\s+"([^"]+)";/gms)].map((trouve) => trouve[1]).sort();
 
 test("offre.js et moteur.js n'importent que ce que le noyau leur permet ; l'offre n'importe jamais le moteur", () => {
-  assert.deepEqual(importsDe(lire("../js/combat/offre.js")), ["../personnage/regles.js", "./circonstances.js", "./degats.js", "./forme.js", "./jet.js", "./plateau.js", "./regles.js", "./valeurs.js"]);
+  // Au lot 4.3 : la clé d'un nom (l'élément Centré) et les effets, que l'offre et le moteur appellent.
+  assert.deepEqual(importsDe(lire("../js/combat/offre.js")), [
+    "../banque/noms.js",
+    "../personnage/regles.js",
+    "./circonstances.js",
+    "./degats.js",
+    "./effets.js",
+    "./forme.js",
+    "./jet.js",
+    "./plateau.js",
+    "./regles.js",
+    "./valeurs.js",
+  ]);
   const duMoteur = importsDe(lire("../js/combat/moteur.js"));
-  const permis = ["../personnage/regles.js", "./circonstances.js", "./degats.js", "./forme.js", "./jet.js", "./journal.js", "./noms.js", "./offre.js", "./plateau.js", "./preparation.js", "./regles.js", "./valeurs.js"];
+  const permis = ["../personnage/regles.js", "./circonstances.js", "./degats.js", "./effets.js", "./forme.js", "./jet.js", "./journal.js", "./noms.js", "./offre.js", "./plateau.js", "./preparation.js", "./regles.js", "./valeurs.js"];
   for (const chemin of duMoteur) assert.equal(permis.includes(chemin), true, `le moteur importe ${chemin}`);
   for (const attendu of ["./offre.js", "./journal.js", "./forme.js", "../personnage/regles.js"]) assert.equal(duMoteur.includes(attendu), true, `le moteur n'importe pas ${attendu}`);
 });
 
 test("offre.js et moteur.js exportent ce que dit le contrat, et l'offre deux fonctions de plus : le prix d'un geste, celui d'une esquive", () => {
   // Au groupe 2 : le rejeu par tranches ; l'annulation, le mode d'une façon, la façon d'une case d'arrivée.
+  // Au lot 4.3 : la contre-attaque offerte, et trois lectures que le moteur partage avec l'offre (l'attaque
+  // en plus d'un geste, les cibles d'une façon Centrée, la face de contre-attaque).
   assert.deepEqual(Object.keys(moteur).sort(), ["appliquer", "gesteEnCours", "ouvrirCombat", "rejeu", "rejouer"]);
   assert.deepEqual(Object.keys(porte).sort(), [
     "accepte",
     "acteurCourant",
     "annulation",
     "arrivees",
+    "attaqueEnPlusDuGeste",
     "boutons",
     "candidats",
     "cibles",
+    "ciblesDuGeste",
+    "contreAttaqueOfferte",
     "esquiveOfferte",
+    "faceDeContre",
     "faconDeLArrivee",
     "faconsDe",
     "modeDeLaFacon",
@@ -1619,10 +1688,15 @@ test("offre.js, moteur.js et scenario.js : un en-tête qui dit le pourquoi et le
     }
   }
   // Le moment d'un geste ne change que dans avancer() : un seul « switch » dans le moteur, aucun dans l'offre ;
-  // hors d'avancer(), le moteur n'écrit un moment qu'à l'ouverture du geste.
-  assert.equal(lire("../js/combat/moteur.js").split("switch (").length - 1, 1);
+  // hors d'avancer() et de ce qu'elle appelle (la fin d'un geste, les moments, au lot 4.3), le moteur n'écrit
+  // un moment qu'à l'ouverture du geste.
+  const duMoteur = lire("../js/combat/moteur.js");
+  assert.equal(duMoteur.split("switch (").length - 1, 1);
   assert.equal(lire("../js/combat/offre.js").includes("switch ("), false);
-  assert.equal(lire("../js/combat/moteur.js").split("moment:").length - 1, 1);
+  const debut = duMoteur.indexOf("// ─── La fin d'un geste");
+  const fin = duMoteur.indexOf("// ─── Les réducteurs");
+  assert.ok(debut > 0 && fin > debut);
+  assert.equal((duMoteur.slice(0, debut) + duMoteur.slice(fin)).split("moment:").length - 1, 1);
 });
 
 // ─── Une recopie du journal par événement ───────────────────────────────────

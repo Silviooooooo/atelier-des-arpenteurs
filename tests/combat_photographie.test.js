@@ -16,15 +16,15 @@ import { readFileSync } from "node:fs";
 import { ecrireTypes } from "../js/adversaire/carte.js";
 import { indexerAdversaires } from "../js/adversaire/resolution.js";
 import { MOT_DE_PASSE_DEMO } from "../js/banque/chargement.js";
-import { validerPhoto } from "../js/combat/forme.js";
-import { capaciteDeRole, photographierAdversaire, photographierPersonnage } from "../js/combat/photographie.js";
+import { validerCapaciteFigee, validerPhoto } from "../js/combat/forme.js";
+import { capaciteDeRole, etatsDeLaBanque, photographierAdversaire, photographierPersonnage } from "../js/combat/photographie.js";
 import { BORNES_PHOTO, ROLES } from "../js/combat/regles.js";
 import { tableDesRoles } from "../js/combat/roles.js";
 import { indexerCreation } from "../js/personnage/calcul.js";
 import { accepter, lirePersonnage } from "../js/personnage/format.js";
 import { ouvrirAvecMotDePasse } from "../js/securite/chiffrement.js";
 import { personnageEssai } from "./outils/personnage_essai.js";
-import { aubepineEssai, chefDePartieEssai, marmitonDeCorveeEssai } from "./outils/photographies_essai.js";
+import { aubepineEssai, chefDePartieEssai, etatsEssai, marmitonDeCorveeEssai } from "./outils/photographies_essai.js";
 
 const racine = new URL("../", import.meta.url);
 const lire = (chemin) => readFileSync(new URL(chemin, racine), "utf8");
@@ -1331,4 +1331,183 @@ test("l'égalité de défense — écrite dans la photographie : mêlée à éga
     p.equipement[4].place = "sac";
   })));
   assert.deepEqual([agile.deDefense.type, agile.deDefense.meles, agile.deDefense.egalite], ["agile", false, []]);
+});
+
+// ─── Les états de la banque (lot 4.3, contrat du lot, § 9) ──────────────────
+
+// Une capacité d'état de la démonstration, telle qu'elle doit se figer :
+// puissance 0, passive, sans coût, rangée sous le nom de son bloc.
+const ETAT_FIGE = (nom, description, titre) => ({
+  nom,
+  role: null,
+  niveau: 0,
+  evolue: false,
+  groupe: { genre: "capacites", titre },
+  lien: null,
+  inactive: null,
+  facons: [
+    {
+      puissance: 0,
+      arme: null,
+      libelle: null,
+      cout: { souffle: 0, lien: 0 },
+      description,
+      elements: ["Passif"],
+      passif: true,
+      intervention: false,
+      attaque: false,
+      degats: null,
+      portee: 0,
+      locMultiple: 1,
+      desavantage: false,
+      maitrise: null,
+    },
+  ],
+});
+const ETATS = etatsDeLaBanque(BANQUE);
+const resume = (etats) => etats.blocs.map(({ nom, blessure, capacites }) => [nom, blessure, capacites.map((capacite) => capacite.nom)]);
+// Une copie retouchée de la banque de démonstration, en mémoire.
+const banqueRetouchee = (retoucher) => {
+  const banque = structuredClone(BANQUE);
+  retoucher(banque);
+  return banque;
+};
+
+test("les états de la démonstration — ses deux blocs de type État, dans l'ordre de la banque ; le bloc de blessure, reconnu par son nom ; chaque capacité figée", () => {
+  assert.deepEqual(resume(ETATS), [
+    ["Blessure", true, ["Cheville tordue", "Main brûlée", "Côtes froissées"]],
+    ["Condition", false, ["Étourdi", "En nage", "Affamé"]],
+  ]);
+  assert.ok(ETATS.blessure === ETATS.blocs[0].capacites, "« blessure » est le tableau même des capacités du bloc de blessure");
+  assert.deepEqual(ETATS.blessure[1], ETAT_FIGE("Main brûlée", "Désavantage avec une arme précise.", "Blessure"));
+  assert.deepEqual(ETATS.blocs[1].capacites[2], ETAT_FIGE("Affamé", "Vous ne regagnez pas de souffle.", "Condition"));
+  // Les autres blocs de la banque n'y sont pas, ni leurs capacités.
+  assert.equal(ETATS.blocs.flatMap((bloc) => bloc.capacites).length, 6);
+  // La copie à la main que prend le lecteur de scénario sans banque est celle-là.
+  const copie = etatsEssai();
+  assert.equal(JSON.stringify(copie), JSON.stringify(ETATS));
+  assert.ok(copie.blessure === copie.blocs[0].capacites);
+});
+
+test("les états — chaque capacité figée a le format d'une capacité de photographie : validerPhoto l'accepte à la suite de celles d'Aubépine, à l'identique ; un champ faux, non", () => {
+  const figees = ETATS.blocs.flatMap((bloc) => bloc.capacites);
+  const avec = (capacites) => {
+    const photo = structuredClone(pj(DEMO).photo);
+    photo.valeurs.capacites.push(...structuredClone(capacites));
+    return validerPhoto(photo, { accepter });
+  };
+  const lue = avec(figees);
+  assert.equal(lue.erreur, undefined, lue.erreur);
+  assert.equal(JSON.stringify(lue.photo.valeurs.capacites.slice(-figees.length)), JSON.stringify(figees), "relues telles quelles");
+  // Le contrôle voit bien une capacité mal figée.
+  const fausse = structuredClone(figees[0]);
+  fausse.groupe.genre = "etat";
+  assert.match(avec([fausse]).erreur, /le genre du groupe de « Cheville tordue »/);
+  // La forme les juge aussi seules, comme l'écran avant de les mettre dans un événement.
+  for (const figee of figees) assert.equal(JSON.stringify(validerCapaciteFigee(structuredClone(figee)).capacite), JSON.stringify(figee), figee.nom);
+  // Ce que rend la fonction passe par JSON à l'identique : il entre tel quel dans un événement.
+  assert.equal(JSON.stringify(JSON.parse(JSON.stringify(ETATS))), JSON.stringify(ETATS));
+});
+
+test("le bloc de blessure — le premier de type Blessure l'emporte sur un État nommé « Blessure » ; toutes ses capacités, quelle que soit la forme de la cellule, sans doublon ni absente", () => {
+  const banque = banqueRetouchee((b) => {
+    b.blocs.push({
+      nom: "Séquelles",
+      type: "Blessure",
+      elements: [],
+      capacites: [
+        { forme: "simple", nom: "Affamé" },
+        { forme: "choix", options: ["Étourdi", "Main brûlée"] },
+        { forme: "facultatif", options: ["En nage", "affamé", "Recette introuvable"] },
+      ],
+      parametres: [],
+    });
+    b.blocs.push({ ...structuredClone(b.blocs.at(-1)), nom: "Séquelles bis", capacites: [{ forme: "simple", nom: "Étourdi" }] });
+  });
+  const etats = etatsDeLaBanque(banque);
+  assert.deepEqual(resume(etats), [
+    ["Blessure", false, ["Cheville tordue", "Main brûlée", "Côtes froissées"]],
+    ["Condition", false, ["Étourdi", "En nage", "Affamé"]],
+    ["Séquelles", true, ["Affamé", "Étourdi", "Main brûlée", "En nage"]],
+    ["Séquelles bis", false, ["Étourdi"]],
+  ]);
+  assert.ok(etats.blessure === etats.blocs[2].capacites);
+  // Rangée sous son bloc : une même capacité se fige sous le nom du bloc qui la cite.
+  assert.deepEqual(etats.blessure[2], ETAT_FIGE("Main brûlée", "Désavantage avec une arme précise.", "Séquelles"));
+});
+
+test("le bloc de blessure — à défaut d'un bloc de type Blessure, l'État dont le nom a pour clé « blessure » ; sinon aucun", () => {
+  // La clé : casse, accents et espaces n'y changent rien.
+  const cle = etatsDeLaBanque(banqueRetouchee((b) => (b.blocs.find((bloc) => bloc.nom === "Blessure").nom = " BLESSURE ")));
+  assert.deepEqual(resume(cle).map(([nom, blessure]) => [nom, blessure]), [["BLESSURE", true], ["Condition", false]]);
+  assert.equal(cle.blessure.length, 3);
+  // Un autre nom : aucun bloc de blessure.
+  const aucun = etatsDeLaBanque(banqueRetouchee((b) => (b.blocs.find((bloc) => bloc.nom === "Blessure").nom = "Blessures")));
+  assert.deepEqual(resume(aucun).map(([nom, blessure]) => [nom, blessure]), [["Blessures", false], ["Condition", false]]);
+  assert.deepEqual(aucun.blessure, []);
+  // Un bloc nommé « Blessure » d'un autre type n'est pas un état ; un second État de même nom est ignoré.
+  const autres = etatsDeLaBanque(
+    banqueRetouchee((b) => {
+      const blessure = b.blocs.find((bloc) => bloc.nom === "Blessure");
+      b.blocs.unshift({ ...structuredClone(blessure), type: "Équipement" });
+      b.blocs.push({ ...structuredClone(blessure), capacites: [{ forme: "simple", nom: "Affamé" }] });
+    }),
+  );
+  assert.deepEqual(resume(autres), resume(ETATS));
+  // Une banque publiée avant la colonne « Type » : aucun état.
+  assert.deepEqual(etatsDeLaBanque(banqueRetouchee((b) => b.blocs.forEach((bloc) => delete bloc.type))), { blocs: [], blessure: [] });
+});
+
+test("une capacité d'état — sa description avec les paramètres de son bloc, ses éléments propres et ceux que son bloc lui donne ; sans puissance 0, sans description et au coût illisible", () => {
+  const banque = banqueRetouchee((b) => {
+    const condition = b.blocs.find((bloc) => bloc.nom === "Condition");
+    condition.parametres = [{ nom: "duree", valeur: "2", cible: null }];
+    condition.elements = [{ nom: "Passif", cible: "En nage" }, { nom: "Tranchant" }];
+    const variante = (nom) => b.capacites.find((capacite) => capacite.nom === nom).variantes[0];
+    Object.assign(variante("Étourdi"), { description: "Dure {duree} tour(s).", elements: [{ nom: "Intervention" }], cout_souffle: "2" });
+    variante("En nage").elements = [];
+    variante("Affamé").puissance = "1";
+  });
+  const [etourdi, enNage, affame] = etatsDeLaBanque(banque).blocs[1].capacites.map((capacite) => capacite.facons[0]);
+  assert.deepEqual([etourdi.description, etourdi.elements, etourdi.passif, etourdi.intervention, etourdi.attaque, etourdi.cout], ["Dure 2 tours.", ["Intervention"], false, true, false, { souffle: 2, lien: 0 }]);
+  // L'élément que le bloc donne en la visant est le sien ; celui qu'il donne sans cible, non.
+  assert.deepEqual([enNage.elements, enNage.passif], [["Passif"], true]);
+  assert.deepEqual([affame.puissance, affame.description, affame.cout, affame.elements, affame.passif], [0, "", null, [], false]);
+});
+
+test("une capacité d'état que la forme refuserait est écartée, sans lever : un nom de plus de 200 signes, une description de plus de 4 000 ; à la borne, elle reste", () => {
+  const LONG = "Cheville tordue, ".padEnd(BORNES_PHOTO.ligne + 1, "x");
+  const avec = (nom, description) =>
+    etatsDeLaBanque(
+      banqueRetouchee((b) => {
+        const capacite = b.capacites.find((une) => une.nom === "Cheville tordue");
+        capacite.nom = nom;
+        capacite.variantes[0].description = description;
+        for (const entree of b.blocs.find((bloc) => bloc.nom === "Blessure").capacites) {
+          if (entree.forme === "simple") entree.nom = entree.nom === "Cheville tordue" ? nom : entree.nom;
+          else entree.options = entree.options.map((option) => (option === "Cheville tordue" ? nom : option));
+        }
+      }),
+    );
+  const sans = ["Main brûlée", "Côtes froissées"];
+  // Armé : trop long, le nom ou la description.
+  for (const etats of [avec(LONG, "Vos déplacements coûtent une action de plus."), avec("Cheville tordue", "x".repeat(BORNES_PHOTO.texte + 1))]) {
+    assert.deepEqual(resume(etats)[0], ["Blessure", true, sans]);
+    assert.ok(etats.blessure === etats.blocs[0].capacites, "« blessure » reste le tableau même des capacités du bloc");
+    assert.deepEqual(resume(etats)[1], resume(ETATS)[1], "les autres blocs n'y perdent rien");
+  }
+  assert.match(validerCapaciteFigee({ ...ETATS.blessure[0], nom: LONG }).erreur, /200/, "c'est bien la forme qui la refuse");
+  // Désarmé : à la borne, la capacité reste, et la forme l'accepte.
+  const aLaBorne = avec(LONG.slice(0, BORNES_PHOTO.ligne), "x".repeat(BORNES_PHOTO.texte));
+  assert.deepEqual(resume(aLaBorne)[0][2].length, 3);
+  for (const figee of aLaBorne.blessure) assert.equal(validerCapaciteFigee(figee).erreur, undefined, figee.nom);
+});
+
+test("etatsDeLaBanque est pure — la banque ne change pas, et deux appels rendent la même chose, sans rien partager", () => {
+  const banque = structuredClone(BANQUE);
+  const avant = JSON.stringify(banque);
+  const [un, deux] = [etatsDeLaBanque(banque), etatsDeLaBanque(banque)];
+  assert.equal(JSON.stringify(banque), avant);
+  assert.equal(JSON.stringify(un), JSON.stringify(deux));
+  assert.ok(un.blessure[0] !== deux.blessure[0]);
 });

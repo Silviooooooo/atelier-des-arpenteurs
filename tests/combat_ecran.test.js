@@ -545,8 +545,12 @@ async function jouerLeGeste(ecran, geste, { apresChaqueDe = () => {} } = {}) {
     const choix = tous(jet, ".combat-choix button");
     const exploser = choix.find((b) => texteDe(b) === "Faire exploser");
     const relancer = choix.find((b) => texteDe(b).startsWith("Relancer le "));
+    // La contre-attaque qui s'offre se laisse passer (lot 4.3).
+    const laisser = choix.find((b) => texteDe(b) === "Laisser passer");
     if (exploser) {
       await cliquer(exploser);
+    } else if (laisser) {
+      await cliquer(laisser);
     } else if (relancer) {
       const place = RANG_DU_DE[texteDe(relancer).slice("Relancer le ".length).split(" ")[0]];
       await cliquer((geste.garde ?? []).includes(place) ? boutonDit(jet, "Garder ce dé") : relancer);
@@ -569,8 +573,12 @@ async function jouerLeGeste(ecran, geste, { apresChaqueDe = () => {} } = {}) {
     champs[0].value = String(geste.esquive);
     await cliquer(bouton);
   }
-  const appliquer = tous(corps(ecran), "button").find((b) => texteDe(b) === "Appliquer");
+  // « Appliquer » les dégâts ; « Terminer » un manqué ou un jet de
+  // caractéristique, qui ne clôt plus le geste de lui-même (lot 4.3).
+  const appliquer = tous(corps(ecran), "button").find((b) => texteDe(b) === "Appliquer" || texteDe(b) === "Terminer");
   if (appliquer) await cliquer(appliquer);
+  // La blessure se choisit après les dégâts, parmi les capacités du bloc de blessure.
+  if (geste.blessure) await cliquer(boutonDit(un(corps(ecran), ".combat-blessure"), geste.blessure));
   return undefined;
 }
 
@@ -1579,6 +1587,9 @@ dansUnePage("combat — ce que le combat de référence ne joue pas : une ligne 
   assert.deepEqual(un(corps(ecran), ".combat-des").children.map((bloc) => bloc.className), ["combat-contexte", "combat-jet", "combat-assiste"]);
   assert.deepEqual(tous(un(corps(ecran), ".combat-cibles"), "button").map((b) => [texteDe(b), b.getAttribute("aria-pressed"), inactif(b)]), [["Marmiton de corvée", "true", true]]);
   assert.deepEqual(tous(corps(ecran), ".combat-origine").map(texteDe), ["choisie ici"]);
+  // Trois réussites et un avantage encore là : le coup critique s'offre (lot 4.3). On garde C.
+  assert.deepEqual(tous(un(corps(ecran), ".combat-jet"), ".combat-choix button").map(texteDe), ["Garder C = 20", "Tenter le critique"]);
+  await cliquer(boutonDit(corps(ecran), "Garder C = 20"));
   assert.match(texteDe(un(corps(ecran), "p.combat-bilan")), /^3 réussites, C = 20/);
 
   // Une raison que le moteur refuse (81 signes) : le refus se dit dans la zone d'avis, et rien ne change.
@@ -1615,6 +1626,8 @@ dansUnePage("combat — ce que le combat de référence ne joue pas : une ligne 
   assert.deepEqual(enTete(ecran), ["Frappe contre Aubépine Crèmebrûlée", "Homard · action 1 sur 2 · souffle 4/4"]);
   assert.equal(texteDe(un(corps(ecran), "p.combat-defenseur")), "Aubépine lance sa défense · souffle 5/10");
   for (let lance = 0; lance < 3; lance += 1) await cliquer(deACliquer(ecran));
+  // Aucun dégât : le geste attend « Terminer » (lot 4.3).
+  await cliquer(boutonDit(corps(ecran), "Terminer"));
   assert.match(journal(ecran).at(-1), /^Homard : Frappe \(Pinces de homard\) contre Aubépine\. .* : 3 réussites, aucun dégât\.$/);
 
   // La Mouette chapardeuse n'a pas d'arme : le jet se prête « sans arme », et les dégâts se saisissent à la main.
@@ -1702,6 +1715,7 @@ dansUnePage("combat — le lien se paie sur une jauge au choix ; un adversaire �
   assert.equal(texteDe(un(un(corps(second), ".combat-jet-prete"), "button")), "Jet d'attaque (Couteau d'office)");
   await cliquer(boutonDit(un(corps(second), ".combat-cibles"), "Aubépine Crèmebrûlée"));
   for (let lance = 0; lance < 3; lance += 1) await cliquer(deACliquer(second));
+  await cliquer(boutonDit(corps(second), "Terminer"));
   assert.match(journal(second).at(-1), /^Homard : Dressage minute \(Couteau d'office\) contre Aubépine\. .* : 3 réussites, aucun dégât\.$/);
 });
 
@@ -1725,9 +1739,10 @@ dansUnePage("les dés — sans service, l'écran les tire du générateur du nav
     await cliquer(deACliquer(ecran));
     // Un désavantage : le dé se lance deux fois, d'un seul clic.
     assert.ok(tires >= 2, `${tires} tirage(s)`);
-    // Le hasard décide de la suite : le dé réussit et la chaîne continue (l'annonce dit le dé),
-    // ou il échoue et l'attaque est manquée (l'annonce est alors la ligne du journal).
-    const dit = /^1er dé : (\d+) et (\d+), on garde (\d+), réussi\.$/.exec(annonce(ecran)) ?? /, 1 désavantage → (\d+)\/(\d+) → (\d+) ✗ : aucune réussite, manqué\.$/.exec(annonce(ecran));
+    // Le hasard décide de la suite : le dé réussit et la chaîne continue, ou il échoue et
+    // l'attaque est manquée ; l'annonce dit le dé, puis, manqué, le bilan (le geste attend
+    // « Terminer » depuis le lot 4.3).
+    const dit = /^1er dé : (\d+) et (\d+), on garde (\d+), (?:réussi|échec\. Aucune réussite, manqué)\.$/.exec(annonce(ecran));
     assert.ok(dit, annonce(ecran));
     const [premier, second, gardee] = dit.slice(1).map(Number);
     // Un d10, plus 1 : chaque valeur va de 2 à 11, et l'on garde la pire.
@@ -1871,6 +1886,7 @@ dansUnePage("un nom hostile reste du texte : à l'écran, dans le journal, et sa
   const VISIBLE = "<img src=x onerror=alert(1)> Chef";
   await cliquer(boutonDit(un(corps(ecran), ".combat-cibles"), VISIBLE));
   await cliquer(deACliquer(ecran));
+  await cliquer(boutonDit(corps(ecran), "Terminer"));
 
   // Rien du nom n'est devenu un élément, et le signe qui renverse l'écriture ne s'affiche nulle part : ni au journal, ni au bandeau, ni dans la bulle.
   assert.equal(tous(ecran, "img").length, 0);
@@ -1895,6 +1911,31 @@ dansUnePage("un nom hostile reste du texte : à l'écran, dans le journal, et sa
   await cliquer(repere(fiche(ecran, "adv2"), "fiche-complete"));
   assert.equal(tous(ecran, "img").length, 0);
   assert.equal(texteDe(tous(ecran, ".combat-panneau h2")[0]), `Fiche complète : ${VISIBLE}`);
+});
+
+test("journal — les segments neufs du lot 4.3 : une échéance et un geste du MJ se lisent comme la fin d'un tour ; qui intervient se nomme au milieu de la ligne, dans la couleur de son camp", async () => {
+  const retirer = installerDom();
+  try {
+    const { ligneEnNoeuds } = await import("../js/ecrans/combat_journal.js");
+    // Des textes d'essai : seuls les types et le camp comptent ici, la phrase est celle du journal (js/combat/journal.js).
+    const noeuds = ligneEnNoeuds({
+      segments: [
+        { type: "acteur", texte: "Chef", camp: "adv", phrase: 0 },
+        { type: "texte", texte: " : Frappe. ", phrase: 0 },
+        { type: "acteur", texte: "Aubépine", camp: "pj", phrase: 1 },
+        { type: "texte", texte: " intervient. ", phrase: 1 },
+        { type: "echeance", texte: "Une échéance.", phrase: 2 },
+        { type: "texte", texte: " ", phrase: null },
+        { type: "mj", texte: "Un geste du MJ.", phrase: 3 },
+      ],
+    });
+    assert.deepEqual(
+      noeuds.filter((noeud) => noeud.tagName === "SPAN").map((noeud) => [noeud.className, texteDe(noeud)]),
+      [["combat-seg-adv", "Chef"], ["combat-seg-pj", "Aubépine"], ["combat-seg-fin", "Une échéance."], ["combat-seg-fin", "Un geste du MJ."]],
+    );
+  } finally {
+    retirer();
+  }
 });
 
 dansUnePage("journal — la dernière ligne reste visible en revenant sur l'écran avec le combat en mémoire, quand la page ne pose le nœud qu'après l'avoir reçu", async (page) => {

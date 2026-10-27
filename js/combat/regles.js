@@ -17,10 +17,15 @@
 // ou un moment la fait monter, et un combat d'une autre version ne se reprend
 // pas. Décision de l'auteur (25/10/2026) : 2 au groupe 2 du lot 4 (l'événement
 // « annuler », la puissance au choix des adversaires, la défense à égalité) ;
-// 3 au lot 5 : l'endurance et l'ordre des caractéristiques ; le groupe 3 du
-// lot 4 la passera à 4. Un combat gardé d'avant (version 1 ou 2) se dit
-// « commencé avec une autre version du simulateur ».
-export const REGLES = 3;
+// 3 au lot 5 : l'endurance et l'ordre des caractéristiques ; 4 au groupe 3 du
+// lot 4 (mission du groupe, § 0, point 6) : les interventions, attendre, la
+// contre-attaque, le coup critique, la palette et ses effets, les états, le
+// menu du MJ, plusieurs cibles, et la blessure du livret du 25/10, qui ôte le
+// −1 à ses jets ; sept événements neufs, des moments neufs et des nombres qui
+// changent : un combat d'avant ne se rejouerait pas à l'identique. Un combat
+// gardé d'avant (version 1, 2 ou 3) se dit « commencé avec une autre version
+// du simulateur ».
+export const REGLES = 4;
 
 // Décision de l'auteur : la carte fait 10 × 10 cases, colonnes A à J, lignes
 // 1 à 10. Une case s'écrit « D4 ».
@@ -182,10 +187,11 @@ export const ROLES_PASSIFS = [
   "degrossir",
 ];
 
-// Passer son tour est un bouton du simulateur, le jet de défense est
-// automatique, et attendre est du groupe 2 : la capacité de la banque qui
-// porte l'un de ces rôles n'a pas de bouton à elle.
-export const ROLES_SANS_BOUTON = ["passer_son_tour", "jet_de_defense", "attendre"];
+// Passer son tour est un bouton du simulateur, et le jet de défense est
+// automatique : la capacité de la banque qui porte l'un de ces rôles n'a pas
+// de bouton à elle. Attendre a le sien depuis le groupe 3 (contrat du groupe,
+// § 6.2) : il se règle (la capacité gardée), puis se confirme.
+export const ROLES_SANS_BOUTON = ["passer_son_tour", "jet_de_defense"];
 
 // Les signes du journal, donnés par leur code : le journal se compare mot
 // pour mot, et un éditeur qui remplacerait l'un d'eux par son voisin (un
@@ -250,6 +256,91 @@ export const BORNES_PHOTO = {
   source: 200000,
 };
 
+// La palette (groupe 3 du lot 4 ; contrat du groupe, § 5.1) : les genres de
+// l'événement « effet », dans l'ordre de son tableau. Les dés (avantages,
+// désavantages, relancer, inverser, +1 réussite), la zone d'un d20, les
+// dégâts (multiplier, ajouter, retrancher, armure, directs, reporter, toute
+// la case, une attaque en plus), puis la cible (rendre, ±N en attaque ou en
+// défense, un état, déplacer).
+export const GENRES_EFFET = [
+  "avantages",
+  "desavantages",
+  "relancer",
+  "inverser",
+  "reussite",
+  "zone",
+  "multiplier",
+  "ajouter",
+  "retrancher",
+  "armure",
+  "directs",
+  "reporter",
+  "toute_la_case",
+  "attaque_en_plus",
+  "rendre",
+  "attaque",
+  "defense",
+  "etat",
+  "deplacer",
+];
+
+// Combien de temps dure un ±N ou un état (mission du groupe 3, § 4.6 : à
+// l'onglet Cible seul). « jet » : les jets du geste qui le porte ; « tour » :
+// jusqu'au prochain tour du camp de son auteur ; « combat » : jusqu'à la fin.
+// Hors d'un geste, et pour le MJ, « jet » ne se choisit pas.
+export const DUREES_EFFET = ["jet", "tour", "combat"];
+
+// Ce que « rendre » rend, sans passer le maximum (contrat du groupe 3,
+// § 5.6) : l'armure et l'endurance d'une zone, le lien d'une jauge.
+export const RESSOURCES_RENDRE = ["souffle", "lien", "armure", "endurance", "corps"];
+
+// Le menu du MJ (mission du groupe 3, § 4.8 ; contrat, § 6.3) : ses gestes,
+// et les valeurs que « Modifier une valeur… » change. L'armure et
+// l'endurance sont celles d'une zone, le lien celui d'une jauge, la défense
+// du bouclier celle du bouclier qu'il porte.
+export const GENRES_MJ = ["valeurs", "equipement", "etat", "deplacer", "retirer"];
+export const CHAMPS_MJ = ["attaque", "defense", "souffle", "souffleMax", "actions", "actionsMax", "lien", "corps", "armure", "endurance", "bouclier"];
+
+// Les bornes de la palette (contrat du groupe 3, § 5.1, § 6), vues à la
+// forme de l'événement (js/combat/forme.js), parce qu'elles ne dépendent pas
+// du moment : celles qui en dépendent (le maximum d'une ressource, une
+// réussite de plus que trois) sont à l'offre.
+// - « nombre » : avantages ou désavantages pour ce jet, de 1 à 20, comme la
+//   main (BORNE_REGLAGE).
+// - « facteurMin », « facteurMax » : multiplier les dégâts, × 2 à × 10.
+// - « points » : ajouter, retrancher, l'armure en plus, rendre, de 1 à 999 ;
+//   des dégâts directs, de 0 à 999, comme la main (BORNE_DEGATS).
+// - « ecart » : un ±N, de −20 à 20, jamais 0 (BORNE_REGLAGE).
+// - « libre » : le nom d'un état libre, 40 signes au plus (mission, § 4.7).
+// - « cibles » : plusieurs cibles, distinctes, au réglage d'une façon Centrée
+//   comme à « toute la case » : de 1 au plafond des protagonistes d'un combat
+//   (PJ et adversaires), et non plus 12, puisqu'une case peut tous les tenir
+//   (contrat, § 6 ; § 12, choix 13).
+export const BORNES_EFFET = {
+  nombre: BORNE_REGLAGE,
+  facteurMin: 2,
+  facteurMax: 10,
+  points: BORNE_DEGATS,
+  ecart: BORNE_REGLAGE,
+  libre: 40,
+  cibles: PLAFOND_PJ + PLAFOND_ADVERSAIRES,
+};
+
+// Les bornes d'un geste du MJ (contrat du groupe 3, § 6.3).
+// - « valeurs » : un geste « valeurs » change de 1 à 20 valeurs, chacune de
+//   0 à 999 (« valeur », BORNE_DEGATS).
+// - « changements », « noms » : ce qu'un geste « equipement » écrit au
+//   journal (l'arme tenue, la qualité d'un objet, la cellule Équipement d'un
+//   adversaire), et les noms de cette cellule. Le contrat ne les borne pas ;
+//   quarante, comme les armes d'une photographie (BORNES_PHOTO.armes) : un
+//   événement forgé n'en porte pas des millions.
+export const BORNES_MJ = {
+  valeurs: 20,
+  valeur: BORNE_DEGATS,
+  changements: 40,
+  noms: 40,
+};
+
 // Les caractères de contrôle, et les deux séparateurs de ligne qu'Unicode
 // range ailleurs : une raison entre au journal, qui tient une ligne par
 // geste, et dans le fichier téléchargé. Les deux séparateurs sont fabriqués
@@ -298,6 +389,25 @@ export function geler(valeur) {
   return valeur;
 }
 
-for (const constante of [FACE_CONTRE, GRILLE_PJ, LETTRES, DIFFICULTES, ELEMENTS_COMBAT, ROLES, ROLES_PASSIFS, ROLES_SANS_BOUTON, SIGNES, BORNES_PHOTO, SANS_ANNULATION]) {
+for (const constante of [
+  FACE_CONTRE,
+  GRILLE_PJ,
+  LETTRES,
+  DIFFICULTES,
+  ELEMENTS_COMBAT,
+  ROLES,
+  ROLES_PASSIFS,
+  ROLES_SANS_BOUTON,
+  SIGNES,
+  BORNES_PHOTO,
+  SANS_ANNULATION,
+  GENRES_EFFET,
+  DUREES_EFFET,
+  RESSOURCES_RENDRE,
+  GENRES_MJ,
+  CHAMPS_MJ,
+  BORNES_EFFET,
+  BORNES_MJ,
+]) {
   geler(constante);
 }

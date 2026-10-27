@@ -53,14 +53,43 @@
 // - « Annuler le dernier geste » : l'offre dit s'il se peut, et sinon
 //   pourquoi, dans un ordre fixe : rien à annuler, puis un geste en cours non
 //   payé, puis un geste payé.
+//
+// Au groupe 3 (mission du lot 4.3, § 4.1 à § 4.4, § 4.9, § 4.10 ; contrat de
+// la vague 1, § 4, § 6 et § 7.4) :
+// - la pile : une intervention ou une contre-attaque s'empile sur le geste
+//   qu'elle interrompt (trois étages au plus), et les colonnes lisent le
+//   sommet ; un geste emboîté n'ouvre rien (ni étape « Interventions », ni
+//   contre-attaque), sauf la contre-attaque, qui a son étape ;
+// - des moments neufs : le critique, la contre-attaque, la blessure ;
+// - les interventions coûtent une action, puis leur coût : dans l'étape
+//   « Interventions » d'une attaque (le jeté et ses alliés vivants), ou par
+//   « Intervenir… » entre deux gestes (le camp qui ne joue pas) ; une ligne
+//   gardée par « attendre » en est une jusqu'à son échéance ; l'esquive garde
+//   son événement ;
+// - attendre : sa ligne paraît ; il se règle (la ligne gardée), puis se
+//   confirme ;
+// - la contre-attaque : le jeté, s'il lui reste une action, qu'il a une arme
+//   et que l'attaquant est à sa portée ; sinon la première raison, dans cet
+//   ordre ;
+// - plusieurs cibles : une façon Centrée d'un geste racine vise les vivants
+//   de la case de son auteur, ses adversaires cochés d'office, sans portée ;
+//   l'auteur et ses alliés y paraissent, inactifs, faute d'un jet écrit
+//   contre eux (contrat, § 12, choix 10) ;
+// - une blessure ne fait jamais passer à sa photographie ses bornes (choix 20) ;
+// - une attaque en plus : son porteur reste un candidat, et une capacité
+//   d'attaque ne lui coûte pas d'action ;
+// - la palette et les gestes du MJ se jugent dans js/combat/effets.js, que
+//   l'offre appelle (l'effet, le MJ, une attaque en plus, une garde).
 
+import { cle } from "../banque/noms.js";
 import { CARACTERISTIQUES } from "../personnage/regles.js";
 import { circonstances } from "./circonstances.js";
-import { basesPermises, bornesDuDecalage, degatsFixes, nombreDeD20 } from "./degats.js";
+import { basesPermises, blessuresAChoisir, bornesDuDecalage, degatsFixes, localiser, nombreDeD20, victimeDe } from "./degats.js";
+import { JET_CONTRE_UN_ALLIE, attaqueEnPlusDe, gardeJouable, jugerEffet, jugerMj, offreDesEffets, refusDeLaBlessure } from "./effets.js";
 import { validerEvenement } from "./forme.js";
-import { choixDuJet, deAttendu, ouvrirJet } from "./jet.js";
+import { choixDuJet, critiqueOffert, deAttendu, ouvrirJet } from "./jet.js";
 import { casesEntre, distance } from "./plateau.js";
-import { BORNE_DEGATS, BORNE_REGLAGE, DIFFICULTES, EVENEMENTS_MAX, FACES_LOCALISATION, ROLES_SANS_BOUTON, SANS_ANNULATION, ecrireEnMilliers } from "./regles.js";
+import { BORNE_DEGATS, BORNE_REGLAGE, DIFFICULTES, ELEMENTS_COMBAT, EVENEMENTS_MAX, FACES_LOCALISATION, ROLES_SANS_BOUTON, SANS_ANNULATION, ecrireEnMilliers } from "./regles.js";
 import { aJoue, campDe, capaciteDe, courantDe, faconDe, gesteEnCours, photoDe, vivant, vivantsDe } from "./valeurs.js";
 
 // Livret, « Capacités » et « Actions de jeu » : jouer une capacité coûte une
@@ -71,7 +100,7 @@ const ACTIONS_D_UN_GESTE = 1;
 const MODES_A_JET = ["attaque", "jet_prete", "caracteristique"];
 const MODES_D_ATTAQUE = ["attaque", "jet_prete"];
 const MODES_A_CIBLE = ["attaque", "jet_prete", "sans_jet"];
-const MODES_A_CONFIRMER = ["sans_jet", "deplacement"];
+const MODES_A_CONFIRMER = ["sans_jet", "deplacement", "attendre"];
 const NATURES = ["normaux", "resistance", "corps"];
 const CODES_CARACTERISTIQUES = CARACTERISTIQUES.map((caracteristique) => caracteristique.code);
 const VALEURS_DE_DIFFICULTE = Object.keys(DIFFICULTES).map(Number);
@@ -84,11 +113,13 @@ const element = (liste, indice) => (Array.isArray(liste) && Number.isInteger(ind
 /**
  * Ceux qui peuvent agir : les vivants du camp qui joue, qui n'ont pas joué
  * (il leur reste une action, et ils n'ont pas passé leur tour), dans l'ordre
- * d'ajout. Personne hors d'un combat lancé et non terminé.
+ * d'ajout ; et, au groupe 3, celui qui porte une attaque en plus, même sans
+ * action, même s'il a passé (contrat, § 5.5). Personne hors d'un combat lancé
+ * et non terminé.
  */
 export function candidats(etat) {
   if (etat.phase !== "combat" || etat.tour === null) return [];
-  return vivantsDe(etat, etat.tour.camp).filter((id) => !aJoue(etat, id));
+  return vivantsDe(etat, etat.tour.camp).filter((id) => !aJoue(etat, id) || attaqueEnPlusDe(etat, id) !== null);
 }
 
 /**
@@ -141,8 +172,9 @@ const casesDuDeplacement = (depart, facon) => casesEntre(depart, 1, facon?.puiss
 // Pourquoi une façon ne se joue pas, ou null si elle se paie. L'ordre des
 // raisons est celui où l'écran les dit : ce qui tient à la capacité d'abord
 // (la banque, puis un déplacement qui ne mène nulle part), ce qui tient au
-// moment ensuite (l'action, le souffle, le lien).
-function empechement(etat, id, capacite, facon, { x = 0, jauge = null } = {}) {
+// moment ensuite (l'action, le souffle, le lien). « sansAction » : une
+// attaque en plus, qui ne demande pas d'action (contrat, § 5.5).
+function empechement(etat, id, capacite, facon, { x = 0, jauge = null, sansAction = false } = {}) {
   if (facon.passif) return PASSIF;
   const cout = coutDe(facon, x);
   if (cout === null) return COUT_ILLISIBLE;
@@ -151,7 +183,7 @@ function empechement(etat, id, capacite, facon, { x = 0, jauge = null } = {}) {
   // n'évolue pas) n'offre aucune case : son bouton le dit, au lieu d'ouvrir
   // un geste sans issue.
   if (capacite.role === "deplacement" && casesDuDeplacement(courant?.case ?? null, facon).length === 0) return AUCUNE_CASE;
-  if (courant === null || courant.actions < ACTIONS_D_UN_GESTE) return PLUS_D_ACTION;
+  if (courant === null || (!sansAction && courant.actions < ACTIONS_D_UN_GESTE)) return PLUS_D_ACTION;
   if (cout.souffle > courant.souffle) return `Pas assez de souffle : ${accorder(cout.souffle, "demandé")}, ${accorder(courant.souffle, "restant")}.`;
   // Un adversaire ne paie pas le lien : rien ne peut lui en manquer.
   if (courant.camp === "pj" && cout.lien > 0 && jaugeDuLien(courant, capacite, cout.lien, jauge) === null) {
@@ -160,12 +192,30 @@ function empechement(etat, id, capacite, facon, { x = 0, jauge = null } = {}) {
   return null;
 }
 
+// Une attaque en plus (contrat, § 5.5) ne vaut que pour une capacité
+// d'attaque : une façon qui attaque, ou, une fois le geste ouvert, un jet
+// prêté.
+const faconDAttaque = (capacite, facon, camp) => modeDeLaFacon(capacite, facon, camp) === "attaque";
+
+/**
+ * L'attaque en plus que consommera ce geste, ou null (contrat, § 5.5) :
+ * l'effet durable « attaque_en_plus » de son acteur, pour un geste racine
+ * joué par « capacite » (ni une intervention, ni une contre-attaque, qui
+ * coûtent leur action), en attaque ou en jet prêté. Le moteur le retire au
+ * paiement.
+ */
+export function attaqueEnPlusDuGeste(etat, geste) {
+  if ((geste?.genre ?? "geste") !== "geste" || (geste?.parent ?? null) !== null || !MODES_D_ATTAQUE.includes(geste?.mode)) return null;
+  return attaqueEnPlusDe(etat, geste.acteur);
+}
+
 /**
  * Le prix d'un geste, tel qu'il se paiera d'un coup au premier dé ou à la
  * confirmation : { actions, souffle, lien, jauge, lienNonPaye }. « jauge » est
  * l'indice de la jauge qui paie le lien d'un PJ (null sans lien à payer, ou
  * si aucune ne suffit) ; « lienNonPaye », le lien qu'un adversaire ne paie
- * pas, et que le journal dit. null si le coût est illisible.
+ * pas, et que le journal dit. null si le coût est illisible. Une intervention
+ * coûte une action, comme une capacité ; une attaque en plus, aucune.
  */
 export function prixDuGeste(etat, geste) {
   const capacite = capaciteDe(etat, geste?.acteur, geste?.capacite);
@@ -174,9 +224,10 @@ export function prixDuGeste(etat, geste) {
   if (capacite === null || facon === null || courant === null) return null;
   const cout = coutDe(facon, geste.x);
   if (cout === null) return null;
-  if (courant.camp !== "pj") return { actions: ACTIONS_D_UN_GESTE, souffle: cout.souffle, lien: 0, jauge: null, lienNonPaye: cout.lien };
+  const actions = attaqueEnPlusDuGeste(etat, geste) === null ? ACTIONS_D_UN_GESTE : 0;
+  if (courant.camp !== "pj") return { actions, souffle: cout.souffle, lien: 0, jauge: null, lienNonPaye: cout.lien };
   const jauge = cout.lien > 0 ? jaugeDuLien(courant, capacite, cout.lien, geste.jauge) : null;
-  return { actions: ACTIONS_D_UN_GESTE, souffle: cout.souffle, lien: cout.lien, jauge, lienNonPaye: 0 };
+  return { actions, souffle: cout.souffle, lien: cout.lien, jauge, lienNonPaye: 0 };
 }
 
 /**
@@ -213,13 +264,16 @@ export function faconsDe(etat, id, capacite) {
  *
  * N'ont pas de ligne : une façon passive, même parmi d'autres qui se jouent ;
  * une capacité dont toutes les façons sont passives ; celles dont le
- * simulateur tient lui-même le rôle (passer son tour, le jet de défense,
- * attendre). Une capacité absente de la banque garde la sienne, inactive et
- * sans façon.
+ * simulateur tient lui-même le rôle (passer son tour, le jet de défense).
+ * Une capacité absente de la banque garde la sienne, inactive et sans façon.
+ * Au groupe 3, attendre a sa ligne (contrat, § 6.2), et une capacité
+ * d'attaque ne demande pas d'action à qui porte une attaque en plus.
  */
 export function boutons(etat, id) {
   const photo = photoDe(etat, id);
   if (photo === null) return [];
+  const camp = campDe(etat, id);
+  const enPlus = attaqueEnPlusDe(etat, id) !== null;
   const liste = [];
   photo.capacites.forEach((capacite, indice) => {
     if (ROLES_SANS_BOUTON.includes(capacite.role)) return;
@@ -229,7 +283,7 @@ export function boutons(etat, id) {
     }
     capacite.facons.forEach((facon, rang) => {
       if (facon.passif) return;
-      const raison = empechement(etat, id, capacite, facon);
+      const raison = empechement(etat, id, capacite, facon, { sansAction: enPlus && faconDAttaque(capacite, facon, camp) });
       liste.push({ capacite: indice, facon: rang, actif: raison === null, raison });
     });
   });
@@ -238,7 +292,8 @@ export function boutons(etat, id) {
 
 /**
  * Comment se joue une façon, à l'ouverture de son geste : « deplacement »
- * pour le rôle du déplacement ; « caracteristique » pour celui du jet de
+ * pour le rôle du déplacement ; « attendre » pour celui d'attendre (groupe 3 :
+ * il se règle, puis se confirme) ; « caracteristique » pour celui du jet de
  * caractéristique, joué par un PJ (un adversaire le joue sans jet : seuls les
  * joueurs lancent des dés) ; « attaque » pour une façon qui attaque ; sinon
  * « sans_jet ». Le jet prêté se choisit ensuite, par un réglage. « capacite »
@@ -246,6 +301,7 @@ export function boutons(etat, id) {
  */
 export function modeDeLaFacon(capacite, facon, camp) {
   if (capacite?.role === "deplacement") return "deplacement";
+  if (capacite?.role === "attendre") return "attendre";
   if (capacite?.role === "jet_de_caracteristique" && camp === "pj") return "caracteristique";
   if (facon?.attaque === true) return "attaque";
   return "sans_jet";
@@ -267,6 +323,71 @@ const armePreteeDe = (etat, geste) => element(photoDe(etat, geste.acteur)?.armes
 function porteeDe(etat, geste) {
   if (geste.mode === "jet_prete") return armePreteeDe(etat, geste)?.portee ?? 0;
   return faconDe(etat, geste)?.portee ?? 0;
+}
+
+// ─── Plusieurs cibles ───────────────────────────────────────────────────────
+
+const CLE_DU_CENTRE = cle(ELEMENTS_COMBAT.centre);
+
+// Vrai pour un geste racine qui attaque (ou prête son jet) d'une façon qui
+// porte l'élément Centré (contrat, § 4.4) : il vise toute la case de son
+// auteur. Un geste emboîté n'a qu'une cible : la contre-attaque vise
+// l'attaquant, une intervention se règle comme une capacité.
+function centree(etat, geste) {
+  if ((geste.genre ?? "geste") === "contre_attaque" || (geste.parent ?? null) !== null || !MODES_D_ATTAQUE.includes(geste.mode)) return false;
+  return (faconDe(etat, geste)?.elements ?? []).some((nom) => cle(nom) === CLE_DU_CENTRE);
+}
+
+// Les vivants de la case d'un protagoniste, tous camps, lui compris, dans
+// l'ordre d'ajout : ce qu'une façon Centrée peut cocher.
+function vivantsDeLaCase(etat, id) {
+  const ici = courantDe(etat, id)?.case ?? null;
+  return etat.ordre.filter((autre) => vivant(etat, autre) && courantDe(etat, autre).case === ici);
+}
+
+// Ce qu'elle coche d'office : les adversaires de son auteur sur sa case,
+// jamais un allié ni l'auteur.
+const ciblesDOffice = (etat, id) => vivantsDeLaCase(etat, id).filter((autre) => campDe(etat, autre) !== campDe(etat, id));
+
+// L'étape « Cible » d'une façon Centrée : les vivants de la case, chacun
+// { id, actif, raison }. Le jet contre un allié ou contre soi n'est écrit
+// nulle part (contrat, § 12, choix 10) : l'auteur et ses alliés paraissent,
+// inactifs, avec cette raison, et ne se cochent pas.
+function vivantsACocher(etat, id) {
+  const camp = campDe(etat, id);
+  return vivantsDeLaCase(etat, id).map((autre) => {
+    const raison = campDe(etat, autre) === camp ? JET_CONTRE_UN_ALLIE : null;
+    return { id: autre, actif: raison === null, raison };
+  });
+}
+
+/**
+ * Les cibles d'un geste à la façon Centrée, dans l'ordre des jets : celles
+ * qu'on a réglées, sinon celles qu'il coche d'office (contrat, § 4.4) ; la
+ * portée ne se juge pas. null pour tout autre geste, qui n'a qu'une cible. Le
+ * moteur les fige au premier dé, où une seule cible fait une attaque
+ * ordinaire.
+ */
+export function ciblesDuGeste(etat, geste) {
+  if (geste === null || geste === undefined || !centree(etat, geste)) return null;
+  return geste.cibles ?? ciblesDOffice(etat, geste.acteur);
+}
+
+// Le geste tel que son premier jet le lira : une façon Centrée vise sa
+// première cible.
+function viseLaPremiere(etat, geste) {
+  const liste = ciblesDuGeste(etat, geste);
+  return liste === null ? geste : { ...geste, cible: liste[0] ?? null };
+}
+
+// Les lignes qu'attendre peut garder (contrat, § 6.2) : celles du
+// protagoniste, actives ou non, sauf celles d'attendre lui-même. L'esquive
+// n'en est pas : elle garde son événement, offert dans l'étape d'une attaque.
+function lignesAGarder(etat, id) {
+  const photo = photoDe(etat, id);
+  return boutons(etat, id)
+    .filter(({ capacite, facon }) => facon !== null && !["attendre", "esquive"].includes(photo.capacites[capacite].role))
+    .map(({ capacite, facon }) => ({ capacite, facon }));
 }
 
 /**
@@ -390,6 +511,15 @@ function defenseAuChoix(etat, geste) {
  * caractéristiques : les codes entre lesquels on en choisit une ou deux) ;
  * « min » et « max », les bornes ; « raison », vrai quand le champ en demande
  * une. Rien hors d'un geste en préparation.
+ *
+ * Au groupe 3 : « garde », la ligne qu'attendre garde ({ valeur, options :
+ * [{ capacite, facon }] }) ; « cibles », celles d'une façon Centrée, qui
+ * remplace « cible » : { valeur, options, dOffice, vivants } ; « vivants »,
+ * ceux de la case, chacun { id, actif, raison } ; « options », ceux qui se
+ * cochent (ses adversaires : le jet contre un allié ou contre soi n'est pas
+ * écrit, contrat, § 12, choix 10) ; « dOffice », ceux qu'elle coche d'office.
+ * La contre-attaque ne règle ni sa façon (une ligne de l'étape par façon) ni
+ * sa cible (l'attaquant), même Centrée (choix 12).
  */
 export function reglages(etat) {
   const geste = enPreparation(etat);
@@ -401,8 +531,9 @@ export function reglages(etat) {
   const photo = photoDe(etat, acteur);
   if (capacite === null || facon === null || courant === null || photo === null) return {};
   const offerts = {};
+  const contre = (geste.genre ?? "geste") === "contre_attaque";
 
-  if (capacite.facons.length > 1) {
+  if (capacite.facons.length > 1 && !contre) {
     offerts.facon = { valeur: geste.facon, options: faconsDe(etat, acteur, geste.capacite).filter(({ actif }) => actif).map((jugee) => jugee.facon) };
   }
   if (mode === "sans_jet" || mode === "jet_prete") offerts.jet_prete = { valeur: mode === "jet_prete", options: [false, true] };
@@ -411,15 +542,21 @@ export function reglages(etat) {
   if (mode === "jet_prete" && courant.camp !== "pj" && photo.armes.length > 1) {
     offerts.arme_pretee = { valeur: geste.armePretee, options: photo.armes.map((_, indice) => indice) };
   }
-  if (MODES_A_CIBLE.includes(mode)) {
+  if (centree(etat, geste)) {
+    const vivants = vivantsACocher(etat, acteur);
+    const options = vivants.filter(({ actif }) => actif).map(({ id }) => id);
+    offerts.cibles = { valeur: geste.cibles, options, dOffice: ciblesDOffice(etat, acteur), vivants };
+  } else if (MODES_A_CIBLE.includes(mode) && !contre) {
     const possibles = cibles(etat)
       .filter(({ possible }) => possible)
       .map(({ id }) => id);
     offerts.cible = { valeur: geste.cible, options: mode === "sans_jet" ? [null, ...possibles] : possibles };
   }
+  if (mode === "attendre") offerts.garde = { valeur: geste.garde ?? null, options: lignesAGarder(etat, acteur) };
   // Le type de la défense : le défaut proposé est le type retenu par la
-  // photographie ; il ne se règle que jusqu'au premier dé.
-  const deDefense = defenseAuChoix(etat, geste);
+  // photographie ; il ne se règle que jusqu'au premier dé. Une façon Centrée
+  // le règle pour sa première cible.
+  const deDefense = defenseAuChoix(etat, viseLaPremiere(etat, geste));
   if (deDefense !== null) offerts.defense = { valeur: geste.defense ?? deDefense.type, options: [...deDefense.egalite] };
   if (mode === "deplacement") offerts.arrivee = { valeur: geste.arrivee, options: arrivees(etat) };
   if (deAuChoix(etat, geste)) offerts.caracteristiques = { valeur: geste.caracteristiques, options: [...CODES_CARACTERISTIQUES] };
@@ -440,6 +577,18 @@ export function reglages(etat) {
 const AUCUN_GESTE_A_REGLER = "Aucun geste n'est en préparation.";
 const CHOISIR_UNE_CIBLE = "Choisissez une cible.";
 const CHOISIR_UNE_ARRIVEE = "Choisissez une case d'arrivée.";
+const CHOISIR_LA_GARDE = "Choisissez la capacité à garder.";
+
+// Ce qui manque à des cibles Centrées : une au moins, et un jet possible
+// contre chacune (la défense réglée ne vaut que pour la première).
+function manqueDesCibles(etat, geste, liste) {
+  if (liste.length === 0) return CHOISIR_UNE_CIBLE;
+  for (const [rang, cible] of liste.entries()) {
+    const { manque } = circonstances(etat, { ...geste, cible, defense: rang === 0 ? geste.defense : null });
+    if (manque) return manque;
+  }
+  return null;
+}
 
 // Ce qui manque à un geste en préparation pour se jouer, ou null.
 function ceQuiManque(etat, geste) {
@@ -447,12 +596,19 @@ function ceQuiManque(etat, geste) {
   const facon = faconDe(etat, geste);
   if (capacite === null || facon === null) return "Cette capacité ne se joue pas.";
   if (geste.mode === "deplacement" && !arrivees(etat).includes(geste.arrivee)) return CHOISIR_UNE_ARRIVEE;
-  if (MODES_D_ATTAQUE.includes(geste.mode) && !cibles(etat).some(({ id, possible }) => possible && id === geste.cible)) return CHOISIR_UNE_CIBLE;
-  if (MODES_A_JET.includes(geste.mode)) {
-    const { manque } = circonstances(etat, geste);
-    if (manque) return manque;
+  if (geste.mode === "attendre" && (geste.garde ?? null) === null) return CHOISIR_LA_GARDE;
+  const liste = ciblesDuGeste(etat, geste);
+  if (liste !== null) {
+    const manque = manqueDesCibles(etat, geste, liste);
+    if (manque !== null) return manque;
+  } else {
+    if (MODES_D_ATTAQUE.includes(geste.mode) && !cibles(etat).some(({ id, possible }) => possible && id === geste.cible)) return CHOISIR_UNE_CIBLE;
+    if (MODES_A_JET.includes(geste.mode)) {
+      const { manque } = circonstances(etat, geste);
+      if (manque) return manque;
+    }
   }
-  return empechement(etat, geste.acteur, capacite, facon, { x: geste.x, jauge: geste.jauge });
+  return empechement(etat, geste.acteur, capacite, facon, { x: geste.x, jauge: geste.jauge, sansAction: attaqueEnPlusDuGeste(etat, geste) !== null });
 }
 
 /**
@@ -472,25 +628,39 @@ export function pret(etat) {
 
 const esquiveJouee = (geste) => geste.interventions.some((intervention) => intervention.effet?.genre === "annuler");
 
-// Le geste dont les d20 sont tous lancés, et dont les dégâts ne sont pas
-// encore appliqués.
+// Le geste dont les d20 sont tous lancés (ou dont le jet a manqué), et dont
+// les dégâts ne sont pas encore appliqués.
 function auxSuites(etat) {
   const geste = gesteEnCours(etat);
   return geste !== null && geste.moment === "suites" && geste.resultat === null ? geste : null;
 }
 
+// L'étape « Interventions » (contrat, § 6.1 ; mission, § 4.1) : le geste au
+// sommet est aux suites, ses dégâts pas encore appliqués, et c'est une
+// attaque (ou un jet prêté) d'un geste racine joué comme une capacité, ou une
+// contre-attaque, touchée ou non. Une intervention n'ouvre rien, ni un jet de
+// caractéristique ; une attaque annulée par sa face de contre-attaque n'arrive
+// pas aux suites. null sinon.
+function etapeOuverte(etat) {
+  const geste = auxSuites(etat);
+  if (geste === null || !MODES_D_ATTAQUE.includes(geste.mode)) return null;
+  const genre = geste.genre ?? "geste";
+  return genre === "contre_attaque" || (genre === "geste" && (geste.parent ?? null) === null) ? geste : null;
+}
+
 /**
  * L'esquive, quand elle est offerte : { min, max, capacite }, où « capacite »
  * est l'indice, chez le PJ visé, de la capacité qui en porte le rôle. Elle
- * l'est avant « Appliquer », au PJ qui va recevoir des dégâts, s'il lui reste
- * une action et du souffle, et une seule fois par attaque. x points de
- * souffle annulent x dégâts : de 1 au plus petit du souffle et du total des
- * dégâts. null sinon : le souffle d'un adversaire n'annule rien.
+ * l'est dans l'étape « Interventions », avant « Appliquer », au PJ qui va
+ * recevoir des dégâts (la victime : un report la suit), s'il lui reste une
+ * action et du souffle, et une seule fois par attaque. x points de souffle
+ * annulent x dégâts : de 1 au plus petit du souffle et du total des dégâts.
+ * null sinon : le souffle d'un adversaire n'annule rien.
  */
 export function esquiveOfferte(etat) {
-  const geste = auxSuites(etat);
+  const geste = etapeOuverte(etat);
   if (geste === null || esquiveJouee(geste)) return null;
-  const victime = geste.cible;
+  const victime = victimeDe(geste);
   const courant = courantDe(etat, victime);
   if (courant === null || courant.camp !== "pj") return null;
   const capacite = (photoDe(etat, victime)?.capacites ?? []).findIndex(({ role }) => role === "esquive");
@@ -500,13 +670,138 @@ export function esquiveOfferte(etat) {
   return { min: 1, max, capacite };
 }
 
-// Les décalages offerts, un par d20 lancé : { de, min, max }. Plus aucun dès
-// qu'une esquive est jouée.
+// Les décalages offerts, un par d20 lancé : { de, min, max }, sur la grille
+// de la victime. Plus aucun dès qu'une esquive est jouée.
 function decalagesOfferts(etat) {
   const geste = auxSuites(etat);
-  const grille = geste === null ? null : photoDe(etat, geste.cible);
+  const grille = geste === null ? null : photoDe(etat, victimeDe(geste));
   if (grille === null || esquiveJouee(geste)) return [];
   return geste.localisation.map(({ brut }, de) => ({ de, ...bornesDuDecalage(grille, brut) }));
+}
+
+// ─── Les interventions ──────────────────────────────────────────────────────
+
+const AUTRE_CAMP = { pj: "adv", adv: "pj" };
+
+// Une option d'intervention de ce protagoniste (contrat, § 6.1), ou null :
+// une façon Intervention de sa capacité, ou une ligne qu'une garde rend
+// jouable (« gardee » : l'identifiant de l'effet « guet »). L'esquive n'en est
+// pas une : elle garde son événement. Chacune coûte une action, puis son
+// coût ; « actif » dit si elle se paie, sinon « raison » dit pourquoi.
+function optionDIntervention(etat, id, capacite, facon) {
+  const laCapacite = capaciteDe(etat, id, capacite);
+  const laFacon = element(laCapacite?.facons, facon);
+  if (laFacon === null || laFacon.passif || laCapacite.role === "esquive") return null;
+  const gardee = laFacon.intervention === true ? null : (gardeJouable(etat, id, capacite, facon)?.id ?? null);
+  if (laFacon.intervention !== true && gardee === null) return null;
+  const raison = empechement(etat, id, laCapacite, laFacon);
+  return { capacite, facon, gardee, actif: raison === null, raison };
+}
+
+// Toutes ses options, dans l'ordre de sa photographie et de ses façons.
+function optionsDIntervention(etat, id) {
+  const options = [];
+  (photoDe(etat, id)?.capacites ?? []).forEach((capacite, indice) => {
+    capacite.facons.forEach((_facon, rang) => {
+      const option = optionDIntervention(etat, id, indice, rang);
+      if (option !== null) options.push(option);
+    });
+  });
+  return options;
+}
+
+// Ceux qui peuvent intervenir à cet instant, leurs options mises à part :
+// dans l'étape, le jeté puis ses alliés vivants, dans l'ordre d'ajout ;
+// entre deux gestes (« Intervenir… »), les vivants du camp qui ne joue pas.
+// Personne ailleurs.
+function intervenantsPossibles(etat) {
+  if (etat.phase !== "combat" || etat.tour === null) return [];
+  if (gesteEnCours(etat) === null) return vivantsDe(etat, AUTRE_CAMP[etat.tour.camp]);
+  const etape = etapeOuverte(etat);
+  if (etape === null || !vivant(etat, etape.cible)) return [];
+  return [etape.cible, ...vivantsDe(etat, campDe(etat, etape.cible)).filter((id) => id !== etape.cible)];
+}
+
+/**
+ * Les interventions offertes (contrat, § 6.1 et § 7.4) : dans l'étape
+ * « Interventions » d'une attaque, ou entre deux gestes (« Intervenir… »),
+ * { intervenants: [{ qui, options: [{ capacite, facon, gardee, actif,
+ * raison }] }], esquive } ; null ailleurs. Un intervenant a au moins une
+ * option qui se paie (donc une action) ; ses options inactives restent, avec
+ * leur raison. « esquive » est celle de l'étape (esquiveOfferte) : jamais
+ * entre deux gestes. Sans intervenant ni esquive, l'étape n'a rien à offrir :
+ * l'écran le dit, et « Appliquer » la passe.
+ */
+function interventionsOffertes(etat) {
+  if (etat.phase !== "combat") return null;
+  const geste = gesteEnCours(etat);
+  if (geste !== null && etapeOuverte(etat) === null) return null;
+  const intervenants = intervenantsPossibles(etat)
+    .map((qui) => ({ qui, options: optionsDIntervention(etat, qui) }))
+    .filter(({ options }) => options.some((option) => option.actif));
+  return { intervenants, esquive: geste === null ? null : esquiveOfferte(etat) };
+}
+
+// ─── La contre-attaque ──────────────────────────────────────────────────────
+
+/**
+ * Vrai quand le dernier d20 lancé d'un geste montre la face de
+ * contre-attaque de son jeté (convention 12) : elle se lit sur le dé brut.
+ */
+export function faceDeContre(etat, geste) {
+  const lances = geste?.localisation ?? [];
+  const jete = photoDe(etat, geste?.cible);
+  return lances.length > 0 && jete !== null && localiser(jete, lances[lances.length - 1].brut).contre === true;
+}
+
+const SANS_CONTRE = Object.freeze({ arme: null, portee: null, distance: null });
+
+/**
+ * La contre-attaque du jeté (contrat, § 6.4 ; mission, § 4.3), sur le geste
+ * au sommet en localisation dont le dernier d20 montre la face de
+ * contre-attaque, ou en contre_attaque ; null ailleurs. Rend { possible,
+ * raison, options, arme, portee, distance } :
+ * - options : les façons d'attaque que donne son arme (un PJ : l'arme tenue,
+ *   sinon ses mains nues ; un adversaire : chacune de ses armes), une par
+ *   puissance, { capacite, facon, actif, raison } : actives si elles se
+ *   paient et que l'attaquant est à leur portée ;
+ * - raison, quand elle n'est pas possible, la première dans cet ordre :
+ *   « action » (il n'a plus d'action), « arme » (aucune arme, ou aucune
+ *   façon d'attaque qu'elle donne), « portee » (aucune option à portée) ;
+ * - arme, portee, distance : pour « portee », le nom et la portée de sa
+ *   première arme, et la distance de l'attaquant, que le journal dit ; null
+ *   sinon.
+ * Une option à portée qu'il ne peut pas payer reste possible, inactive : il
+ * laisse alors passer.
+ */
+export function contreAttaqueOfferte(etat) {
+  const geste = gesteEnCours(etat);
+  if (geste === null || (geste.moment !== "contre_attaque" && !(geste.moment === "localisation" && faceDeContre(etat, geste)))) return null;
+  const defenseur = geste.cible;
+  const photo = photoDe(etat, defenseur);
+  const courant = courantDe(etat, defenseur);
+  const attaquant = courantDe(etat, geste.acteur);
+  if (photo === null || courant === null || attaquant === null) return { possible: false, raison: "arme", options: [], ...SANS_CONTRE };
+  const armes = courant.camp === "pj" ? (photo.armePretee === null ? [] : [photo.armePretee]) : photo.armes.map((_arme, indice) => indice);
+  const ecart = distance(courant.case, attaquant.case);
+  const options = [];
+  let aPortee = false;
+  photo.capacites.forEach((capacite, indice) => {
+    capacite.facons.forEach((facon, rang) => {
+      if (facon.attaque !== true || facon.passif || !armes.includes(facon.arme)) return;
+      const portee = facon.portee ?? 0;
+      aPortee ||= ecart <= portee;
+      const raison = empechement(etat, defenseur, capacite, facon) ?? (ecart <= portee ? null : `hors de portée : ${accorder(ecart, "case")}, portée ${portee}`);
+      options.push({ capacite: indice, facon: rang, actif: raison === null, raison });
+    });
+  });
+  let raison = null;
+  if (courant.actions < ACTIONS_D_UN_GESTE) raison = "action";
+  else if (options.length === 0) raison = "arme";
+  else if (!aPortee) raison = "portee";
+  if (raison !== "portee") return { possible: raison === null, raison, options, ...SANS_CONTRE };
+  const premiere = photo.armes[armes[0]];
+  return { possible: false, raison, options, arme: premiere.nom, portee: premiere.portee, distance: ecart };
 }
 
 // ─── Le dé attendu ──────────────────────────────────────────────────────────
@@ -515,11 +810,12 @@ const d20 = (geste) => ({ faces: FACES_LOCALISATION, combien: 1, motif: "localis
 
 // Le dé que le combat attend, selon le moment du geste. En préparation, c'est
 // le premier dé du jet, et seulement si le geste est prêt : ses circonstances
-// sont celles qui se figeront au paiement.
+// sont celles qui se figeront au paiement (une façon Centrée : celles de sa
+// première cible).
 const DE_ATTENDU = {
   preparation(etat, geste) {
     if (!MODES_A_JET.includes(geste.mode) || ceQuiManque(etat, geste) !== null) return null;
-    return deAttendu(ouvrirJet(circonstances(etat, geste)));
+    return deAttendu(ouvrirJet(circonstances(etat, viseLaPremiere(etat, geste))));
   },
   jet: (etat, geste) => deAttendu(geste.jet),
   bilan: (etat, geste) => d20(geste),
@@ -572,22 +868,36 @@ const peutSeLancer = (etat) => ["pj", "adv"].every((camp) => vivantsDe(etat, cam
 // colonne est refusé, « hors_moment ». « annuler » est de toutes les colonnes
 // d'un combat lancé, combat terminé compris : hors de son seul moment
 // possible (aucun geste en cours), c'est un bouton inactif, qui dit pourquoi.
+//
+// Au groupe 3 : « effet » est de toutes les colonnes d'un combat en cours
+// (js/combat/effets.js juge le genre et le moment) ; « mj » et « Intervenir… »
+// sont entre deux gestes ; « emboite » est la préparation d'un geste emboîté,
+// qui ne cède pas la place comme un geste racine (ni « capacite », ni
+// « passer », ni « fin_de_tour » ne le retirent) ; l'étape « Interventions »
+// est aux suites.
 const TABLE = {
   avant: ["lancer"],
-  sans_geste: ["capacite", "passer", "fin_de_tour", "annuler"],
-  preparation: ["capacite", "regler", "revenir", "confirmer", "de", "passer", "fin_de_tour", "annuler"],
-  jet: ["de", "relancer", "garder", "exploser", "annuler"],
-  bilan: ["de", "degats", "annuler"],
-  localisation: ["de", "annuler"],
-  suites: ["decaler", "esquive", "appliquer", "annuler"],
+  sans_geste: ["capacite", "intervenir", "effet", "mj", "passer", "fin_de_tour", "annuler"],
+  preparation: ["capacite", "regler", "revenir", "confirmer", "de", "effet", "passer", "fin_de_tour", "annuler"],
+  emboite: ["regler", "revenir", "confirmer", "de", "effet", "annuler"],
+  jet: ["de", "relancer", "garder", "exploser", "effet", "annuler"],
+  critique: ["critique", "effet", "annuler"],
+  bilan: ["de", "degats", "effet", "annuler"],
+  localisation: ["de", "effet", "annuler"],
+  contre_attaque: ["contre_attaquer", "laisser", "effet", "annuler"],
+  suites: ["intervenir", "decaler", "esquive", "appliquer", "effet", "annuler"],
+  blessure: ["blessure", "effet", "annuler"],
   termine: ["annuler"],
 };
+
+const MOMENTS_DE_PREPARATION = ["preparation", "emboite"];
 
 function colonneDe(etat) {
   if (etat.phase === "preparation") return "avant";
   if (etat.phase !== "combat") return "termine";
   const geste = gesteEnCours(etat);
   if (geste === null) return "sans_geste";
+  if (geste.moment === "preparation" && etat.pile.length > 1) return "emboite";
   return Object.hasOwn(TABLE, geste.moment) ? geste.moment : "termine";
 }
 
@@ -606,6 +916,12 @@ const S_OFFRE = {
   decaler: ({ offerts }) => offerts.decalages.length > 0,
   esquive: ({ offerts }) => offerts.esquive !== null,
   annuler: ({ offerts }) => offerts.annulation?.actif === true,
+  intervenir: ({ offerts }) => (offerts.interventions?.intervenants.length ?? 0) > 0,
+  contre_attaquer: ({ offerts }) => offerts.contre?.options.some((option) => option.actif) === true,
+  critique: ({ offerts }) => offerts.critique,
+  effet: ({ offerts }) => Object.values(offerts.effets).some((genre) => genre.actif),
+  blessure: ({ offerts }) => offerts.blessure !== null,
+  mj: ({ offerts }) => offerts.mj,
 };
 
 /**
@@ -621,7 +937,17 @@ const S_OFFRE = {
  * - decalages : un par d20 lancé, { de, min, max }, tant qu'aucune esquive
  *   n'est jouée ;
  * - esquive : { min, max, capacite }, ou null ;
- * - annulation : ce que dit annulation(etat).
+ * - annulation : ce que dit annulation(etat) ;
+ * et, au groupe 3 (contrat, § 7.4) :
+ * - interventions : l'étape « Interventions », ou « Intervenir… » entre deux
+ *   gestes (interventionsOffertes), ou null ;
+ * - contre : à l'étape de la contre-attaque, contreAttaqueOfferte(etat), ou
+ *   null ;
+ * - critique : vrai à l'étape du coup critique ;
+ * - effets : { [genre]: { actif, raison } }, ce que la palette peut appliquer
+ *   maintenant (js/combat/effets.js) ;
+ * - blessure : { zone }, la zone dont la blessure est à choisir, ou null ;
+ * - mj : vrai entre deux gestes, où le MJ agit.
  */
 export function offre(etat) {
   const geste = gesteEnCours(etat);
@@ -630,12 +956,18 @@ export function offre(etat) {
     types: [],
     de: deOffert(etat, geste),
     choix: colonne === "jet" ? choixDuJet(geste.jet) : [],
-    pret: colonne === "preparation" ? pret(etat) : null,
+    pret: MOMENTS_DE_PREPARATION.includes(colonne) ? pret(etat) : null,
     reglages: reglages(etat),
     degats: colonne === "bilan" ? { bases: basesPermises(etat, geste), natures: [...NATURES], max: BORNE_DEGATS } : null,
     decalages: decalagesOfferts(etat),
     esquive: esquiveOfferte(etat),
     annulation: annulation(etat),
+    interventions: interventionsOffertes(etat),
+    contre: colonne === "contre_attaque" ? contreAttaqueOfferte(etat) : null,
+    critique: colonne === "critique",
+    effets: offreDesEffets(etat),
+    blessure: colonne === "blessure" ? { zone: blessuresAChoisir(etat, geste)[0] ?? null } : null,
+    mj: colonne === "sans_geste",
   };
   offerts.types = TABLE[colonne].filter((type) => !Object.hasOwn(S_OFFRE, type) || S_OFFRE[type]({ etat, geste, offerts }));
   return offerts;
@@ -653,13 +985,17 @@ const INCONNU = "Ce protagoniste n'est pas dans le combat.";
 const NE_PEUT_PAS_JOUER = "Ce protagoniste ne peut pas jouer à cet instant.";
 const NE_SE_JOUE_PAS = "Cette capacité ne se joue pas.";
 
+// Ce qui ne se joue qu'entre deux gestes, et qu'un geste en cours fait donc
+// attendre (« Intervenir… » se joue aussi dans l'étape d'une attaque).
+const ENTRE_DEUX_GESTES = ["capacite", "mj", "passer", "fin_de_tour"];
+
 // Pourquoi un type n'est pas de sa colonne.
 function raisonHorsMoment(colonne, type) {
   if (colonne === "termine") return "Le combat est terminé.";
   if (type === "lancer") return "Le combat est déjà lancé.";
   if (colonne === "avant") return "Le combat n'est pas lancé.";
   if (colonne === "sans_geste") return "Aucun geste n'est en cours.";
-  if (TABLE.sans_geste.includes(type)) return "Le geste en cours se finit d'abord.";
+  if (ENTRE_DEUX_GESTES.includes(type)) return "Le geste en cours se finit d'abord.";
   return "Le geste en cours n'en est pas là.";
 }
 
@@ -684,6 +1020,19 @@ function jugerValeur(etat, { champ, valeur }, reglage) {
     const vise = cibles(etat).find(({ id }) => id === valeur);
     return vise ? interdit(vise.raison) : horsBornes("Ce protagoniste ne peut pas être la cible de ce geste.");
   }
+  // La garde est une ligne, les cibles une liste : elles se comparent par
+  // leurs valeurs, non par l'objet.
+  if (champ === "garde") {
+    return reglage.options.some((ligne) => ligne.capacite === valeur.capacite && ligne.facon === valeur.facon) ? OUI : horsBornes("Cette ligne ne se garde pas.");
+  }
+  if (champ === "cibles") {
+    // La première cible qui ne se coche pas : un allié ou l'auteur est un
+    // bouton inactif (contrat, § 12, choix 10), un autre n'est pas de la case.
+    const horsOptions = valeur.find((id) => !reglage.options.includes(id));
+    if (horsOptions === undefined) return OUI;
+    const inactif = reglage.vivants.find(({ id }) => id === horsOptions);
+    return inactif ? interdit(inactif.raison) : horsBornes("Ce protagoniste n'est pas un vivant de la case de l'auteur.");
+  }
   if (reglage.options) return reglage.options.includes(valeur) ? OUI : horsBornes("Cette valeur n'est pas de celles qui s'offrent.");
   return valeur >= reglage.min && valeur <= reglage.max ? OUI : horsBornes(`Cette valeur ne va que de ${reglage.min} à ${reglage.max}.`);
 }
@@ -706,9 +1055,45 @@ const JUGES = {
     if (laCapacite.facons.every((une) => une.passif)) return horsBornes(NE_SE_JOUE_PAS);
     const laFacon = element(laCapacite.facons, facon);
     if (laFacon === null) return horsBornes("Cette capacité ne se joue pas de cette façon.");
-    const raison = empechement(etat, qui, laCapacite, laFacon);
+    const sansAction = attaqueEnPlusDe(etat, qui) !== null && faconDAttaque(laCapacite, laFacon, campDe(etat, qui));
+    const raison = empechement(etat, qui, laCapacite, laFacon, { sansAction });
     return raison === null ? OUI : interdit(raison);
   },
+
+  // Une intervention (contrat, § 6.1) : seule l'option demandée se juge,
+  // comme une capacité. Qui peut intervenir, puis si c'est une de ses
+  // options, puis si elle se paie.
+  intervenir(etat, { qui, capacite, facon }) {
+    if (courantDe(etat, qui) === null) return horsBornes(INCONNU);
+    if (gesteEnCours(etat) !== null && etapeOuverte(etat) === null) return horsMoment("L'étape « Interventions » n'est pas ouverte.");
+    if (!intervenantsPossibles(etat).includes(qui)) return interdit("Ce protagoniste ne peut pas intervenir à cet instant.");
+    const option = optionDIntervention(etat, qui, capacite, facon);
+    if (option === null) return horsBornes("Cette capacité n'est pas une intervention de ce protagoniste.");
+    return option.actif ? OUI : interdit(option.raison);
+  },
+
+  contre_attaquer(etat, { capacite, facon }) {
+    const option = (contreAttaqueOfferte(etat)?.options ?? []).find((une) => une.capacite === capacite && une.facon === facon);
+    if (option === undefined) return horsBornes("Cette capacité ne contre-attaque pas.");
+    return option.actif ? OUI : interdit(option.raison);
+  },
+
+  critique(etat) {
+    const { jet } = gesteEnCours(etat);
+    return critiqueOffert(jet, campDe(etat, jet.lanceur)) ? OUI : horsMoment("Le critique ne s'offre pas à cet instant.");
+  },
+
+  // Une capacité qui ferait passer sa photographie au-delà de ses bornes est
+  // refusée, avec sa raison (contrat, § 12, choix 20 ; js/combat/effets.js).
+  blessure(etat, { capacite = null }) {
+    if (blessuresAChoisir(etat, gesteEnCours(etat)).length === 0) return horsMoment("Aucune blessure n'est à choisir.");
+    const raison = capacite === null ? null : refusDeLaBlessure(etat, capacite);
+    return raison === null ? OUI : interdit(raison);
+  },
+
+  // La palette et les gestes du MJ se jugent dans js/combat/effets.js.
+  effet: (etat, evenement) => jugerEffet(etat, evenement),
+  mj: (etat, evenement) => jugerMj(etat, evenement),
 
   regler(etat, evenement) {
     const offerts = reglages(etat);

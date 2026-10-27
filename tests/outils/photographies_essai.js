@@ -62,6 +62,13 @@
 // capacités de couteau sont hors maîtrise, à cause du couteau (précise). Le
 // Chef de partie joue Pas chassé à chacune de ses puissances, comme le fait
 // la photographie d'un adversaire au groupe 2 : [1] gratuit, [2] 1 souffle.
+// Depuis la fin du combat (lot 4.3), leur Moulinet farineux porte l'élément
+// Centré, comme dans la démonstration ; celui du « Marmiton » rond, non.
+//
+// etatsEssai() (lot 4.3) : ce que etatsDeLaBanque() rend de la démonstration,
+// ses deux blocs de type État et leurs six capacités figées, recopié à la
+// main ; le lecteur de scénario y prend une blessure nommée quand on ne lui
+// donne pas la banque.
 //
 // ── L'état ──────────────────────────────────────────────────────────────────
 //
@@ -288,7 +295,7 @@ export function pjEssai(retoucher = sansRetouche) {
 // Les trois capacités que tout adversaire de la démonstration tient de ses
 // types : deux de sa spatule, une de son espèce. Pas chassé a une façon par
 // puissance, de 1 à son rang ; elle coûte sa puissance moins 1 en souffle.
-const capacitesDeSpatule = ({ degats, moulinetHorsMaitrise, rangDuPas }) => [
+const capacitesDeSpatule = ({ degats, moulinetHorsMaitrise, moulinetCentre, rangDuPas }) => [
   capaciteEssai({
     nom: "Frappe",
     groupe: SPATULE,
@@ -306,6 +313,7 @@ const capacitesDeSpatule = ({ degats, moulinetHorsMaitrise, rangDuPas }) => [
         libelle: "Spatule souple",
         cout: { souffle: 5, lien: 0 },
         description: "Tourbillonne 1 fois.",
+        elements: moulinetCentre ? ["Centré"] : [],
         attaque: true,
         degats,
         desavantage: moulinetHorsMaitrise,
@@ -325,7 +333,7 @@ const capacitesDeSpatule = ({ degats, moulinetHorsMaitrise, rangDuPas }) => [
   }),
 ];
 
-const adversaire = ({ nom, sousTitre, souffle, attaque, defense, armures, ecrits, degats, moulinetHorsMaitrise, rangDuPas }) => ({
+const adversaire = ({ nom, sousTitre, souffle, attaque, defense, armures, ecrits, degats, moulinetHorsMaitrise, moulinetCentre = false, rangDuPas }) => ({
   identifiant: null,
   nom,
   sousTitre,
@@ -344,7 +352,7 @@ const adversaire = ({ nom, sousTitre, souffle, attaque, defense, armures, ecrits
   bouclier: null,
   liens: [],
   passifs: [],
-  capacites: capacitesDeSpatule({ degats, moulinetHorsMaitrise, rangDuPas }),
+  capacites: capacitesDeSpatule({ degats, moulinetHorsMaitrise, moulinetCentre, rangDuPas }),
 });
 
 /** L'adversaire rond (voir l'en-tête). retoucher reçoit ses valeurs, et les change sur place. */
@@ -507,6 +515,7 @@ export function chefDePartieEssai(retoucher = sansRetouche) {
       ecrits: { jambe_droite: "Jambre droite" },
       degats: [6, 12, 19],
       moulinetHorsMaitrise: false,
+      moulinetCentre: true,
       rangDuPas: 2,
     }),
     retoucher,
@@ -527,10 +536,46 @@ export function marmitonDeCorveeEssai(retoucher = sansRetouche) {
       ecrits: { jambe_droite: "Jambre droite" },
       degats: [5, 10, 15],
       moulinetHorsMaitrise: true,
+      moulinetCentre: true,
       rangDuPas: 1,
     }),
     retoucher,
   );
+}
+
+// ─── Les états de la démonstration (lot 4.3) ────────────────────────────────
+
+// Une capacité d'état de la démonstration : puissance 0, gratuite, passive,
+// rangée sous le nom de son bloc.
+const etatDeLaDemonstration =
+  (titre) =>
+  ([nom, description]) =>
+    capaciteEssai({ nom, groupe: { genre: "capacites", titre }, facons: [faconEssai({ description, elements: ["Passif"], passif: true })] });
+
+/**
+ * Les états de la démonstration, tels que les rend etatsDeLaBanque()
+ * (js/combat/photographie.js) : « Blessure », le bloc de blessure, reconnu
+ * par son nom, et « Condition ». tests/combat_photographie.test.js tient ce
+ * que la banque donne vraiment, et les y compare.
+ */
+export function etatsEssai() {
+  const blessure = [
+    ["Cheville tordue", "Vos déplacements coûtent une action de plus."],
+    ["Main brûlée", "Désavantage avec une arme précise."],
+    ["Côtes froissées", "Vos interventions coûtent 1 souffle de plus."],
+  ].map(etatDeLaDemonstration("Blessure"));
+  const condition = [
+    ["Étourdi", "Votre prochaine action coûte une action de plus."],
+    ["En nage", "Vos jets de défense ont un désavantage."],
+    ["Affamé", "Vous ne regagnez pas de souffle."],
+  ].map(etatDeLaDemonstration("Condition"));
+  return {
+    blocs: [
+      { nom: "Blessure", blessure: true, capacites: blessure },
+      { nom: "Condition", blessure: false, capacites: condition },
+    ],
+    blessure,
+  };
 }
 
 // ─── La mise en place et l'état ─────────────────────────────────────────────

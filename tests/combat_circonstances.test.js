@@ -15,6 +15,10 @@
 // Au groupe 2 (contrat du groupe, § 5.4, § 5.5 et § 14, N4) : le rôle et
 // l'indice de capacité d'une source de passif ; les causes sans cible du
 // survol (sourcesSansCible) ; la défense à égalité de dés, au choix du joueur.
+//
+// Au groupe 3 : la fin du −1 (mission du lot 4.3, § 4.10) ; ±N, les avantages
+// « pour ce jet », le retrait et le nom d'une source sont contrôlés dans
+// tests/combat_calcul_g3.test.js.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -32,6 +36,7 @@ import {
   capaciteDe,
   courantDe,
   defenseDe,
+  effetsDurablesDe,
   faconDe,
   gesteEnCours,
   photoDe,
@@ -187,8 +192,12 @@ test("valeurs.js et circonstances.js exportent ce que dit le contrat, sans un no
     "capaciteDe",
     "courantDe",
     "defenseDe",
+    "effetsDuGeste",
+    "effetsDurablesDe",
     "faconDe",
+    "gardesDe",
     "gesteEnCours",
+    "nomDeLaSource",
     "photoDe",
     "vivant",
     "vivantsDe",
@@ -230,6 +239,7 @@ test("un identifiant inconnu ou piégé ne lève pas : null, faux, zéro, une li
     assert.equal(aJoue(etat, id), true, "qui n'est pas dans le combat n'a rien à jouer");
     assert.deepEqual(attaqueDe(etat, id), { valeur: null, base: null, ecarts: [] });
     assert.deepEqual(defenseDe(etat, id), { valeur: null, base: null, ecarts: [] });
+    assert.deepEqual(effetsDurablesDe(etat, id), []);
     assert.equal(blessuresDe(etat, id), 0);
     assert.deepEqual(alliesSurLaCase(etat, id), []);
     assert.equal(capaciteDe(etat, id, 0), null);
@@ -278,10 +288,10 @@ test("attaqueDe, defenseDe : les nombres courants d'un adversaire, jamais ceux d
   assert.equal(defenseDe(change, "adv2").valeur, 3);
 });
 
-test("blessuresDe : une par zone dont l'endurance est à 0", () => {
+test("blessuresDe : le nombre de zones dont l'endurance est à 0 (pour le banc ; il ne pèse plus sur les jets)", () => {
   assert.equal(blessuresDe(duel(), "pj1"), 0);
   const entamee = duel({ retoucher: (etat) => { etat.protagonistes.pj1.zones[2].resistance = 1; etat.protagonistes.pj1.zones[2].armure = 0; } });
-  assert.equal(blessuresDe(entamee, "pj1"), 0, "une endurance entamée, ou une armure à 0, ne sont pas une blessure");
+  assert.equal(blessuresDe(entamee, "pj1"), 0, "une endurance entamée, ou une armure à 0, ne comptent pas");
   const une = duel({ retoucher: (etat) => { etat.protagonistes.pj1.zones[2].resistance = 0; } });
   assert.equal(blessuresDe(une, "pj1"), 1);
   assert.equal(blessuresDe(une, "adv2"), 0, "chacun les siennes");
@@ -342,7 +352,7 @@ test("attaque d'un PJ : il lance le dé de son arme contre la défense de sa cib
     desavantages: [],
   });
   assert.deepEqual(Object.keys(rendu), CLES);
-  assert.deepEqual(Object.keys(ouvrirJet(rendu)), [...CLES, "attente", "places"], "de quoi ouvrir le jet, tel quel");
+  assert.deepEqual(Object.keys(ouvrirJet(rendu)), [...CLES, "attente", "places", "bonus", "critique", "relanceParPalette"], "de quoi ouvrir le jet, tel quel");
 });
 
 test("attaque d'un PJ : le dé suit l'arme, la difficulté suit la défense courante de la cible", () => {
@@ -579,21 +589,15 @@ test("modificateurs 4 et 5, petit : +N aux jets de défense ; −1 aux jets qui 
   assert.deepEqual(gouter.modificateurs, [{ genre: "passif", nom: "Demi-portion", valeur: -1 }], "un jet de caractéristique n'est pas une défense");
 });
 
-test("modificateur 6, blessures : −1 par zone dont l'endurance est à 0, à chaque jet du PJ", () => {
+test("la fin du −1 (mission, § 4.10) : une zone sans endurance ne retire plus rien aux jets du PJ", () => {
   const blesser = (...zones) => (etat) => {
     for (const zone of zones) etat.protagonistes.pj1.zones[zone].resistance = 0;
   };
   const une = duel({ retoucher: blesser(2) });
-  const blessure = [{ genre: "blessures", nom: null, valeur: -1 }];
-  assert.deepEqual(attaqueDuPj(une).modificateurs, blessure, "en attaque");
-  assert.deepEqual(attaqueDeLAdversaire(une).modificateurs, blessure, "en défense");
-  assert.deepEqual(circonstances(une, joue(une, "pj1", "Goûter", { mode: "caracteristique", caracteristiques: ["sens"], difficulte: 5 })).modificateurs, blessure, "au jet de caractéristique");
-
-  assert.deepEqual(attaqueDuPj(duel({ retoucher: blesser(2, 4) })).modificateurs, [{ genre: "blessures", nom: null, valeur: -2 }], "elles se cumulent");
-  assert.deepEqual(attaqueDuPj(duel({ retoucher: blesser(0, 1, 5) })).modificateurs, [{ genre: "blessures", nom: null, valeur: -3 }]);
-  assert.deepEqual(attaqueDuPj(duel()).modificateurs, [], "sans blessure, rien");
-  const entamee = duel({ retoucher: (etat) => { etat.protagonistes.pj1.zones[2].resistance = 1; } });
-  assert.deepEqual(attaqueDuPj(entamee).modificateurs, [], "une endurance à 1 n'est pas une blessure");
+  assert.deepEqual(attaqueDuPj(une).modificateurs, [], "en attaque");
+  assert.deepEqual(attaqueDeLAdversaire(une).modificateurs, [], "en défense");
+  assert.deepEqual(circonstances(une, joue(une, "pj1", "Goûter", { mode: "caracteristique", caracteristiques: ["sens"], difficulte: 5 })).modificateurs, [], "au jet de caractéristique");
+  assert.deepEqual(attaqueDuPj(duel({ retoucher: blesser(0, 1, 5) })).modificateurs, [], "ni plusieurs");
 });
 
 test("modificateur 7, la main : ±N avec sa raison, en dernier ; nul ou absent, rien", () => {
@@ -617,6 +621,7 @@ test("les modificateurs suivent l'ordre écrit, pas celui de la photographie", (
   const tout = ensemble(passif("petit", "Demi-portion", 2), passif("bonus_precision", "Main sûre", 3), passif("bonus_agilite", "Vif", 1), passif("bonus_force", "Costaud", 2));
   const blesser = (etat) => { etat.protagonistes.pj1.zones[3].resistance = 0; };
   const main = { modificateur: { valeur: 1, raison: "Inspiration" }, avantages: null };
+  // Une zone sans endurance n'y entre plus (la fin du −1).
   const defenseDuType = (type) => (valeurs) => {
     valeurs.deDefense = { faces: 8, type, caracteristiques: [...TYPES_OBJET[type].defense], meles: false, egalite: [] };
   };
@@ -626,7 +631,6 @@ test("les modificateurs suivent l'ordre écrit, pas celui de la photographie", (
     { genre: "passif", nom: "Costaud", valeur: 2 },
     { genre: "passif", nom: "Demi-portion", valeur: 2 },
     { genre: "passif", nom: "Demi-portion", valeur: -1 },
-    { genre: "blessures", nom: null, valeur: -1 },
     { genre: "main", nom: "Inspiration", valeur: 1 },
   ]);
 
@@ -634,7 +638,6 @@ test("les modificateurs suivent l'ordre écrit, pas celui de la photographie", (
   assert.deepEqual(attaqueDeLAdversaire(enDefensePrecise, { reglages: main }).modificateurs, [
     { genre: "passif", nom: "Main sûre", valeur: 3 },
     { genre: "passif", nom: "Demi-portion", valeur: 2 },
-    { genre: "blessures", nom: null, valeur: -1 },
     { genre: "main", nom: "Inspiration", valeur: 1 },
   ]);
 
@@ -643,16 +646,14 @@ test("les modificateurs suivent l'ordre écrit, pas celui de la photographie", (
     { genre: "passif", nom: "Costaud", valeur: 2 },
     { genre: "passif", nom: "Vif", valeur: 1 },
     { genre: "passif", nom: "Demi-portion", valeur: -1 },
-    { genre: "blessures", nom: null, valeur: -1 },
     { genre: "main", nom: "Inspiration", valeur: 1 },
   ]);
   assert.deepEqual(attaqueDuPj(enAttaque, { reglages: main }).modificateurs, [
     { genre: "passif", nom: "Vif", valeur: 1 },
     { genre: "passif", nom: "Main sûre", valeur: 3 },
-    { genre: "blessures", nom: null, valeur: -1 },
     { genre: "main", nom: "Inspiration", valeur: 1 },
   ]);
-  assert.equal(modificateurDe(ouvrirJet(attaqueDuPj(enAttaque, { reglages: main }))), 4, "1 + 3 − 1 + 1");
+  assert.equal(modificateurDe(ouvrirJet(attaqueDuPj(enAttaque, { reglages: main }))), 5, "1 + 3 + 1");
 });
 
 test("le N d'un bonus est le niveau de la capacité : au niveau 2, un d10 devient « d10+2 »", () => {
@@ -677,17 +678,13 @@ test("deux passifs du même rôle comptent tous les deux, dans l'ordre de la pho
 
 test("modificateursDe : la même liste, sans la main, pour la fiche comme pour le jet", () => {
   const etat = duel({ pj: ensemble(passif("bonus_agilite", "Vif", 1), passif("petit", "Demi-portion", 2)), retoucher: (courant) => { courant.protagonistes.pj1.zones[0].resistance = 0; } });
-  assert.deepEqual(modificateursDe(etat, "pj1", { genre: "attaque", mobilisees: ["precision", "agilite"] }), [
-    { genre: "passif", nom: "Vif", valeur: 1 },
-    { genre: "blessures", nom: null, valeur: -1 },
-  ]);
+  assert.deepEqual(modificateursDe(etat, "pj1", { genre: "attaque", mobilisees: ["precision", "agilite"] }), [{ genre: "passif", nom: "Vif", valeur: 1 }]);
   assert.deepEqual(modificateursDe(etat, "pj1", { genre: "defense", mobilisees: ["agilite", "creativite"] }), [
     { genre: "passif", nom: "Vif", valeur: 1 },
     { genre: "passif", nom: "Demi-portion", valeur: 2 },
-    { genre: "blessures", nom: null, valeur: -1 },
   ]);
-  assert.deepEqual(modificateursDe(etat, "pj1", { genre: "caracteristique", mobilisees: ["sens"] }), [{ genre: "blessures", nom: null, valeur: -1 }]);
-  assert.deepEqual(modificateursDe(etat, "pj1"), [{ genre: "blessures", nom: null, valeur: -1 }], "sans jet nommé : ce qui vaut pour tout jet, les blessures");
+  assert.deepEqual(modificateursDe(etat, "pj1", { genre: "caracteristique", mobilisees: ["sens"] }), []);
+  assert.deepEqual(modificateursDe(etat, "pj1"), [], "sans jet nommé, rien : la zone sans endurance ne compte plus");
   const main = { modificateur: { valeur: 5, raison: "Inspiration" }, avantages: null };
   assert.deepEqual(
     attaqueDuPj(etat, { reglages: main }).modificateurs,
@@ -1215,37 +1212,37 @@ test("référence, étape 12 : Moulinet farineux hors maîtrise, « Ses 2 avanta
   });
 });
 
-test("référence, étape 14 : Goûter avec une blessure, « d6−1 (Savoir sauvage + Sens) contre 6 (compliqué) », sans avantage", () => {
+test("référence, étape 14 : Goûter, une zone sans endurance, « d6 (Savoir sauvage + Sens) contre 6 (compliqué) », sans avantage ni −1", () => {
   const etat = reference({ retoucher: blesserAubepine(2) });
   const rendu = circonstances(etat, joue(etat, "pj1", "Goûter", { mode: "caracteristique", caracteristiques: ["savoir_sauvage", "sens"], difficulte: 6 }));
   assert.equal(rendu.libelle, "compliqué");
   assert.deepEqual(rendu.caracteristiques, ["savoir_sauvage", "sens"]);
-  assert.deepEqual(rendu.modificateurs, [{ genre: "blessures", nom: null, valeur: -1 }], "l'Agilité n'y est pas : pas de Vif");
-  verifier(rendu, { faces: 6, modificateur: -1, difficulte: 6, net: 0, avantages: [], desavantages: [] });
+  assert.deepEqual(rendu.modificateurs, [], "l'Agilité n'y est pas : pas de Vif ; et plus de −1");
+  verifier(rendu, { faces: 6, modificateur: 0, difficulte: 6, net: 0, avantages: [], desavantages: [] });
 });
 
-test("référence, étape 16 : le Chef attaque dans sa maîtrise, « d8 contre 5 » (Vif +1, une blessure −1)", () => {
+test("référence, étape 16 : le Chef attaque dans sa maîtrise, « d8+1 contre 5 » (Vif +1, plus de −1)", () => {
   const etat = reference({ retoucher: (courant) => { tuer("adv3")(courant); blesserAubepine(2)(courant); } });
   const rendu = circonstances(etat, joue(etat, "adv2", "Moulinet farineux", { cible: "pj1" }));
-  assert.deepEqual(rendu.modificateurs, [VIF, { genre: "blessures", nom: null, valeur: -1 }]);
-  verifier(rendu, { faces: 8, modificateur: 0, difficulte: 5, net: 0, avantages: [SOLO_D_AUBEPINE], desavantages: [MELEE] });
+  assert.deepEqual(rendu.modificateurs, [VIF]);
+  verifier(rendu, { faces: 8, modificateur: 1, difficulte: 5, net: 0, avantages: [SOLO_D_AUBEPINE], desavantages: [MELEE] });
 });
 
-test("référence, étape 19 : Fournaise avec le jet prêté du couteau, « d10 contre 7, 1 avantage »", () => {
+test("référence, étape 19 : Fournaise avec le jet prêté du couteau, « d10+1 contre 7, 1 avantage » (Vif, plus de −1)", () => {
   const etat = reference({ retoucher: (courant) => { tuer("adv3")(courant); blesserAubepine(2)(courant); } });
   const rendu = circonstances(etat, joue(etat, "pj1", "Fournaise", { mode: "jet_prete", cible: "adv2", armePretee: 0 }));
   assert.equal(rendu.genre, "attaque");
-  verifier(rendu, { faces: 10, modificateur: 0, difficulte: 7, net: 1, avantages: [SOLO_D_AUBEPINE], desavantages: [] });
+  verifier(rendu, { faces: 10, modificateur: 1, difficulte: 7, net: 1, avantages: [SOLO_D_AUBEPINE], desavantages: [] });
 });
 
-test("référence, étapes 24 et 25 : deux blessures, « d10−1 contre 5 » puis « d10−1 contre 7 »", () => {
+test("référence, étapes 24 et 25 : deux zones sans endurance, « d10+1 contre 5 » puis « d10+1 contre 7 »", () => {
   const etat = reference({ retoucher: (courant) => { tuer("adv3")(courant); blesserAubepine(2, 4)(courant); } });
   const maitrise = [{ genre: "maitrise", nom: "Frappe", nombre: 1, de: null }];
   const contreMarmiton = circonstances(etat, joue(etat, "pj1", "Frappe", { cible: "adv4" }));
-  assert.deepEqual(contreMarmiton.modificateurs, [VIF, { genre: "blessures", nom: null, valeur: -2 }]);
-  verifier(contreMarmiton, { faces: 10, modificateur: -1, difficulte: 5, net: 0, avantages: [SOLO_D_AUBEPINE], desavantages: maitrise });
+  assert.deepEqual(contreMarmiton.modificateurs, [VIF]);
+  verifier(contreMarmiton, { faces: 10, modificateur: 1, difficulte: 5, net: 0, avantages: [SOLO_D_AUBEPINE], desavantages: maitrise });
   const contreChef = circonstances(etat, joue(etat, "pj1", "Frappe", { cible: "adv2" }));
-  verifier(contreChef, { faces: 10, modificateur: -1, difficulte: 7, net: 0, avantages: [SOLO_D_AUBEPINE], desavantages: maitrise });
+  verifier(contreChef, { faces: 10, modificateur: 1, difficulte: 7, net: 0, avantages: [SOLO_D_AUBEPINE], desavantages: maitrise });
 });
 
 test("référence, étape 4 au choix : Aubépine, agile et précise à égalité ; « precise » ôte Vif, « d8+1 contre 4 » devient « d8 contre 4 »", () => {

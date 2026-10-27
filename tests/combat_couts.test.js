@@ -217,7 +217,8 @@ test("chaque raison d'un bouton inactif, et leur ordre", () => {
   assert.equal(prixDuGeste(depart, { acteur: "pj1", capacite: 9, facon: 0, x: 0, jauge: null }), null);
 
   // « Plus d'action à ce tour. » : Aubépine a dépensé ses deux actions, Ciboulette n'a pas joué.
-  const frappe = [capacite(depart, "pj1", "Frappe"), viser("adv2"), d8(1)];
+  // Depuis le lot 4.3, un manqué attend « Appliquer ».
+  const frappe = [capacite(depart, "pj1", "Frappe"), viser("adv2"), d8(1), APPLIQUER];
   const sansAction = jouer(depart, frappe, frappe);
   assert.equal(sansAction.protagonistes.pj1.actions, 0);
   assert.deepEqual(sansAction.tour, { numero: 1, camp: "pj" });
@@ -259,12 +260,14 @@ test("un passif n'a pas de bouton, ni la capacité dont le simulateur tient le r
     champs.capacites.push(capaciteEssai({ nom: "Lever le couvercle", role: "jet_de_defense" }));
   });
   const depart = contre(charge);
-  // Flambage et Pas chassé : une ligne par puissance.
+  // Flambage et Pas chassé : une ligne par puissance. Depuis le lot 4.3, attendre (Guetter, la n° 9) a la
+  // sienne (contrat de la vague 1, § 6.2).
   assert.deepEqual(
     boutons(depart, "pj1").map((bouton) => bouton.capacite),
-    [0, 1, 2, 2, 3, 4, 4, 5, 6, 7],
+    [0, 1, 2, 2, 3, 4, 4, 5, 6, 7, 9],
   );
-  for (const nom of ["Costaud", "Guetter", "Lever le pied", "Lever le couvercle"]) {
+  assert.deepEqual(boutonDe(depart, "pj1", "Guetter"), [{ capacite: 9, facon: 0, actif: true, raison: null }]);
+  for (const nom of ["Costaud", "Lever le pied", "Lever le couvercle"]) {
     assert.deepEqual(boutonDe(depart, "pj1", nom), [], nom);
     refuse(depart, capacite(depart, "pj1", nom), "hors_bornes", "Cette capacité ne se joue pas.");
   }
@@ -731,7 +734,7 @@ test("un déplacement à la puissance 0 n'offre aucune case : son bouton est ina
   assert.equal(gesteEnCours(depart), null, "aucun geste ne s'ouvre");
   assert.equal(boutonDe(depart, "pj1", "Frappe")[0].actif, true, "ses autres boutons n'en savent rien");
   // La raison tient à la capacité : elle se dit avant l'action qui manque.
-  const frappe = [capacite(depart, "pj1", "Frappe"), viser("adv2"), d8(1)];
+  const frappe = [capacite(depart, "pj1", "Frappe"), viser("adv2"), d8(1), APPLIQUER];
   const sansAction = jouer(depart, frappe, frappe);
   assert.equal(sansAction.protagonistes.pj1.actions, 0);
   assert.equal(boutonDe(sansAction, "pj1", "Pas chassé")[0].raison, "aucune case à sa portée");

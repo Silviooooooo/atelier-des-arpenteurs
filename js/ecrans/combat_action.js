@@ -19,6 +19,11 @@
 // ("bulle" ou "panneau"), chaque saisie complète le gabarit que la vue lui
 // donne.
 //
+// Au lot 4.3 (vague 1), il suit le noyau neuf sans en dessiner les vues : les
+// choix du critique et de la contre-attaque, la capacité gardée d'attendre,
+// l'étape de la blessure (ses capacités, puis un état libre nommé), et des
+// dégâts « ajustés à » la valeur calculée, qui ne changent rien.
+//
 // Pourquoi il existe : l'écran du combat se partage en parties, pour que
 // chacune se contrôle seule, sur des vues écrites à la main. Celle-ci ne
 // porte AUCUNE règle du jeu et n'importe que dom.js : ce qui est permis, ce
@@ -236,6 +241,11 @@ function bouton(r, { cle = null, classe, contenu, commande = null, actif = true,
  * seul un nombre nul s'émet (il efface le réglage), sauf pour des dégâts,
  * dont l'opération exige toujours la sienne.
  *
+ * Quand la vue donne « sansEffet » ({ valeur, commande }), ce nombre-là
+ * n'émet que sa commande, sans raison, ou rien si elle est nulle : des
+ * dégâts « ajustés à » la valeur calculée ne changent rien (mission du lot
+ * 4.3, § 6).
+ *
  * Une saisie refusée ne part pas, et le dit : le champ fautif est marqué
  * (aria-invalid, que la feuille de style montre), une phrase liée aux deux
  * champs dit ce qui est attendu, et le focus va au champ, sans faire défiler
@@ -274,6 +284,10 @@ function saisie(r, { cle, libelle, donnee, action, defaut = "" }) {
     const valeur = lireEntier(nombre.value, donnee.min, donnee.max);
     if (valeur === null) {
       refuser(nombre, nombreRefuse(donnee));
+      return;
+    }
+    if (present(donnee.sansEffet) && valeur === donnee.sansEffet.valeur) {
+      emettre(r, donnee.sansEffet.commande);
       return;
     }
     let dite = null;
@@ -652,6 +666,81 @@ function jauges(r, liste) {
   );
 }
 
+/** La capacité qu'attendre garde : un bouton par ligne de qui attend. */
+function gardes(r, liste) {
+  return rangee(
+    r,
+    "combat-ligne combat-gardes",
+    "Garder :",
+    liste.map((garde, i) => bouton(r, { cle: `garde:${i}`, classe: "combat-capacite", presse: Boolean(garde.choisie), commande: garde.commande, contenu: garde.libelle })),
+  );
+}
+
+// ——— La blessure ———
+
+/** Ce que dit un nom refusé : « Un nom de 1 à 40 signes est attendu. » */
+const nomRefuse = (donnee) => `Un nom de 1 à ${typeof donnee.max === "number" ? donnee.max : 1} signes est attendu.`;
+
+/**
+ * Un nom à saisir (un état libre, « Une autre… »), et le bouton qui émet le
+ * gabarit de la vue complété de ce nom, dans « libre ». Un nom vide, ou plus
+ * long que la borne de la vue, ne part pas, et le dit comme une saisie
+ * refusée. Rend la rangée, puis la phrase.
+ */
+function saisieDUnNom(r, { cle, libelle, donnee, action }) {
+  const idRefus = identifiant(r, "refus");
+  const refus = el("p", { id: idRefus, classe: "combat-refus", hidden: true });
+  const champ = el("input", { type: "text", classe: "champ", maxlength: typeof donnee.max === "number" ? donnee.max : null, "aria-describedby": idRefus });
+  marquer(r, champ, cle);
+  const envoyer = () => {
+    champ.removeAttribute("aria-invalid");
+    refus.replaceChildren();
+    refus.hidden = true;
+    const nom = champ.value.trim();
+    if (nom === "" || (typeof donnee.max === "number" && nom.length > donnee.max)) {
+      champ.setAttribute("aria-invalid", "true");
+      refus.replaceChildren(nomRefuse(donnee));
+      refus.hidden = false;
+      champ.focus({ preventScroll: true });
+      return;
+    }
+    const evenement = donnee.gabarit?.evenement;
+    if (evenement) emettre(r, { evenement: { ...evenement, libre: nom } });
+  };
+  champ.addEventListener("keydown", (evenement) => {
+    if (evenement.key !== "Enter") return;
+    evenement.preventDefault();
+    envoyer();
+  });
+  return [el("div", { classe: "combat-ligne" }, el("label", {}, libelle, champ), el("button", { type: "button", classe: "bouton secondaire", onclick: envoyer }, action)), refus];
+}
+
+/**
+ * L'étape « La blessure » : son titre (« Blessure : Aubépine, bras
+ * gauche »), une option par capacité du bloc de blessure, chacune suivie de
+ * son texte, la phrase d'une banque sans bloc, puis l'état libre. En
+ * attendant ses vues (vague 3), elle prend les classes d'aujourd'hui : une
+ * option est une rangée de choix, jamais une .combat-option, qui a l'aspect
+ * de « Passer son tour ».
+ */
+function blessure(r, b) {
+  return el(
+    "div",
+    { classe: "combat-blessure" },
+    el("p", { classe: "combat-blessure-titre" }, b.titre ?? ""),
+    (b.options ?? []).map((option) =>
+      el(
+        "div",
+        { classe: "combat-choix" },
+        bouton(r, { cle: option.cle, classe: "combat-capacite", actif: option.actif, raison: option.raison, commande: option.commande, contenu: option.libelle }),
+        paragraphe(option.description, "combat-sous"),
+      ),
+    ),
+    paragraphe(b.vide),
+    b.libre ? saisieDUnNom(r, { cle: "blessure:libre", libelle: b.libre.libelle ?? "", donnee: b.libre, action: "Choisir" }) : null,
+  );
+}
+
 // ——— Le contexte du jet ———
 
 /**
@@ -867,12 +956,14 @@ function etapes(liste) {
 /**
  * Le jet d'un geste (vuePanneau « action » avec geste), sans en-tête ni
  * conteneur, dans l'ordre de la vue 2 bis, qui est aussi celui du
- * téléphone : les étapes ; qui se défend ; les rangées du groupe 1 ; puis,
- * ensemble, le contexte, les dés (la chaîne, le bilan, les rangs, les choix
- * du moment, les dégâts, la face, l'esquive, le détail, « Appliquer »,
- * « Confirmer », « Revenir ») et le pied : le texte de la capacité, toujours
- * (mode assisté : c'est au joueur d'en appliquer l'effet), et les réglages à
- * la main tant qu'ils existent. Rend des nœuds.
+ * téléphone : les étapes ; qui se défend ; les rangées du groupe 1 (et la
+ * capacité gardée d'attendre) ; puis, ensemble, le contexte, les dés (la
+ * chaîne, le bilan, les rangs, les choix du moment, critique et
+ * contre-attaque compris, les dégâts, la face, l'esquive, le détail, la
+ * blessure, « Appliquer » ou « Terminer », « Confirmer », « Revenir ») et le
+ * pied : le texte de la capacité, toujours (mode assisté : c'est au joueur
+ * d'en appliquer l'effet), et les réglages à la main tant qu'ils existent.
+ * Rend des nœuds.
  */
 export function composerGeste(r, vue) {
   const geste = vue.geste ?? null;
@@ -899,6 +990,7 @@ export function composerGeste(r, vue) {
     localisation(r, geste, d20Attendu),
     geste.esquive ? saisie(r, { cle: "esquive", libelle: `${geste.esquive.libelle}, X`, donnee: geste.esquive, action: geste.esquive.libelle, defaut: geste.esquive.min ?? "" }) : null,
     geste.detail?.length ? detail(geste.detail) : null,
+    geste.blessure ? blessure(r, geste.blessure) : null,
     fins.length ? el("div", { classe: "combat-choix" }, fins) : null,
   );
   const assiste = el("div", { classe: "combat-assiste" }, el("h3", {}, TITRE_DE_LA_DESCRIPTION), el("p", { classe: "combat-description" }, geste.description ?? ""));
@@ -914,6 +1006,7 @@ export function composerGeste(r, vue) {
     geste.difficultes?.length ? difficultes(r, geste.difficultes) : null,
     geste.x ? saisie(r, { cle: "x", libelle: "X", donnee: geste.x, action: "Régler X", defaut: 0 }) : null,
     geste.jauges?.length ? jauges(r, geste.jauges) : null,
+    geste.gardes?.length ? gardes(r, geste.gardes) : null,
     el("div", { classe: "combat-des" }, contexte(r, geste.contexte), jet, assiste, geste.contexte?.reglages ? reglages(r, geste.contexte.reglages) : null),
   ]
     .flat(Infinity)

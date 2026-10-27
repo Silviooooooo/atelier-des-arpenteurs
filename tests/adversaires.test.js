@@ -952,18 +952,21 @@ test("résolution — « complet » : une grille, une attaque et une défense qu
 
 // Le lot 4 a posé dans le classeur d'essai deux éléments, deux capacités du
 // bloc de base, et Passif ou Intervention sur quatorze capacités, dont une
-// maîtrise et une capacité que portent des adversaires. Aucune valeur d'un
-// adversaire ne doit en changer : chacun se résout, par le même code, comme
-// sur le classeur d'avant.
+// maîtrise et une capacité que portent des adversaires ; le lot 4.3,
+// l'élément Centré sur Moulinet farineux, que portent deux adversaires, et
+// deux blocs d'état, de six capacités. Aucune valeur d'un adversaire ne doit
+// en changer, hors les éléments de ces capacités : chacun se résout, par le
+// même code, comme sur le classeur d'avant.
 test("démonstration — les ajouts du simulateur de combat ne changent aucun adversaire : chacun se résout à l'identique sur le classeur d'avant", async () => {
   const { banque: avant, erreur } = await importerFichier(fabriquerClasseur(sansAjoutsDuCombat()), "classeur_essai.xlsx");
   assert.equal(erreur, undefined, erreur);
-  // Le classeur d'avant est bien un autre classeur : ni les deux éléments, ni les deux capacités.
-  assert.deepEqual([avant.capacites.length, avant.elements.length], [BANQUE.capacites.length - 2, BANQUE.elements.length - 2]);
-  assert.deepEqual([BANQUE.capacites.length, BANQUE.elements.length], [46, 22]);
+  // Le classeur d'avant est bien un autre classeur : ni les trois éléments, ni les huit capacités, ni les deux blocs.
+  assert.deepEqual([avant.capacites.length, avant.elements.length, avant.blocs.length], [BANQUE.capacites.length - 8, BANQUE.elements.length - 3, BANQUE.blocs.length - 2]);
+  assert.deepEqual([BANQUE.capacites.length, BANQUE.elements.length, BANQUE.blocs.length], [52, 23, 39]);
   const ajoutes = (liste, ancienne) => liste.map((entree) => entree.nom).filter((nom) => !ancienne.some((entree) => entree.nom === nom));
-  assert.deepEqual(ajoutes(BANQUE.elements, avant.elements), ["Intervention", "Passif"]);
-  assert.deepEqual(ajoutes(BANQUE.capacites, avant.capacites), ["Pas de côté", "Guetter"]);
+  assert.deepEqual(ajoutes(BANQUE.elements, avant.elements), ["Intervention", "Passif", "Centré"]);
+  assert.deepEqual(ajoutes(BANQUE.capacites, avant.capacites), ["Pas de côté", "Guetter", "Cheville tordue", "Main brûlée", "Côtes froissées", "Étourdi", "En nage", "Affamé"]);
+  assert.deepEqual(ajoutes(BANQUE.blocs, avant.blocs), ["Blessure", "Condition"]);
   // Les ajouts touchent bien ce que portent des adversaires : la comparaison n'est pas vide de sens.
   const elementsDe = (banque, nom) => banque.capacites.find((c) => c.nom === nom).variantes[0].elements.map((e) => e.nom);
   assert.deepEqual([elementsDe(avant, "Nez fin"), elementsDe(BANQUE, "Nez fin")], [[], ["Passif"]]);
@@ -982,11 +985,16 @@ test("démonstration — les ajouts du simulateur de combat ne changent aucun ad
   // neufs compris (les armes, les valeurs par arme et en propre), est égal.
   const sansElements = (resolu) => ({ ...resolu, capacites: resolu.capacites.map(({ elements, ...reste }) => (assert.ok(Array.isArray(elements), "le champ écarté existe"), reste)) });
   for (const [i, resolu] of aujourdhui.entries()) assert.deepEqual(sansElements(resolu), sansElements(hier[i]), resolu.nom);
-  // Les éléments : un seul écart, le Passif posé sur une capacité de la Mouette chapardeuse.
+  // Les éléments : trois écarts, le Centré de Moulinet farineux chez deux adversaires, le Passif posé sur une
+  // capacité de la Mouette chapardeuse.
   const elementsDesCapacites = (liste) => liste.flatMap((resolu) => resolu.capacites.map((c) => [resolu.nom, c.nom, c.elements]));
   const [dits, ditsHier] = [elementsDesCapacites(aujourdhui), elementsDesCapacites(hier)];
   assert.equal(dits.length, 12);
-  assert.deepEqual(dits.filter((ligne, i) => ligne[2].join() !== ditsHier[i][2].join()), [["Mouette chapardeuse", "Nez fin", ["Passif"]]]);
+  assert.deepEqual(dits.filter((ligne, i) => ligne[2].join() !== ditsHier[i][2].join()), [
+    ["Marmiton de corvée", "Moulinet farineux", ["Centré"]],
+    ["Chef de partie", "Moulinet farineux", ["Centré"]],
+    ["Mouette chapardeuse", "Nez fin", ["Passif"]],
+  ]);
   assert.deepEqual(ditsHier.filter((ligne) => ligne[2].length), []);
   // Les types se lisent de même, et la feuille porte les mêmes anomalies.
   const lus = (banque) => {

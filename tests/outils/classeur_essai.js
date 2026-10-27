@@ -48,6 +48,13 @@
 // « origine » des trois styles de combat disait déjà « Style de combat ».
 // Aucune anomalie ne change.
 //
+// À la fin du combat (lot 4.3, mission § 10) : l'élément Centré, en fin
+// d'Eléments, que porte Moulinet farineux (sa cellule était vide) ; deux blocs
+// de type État, en fin de Blocs, « Blessure » (le bloc de blessure, reconnu
+// par son nom) et « Condition », chacun de trois capacités en ensemble
+// facultatif ; ces six capacités, passives, en fin de Capacites. Aucune ligne
+// ne change de numéro, aucune anomalie ne s'ajoute.
+//
 // Après une modification, réécrire essais/classeur_essai.xlsx :
 //   node tests/outils/classeur_essai.js
 
@@ -126,6 +133,11 @@ export const CLASSEUR_ESSAI = {
         // couvre toutes les zones.
         ["Pinces de homard", "Arme", "Frappe, Choc sourd", "{degats:4/8/12}, {portee:0}", "Arme naturelle : hors du créateur de personnage", "Arme naturelle"],
         ["Carapace épaisse", "Armure", _, "{armure:30}", "Armure naturelle globale : une seule valeur ; I3", "armure naturelle"],
+        // La fin du combat (lot 4.3) : deux blocs de type État. Le premier est
+        // le bloc de blessure, reconnu par son nom faute d'un bloc de type
+        // Blessure ; ses capacités sont un ensemble facultatif.
+        ["Blessure", _, "[Cheville tordue | Main brûlée | Côtes froissées]", _, "Bloc de blessure : type État, nommé Blessure", "État"],
+        ["Condition", _, "[Étourdi | En nage | Affamé]", _, "États", "État"],
       ],
     },
     {
@@ -161,6 +173,8 @@ export const CLASSEUR_ESSAI = {
         // Le simulateur de combat (lot 4).
         ["Intervention", _, "Se joue pendant le tour adverse."],
         ["Passif", _, "Agit sans action."],
+        // La fin du combat (lot 4.3).
+        ["Centré", _, "Touche toute la case de son auteur."],
       ],
     },
     {
@@ -168,7 +182,7 @@ export const CLASSEUR_ESSAI = {
       lignes: [
         ["Nom", "puissance", "Coût en souffle", "Coût en lien", "Éléments propres", "description", "origine"],
         ["Coup de louche", 0, 1, _, "Tranchant", "Frappe pour {chaleur} point(s).", "Liste simple"],
-        ["Moulinet farineux", "N", "5*N", 0, _, { riche: ["Tourbillonne ", "[N]", " fois."] }, "Texte enrichi"],
+        ["Moulinet farineux", "N", "5*N", 0, "Centré", { riche: ["Tourbillonne ", "[N]", " fois."] }, "Texte enrichi"],
         ["Jet de sel", 0, "X", _, "Distance[2]", "Lance du sel à {distance} pas.\nPuis recommence.", "Élément propre à valeur ; retour à la ligne"],
         ["Sauce piquante", 1, 2, _, "Brûlant", "[N*{chaleur}] point(s).", "Trois puissances"],
         ["Sauce piquante", 2, 3, _, "Brûlant", "[N*{chaleur}] point(s).", _],
@@ -228,6 +242,13 @@ export const CLASSEUR_ESSAI = {
           "Après un déplacement, ou pour finir son tour : une de vos capacités se joue en intervention jusqu'au prochain tour de votre camp.",
           "Base",
         ],
+        // La fin du combat (lot 4.3) : les capacités des deux blocs d'état.
+        ["Cheville tordue", 0, _, _, "Passif", "Vos déplacements coûtent une action de plus.", "État"],
+        ["Main brûlée", 0, _, _, "Passif", "Désavantage avec une arme précise.", "État"],
+        ["Côtes froissées", 0, _, _, "Passif", "Vos interventions coûtent 1 souffle de plus.", "État"],
+        ["Étourdi", 0, _, _, "Passif", "Votre prochaine action coûte une action de plus.", "État"],
+        ["En nage", 0, _, _, "Passif", "Vos jets de défense ont un désavantage.", "État"],
+        ["Affamé", 0, _, _, "Passif", "Vous ne regagnez pas de souffle.", "État"],
       ],
     },
     {

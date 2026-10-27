@@ -34,6 +34,7 @@ import {
   capaciteEssai,
   chefDePartieEssai,
   etatEssai,
+  etatsEssai,
   faconEssai,
   marmitonDeCorveeEssai,
   miseEnPlaceEssai,
@@ -66,6 +67,9 @@ const GESTE_NEUTRE = {
   interventions: [],
   resultat: null,
   parent: null,
+  // Le lot 4.3 : les blessures qu'un PJ a choisies, une par zone blessée
+  // (contrat de la vague 1, § 5.9).
+  blessures: [],
 };
 
 // Un geste tel que le moteur le tient, gelé. Un champ mal orthographié
@@ -106,6 +110,9 @@ function chaineFinie(circonstances, ...pas) {
 }
 
 const VIF = { genre: "passif", nom: "Vif", valeur: 1 };
+// Un modificateur de −N. Son genre, « blessures », n'est plus de ceux que les
+// circonstances posent (lot 4.3, mission § 4.10 : la fin du −1) ; le journal
+// n'en lit que la valeur, et ces gabarits n'éprouvent que l'écriture du signe.
 const blessures = (nombre) => ({ genre: "blessures", nom: null, valeur: -nombre });
 const SOLO = { genre: "passif", nom: "Solo du chef", nombre: 1, de: null };
 const MELES = { genre: "armure_melee", nom: null, nombre: 1, de: null };
@@ -177,6 +184,9 @@ const mouette = (valeurs) => {
 const aPlusieursD20 = (nombre) => (valeurs) => {
   for (const facon of valeurs.capacites[0].facons) facon.locMultiple = nombre;
 };
+
+// La blessure que choisit un PJ : une capacité du bloc de blessure, figée.
+const MAIN_BRULEE = etatsEssai().blessure.find((capacite) => capacite.nom === "Main brûlée");
 
 const pasDeCote = (etat, x) => ({ qui: "pj1", capacite: indice(etat, "pj1", "Pas de côté"), prix: { actions: 1, souffle: x }, effet: { genre: "annuler", x } });
 
@@ -454,12 +464,15 @@ function catalogue() {
       degats: LETTRE,
       localisation: [d20(12), d20(6)],
       interventions: [pasDeCote(lourde, 3)],
+      // Le lot 4.3 (mission, § 4.10) : la zone n'est blessée que si le coup lui ôte du corps, et Aubépine
+      // choisit sa blessure dans le bloc de blessure ; plus de « −1 à ses jets ».
       resultat: resultat([
-        coup(zone(lourde, "pj1", "jambe_gauche"), { armure: [10, 10], resistance: [5, 0], blessure: true, blessures: 1 }),
-        coup(zone(lourde, "pj1", "torse"), { armure: [10, 3] }),
+        coup(zone(lourde, "pj1", "jambe_gauche"), { armure: [10, 10], resistance: [5, 0], corps: [10, 8], blessure: true, blessures: 1 }),
+        coup(zone(lourde, "pj1", "torse"), { armure: [10, 3], corps: [8, 8] }),
       ]),
+      blessures: [{ zone: zone(lourde, "pj1", "jambe_gauche"), capacite: MAIN_BRULEE, libre: null }],
     }),
-    "Marmiton : Frappe contre Aubépine. Aubépine lance sa défense, d8 contre 4 → 6 ✓, 3 ✗ : 1 réussite, Aubépine reçoit B = 10. Localisation 2 d20 → 12 : jambe gauche ; 6 : torse. Aubépine intervient : Pas de côté (1 action, 3 souffle), jambe gauche 10 → 7. Jambe gauche : endurance 5 → 0. Torse : armure 10 → 3. Blessure (jambe gauche) : −1 à ses jets.",
+    "Marmiton : Frappe contre Aubépine. Aubépine lance sa défense, d8 contre 4 → 6 ✓, 3 ✗ : 1 réussite, Aubépine reçoit B = 10. Localisation 2 d20 → 12 : jambe gauche ; 6 : torse. Aubépine intervient : Pas de côté (1 action, 3 souffle), jambe gauche 10 → 7. Jambe gauche : endurance 5 → 0, corps 10 → 8. Torse : armure 10 → 3. Blessure (jambe gauche) : Main brûlée.",
     ["ouverture", "jet", "localisation", "intervention", "degats", "blessures"],
   );
   const sansArme = duel({ adv: mouette });
@@ -550,9 +563,10 @@ test("les lignes du cadre et la passe : une phrase, son genre, ses segments", ()
   });
   for (const ligne of [lignes.lancement(etat), lignes.tour({ numero: 1, camp: "pj" }), lignes.finDeTour("adv"), lignes.fin("pj"), lignes.passe(etat, "pj1")]) verifierLaLigne(ligne, ligne.texte);
 
-  // Les fabriques : sept, dans un objet gelé.
+  // Les fabriques : dix, dans un objet gelé. Le lot 4.3 a ajouté l'échéance, l'effet hors d'un geste et le geste du
+  // MJ, dont les lignes sont éprouvées dans combat_g3_journal.test.js.
   assert.ok(Object.isFrozen(lignes));
-  assert.deepEqual(Object.keys(lignes).sort(), ["annulation", "fin", "finDeTour", "geste", "lancement", "passe", "tour"]);
+  assert.deepEqual(Object.keys(lignes).sort(), ["annulation", "echeance", "effet", "fin", "finDeTour", "geste", "lancement", "mj", "passe", "tour"]);
 });
 
 // ─── b) Chaque type à sa place ──────────────────────────────────────────────

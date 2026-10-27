@@ -28,10 +28,17 @@
 // écrira ; à la fin de chaque geste, « annuler » rend l'état d'avant lui ;
 // et le même combat, écrit en version 1 ou 2 des règles (d'avant le lot 5),
 // se dit d'une autre version.
+//
+// Au lot 4.3 (mission, § 10) : sans le −1 des blessures, huit lignes changent,
+// et la mission les redonne mot pour mot ; Moulinet farineux est Centré, la
+// contre-attaque se laisse passer, et Aubépine choisit sa blessure dans le bloc
+// de blessure de la banque. L'état final porte ses blessures en liste, et la
+// version des règles est la 4.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { isDeepStrictEqual } from "node:util";
 import { indexerAdversaires } from "../js/adversaire/resolution.js";
 import { MOT_DE_PASSE_DEMO } from "../js/banque/chargement.js";
 import { validerContenu, validerPhoto } from "../js/combat/forme.js";
@@ -42,7 +49,7 @@ import { offre } from "../js/combat/offre.js";
 import { REGLES } from "../js/combat/regles.js";
 import { photographierAdversaire, photographierPersonnage } from "../js/combat/photographie.js";
 import { ecrireAbsents, tableDesRoles } from "../js/combat/roles.js";
-import { blessuresDe, gesteEnCours } from "../js/combat/valeurs.js";
+import { effetsDurablesDe, gesteEnCours } from "../js/combat/valeurs.js";
 import { indexerCreation } from "../js/personnage/calcul.js";
 import { accepter, lirePersonnage } from "../js/personnage/format.js";
 import { ouvrirAvecMotDePasse } from "../js/securite/chiffrement.js";
@@ -68,9 +75,11 @@ const RENDUS = {
 for (const [nom, rendu] of Object.entries(RENDUS)) assert.equal(rendu.refus, undefined, `${nom} : ${rendu.refus}`);
 const PHOTOS = Object.fromEntries(Object.entries(RENDUS).map(([nom, rendu]) => [nom, rendu.photo]));
 
-// Le combat entier, joué une fois ; et le même, arrêté où l'on veut.
-const JOUE = versContenu(scenario, PHOTOS);
-const arrete = (jusqua) => versContenu(scenario, PHOTOS, { jusqua }).etat;
+// Le combat entier, joué une fois ; et le même, arrêté où l'on veut. La
+// blessure qu'Aubépine choisit se prend, figée, dans le bloc de blessure de la
+// banque publiée (photographie.js, etatsDeLaBanque).
+const JOUE = versContenu(scenario, PHOTOS, { banque: BANQUE });
+const arrete = (jusqua) => versContenu(scenario, PHOTOS, { jusqua, banque: BANQUE }).etat;
 const lignesDe = (etat) => etat.journal.map((ligne) => ligne.texte);
 
 const [PJ, CHEF, MARMITON_1, MARMITON_2] = JOUE.etat.ordre;
@@ -91,6 +100,27 @@ for (let n = 1; n < TENUS.length; n += 1) {
 }
 
 const texteDes = (segments) => segments.map((segment) => segment.texte).join("");
+
+// Les blessures qu'un protagoniste porte (lot 4.3) : ses effets durables de
+// blessure, dans l'ordre où ils sont venus.
+const blessuresPortees = (etat, id) => effetsDurablesDe(etat, id).filter((effet) => effet.blessure === true);
+
+// Où deux valeurs se séparent : le chemin du premier écart, pour qu'un échec
+// dise autre chose que deux états entiers (et qu'aucun état entier ne passe
+// par assert.deepEqual).
+function premierEcart(a, b, chemin = "etat") {
+  if (Object.is(a, b)) return null;
+  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return `${chemin} : ${JSON.stringify(a)} contre ${JSON.stringify(b)}`;
+  if (Array.isArray(a) !== Array.isArray(b)) return `${chemin} : une liste contre un objet`;
+  const clesA = Object.keys(a);
+  const clesB = Object.keys(b);
+  if (clesA.join("|") !== clesB.join("|")) return `${chemin} : les clés [${clesA.join(", ")}] contre [${clesB.join(", ")}]`;
+  for (const cle of clesA) {
+    const ecart = premierEcart(a[cle], b[cle], `${chemin}.${cle}`);
+    if (ecart !== null) return ecart;
+  }
+  return null;
+}
 
 // ─── Les photographies ──────────────────────────────────────────────────────
 
@@ -182,10 +212,12 @@ test("le journal du combat de référence, mot pour mot : trente-six lignes, du 
   assert.deepEqual(lignes, journalAttendu);
   assert.equal(lignes.length, 36);
 
-  // Le texte est exact jusque dans ses signes : aucune espace insécable, et le signe moins, jamais le trait d'union.
+  // Le texte est exact jusque dans ses signes : aucune espace insécable, et aucun signe moins. Les cinq qu'il
+  // portait venaient du −1 des blessures, qui n'est plus (mission du lot 4.3, § 10 : « d10−1 » devient « d10+1 ») ;
+  // les signes moins des gabarits neufs s'éprouvent sur des combats fabriqués (combat_g3_journal.test.js).
   const texte = lignes.join("\n");
   for (const code of [0x00a0, 0x202f]) assert.equal(texte.includes(signe(code)), false, "aucune espace insécable");
-  assert.equal(texte.split(signe(0x2212)).length - 1, 5, "cinq signes moins");
+  assert.equal(texte.includes(signe(0x2212)), false, "aucun signe moins");
   assert.equal(/\d-\d|d\d+-/.test(texte), false, "aucun trait d'union pour un signe moins");
 });
 
@@ -199,12 +231,30 @@ test("l'état final du combat de référence, protagoniste par protagoniste : ca
   assert.deepEqual(JOUE.etat.tour, { numero: 5, camp: "pj" });
   assert.equal(gesteEnCours(JOUE.etat), null);
   assert.equal(JOUE.etat.pas, JOUE.contenu.evenements.length);
+
+  // La blessure d'Aubépine (lot 4.3) : Main brûlée, prise figée dans le bloc de blessure de la banque, rejoint sa
+  // photographie pour ce combat, et un effet durable la montre, avec sa zone (contrat, § 5.9 ; § 12, choix 18).
+  const [blessure, ...autres] = blessuresPortees(JOUE.etat, PJ);
+  assert.equal(autres.length, 0, "une seule blessure");
+  const photo = JOUE.etat.photos[PJ];
+  assert.ok(photo.capacites.at(-1) === blessure.capacite, "la capacité figée est la dernière de sa photographie, l'objet même");
+  assert.equal(photo.capacites.length, JOUE.contenu.miseEnPlace.protagonistes[0].photo.valeurs.capacites.length + 1, "une capacité de plus que sa photographie de départ");
+  assert.deepEqual([blessure.capacite.nom, blessure.capacite.groupe.titre, blessure.capacite.facons[0].description, blessure.libre], ["Main brûlée", "Blessure", "Désavantage avec une arme précise.", null]);
+  assert.deepEqual([blessure.genre, blessure.duree, blessure.porteur, blessure.auteur, photo.zones[blessure.zone].code], ["etat", "combat", PJ, CHEF, "bras_gauche"]);
+  assert.deepEqual(blessure.source, { genre: "capacite", qui: PJ, capacite: photo.capacites.length - 1 });
+  // Les autres effets durables : aucun ; et aucun adversaire n'a d'étape de blessure.
+  assert.deepEqual(JOUE.etat.effets.map((effet) => effet.porteur), [PJ]);
 });
 
 // Le suivi des ressources du calcul à la main (son tableau « étape par
 // étape »), relu après chaque geste du scénario. Une fin automatique de tour
 // suit son geste dans le même événement : la ligne d'un geste qui finit un
 // tour est donc celle d'après la fin du tour.
+//
+// Ses blessures (lot 4.3, mission § 4.10 et § 10) : celles qu'elle porte, non
+// plus ses zones sans endurance. Le Moulinet du geste 12 lui laisse la jambe
+// gauche sans endurance sans lui ôter de corps : aucune blessure ; la Frappe du
+// geste 22 lui en fait choisir une, Main brûlée.
 //   [tour, camp qui joue, actions d'Aubépine, son souffle, son lien, ses blessures, souffle du Chef, souffle de Marmiton n° 2]
 const SUIVI = [
   /* départ               */ [1, "pj", 2, 10, 1, 0, 7, 5],
@@ -216,16 +266,16 @@ const SUIVI = [
   /*  8 Émincer           */ [2, "pj", 1, 6, 1, 0, 6, 5],
   /*  9 Taloche, fin      */ [2, "adv", 2, 6, 1, 0, 6, 5],
   /* 11 Frappe, esquive   */ [2, "adv", 1, 3, 1, 0, 6, 5],
-  /* 12 Moulinet, fin     */ [3, "pj", 1, 3, 1, 1, 6, 0],
-  /* 14 Goûter, fin       */ [3, "adv", 2, 3, 1, 1, 6, 0],
-  /* 16 Moulinet annulé   */ [3, "adv", 2, 3, 1, 1, 1, 0],
-  /* 17 passe, fin        */ [4, "pj", 2, 3, 1, 1, 1, 0],
-  /* 19 Fournaise         */ [4, "pj", 1, 2, 0, 1, 1, 0],
-  /* 20 Frappe, fin       */ [4, "adv", 2, 2, 0, 1, 1, 0],
-  /* 22 Frappe            */ [4, "adv", 2, 2, 0, 2, 1, 0],
-  /* 23 « Fin de tour »   */ [5, "pj", 2, 2, 0, 2, 1, 0],
-  /* 24 Frappe            */ [5, "pj", 1, 2, 0, 2, 1, 0],
-  /* 25 Frappe, victoire  */ [5, "pj", 0, 2, 0, 2, 1, 0],
+  /* 12 Moulinet, fin     */ [3, "pj", 1, 3, 1, 0, 6, 0],
+  /* 14 Goûter, fin       */ [3, "adv", 2, 3, 1, 0, 6, 0],
+  /* 16 Moulinet annulé   */ [3, "adv", 2, 3, 1, 0, 1, 0],
+  /* 17 passe, fin        */ [4, "pj", 2, 3, 1, 0, 1, 0],
+  /* 19 Fournaise         */ [4, "pj", 1, 2, 0, 0, 1, 0],
+  /* 20 Frappe, fin       */ [4, "adv", 2, 2, 0, 0, 1, 0],
+  /* 22 Frappe            */ [4, "adv", 2, 2, 0, 1, 1, 0],
+  /* 23 « Fin de tour »   */ [5, "pj", 2, 2, 0, 1, 1, 0],
+  /* 24 Frappe            */ [5, "pj", 1, 2, 0, 1, 1, 0],
+  /* 25 Frappe, victoire  */ [5, "pj", 0, 2, 0, 1, 1, 0],
 ];
 
 test("le suivi des ressources, geste après geste : les actions qui manquent après le Pas de côté, le souffle, le lien, les blessures", () => {
@@ -234,7 +284,7 @@ test("le suivi des ressources, geste après geste : les actions qui manquent apr
     const etat = arrete(gestes);
     const { actions, souffle, liens } = etat.protagonistes[PJ];
     assert.deepEqual(
-      [etat.tour.numero, etat.tour.camp, actions, souffle, liens[0].points, blessuresDe(etat, PJ), etat.protagonistes[CHEF].souffle, etat.protagonistes[MARMITON_2].souffle],
+      [etat.tour.numero, etat.tour.camp, actions, souffle, liens[0].points, blessuresPortees(etat, PJ).length, etat.protagonistes[CHEF].souffle, etat.protagonistes[MARMITON_2].souffle],
       attendu,
       `après ${gestes} geste(s) du scénario`,
     );
@@ -263,7 +313,8 @@ test("le moment de la maquette : la Taloche d'Aubépine, la relance choisie, le 
   const offert = offre(etat);
   assert.deepEqual(offert.de, { faces: 8, combien: 1, motif: "relance", place: 2 }, "le d8 de la relance, et lui seul");
   assert.deepEqual(offert.choix, []);
-  assert.deepEqual(offert.types, ["de"]);
+  // Et la palette (lot 4.3), qui s'offre à tout moment d'un geste payé.
+  assert.deepEqual(offert.types, ["de", "effet"]);
 
   // L'action de la Taloche est payée au premier dé ; le journal finit par la ligne d'Émincer.
   assert.deepEqual([etat.protagonistes[PJ].actions, etat.protagonistes[PJ].souffle], [0, 6]);
@@ -279,25 +330,32 @@ test("le moment de la maquette : la Taloche d'Aubépine, la relance choisie, le 
 test("ce que le combat traverse : un événement par dé et par choix, de chaque sorte que la mission demande", () => {
   const compte = {};
   for (const { type } of JOUE.contenu.evenements) compte[type] = (compte[type] ?? 0) + 1;
-  // Compté sur le scénario : dix-huit gestes, dont un « passe » et une « Fin de tour » ; deux déplacements confirmés ;
-  // quarante-huit dés (trente-sept de chaîne, onze d20) ; deux relances prises et une refusée ; deux explosions ; des
-  // dégâts fixés une fois ; une esquive ; dix attaques menées jusqu'à « Appliquer » (trois autres s'arrêtent avant :
-  // une défense à trois réussites, une face de contre-attaque après son d20, un coup manqué).
+  // Compté sur le scénario du lot 4.3 (mission, § 10) : dix-huit gestes, dont un « passe » et une « Fin de tour » ;
+  // dix-sept réglages (Moulinet farineux, Centré, coche sa cible d'office aux gestes 12 et 16, sans « regler ») ; deux
+  // déplacements confirmés ; quarante-six événements de dés (trente-cinq de chaîne, onze d20), qui portent
+  // quarante-huit valeurs (le désavantage du geste 1 en lance deux à la fois, deux fois) ; deux relances prises et une
+  // refusée ; aucune explosion (le Goûter du geste 14, sans le −1, réussit sans exploser) ; des dégâts fixés une fois ;
+  // une esquive ; treize « Appliquer » : dix attaques qui touchent, puis la défense à trois réussites (geste 6), le
+  // Goûter (geste 14) et le coup manqué (geste 20), qui l'attendent depuis le lot 4.3 (contrat, § 12, choix 1) ; la
+  // face de contre-attaque du geste 16 finit par « laisser » ; une blessure choisie (geste 22). Cent quatre en tout.
   assert.deepEqual(compte, {
     lancer: 1,
     capacite: 16,
-    regler: 19,
+    regler: 17,
     confirmer: 2,
-    de: 48,
+    de: 46,
     relancer: 2,
     garder: 1,
-    exploser: 2,
     degats: 1,
     esquive: 1,
-    appliquer: 10,
+    appliquer: 13,
+    laisser: 1,
+    blessure: 1,
     passer: 1,
     fin_de_tour: 1,
   });
+  assert.equal(JOUE.contenu.evenements.length, 104);
+  assert.equal(JOUE.contenu.evenements.filter((evenement) => evenement.type === "de").flatMap((evenement) => evenement.valeurs).length, 48);
   const d20 = JOUE.contenu.evenements.filter((evenement) => evenement.type === "de" && evenement.faces === 20);
   assert.deepEqual(
     d20.map((evenement) => evenement.valeurs[0]),
@@ -313,7 +371,6 @@ test("ce que le combat traverse : un événement par dé et par choix, de chaque
 
 test("le combat de référence couvre chaque point que la mission lui demande, et le journal joué le montre", () => {
   const lignes = lignesDe(JOUE.etat);
-  const MOINS = signe(0x2212);
   // Un point de la liste, et le fragment du journal qui le montre (un texte exact, ou un motif).
   const POINTS = [
     ["un déplacement gratuit", /^Aubépine : Pas chassé \[1\], C3 → D4\.$/],
@@ -322,14 +379,18 @@ test("le combat de référence couvre chaque point que la mission lui demande, e
     ["des dégâts fixés à la main, et Réduction", "B = 8, ajusté à 20 (Émincer), +2 contre l'armure (Réduction)."],
     ["une mort par l'armure, l'endurance et le corps", "Armure 5 → 0, endurance 5 → 0, corps 10 → 0. Marmiton n° 1 meurt."],
     ["un coup sur une zone sans armure d'un adversaire, et sa blessure", "Localisation d20 → 14 : jambe droite. Endurance 5 → 0, corps 10 → 7. Blessure (jambe droite), sans effet calculé."],
-    ["un coup sur une zone sans armure d'Aubépine, et sa blessure", `Localisation d20 → 12 : jambe gauche. Endurance 5 → 0. Blessure (jambe gauche) : ${MOINS}1 à ses jets.`],
-    ["puis un jet où la blessure compte", `Aubépine : Goûter, d6${MOINS}1 (Savoir sauvage + Sens) contre 6 (compliqué)`],
+    // Au lot 4.3 (mission, § 4.10 et § 10) : une zone sans endurance n'est une blessure que si le coup ôte du corps.
+    ["un coup sur une zone sans armure d'Aubépine, qui ne lui ôte pas de corps : aucune blessure", /Localisation d20 → 12 : jambe gauche\. Endurance 5 → 0\.$/],
+    ["un coup qui ôte du corps à Aubépine, et la blessure qu'elle choisit dans le bloc de blessure", /, corps 10 → 4\. Blessure \(bras gauche\) : Main brûlée\.$/],
+    ["une capacité Centrée, sa seule cible cochée d'office", /^Marmiton n° 2 : Moulinet farineux \[1\] \(5 souffle\) contre Aubépine\. /],
+    ["une contre-attaque qui s'offre, et qu'Aubépine laisse passer", /contre-attaque, l'attaque est annulée\. Aubépine ne contre-attaque pas\.$/],
     ["une défense avec relance d'avantage", "Aubépine lance sa défense, d8+1 contre 4, 1 avantage → 7 ✓, 3 ✗, relancé 5 ✓, 2 ✗ : 2 réussites"],
     ["une défense à trois réussites", /Aubépine lance sa défense, .* : 3 réussites, aucun dégât\.$/],
     ["une esquive pendant le tour adverse", "Aubépine intervient : Pas de côté (1 action, 3 souffle), 12 → 9."],
     ["une capacité sans dégâts jouée avec un jet d'attaque, et sa localisation", /^Aubépine : Fournaise \[1\] \(1 souffle, 1 lien\) contre Chef\. .* : 1 réussite, touché\. Localisation d20 → 6 : torse\.$/],
-    ["un dé explosif", "5 explose, + 6 = 11 ✓, 5 explose, + 2 = 7 ✓"],
-    ["un jet de caractéristique", /^Aubépine : Goûter, .* : 2 réussites\.$/],
+    // Le dé explosif n'y est plus (mission du lot 4.3, § 10 : le Goûter réussit sans exploser) ; la table des
+    // événements (combat_evenements) et la ligne en cours (combat_segments) l'éprouvent sur des combats fabriqués.
+    ["un jet de caractéristique", /^Aubépine : Goûter, d6 \(Savoir sauvage \+ Sens\) contre 6 \(compliqué\) → .* : 2 réussites\.$/],
     ["une Taloche", "Aubépine : Taloche [1] contre Marmiton n° 2. d8+1 (Force + Agilité) contre 5"],
     ["« Passer son tour »", /^Marmiton n° 2 passe son tour\.$/],
     ["la fin du combat", /^Combat terminé : victoire des PJ\.$/],
@@ -443,17 +504,23 @@ test("la ligne en cours : à chaque événement du combat, le début exact de la
     assert.deepEqual(ligne.phrases, finale.phrases.slice(0, ligne.phrases.length), `${ou} : les phrases, dans l'ordre`);
   });
 
-  // Plus de quarante états, et chaque cas du contrat (§ 3.4) : la chaîne, un dé qui attend d'exploser ou une
-  // relance, le bilan, les suites avant et après l'esquive. Le moment « localisation » (plusieurs d20 à lancer)
-  // n'arrive pas dans ce combat, dont chaque coup n'en lance qu'un : il partage sa règle avec « suites, sans
-  // esquive », et les contrôles du journal l'éprouvent à la main (tests/combat_segments.test.js).
+  // Plus de quarante états, et chaque cas du contrat (§ 3.4) que ce combat traverse : la chaîne, un dé qui attend
+  // une relance, le bilan, les suites avant et après l'esquive ; et, depuis le lot 4.3, la contre-attaque qui
+  // s'offre (geste 16) et la blessure à choisir (geste 22). Un manqué, une défense sans dégât et un jet de
+  // caractéristique attendent « Appliquer » aux suites (contrat du lot 4.3, § 12, choix 1). Le moment
+  // « localisation » (plusieurs d20 à lancer) n'arrive pas dans ce combat, dont chaque coup n'en lance qu'un : il
+  // partage sa règle avec « suites, sans esquive ». L'explosion n'y arrive plus (mission du lot 4.3, § 10). Les
+  // contrôles du journal éprouvent l'un et l'autre à la main (tests/combat_segments.test.js).
   assert.ok(enCours > 40, `${enCours} états avec une ligne en cours`);
   assert.ok(nulles > 20, `${nulles} états sans ligne en cours`);
-  assert.deepEqual([...vus.keys()].sort(), ["bilan", "jet, choix_explosion", "jet, choix_relance", "jet, de", "jet, de_explosion", "jet, de_relance", "suites, esquive jouée", "suites, sans esquive"], JSON.stringify(Object.fromEntries(vus)));
+  assert.deepEqual([...vus.keys()].sort(), ["bilan", "blessure", "contre_attaque", "jet, choix_relance", "jet, de", "jet, de_relance", "suites, esquive jouée", "suites, sans esquive"], JSON.stringify(Object.fromEntries(vus)));
 });
 
 // Ce qui ne recule pas à l'annulation : le journal, le pas, l'annonce, et la pile elle-même.
 const sansCeQuiAvance = ({ journal, pas, annonce, annulation, ...reste }) => reste;
+// L'id d'un effet durable est le pas qui l'a posé (contrat du lot 4.3, § 3) : rejoué après « annuler », le
+// geste le pose à un autre pas. L'état rejoué se compare donc sans ces ids ; tout le reste est le même.
+const sansLesIds = (etat) => ({ ...sansCeQuiAvance(etat), effets: etat.effets.map(({ id, ...effet }) => effet) });
 
 test("à la fin de chaque geste, « annuler » rend l'état d'avant lui, écrit une ligne « Annulé » qui couvre ses lignes, et le geste se rejoue à l'identique", () => {
   assert.equal(FINS_DE_GESTE.length, scenario.gestes.length, "un maillon par geste du scénario");
@@ -469,7 +536,7 @@ test("à la fin de chaque geste, « annuler » rend l'état d'avant lui, écrit 
 
     const { etat: annule, refus } = appliquer(TENUS[n], { type: "annuler" });
     assert.equal(refus, undefined, `${ou} : ${refus?.message}`);
-    assert.deepEqual(sansCeQuiAvance(annule), sansCeQuiAvance(avant), `${ou} : l'état d'avant le geste`);
+    assert.equal(premierEcart(sansCeQuiAvance(annule), sansCeQuiAvance(avant)), null, `${ou} : l'état d'avant le geste`);
     // La pile : le maillon d'avant, l'objet même.
     assert.equal(annule.annulation.pile, maillon.precedent, ou);
     assert.equal(annule.annulation.pile, avant.annulation.pile, ou);
@@ -492,7 +559,11 @@ test("à la fin de chaque geste, « annuler » rend l'état d'avant lui, écrit 
       assert.equal(rendu.refus, undefined, `${ou}, rejoué : ${rendu.refus?.message}`);
       rejoue = rendu.etat;
     }
-    assert.deepEqual(sansCeQuiAvance(rejoue), sansCeQuiAvance(TENUS[n]), `${ou}, rejoué`);
+    assert.equal(premierEcart(sansLesIds(rejoue), sansLesIds(TENUS[n])), null, `${ou}, rejoué`);
+    // Les ids : ceux d'avant le geste restent ; ceux qu'il pose suivent son pas neuf, décalé d'autant que
+    // l'annulation et le geste l'ont fait avancer.
+    const decalage = annule.pas - debut;
+    assert.deepEqual(rejoue.effets.map((effet) => effet.id), TENUS[n].effets.map((effet) => (effet.id > debut ? effet.id + decalage : effet.id)), `${ou}, rejoué : les ids des effets`);
     assert.deepEqual(
       rejoue.journal.slice(annule.journal.length).map((ligne) => ligne.texte),
       TENUS[n].journal.slice(...maillon.plage).map((ligne) => ligne.texte),
@@ -505,15 +576,15 @@ test("à la fin de chaque geste, « annuler » rend l'état d'avant lui, écrit 
   // Et jusqu'au lancement, geste après geste, puis plus rien à annuler.
   let etat = JOUE.etat;
   for (let fois = 0; fois < scenario.gestes.length; fois += 1) etat = appliquer(etat, { type: "annuler" }).etat;
-  assert.deepEqual(sansCeQuiAvance(etat), sansCeQuiAvance(TENUS[1]), "défait jusqu'au lancement");
+  assert.equal(premierEcart(sansCeQuiAvance(etat), sansCeQuiAvance(TENUS[1])), null, "défait jusqu'au lancement");
   assert.equal(etat.annulation.pile, null);
   assert.deepEqual(appliquer(etat, { type: "annuler" }).refus, { code: "interdit", message: "Rien à annuler depuis le lancement." });
 });
 
-test("le combat de référence écrit en version 1 ou 2 des règles (d'avant le lot 5) se dit d'une autre version, et ne se rejoue pas ; en version courante, il se relit et se rejoue", () => {
-  assert.equal(REGLES, 3);
+test("le combat de référence écrit en version 1, 2 ou 3 des règles (d'avant le lot 4.3) se dit d'une autre version, et ne se rejoue pas ; en version courante, il se relit et se rejoue", () => {
+  assert.equal(REGLES, 4);
   const texte = JSON.stringify(JOUE.contenu);
-  for (const regles of [1, 2]) {
+  for (const regles of [1, 2, 3]) {
     const enVersionAncienne = { ...JSON.parse(texte), regles };
     assert.deepEqual(validerContenu(enVersionAncienne, { mode: "demo", revision: JOUE.contenu.revision, accepter }), { autreVersion: { regles } });
     assert.equal(rejouer(enVersionAncienne).erreur.pas, 0);
@@ -547,7 +618,9 @@ test("la comparaison du journal cite la ligne qui s'écarte, et l'endroit ; elle
   assert.deepEqual(ecartsDuJournal([...journalAttendu, "Une ligne de plus."], journalAttendu), ["ligne 37, en trop dans le journal :\n    obtenu  : Une ligne de plus."]);
 
   // Deux signes qui se ressemblent : un trait d'union à la place du signe moins, une espace insécable à la place d'une espace.
-  const [avecMoins] = journalAttendu.filter((ligne) => ligne.includes(signe(0x2212)));
+  // Le journal de référence n'a plus de signe moins (lot 4.3) : la ligne qui en porte un est forgée.
+  const avecMoins = journalAttendu[2].replace("d10+1", `d10${signe(0x2212)}1`);
+  assert.notEqual(avecMoins, journalAttendu[2]);
   assert.match(ecartsDuJournal([avecMoins.replace(signe(0x2212), "-")], [avecMoins])[0], /obtenu « - », U\+002D ; attendu « . », U\+2212/u);
   assert.match(ecartsDuJournal([journalAttendu[0].replace(" ", signe(0x00a0))], [journalAttendu[0]])[0], /^ligne 1, au signe 7 \(obtenu « . », U\+00A0 ; attendu « {3}», U\+0020\)/u);
   // Une ligne coupée court.
@@ -569,7 +642,15 @@ test("la comparaison de l'état nomme le protagoniste et ce qui s'écarte, champ
     [(attendus) => (attendus[3].corpsMax = 12), "Marmiton n° 2 : corps au plus 10, attendu 12."],
     [(attendus) => (attendus[1].defense = 6), "Chef : défense 7, attendu 6."],
     [(attendus) => (attendus[1].attaque = 6), "Chef : attaque 5, attendu 6."],
-    [(attendus) => (attendus[0].blessures = 1), "Aubépine : blessures 2, attendu 1."],
+    // Les blessures (lot 4.3) : une liste, comparée dans l'ordre, nom, zone et durée.
+    [(attendus) => (attendus[0].blessures = []), "Aubépine : blessures Main brûlée (bras gauche, combat), attendu aucune."],
+    [(attendus) => (attendus[0].blessures[0].nom = "Cheville tordue"), "Aubépine : blessures Main brûlée (bras gauche, combat), attendu Cheville tordue (bras gauche, combat)."],
+    [(attendus) => (attendus[0].blessures[0].zone = "bras_droit"), "Aubépine : blessures Main brûlée (bras gauche, combat), attendu Main brûlée (bras droit, combat)."],
+    [(attendus) => (attendus[0].blessures[0].zone = "queue"), "Aubépine : blessures Main brûlée (bras gauche, combat), attendu Main brûlée (queue, combat)."],
+    [(attendus) => (attendus[0].blessures[0].duree = "tour"), "Aubépine : blessures Main brûlée (bras gauche, combat), attendu Main brûlée (bras gauche, tour)."],
+    [(attendus) => attendus[0].blessures.push({ nom: "Côtes froissées", zone: "torse", duree: "combat" }), "Aubépine : blessures Main brûlée (bras gauche, combat), attendu Main brûlée (bras gauche, combat), Côtes froissées (torse, combat)."],
+    // Un scénario d'avant le lot 4.3, qui comptait ses zones sans endurance.
+    [(attendus) => (attendus[0].blessures = 2), "Aubépine : blessures attendues en nombre (2) ; depuis le lot 4.3, l'état attendu les dit en liste, chacune { nom, zone, duree }."],
     [(attendus) => (attendus[0].liens[0].points = 1), "Aubépine : lien Grand Four 0/1, attendu 1/1."],
     [(attendus) => (attendus[0].liens[0].max = 2), "Aubépine : lien Grand Four 0/1, attendu 0/2."],
     [(attendus) => (attendus[0].liens[0].nom = "Vieux Chaudron"), "Aubépine : jauge de lien n° 1 « Grand Four », attendu « Vieux Chaudron »."],
@@ -614,8 +695,17 @@ test("la comparaison de l'état nomme le protagoniste et ce qui s'écarte, champ
   // Dès qu'il les dit, elles se comparent.
   const dites = structuredClone(etatAttendu);
   dites[1].actions = 0;
-  dites[3].blessures = 0;
-  assert.deepEqual(ecartsDeLEtat(etat, dites), ["Chef : actions 1, attendu 0.", "Marmiton n° 2 : blessures 1, attendu 0."]);
+  dites[2].blessures = [];
+  dites[3].blessures = [{ nom: "Genou en vrac", zone: "jambe_droite", duree: "combat" }];
+  assert.deepEqual(ecartsDeLEtat(etat, dites), ["Chef : actions 1, attendu 0.", "Marmiton n° 2 : blessures aucune, attendu Genou en vrac (jambe droite, combat)."]);
+  // La zone d'une blessure se retrouve aussi par son nom.
+  const blessureParNom = structuredClone(etatAttendu);
+  blessureParNom[0].blessures[0].zone = "Bras gauche";
+  assert.deepEqual(ecartsDeLEtat(etat, blessureParNom), []);
+  // Un effet durable qui n'est pas une blessure (une garde, un état posé par le MJ) ne se compte pas parmi elles.
+  const garde = { id: etat.pas + 1, genre: "guet", porteur: PJ, auteur: PJ, camp: "pj", duree: "tour", source: { genre: "capacite", qui: PJ, capacite: 0 }, garde: { capacite: 0, facon: 0 } };
+  const etatLibre = { id: etat.pas + 2, genre: "etat", porteur: PJ, auteur: null, camp: "pj", duree: "combat", source: { genre: "mj" }, capacite: null, libre: "En nage", blessure: false };
+  assert.deepEqual(ecartsDeLEtat({ ...etat, effets: [garde, ...etat.effets, etatLibre] }, etatAttendu), []);
 
   // Une zone que la banque ne reconnaît pas se retrouve par son nom.
   const parNom = structuredClone(etatAttendu);
@@ -640,7 +730,7 @@ test("la comparaison d'un combat arrêté en cours de route : le moment de la ma
     ],
     de: { faces: 8, combien: 1, motif: "relance", place: 2 },
     etatAttendu: [
-      { protagoniste: "Aubépine", case: "D4", actions: 0, actionsMax: 2, souffle: 6, souffleMax: 10, liens: [{ nom: "Grand Four", points: 1, max: 1 }], corps: 10, corpsMax: 10, mort: null, blessures: 0, zones: [{ code: "jambe_gauche", armure: 0, armureMax: 10, resistance: 5, resistanceMax: 5 }] },
+      { protagoniste: "Aubépine", case: "D4", actions: 0, actionsMax: 2, souffle: 6, souffleMax: 10, liens: [{ nom: "Grand Four", points: 1, max: 1 }], corps: 10, corpsMax: 10, mort: null, blessures: [], zones: [{ code: "jambe_gauche", armure: 0, armureMax: 10, resistance: 5, resistanceMax: 5 }] },
       { protagoniste: "Chef", case: "D4", actions: 1, actionsMax: 1, souffle: 6, souffleMax: 7, liens: [], corps: 10, corpsMax: 10, mort: null, blessures: null, zones: [] },
       { protagoniste: "Marmiton n° 1", case: "D4", actions: null, actionsMax: null, souffle: 5, souffleMax: 5, liens: [], corps: 0, corpsMax: 10, mort: { tour: 2 }, blessures: null, zones: etatAttendu[2].zones },
       { protagoniste: "Marmiton n° 2", case: "D4", actions: null, actionsMax: null, souffle: 5, souffleMax: 5, liens: [], corps: 10, corpsMax: 10, mort: null, blessures: null, zones: [] },

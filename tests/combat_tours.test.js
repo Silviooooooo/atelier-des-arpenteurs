@@ -67,11 +67,12 @@ const passer = (qui) => ({ type: "passer", qui });
 const APPLIQUER = { type: "appliquer" };
 
 // Une Frappe d'un PJ qui manque (1 contre une défense de 5) : une action
-// dépensée, et rien d'autre.
-const frappeManquee = (etat, qui, cible) => [capacite(etat, qui, "Frappe"), viser(cible), d8(1)];
+// dépensée, et rien d'autre. Depuis le lot 4.3, un jet ne clôt plus le geste
+// de lui-même : l'étape « Interventions » se passe (« Appliquer »).
+const frappeManquee = (etat, qui, cible) => [capacite(etat, qui, "Frappe"), viser(cible), d8(1), APPLIQUER];
 // Une Frappe d'un adversaire que le PJ pare (trois réussites contre 4) : une
-// action dépensée, et rien d'autre.
-const frappeParee = (etat, qui, cible) => [capacite(etat, qui, "Frappe"), viser(cible), d8(8), d8(8), d8(8)];
+// action dépensée, et rien d'autre ; « Appliquer » de même.
+const frappeParee = (etat, qui, cible) => [capacite(etat, qui, "Frappe"), viser(cible), d8(8), d8(8), d8(8), APPLIQUER];
 // Une Frappe qui touche et tue : les dégâts sont fixés à la main, droit au corps.
 const coupMortel = (etat, qui, cible, des, degats = 10) => [
   capacite(etat, qui, "Frappe"),
@@ -377,7 +378,9 @@ test("deux fins de tour d'affilée au plus : quand aucun camp ne peut agir, le c
   assert.deepEqual(lance.tour, { numero: 2, camp: "pj" });
   assert.equal(lance.phase, "combat");
   assert.deepEqual(candidats(lance), []);
-  assert.deepEqual(offre(lance).types, ["fin_de_tour"], "seule « Fin de tour » s'offre");
+  // Depuis le lot 4.3, la palette et le menu du MJ s'offrent aussi entre deux
+  // gestes : ils ne font jouer personne.
+  assert.deepEqual(offre(lance).types, ["effet", "mj", "fin_de_tour"], "seule « Fin de tour » fait avancer le combat");
 
   // « Fin de tour » : la fin demandée, puis deux fins automatiques, pas une de plus.
   const pousse = jouer(lance, FIN_DE_TOUR);

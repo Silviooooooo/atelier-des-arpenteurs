@@ -33,15 +33,21 @@
 // de dés (« egalite »), parmi lesquels le joueur choisit au combat. Et, à la
 // relecture du groupe (C-15), un demi-codet isolé d'un texte devient une
 // espace, comme un caractère de contrôle.
+//
+// À la fin du combat (lot 4.3, contrat du lot, § 9) : etatsDeLaBanque() fige
+// de même les capacités des blocs de type État et Blessure, au format d'une
+// capacité de photographie. Un état ou une blessure posés en combat les
+// portent dans leur événement : le rejeu ne relit jamais la banque.
 
 import { ecrireTypes } from "../adversaire/carte.js";
 import { defautDe } from "../adversaire/lecture.js";
 import { horsMaitrise, positionDans, rangsDeMaitrise } from "../adversaire/resolution.js";
 import { cle } from "../banque/noms.js";
+import { typeDe } from "../banque/types.js";
 import { calculerFiche, contexte, coutA, decrire, degatsDecrits, donneAuCombat, elementsDe, estStyleDeCombat, indexerCreation, typesDuBloc, varianteA } from "../personnage/calcul.js";
 import { accepter } from "../personnage/format.js";
 import { NIVEAU_MAX, ORIGINE_STYLE, PARAMETRES, TYPES_OBJET, ZONES } from "../personnage/regles.js";
-import { validerPhoto } from "./forme.js";
+import { validerCapaciteFigee, validerPhoto } from "./forme.js";
 import { ACTIONS_PJ, BORNES_PHOTO, ELEMENTS_COMBAT, FACE_CONTRE, GRILLE_PJ, PARAMETRE_LOC, ROLES_PASSIFS, SIGNES } from "./regles.js";
 
 // ─── Les textes ─────────────────────────────────────────────────────────────
@@ -569,4 +575,110 @@ export function photographierAdversaire(resolution, nom, { banque = resolution?.
   };
   const lue = validerPhoto({ camp: "adv", publiee_le: dateDe(banque), source, valeurs, avertissements: [] }, { accepter });
   return lue.erreur ? refusDeForme(lue.erreur) : { photo: lue.photo };
+}
+
+// ─── Les états de la banque (lot 4.3) ───────────────────────────────────────
+
+// Le nom, à sa clé près, du bloc de type État qui tient lieu de bloc de
+// blessure quand la banque n'a aucun bloc de type Blessure (mission du lot
+// 4.3, § 4.10).
+const CLE_DU_BLOC_DE_BLESSURE = "blessure";
+const TYPES_D_ETAT = ["etat", "blessure"];
+
+/**
+ * Les capacités que cite un bloc, dans l'ordre de sa cellule, quelle qu'en
+ * soit la forme : simples, choix obligatoire « (a | b) », ensemble facultatif
+ * « [a | b] ». Une capacité citée deux fois ne compte qu'une fois ; une
+ * capacité absente de la banque ne compte pas.
+ */
+function capacitesCitees(index, bloc) {
+  const vues = new Set();
+  const citees = [];
+  for (const entree of bloc.capacites ?? []) {
+    const noms = entree?.forme === "simple" ? [entree.nom] : Array.isArray(entree?.options) ? entree.options : [];
+    for (const nom of noms) {
+      const capacite = index.capacite(nom);
+      if (!capacite || vues.has(capacite.nom)) continue;
+      vues.add(capacite.nom);
+      citees.push(capacite);
+    }
+  }
+  return citees;
+}
+
+/**
+ * Une capacité d'état, figée au format d'une capacité de photographie
+ * (contrat du lot 4.3, § 9) : puissance 0, sans rôle, sans jauge, rangée sous
+ * le nom de son bloc ; une seule façon, passive si ses éléments le disent,
+ * qui n'attaque pas. Sa description se lit comme celle d'une capacité de
+ * personnage, avec les paramètres de son bloc, sans caractéristiques. Une
+ * capacité sans variante de puissance 0 garde sa façon, sans description et
+ * au coût illisible, comme une capacité de personnage dont aucune puissance
+ * ne se lit.
+ */
+function figerUnEtat(index, bloc, capacite) {
+  const variables = contexte(index, {}, bloc, null, capacite, 0);
+  const lus = lireElements(elementsDe(index, bloc, capacite, 0));
+  return {
+    nom: uneLigne(capacite.nom),
+    role: null,
+    niveau: 0,
+    evolue: false,
+    groupe: { genre: "capacites", titre: uneLigne(bloc.nom) },
+    lien: null,
+    inactive: null,
+    facons: [
+      {
+        puissance: 0,
+        arme: null,
+        libelle: null,
+        cout: lireCout(coutA(capacite, 0)),
+        description: aLignes(decrire(varianteA(capacite, 0)?.description, variables, null, 0).texte),
+        elements: lus.elements,
+        passif: lus.passif,
+        intervention: lus.intervention,
+        attaque: false,
+        degats: null,
+        portee: 0,
+        locMultiple: 1,
+        desavantage: false,
+        maitrise: null,
+      },
+    ],
+  };
+}
+
+/**
+ * Les états que la banque propose au combat (contrat du lot 4.3, § 9) :
+ * { blocs: [{ nom, blessure, capacites }], blessure: [capacité figée] }.
+ * - blocs : les blocs de type État ou Blessure, dans l'ordre de la banque (un
+ *   nom répété : le premier), chacun avec ses capacités figées ;
+ * - blessure : les capacités du bloc de blessure, toutes, quelle que soit la
+ *   forme de sa cellule ; [] sans bloc de blessure. Ce bloc est le premier de
+ *   type Blessure, sinon le premier de type État dont le nom a pour clé
+ *   « blessure » (mission du lot 4.3, § 4.10) ; il est le seul dont
+ *   « blessure » est vrai, et « blessure » est le tableau même de ses
+ *   capacités.
+ * Une capacité figée que la forme refuserait (validerCapaciteFigee : un nom
+ * de plus de 200 signes, une description de plus de 4 000…) n'entrerait dans
+ * aucun événement : elle est écartée, sans lever.
+ * Pure : elle ne lit que la banque, et ne la change pas.
+ */
+export function etatsDeLaBanque(banque) {
+  const index = indexerCreation(banque);
+  const noms = new Set();
+  const retenus = (banque?.blocs ?? []).filter((bloc) => {
+    if (!TYPES_D_ETAT.includes(typeDe(bloc)) || noms.has(bloc.nom)) return false;
+    noms.add(bloc.nom);
+    return true;
+  });
+  const deBlessure = retenus.find((bloc) => typeDe(bloc) === "blessure") ?? retenus.find((bloc) => cle(bloc.nom) === CLE_DU_BLOC_DE_BLESSURE) ?? null;
+  const blocs = retenus.map((bloc) => ({
+    nom: uneLigne(bloc.nom),
+    blessure: bloc === deBlessure,
+    capacites: capacitesCitees(index, bloc)
+      .map((capacite) => figerUnEtat(index, bloc, capacite))
+      .filter((figee) => validerCapaciteFigee(figee).erreur === undefined),
+  }));
+  return { blocs, blessure: blocs.find((bloc) => bloc.blessure)?.capacites ?? [] };
 }

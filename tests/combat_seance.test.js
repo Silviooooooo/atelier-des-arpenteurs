@@ -551,10 +551,12 @@ test("annuler : accepté, personne n'est plus choisi (la bulle se ferme) ; refus
   refuse(seance.executer(ANNULER), "interdit", "Rien à annuler depuis le lancement.");
   assert.equal(seance.choisi(), "pj1");
 
-  // Frappe manquée : le geste est fini, et Aubépine reste choisie tant qu'elle peut jouer.
+  // Frappe manquée, puis « Appliquer » (lot 4.3) : le geste est fini, et Aubépine reste choisie tant
+  // qu'elle peut jouer.
   accepte(seance.executer(capacite("pj1", FRAPPE)));
   accepte(seance.executer(regler("cible", "adv3")));
   accepte(seance.lancerLeDe());
+  accepte(seance.executer({ evenement: { type: "appliquer" } }));
   assert.equal(gesteEnCours(seance.etat()), null);
   assert.equal(seance.etat().protagonistes.pj1.actions, 1);
   assert.equal(seance.choisi(), "pj1");
@@ -743,11 +745,11 @@ test("ouvrir, reprendre : une ouverture que remplace une autre rend « abandonne
   assert.deepEqual(await autre.seance.ouvrir(), { issue: "repris" });
 });
 
-partout("la version des règles est 3 : un combat de la version 2, d'avant le lot 5, se dit « commencé avec une autre version du simulateur », et ne se reprend pas", async (lieu) => {
-  assert.equal(REGLES, 3);
+partout("la version des règles est 4 : un combat de la version 3, d'avant le lot 4.3, se dit « commencé avec une autre version du simulateur », et ne se reprend pas", async (lieu) => {
+  assert.equal(REGLES, 4);
   assert.equal(PHRASES_DE_GARDE.autre_version, "Ce combat a été commencé avec une autre version du simulateur : il ne se reprend pas.");
   const { contenu } = contenuDePasses(5);
-  await poserEnBase(lieu, JSON.stringify({ ...contenu, regles: 2 }));
+  await poserEnBase(lieu, JSON.stringify({ ...contenu, regles: 3 }));
   const { seance, gardien } = await monter(lieu);
   assert.deepEqual(await seance.ouvrir(), { issue: "autre_version" });
   assert.equal(seance.bloque(), "autre_version");
@@ -780,7 +782,11 @@ test("lancerLeDe ne tire que le dé que le moteur attend, avec ses faces et son 
   accepte(seance.lancerLeDe());
   assert.deepEqual(des.demandes, [[8, 2]]);
   assert.deepEqual(JSON.parse(seance.texte(1)).evenements.at(-1), { type: "de", faces: 8, valeurs: [8, 2] });
-  // Le pire des deux (2) manque la défense de 5 : le geste est fini, payé.
+  // Le pire des deux (2) manque la défense de 5 : le geste est payé, et attend « Appliquer » (lot 4.3),
+  // sans autre dé.
+  assert.equal(gesteEnCours(seance.etat()).moment, "suites");
+  refuse(seance.lancerLeDe(), "hors_moment", "Aucun dé n'est attendu à cet instant.");
+  accepte(seance.executer({ evenement: { type: "appliquer" } }));
   assert.equal(gesteEnCours(seance.etat()), null);
   assert.equal(seance.etat().protagonistes.pj1.souffle, 6);
 

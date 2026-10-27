@@ -80,7 +80,7 @@ import { photographierAdversaire, photographierPersonnage } from "../js/combat/p
 import { ajouterAdversaires, ajouterPersonnage, miseEnPlaceVide } from "../js/combat/preparation.js";
 import { BORNES_PHOTO, EVENEMENTS_MAX, LONGUEUR_RAISON, PLAFOND_ADVERSAIRES, PLAFOND_EXEMPLAIRES, PLAFOND_PJ, REGLES, ROLES_SANS_BOUTON } from "../js/combat/regles.js";
 import { ecrireAbsents, tableDesRoles } from "../js/combat/roles.js";
-import { blessuresDe, campDe, courantDe, gesteEnCours, photoDe } from "../js/combat/valeurs.js";
+import { campDe, courantDe, effetsDurablesDe, gesteEnCours, photoDe } from "../js/combat/valeurs.js";
 import { indexerCreation } from "../js/personnage/calcul.js";
 import { accepter } from "../js/personnage/format.js";
 import { nouveauSecret } from "../js/securite/chiffrement.js";
@@ -139,6 +139,25 @@ const NOMBRES_COMPARES = [
 
 const dit = (valeur) => valeur !== null && valeur !== undefined;
 
+// Les blessures qu'il porte (lot 4.3, mission § 4.10) : ses effets durables de
+// blessure, dans l'ordre où ils sont venus, chacun { nom, zone, duree } : la
+// capacité du bloc de blessure (ou l'état libre), la zone blessée de sa grille
+// (l'effet en porte l'indice : contrat de la vague 1, § 12, choix 18), et sa
+// durée.
+function blessuresPortees(etat, id) {
+  return effetsDurablesDe(etat, id)
+    .filter((effet) => effet.blessure === true)
+    .map((effet) => ({ nom: effet.capacite?.nom ?? effet.libre, zone: etat.photos[id].zones[effet.zone] ?? null, duree: effet.duree }));
+}
+
+// Des blessures, écrites pour un écart : « Main brûlée (bras gauche, combat) ».
+// Une zone de la grille se nomme comme elle ; une autre, telle qu'elle est
+// écrite.
+function ecrireBlessures(blessures) {
+  if (blessures.length === 0) return "aucune";
+  return blessures.map(({ nom, zone, duree }) => `${nom} (${typeof zone?.nom === "string" ? zone.nom.toLowerCase() : zone}, ${duree})`).join(", ");
+}
+
 /**
  * Les écarts entre l'état d'un combat et l'état attendu. Rend une liste de
  * phrases, vide quand l'état est celui qu'on attend ; chacune nomme le
@@ -153,7 +172,11 @@ const dit = (valeur) => valeur !== null && valeur !== undefined;
  * - liens : [{ nom, points, max }], dans l'ordre des jauges ; nul : non dit ;
  * - mort : null pour un vivant, { tour } pour un mort (un tour nul : non dit) ;
  *   absent : non dit ;
- * - blessures : le nombre de zones dont l'endurance est à 0 ;
+ * - blessures (lot 4.3) : celles qu'il porte, dans l'ordre où elles sont
+ *   venues, chacune { nom, zone, duree } : le nom de la capacité du bloc de
+ *   blessure (ou l'état libre), le code de la zone (ou son nom), la durée
+ *   (« combat ») ; une liste vide : aucune. Une zone sans endurance n'est
+ *   plus une blessure : il faut qu'un coup y ôte du corps ;
  * - zones : [{ code, armure, armureMax, resistance, resistanceMax }], chacune
  *   retrouvée par son code (ou par « nom », pour une zone que la banque ne
  *   reconnaît pas). Toute zone qui n'y figure pas doit être intacte : armure
@@ -187,7 +210,16 @@ export function ecartsDeLEtat(etat, attendus) {
       if (!memeSort) ecarts.push(`${qui} : ${sort(courant.mort)}, attendu ${sort(attendu.mort)}.`);
     }
 
-    if (dit(attendu.blessures)) comparer("blessures", blessuresDe(etat, id), attendu.blessures);
+    if (Array.isArray(attendu.blessures)) {
+      // Chaque blessure attendue retrouve sa zone par son code (ou par « nom ») ; les deux listes se comparent dans l'ordre.
+      const portees = blessuresPortees(etat, id);
+      const voulues = attendu.blessures.map((blessure) => ({ ...blessure, zone: photo.zones.find((zone) => (zone.code !== null && zone.code === blessure.zone) || zone.nom === blessure.zone) ?? blessure.zone }));
+      const memes = portees.length === voulues.length && portees.every((blessure, rang) => blessure.nom === voulues[rang].nom && blessure.zone === voulues[rang].zone && blessure.duree === voulues[rang].duree);
+      if (!memes) ecarts.push(`${qui} : blessures ${ecrireBlessures(portees)}, attendu ${ecrireBlessures(voulues)}.`);
+    } else if (dit(attendu.blessures)) {
+      // Un scénario d'avant le lot 4.3 les comptait (ses zones sans endurance) : ce compte ne dit plus une blessure.
+      ecarts.push(`${qui} : blessures attendues en nombre (${attendu.blessures}) ; depuis le lot 4.3, l'état attendu les dit en liste, chacune { nom, zone, duree }.`);
+    }
 
     if (dit(attendu.liens)) {
       comparer("jauges de lien", courant.liens.length, attendu.liens.length);
@@ -335,7 +367,9 @@ export function ecartsDeLaLigneEnCours(etats, { lire = ligneEnCours } = {}) {
 // le recopie de js/combat/offre.js au commit a61a7e7, la fin du groupe 1),
 // sans rien y changer que les noms : il ne sert qu'à juger le jugement neuf.
 // Un fichier de contrôles ne s'importe pas d'ici : ses contrôles se
-// lanceraient avec le banc.
+// lanceraient avec le banc. Depuis le lot 4.3, ROLES_SANS_BOUTON n'a plus
+// « attendre » (Guetter a sa ligne) : la copie le lit tel qu'il est, comme le
+// contrôle dont elle vient, et attendre s'y juge comme toute capacité.
 
 const OUI = { ok: true };
 const refusDuGroupe1 = (code, message) => ({ ok: false, code, message });
@@ -503,7 +537,7 @@ export function ecrireDepart({ camp, valeurs, avertissements }) {
 }
 
 function ecrireEtat(etat) {
-  const lignes = [["protagoniste", "case", "actions", "souffle", "corps", "zones touchées"]];
+  const lignes = [["protagoniste", "case", "actions", "souffle", "corps", "zones touchées", "blessures"]];
   for (const id of etat.ordre) {
     const courant = etat.protagonistes[id];
     const touchees = etat.photos[id].zones
@@ -517,6 +551,7 @@ function ecrireEtat(etat) {
       `${courant.souffle}/${courant.souffleMax}`,
       courant.corps,
       touchees.join(" ; ") || "—",
+      ecrireBlessures(blessuresPortees(etat, id)).replace(/^aucune$/, "—"),
     ]);
   }
   tableau(lignes);
@@ -730,14 +765,16 @@ function direLesBornes(photos) {
 }
 
 // Joue le scénario. S'il ne se joue pas jusqu'au bout, rend aussi le combat
-// arrêté avant le geste qui échoue : son journal dit jusqu'où tout allait.
-function jouer(scenario, photos) {
+// arrêté avant le geste qui échoue : son journal dit jusqu'où tout allait. La
+// banque est celle du classeur : une blessure que le scénario nomme se prend,
+// figée, dans son bloc de blessure (lot 4.3).
+function jouer(scenario, photos, banque) {
   try {
-    return versContenu(scenario, photos);
+    return versContenu(scenario, photos, { banque });
   } catch (echec) {
     for (let gestes = scenario.gestes.length - 1; gestes >= 0; gestes -= 1) {
       try {
-        return { ...versContenu(scenario, photos, { jusqua: gestes }), echec: echec.message, gestes };
+        return { ...versContenu(scenario, photos, { jusqua: gestes, banque }), echec: echec.message, gestes };
       } catch {
         // Ce geste-là ne se joue pas non plus : on recule encore.
       }
@@ -835,7 +872,7 @@ async function banc([cheminClasseur, cheminScenario]) {
     dire("  Le combat ne se joue pas : il lui manque une photographie.");
     return 1;
   }
-  const joue = jouer(scenario, photos);
+  const joue = jouer(scenario, photos, monde.banque);
   const lignes = joue.etat ? joue.etat.journal.map((ligne) => ligne.texte) : [];
   const attendues = joue.echec === undefined ? scenario.journalAttendu : scenario.journalAttendu.slice(0, lignes.length);
   lignes.forEach((ligne, rang) => dire(`  ${String(rang + 1).padStart(3)} ${ligne === scenario.journalAttendu[rang] ? "=" : "≠"} ${ligne}`));
@@ -879,7 +916,7 @@ async function banc([cheminClasseur, cheminScenario]) {
   for (const arret of arrets) {
     let arrete;
     try {
-      arrete = versContenu(scenario, photos, { jusqua: arret.jusqua }).etat;
+      arrete = versContenu(scenario, photos, { jusqua: arret.jusqua, banque: monde.banque }).etat;
     } catch (echec) {
       dire(`  ${arret.nom} : ÉCART, le combat ne s'y arrête pas. ${echec.message}`);
       ecarts.push(echec.message);

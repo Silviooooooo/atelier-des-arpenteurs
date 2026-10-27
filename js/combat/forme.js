@@ -11,7 +11,8 @@
 // Ce que ces fonctions ne font pas : dire si un événement est permis à cet
 // instant (c'est l'offre, js/combat/offre.js) ni si une valeur tient dans les
 // bornes du moment. Ici, un nombre est un entier sûr, un indice un entier sûr
-// positif ou nul, et rien de plus.
+// positif ou nul, et rien de plus ; hors les bornes de la palette et du MJ
+// (BORNES_EFFET, BORNES_MJ), qui ne dépendent pas du moment.
 //
 // Aucune ne lève : elles rendent une copie gelée, aux seuls champs connus, ou
 // une phrase. Celle de validerPhoto commence sans majuscule et nomme le
@@ -24,10 +25,24 @@
 // égalité (« egalite »). Et, à la relecture du groupe (C-15), un texte de la
 // photographie ne porte pas plus un demi-codet isolé qu'un caractère de
 // contrôle.
+//
+// Au groupe 3 du lot 4 (le contrat du groupe, § 4 à § 6, § 9) : sept
+// événements neufs, « intervenir », « contre_attaquer », « laisser »,
+// « critique », « effet » (la palette, un genre par effet, et sa source),
+// « blessure » et « mj » (un genre par geste du MJ) ; les réglages « garde »
+// (la ligne qu'attendre garde) et « cibles » (plusieurs cibles, autant qu'un
+// combat compte de protagonistes au plus : BORNES_EFFET.cibles) ; la capacité
+// figée, qu'un état ou une blessure porte au format de la photographie
+// (validerCapaciteFigee). Un événement à genres a les champs de son genre, et
+// eux seuls.
 
 import { CARACTERISTIQUES } from "../personnage/regles.js";
 import {
+  BORNES_EFFET,
+  BORNES_MJ,
   BORNES_PHOTO,
+  CHAMPS_MJ,
+  DUREES_EFFET,
   EVENEMENTS_MAX,
   FACES_LOCALISATION,
   FACE_CONTRE,
@@ -39,8 +54,10 @@ import {
   PLAFOND_EXEMPLAIRES,
   PLAFOND_PJ,
   REGLES,
+  RESSOURCES_RENDRE,
   ROLES,
   ROLES_PASSIFS,
+  SIGNES,
   TIRAGES_MAX,
   ecrireEnMilliers,
   geler,
@@ -115,11 +132,11 @@ const CONTROLE = new RegExp(`[\\p{Cc}\\p{Cs}${String.fromCodePoint(0x2028, 0x202
 const BLANCS_DE_LIGNE = /[\n\r\t]/g;
 
 /** Un texte d'une ligne : il entre au journal, qui tient une ligne par geste. */
-function ligne(valeur, quoi, min = 1) {
+function ligne(valeur, quoi, min = 1, max = BORNES_PHOTO.ligne) {
   if (typeof valeur !== "string") refuser(`${quoi} n'est pas un texte.`);
   if (CONTROLE.test(valeur)) refuser(`${quoi} porte un retour à la ligne ou un caractère de contrôle.`);
   if (valeur.length < min) refuser(`${quoi} est vide.`);
-  if (valeur.length > BORNES_PHOTO.ligne) refuser(`${quoi} dépasse ${ecrireNombre(BORNES_PHOTO.ligne)} signes.`);
+  if (valeur.length > max) refuser(`${quoi} dépasse ${ecrireNombre(max)} signes.`);
   return valeur;
 }
 
@@ -190,12 +207,32 @@ function codesDistincts(valeur, quoi) {
   return [...valeur];
 }
 
+/** Plusieurs cibles, dans l'ordre des jets : de 1 à BORNES_EFFET.cibles identifiants, distincts. */
+function listeDeCibles(valeur, quoi) {
+  if (!Array.isArray(valeur) || valeur.length < 1 || valeur.length > BORNES_EFFET.cibles) {
+    refuser(`${quoi} n'est pas une liste de 1 à ${ecrireNombre(BORNES_EFFET.cibles)} cibles.`);
+  }
+  // Array.from, et non map : un trou de la liste est lu, et refusé.
+  const lues = Array.from(valeur, (id) => identifiant(id, `${quoi} : une cible`));
+  if (new Set(lues).size !== lues.length) refuser(`${quoi} nomme deux fois la même cible.`);
+  return lues;
+}
+
+/** La ligne qu'un geste « attendre » garde : une capacité et l'une de ses façons, par leurs indices. */
+function ligneGardee(valeur, quoi) {
+  champs(valeur, quoi, ["capacite", "facon"]);
+  return { capacite: indice(valeur.capacite, `${quoi} : « capacite »`), facon: indice(valeur.facon, `${quoi} : « facon »`) };
+}
+
 // Ce que vaut « valeur » pour chaque champ de « regler ». Les deux derniers
 // se règlent à la main : ils demandent une raison dès que la valeur n'est pas
 // nulle (0 efface le réglage). « defense » choisit le type du jet de défense
 // quand deux types d'armure sont à égalité de dés (contrat du groupe 2,
 // § 5.4) : un type, sans raison ; le retour au défaut ne se règle pas, il
-// suit le changement de cible.
+// suit le changement de cible. Au groupe 3 (contrat du groupe, § 6) :
+// « garde », la ligne qu'un geste « attendre » garde, et « cibles », celles
+// d'une façon Centrée, dans l'ordre des jets ; ni l'un ni l'autre ne revient
+// à vide, et aucun ne prend de raison.
 const VALEURS_DE_REGLER = {
   facon: indice,
   jet_prete: booleen,
@@ -207,6 +244,8 @@ const VALEURS_DE_REGLER = {
   x: entierSur,
   jauge: indice,
   defense: (valeur, quoi) => parmi(valeur, quoi, POIDS),
+  garde: ligneGardee,
+  cibles: listeDeCibles,
   modificateur: entierSur,
   avantages: entierSur,
 };
@@ -222,6 +261,235 @@ function avecRaison(donnee, quoi, evenement, due) {
 // Un type, ses champs, et la lecture qui en fait la copie. Un champ en trop,
 // un champ qui manque ou un champ mal typé est un refus.
 const SANS_CHAMP = { champs: [], lire: () => ({}) };
+
+// Une ligne jouée : qui, quelle capacité, de quelle façon. Une capacité, et,
+// au groupe 3, une intervention (contrat du groupe, § 6.1).
+const LIGNE_JOUEE = {
+  champs: ["qui", "capacite", "facon"],
+  lire: (donnee, quoi) => ({
+    qui: identifiant(donnee.qui, `${quoi} : « qui »`),
+    capacite: indice(donnee.capacite, `${quoi} : « capacite »`),
+    facon: indice(donnee.facon, `${quoi} : « facon »`),
+  }),
+};
+
+// ─── Le groupe 3 : la palette et le MJ ──────────────────────────────────────
+
+/**
+ * Lit une partie par une lecture de la photographie, dont le refus est une
+ * phrase sans majuscule, et le rend sous le nom de l'événement.
+ */
+function sousPartie(quoi, lire) {
+  try {
+    return lire();
+  } catch (echec) {
+    if (echec instanceof Refus) refuser(`${quoi} est refusée : ${echec.message}`);
+    throw echec;
+  }
+}
+
+/** L'identifiant d'un effet durable : le pas de l'événement qui l'a posé. */
+function idDEffet(valeur, quoi) {
+  if (!Number.isSafeInteger(valeur) || valeur < 0) refuser(`${quoi} n'est pas l'identifiant d'un effet.`);
+  return valeur;
+}
+
+/** Un ±N : de −20 à 20, jamais nul. Le moins s'écrit par son signe, comme au journal. */
+function ecart(valeur, quoi) {
+  const borne = BORNES_EFFET.ecart;
+  if (!Number.isSafeInteger(valeur) || valeur === 0 || valeur < -borne || valeur > borne) {
+    refuser(`${quoi} n'est pas un entier de ${SIGNES.moins}${borne} à ${borne}, autre que 0.`);
+  }
+  return valeur;
+}
+
+// Une Source (contrat du groupe 3, § 5) : une capacité d'un protagoniste, par
+// son indice dans sa photographie ; un état porté, par l'identifiant de son
+// effet durable ; ou le MJ.
+const CHAMPS_DE_LA_SOURCE = { capacite: ["qui", "capacite"], etat: ["effet"], mj: [] };
+
+function sourceDEffet(valeur, quoi) {
+  if (!estObjet(valeur) || typeof valeur.genre !== "string" || !a(CHAMPS_DE_LA_SOURCE, valeur.genre)) {
+    refuser(`${quoi} n'est ni une capacité, ni un état, ni le MJ.`);
+  }
+  champs(valeur, quoi, ["genre", ...CHAMPS_DE_LA_SOURCE[valeur.genre]]);
+  if (valeur.genre === "capacite") {
+    return { genre: "capacite", qui: identifiant(valeur.qui, `${quoi} : « qui »`), capacite: indice(valeur.capacite, `${quoi} : « capacite »`) };
+  }
+  if (valeur.genre === "etat") return { genre: "etat", effet: idDEffet(valeur.effet, `${quoi} : « effet »`) };
+  return { genre: "mj" };
+}
+
+// L'armure et l'endurance sont celles d'une zone, le lien celui d'une jauge :
+// leur indice est présent exactement là, pour « rendre » comme pour les
+// valeurs du MJ.
+const A_ZONE = ["armure", "endurance"];
+
+function precision(donnee, quoi, laquelle) {
+  const voulue = laquelle === "lien" ? "jauge" : A_ZONE.includes(laquelle) ? "zone" : null;
+  for (const nom of ["zone", "jauge"]) {
+    if (nom !== voulue && a(donnee, nom)) refuser(`${quoi} ne prend pas de « ${nom} » pour « ${laquelle} ».`);
+  }
+  if (voulue === null) return {};
+  if (!a(donnee, voulue)) refuser(`${quoi} n'a pas de champ « ${voulue} ».`);
+  return { [voulue]: indice(donnee[voulue], `${quoi} : « ${voulue} »`) };
+}
+
+/** Un état : une capacité figée, ou un nom libre ; l'un des deux, jamais les deux. */
+function capaciteOuLibre(donnee, quoi) {
+  if (a(donnee, "capacite") === a(donnee, "libre")) refuser(`${quoi} porte « capacite » ou « libre » : l'un des deux.`);
+  // Le nom libre est une donnée hostile, comme une raison : il entre au journal.
+  if (a(donnee, "libre")) return { libre: ligne(donnee.libre, `${quoi} : « libre »`, 1, BORNES_EFFET.libre) };
+  return { capacite: sousPartie(`${quoi} : sa capacité`, () => lireCapaciteFigee(donnee.capacite)) };
+}
+
+// Les dégâts directs sont de résistance ou de corps : des dégâts normaux
+// n'en sont pas. Un geste du MJ, hors d'un geste, ne dure pas « pour ce jet ».
+const NATURES_DIRECTES = ["resistance", "corps"];
+const DUREES_DURABLES = DUREES_EFFET.filter((duree) => duree !== "jet");
+
+const sur = (donnee, quoi) => identifiant(donnee.sur, `${quoi} : « sur »`);
+const duree = (donnee, quoi, permises = DUREES_EFFET) => parmi(donnee.duree, `${quoi} : « duree »`, permises);
+const points = (donnee, quoi, min = 1) => entier(donnee.n, `${quoi} : « n »`, min, BORNES_EFFET.points);
+
+const NOMBRE_DE_DES = { champs: ["nombre"], lire: (donnee, quoi) => ({ nombre: entier(donnee.nombre, `${quoi} : « nombre »`, 1, BORNES_EFFET.nombre) }) };
+const OPERATION = { champs: ["n"], lire: (donnee, quoi) => ({ n: points(donnee, quoi) }) };
+const ECART = {
+  champs: ["sur", "n", "duree"],
+  lire: (donnee, quoi) => ({ sur: sur(donnee, quoi), n: ecart(donnee.n, `${quoi} : « n »`), duree: duree(donnee, quoi) }),
+};
+
+// Les genres de l'événement « effet » (contrat du groupe 3, § 5.1), dans
+// l'ordre de GENRES_EFFET (js/combat/regles.js) : leurs champs et leurs
+// bornes. Le moment, la source permise, le prix et les bornes qui dépendent
+// de l'état (un maximum, une case autre que la sienne) sont à l'offre.
+const GENRES_D_EFFET = {
+  avantages: NOMBRE_DE_DES,
+  desavantages: NOMBRE_DE_DES,
+  relancer: SANS_CHAMP,
+  inverser: SANS_CHAMP,
+  reussite: SANS_CHAMP,
+  zone: {
+    champs: ["de", "zone"],
+    lire: (donnee, quoi) => ({ de: indice(donnee.de, `${quoi} : « de »`), zone: indice(donnee.zone, `${quoi} : « zone »`) }),
+  },
+  multiplier: {
+    champs: ["k"],
+    lire: (donnee, quoi) => ({ k: entier(donnee.k, `${quoi} : « k »`, BORNES_EFFET.facteurMin, BORNES_EFFET.facteurMax) }),
+  },
+  ajouter: OPERATION,
+  retrancher: OPERATION,
+  armure: OPERATION,
+  directs: {
+    champs: ["n", "nature"],
+    lire: (donnee, quoi) => ({ n: points(donnee, quoi, 0), nature: parmi(donnee.nature, `${quoi} : « nature »`, NATURES_DIRECTES) }),
+  },
+  reporter: { champs: ["sur"], lire: (donnee, quoi) => ({ sur: sur(donnee, quoi) }) },
+  toute_la_case: { champs: ["cibles"], lire: (donnee, quoi) => ({ cibles: listeDeCibles(donnee.cibles, `${quoi} : « cibles »`) }) },
+  attaque_en_plus: SANS_CHAMP,
+  rendre: {
+    champs: ["sur", "ressource", "n"],
+    facultatifs: ["zone", "jauge"],
+    lire(donnee, quoi) {
+      const ressource = parmi(donnee.ressource, `${quoi} : « ressource »`, RESSOURCES_RENDRE);
+      return { sur: sur(donnee, quoi), ressource, n: points(donnee, quoi), ...precision(donnee, quoi, ressource) };
+    },
+  },
+  attaque: ECART,
+  defense: ECART,
+  etat: {
+    champs: ["sur", "duree"],
+    facultatifs: ["capacite", "libre"],
+    lire: (donnee, quoi) => ({ sur: sur(donnee, quoi), ...capaciteOuLibre(donnee, quoi), duree: duree(donnee, quoi) }),
+  },
+  deplacer: { champs: ["sur", "vers"], lire: (donnee, quoi) => ({ sur: sur(donnee, quoi), vers: nomDeCase(donnee.vers, `${quoi} : « vers »`) }) },
+};
+
+// La qualité d'un objet s'écrit comme dans le fichier du personnage
+// (js/personnage/format.js) : « 2 », « 1,5 », ou rien.
+const MOTIF_QUALITE = /^\d{1,3}(?:,\d{1,2})?$/;
+
+function qualite(valeur, quoi) {
+  if (valeur !== null && (typeof valeur !== "string" || !MOTIF_QUALITE.test(valeur))) refuser(`${quoi} n'est ni une qualité (« 2 », « 1,5 ») ni rien.`);
+  return valeur;
+}
+
+// Ce qu'un geste « equipement » écrit au journal (contrat du groupe 3,
+// § 6.3) : l'arme tenue (nulle : aucune), la qualité d'un objet, ou la
+// cellule Équipement d'un adversaire, ses noms dans l'ordre.
+const CHAMPS_DU_CHANGEMENT = { arme: ["nom"], qualite: ["objet", "avant", "apres"], cellule: ["noms"] };
+
+function lireChangement(valeur, quoi) {
+  if (!estObjet(valeur) || typeof valeur.genre !== "string" || !a(CHAMPS_DU_CHANGEMENT, valeur.genre)) {
+    refuser(`${quoi} n'est ni une arme, ni une qualité, ni une cellule.`);
+  }
+  champs(valeur, quoi, ["genre", ...CHAMPS_DU_CHANGEMENT[valeur.genre]]);
+  if (valeur.genre === "arme") return { genre: "arme", nom: valeur.nom === null ? null : ligne(valeur.nom, `${quoi} : « nom »`) };
+  if (valeur.genre === "qualite") {
+    return {
+      genre: "qualite",
+      objet: ligne(valeur.objet, `${quoi} : « objet »`),
+      avant: qualite(valeur.avant, `${quoi} : « avant »`),
+      apres: qualite(valeur.apres, `${quoi} : « apres »`),
+    };
+  }
+  liste(valeur.noms, `${quoi} : « noms »`, BORNES_MJ.noms, "noms");
+  return { genre: "cellule", noms: Array.from(valeur.noms, (nom) => ligne(nom, `${quoi} : un nom`)) };
+}
+
+// Les genres de l'événement « mj » (contrat du groupe 3, § 6.3). Qui est
+// vivant, ce qui change vraiment, un maximum sous la valeur courante : c'est
+// l'offre qui le juge.
+const GENRES_DU_MJ = {
+  valeurs: {
+    champs: ["valeurs"],
+    lire(donnee, quoi) {
+      if (!Array.isArray(donnee.valeurs) || donnee.valeurs.length < 1 || donnee.valeurs.length > BORNES_MJ.valeurs) {
+        refuser(`${quoi} : « valeurs » n'est pas une liste de 1 à ${ecrireNombre(BORNES_MJ.valeurs)} valeurs.`);
+      }
+      const vues = new Set();
+      const valeurs = Array.from(donnee.valeurs, (entree, rang) => {
+        const laquelle = `${quoi} : la valeur n° ${rang + 1}`;
+        champs(entree, laquelle, ["champ", "valeur"], ["zone", "jauge"]);
+        const champ = parmi(entree.champ, `${laquelle} : « champ »`, CHAMPS_MJ);
+        const lue = { champ, ...precision(entree, laquelle, champ), valeur: entier(entree.valeur, `${laquelle} : « valeur »`, 0, BORNES_MJ.valeur) };
+        // Deux entrées pour la même valeur : aucune ne dirait laquelle compte.
+        const cle = `${champ} ${lue.zone ?? ""} ${lue.jauge ?? ""}`;
+        if (vues.has(cle)) refuser(`${laquelle} change une valeur déjà changée.`);
+        vues.add(cle);
+        return lue;
+      });
+      return { valeurs };
+    },
+  },
+  equipement: {
+    champs: ["photo", "changements"],
+    lire(donnee, quoi) {
+      // L'identifiant dit le camp (« qui » est déjà lu) : les valeurs se lisent
+      // comme celles d'une photographie de ce camp, à l'ajout.
+      const camp = donnee.qui.startsWith("pj") ? "pj" : "adv";
+      const photo = sousPartie(`${quoi} : sa photographie`, () => lireValeurs(donnee.photo, camp));
+      if (!Array.isArray(donnee.changements) || donnee.changements.length < 1 || donnee.changements.length > BORNES_MJ.changements) {
+        refuser(`${quoi} : « changements » n'est pas une liste de 1 à ${ecrireNombre(BORNES_MJ.changements)} changements.`);
+      }
+      return { photo, changements: Array.from(donnee.changements, (changement, rang) => lireChangement(changement, `${quoi} : le changement n° ${rang + 1}`)) };
+    },
+  },
+  etat: {
+    champs: [],
+    facultatifs: ["ajout", "retrait"],
+    lire(donnee, quoi) {
+      if (a(donnee, "ajout") === a(donnee, "retrait")) refuser(`${quoi} porte « ajout » ou « retrait » : l'un des deux.`);
+      if (a(donnee, "retrait")) return { retrait: idDEffet(donnee.retrait, `${quoi} : « retrait »`) };
+      const dit = `${quoi} : son ajout`;
+      champs(donnee.ajout, dit, ["duree"], ["capacite", "libre"]);
+      return { ajout: { ...capaciteOuLibre(donnee.ajout, dit), duree: duree(donnee.ajout, dit, DUREES_DURABLES) } };
+    },
+  },
+  deplacer: { champs: ["vers"], lire: (donnee, quoi) => ({ vers: nomDeCase(donnee.vers, `${quoi} : « vers »`) }) },
+  retirer: SANS_CHAMP,
+};
+
 const EVENEMENTS = {
   lancer: {
     champs: ["le"],
@@ -230,14 +498,7 @@ const EVENEMENTS = {
       return { le: donnee.le };
     },
   },
-  capacite: {
-    champs: ["qui", "capacite", "facon"],
-    lire: (donnee, quoi) => ({
-      qui: identifiant(donnee.qui, `${quoi} : « qui »`),
-      capacite: indice(donnee.capacite, `${quoi} : « capacite »`),
-      facon: indice(donnee.facon, `${quoi} : « facon »`),
-    }),
-  },
+  capacite: LIGNE_JOUEE,
   regler: {
     champs: ["champ", "valeur"],
     facultatifs: ["raison"],
@@ -306,15 +567,59 @@ const EVENEMENTS = {
   // Défait le dernier geste fini depuis le lancement (contrat du groupe 2,
   // § 2.1) : il entre au contenu et compte pour la borne comme les autres.
   annuler: SANS_CHAMP,
+  // Le groupe 3 (contrat du groupe, § 6) : une intervention, la
+  // contre-attaque jouée ou laissée, le critique tenté ou gardé.
+  intervenir: LIGNE_JOUEE,
+  contre_attaquer: {
+    champs: ["capacite", "facon"],
+    lire: (donnee, quoi) => ({ capacite: indice(donnee.capacite, `${quoi} : « capacite »`), facon: indice(donnee.facon, `${quoi} : « facon »`) }),
+  },
+  laisser: SANS_CHAMP,
+  critique: { champs: ["tenter"], lire: (donnee, quoi) => ({ tenter: booleen(donnee.tenter, `${quoi} : « tenter »`) }) },
+  // Un effet de la palette : sa source, et les champs de son genre. Un X ne
+  // se paie que par une capacité (un passif au coût X, contrat du groupe 3,
+  // § 5) : toute autre source ne coûte rien.
+  effet: {
+    genres: GENRES_D_EFFET,
+    champs: ["source"],
+    facultatifs: ["x"],
+    lire(donnee, quoi) {
+      const source = sourceDEffet(donnee.source, `${quoi} : sa source`);
+      if (!a(donnee, "x")) return { source };
+      if (source.genre !== "capacite") refuser(`${quoi} : seule une capacité prend un « x ».`);
+      if (!Number.isSafeInteger(donnee.x) || donnee.x < 0) refuser(`${quoi} : « x » n'est pas un entier positif ou nul.`);
+      return { source, x: donnee.x };
+    },
+  },
+  // La blessure d'un personnage (contrat du groupe 3, § 5.9) : une capacité
+  // du bloc de blessure, figée, ou un état libre.
+  blessure: { champs: [], facultatifs: ["capacite", "libre"], lire: capaciteOuLibre },
+  mj: {
+    genres: GENRES_DU_MJ,
+    champs: ["qui"],
+    lire: (donnee, quoi) => ({ qui: identifiant(donnee.qui, `${quoi} : « qui »`) }),
+  },
 };
 
 function lireEvenement(donnee) {
   if (!estObjet(donnee)) refuser("Un événement est un objet simple.");
   if (typeof donnee.type !== "string" || !a(EVENEMENTS, donnee.type)) refuser("Le type de l'événement n'est pas connu.");
-  const { champs: attendus, facultatifs = [], lire } = EVENEMENTS[donnee.type];
+  const definition = EVENEMENTS[donnee.type];
   const quoi = `L'événement « ${donnee.type} »`;
-  champs(donnee, quoi, ["type", ...attendus], facultatifs);
-  return { type: donnee.type, ...lire(donnee, quoi) };
+  if (!definition.genres) {
+    champs(donnee, quoi, ["type", ...definition.champs], definition.facultatifs ?? []);
+    return { type: donnee.type, ...definition.lire(donnee, quoi) };
+  }
+  // Un événement à genres (« effet », « mj ») : ses champs, puis ceux de son
+  // genre, et eux seuls. Les siens se lisent d'abord : le genre peut s'en
+  // servir (le camp de « qui »).
+  if (!a(donnee, "genre")) refuser(`${quoi} n'a pas de champ « genre ».`);
+  if (typeof donnee.genre !== "string" || !a(definition.genres, donnee.genre)) refuser(`${quoi} : son genre n'est pas connu.`);
+  const genre = definition.genres[donnee.genre];
+  const dit = `${quoi} « ${donnee.genre} »`;
+  champs(donnee, dit, ["type", "genre", ...definition.champs, ...genre.champs], [...(definition.facultatifs ?? []), ...(genre.facultatifs ?? [])]);
+  const communs = definition.lire(donnee, dit);
+  return { type: donnee.type, genre: donnee.genre, ...communs, ...genre.lire(donnee, dit) };
 }
 
 /**
@@ -532,8 +837,9 @@ function lireFacon(donnee, quoi, deLaCapacite, armes) {
   return lue;
 }
 
-function lireCapacite(donnee, rang, armes, liens) {
-  const numero = `la capacité n° ${rang + 1}`;
+// « numero » la nomme tant que son nom n'est pas lu : « la capacité n° 3 »,
+// ou « la capacité figée ».
+function lireCapacite(donnee, numero, armes, liens) {
   champs(donnee, numero, CHAMPS_CAPACITE);
   const nom = ligne(donnee.nom, `le nom de ${numero}`);
   // Le nom est lu : il peut maintenant se citer.
@@ -557,6 +863,34 @@ function lireCapacite(donnee, rang, armes, liens) {
     inactive: donnee.inactive,
     facons: donnee.facons.map((facon, k) => lireFacon(facon, `la façon n° ${k + 1} de ${quoi}`, `de ${quoi}`, armes)),
   };
+}
+
+/**
+ * Une capacité figée (contrat du groupe 3, § 5.1, § 9) : une capacité d'un
+ * bloc d'état ou de blessure, que l'événement porte au format de la
+ * photographie pour que le rejeu ne lise jamais la banque. Elle se lit comme
+ * une capacité de photographie, sans arme ni jauge où renvoyer (« arme » et
+ * « lien » nuls) ; elle n'a pas de rôle câblé, qui ne se reconnaît qu'à la
+ * photographie, et n'est jamais absente de la banque, d'où elle vient.
+ */
+function lireCapaciteFigee(donnee) {
+  const capacite = lireCapacite(donnee, "la capacité figée", 0, 0);
+  if (capacite.role !== null) refuser(`« ${capacite.nom} » porte un rôle câblé : une capacité figée n'en a pas.`);
+  if (capacite.inactive !== null) refuser(`« ${capacite.nom} » est dite absente de la banque.`);
+  return capacite;
+}
+
+/**
+ * Une capacité figée, seule : ce que l'écran vérifie avant de la mettre dans
+ * un événement. Rend { capacite }, une copie gelée, ou { erreur } : une phrase
+ * sans majuscule, qui nomme le champ.
+ */
+export function validerCapaciteFigee(donnee) {
+  try {
+    return { capacite: geler(lireCapaciteFigee(donnee)) };
+  } catch (echec) {
+    return { erreur: phraseDe(echec, "la capacité figée ne se lit pas.") };
+  }
 }
 
 function lireValeurs(donnee, camp) {
@@ -601,7 +935,7 @@ function lireValeurs(donnee, camp) {
   });
 
   const capacites = liste(donnee.capacites, "la photographie", BORNES_PHOTO.capacites, "capacités").map((capacite, rang) =>
-    lireCapacite(capacite, rang, armes.length, liens.length),
+    lireCapacite(capacite, `la capacité n° ${rang + 1}`, armes.length, liens.length),
   );
 
   // Les façons se comptent aussi ensemble : l'offre les juge toutes à chaque

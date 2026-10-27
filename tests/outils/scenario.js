@@ -42,7 +42,9 @@
 //                        la façon d'office du groupe 1, gardée ici comme
 //                        convention de lecture : la plus haute puissance
 //                        qu'il peut payer, sinon la plus basse
-//   contre, sur          la cible : un adversaire ; un allié ou soi
+//   contre, sur          la cible : un adversaire ; un allié ou soi. Une
+//                        façon Centrée n'en a pas : ses cibles sont celles
+//                        que le moteur coche d'office, sans réglage
 //   defense              après la cible : le type d'armure du jet de défense
 //                        du PJ visé, à égalité de dés (« lourde », « agile »,
 //                        « precise »)
@@ -61,12 +63,24 @@
 //   localisation         les d20, bruts
 //   decale               [{ de, valeur, raison }] ; « de » compte de 0
 //   esquive              le nombre de dégâts annulés
-// « Faire exploser » se choisit toujours.
+//   blessure             la blessure choisie pour une zone blessée : le nom
+//                        d'une capacité du bloc de blessure (etatsDeLaBanque,
+//                        js/combat/photographie.js ; sans banque, celui de la
+//                        démonstration), ou { libre } ; une liste, une par
+//                        zone, dans l'ordre des dés
+// « Faire exploser » se choisit toujours. Depuis la fin du combat (lot 4.3,
+// contrat du lot, § 9) : la contre-attaque qui s'offre se laisse passer
+// (« laisser ») ; l'étape « Interventions » se passe (« Appliquer ») ; un
+// geste qui attend après son jet, un manqué ou un jet de caractéristique,
+// finit par « Appliquer ». Le scénario ne sait jouer ni une intervention, ni
+// une contre-attaque, ni le coup critique : un critique qui s'offre lève.
 
 import { appliquer, gesteEnCours, ouvrirCombat } from "../../js/combat/moteur.js";
 import { boutons, offre } from "../../js/combat/offre.js";
+import { etatsDeLaBanque } from "../../js/combat/photographie.js";
 import { ajouterAdversaires, ajouterPersonnage, miseEnPlaceVide, poser, reglerQuiCommence } from "../../js/combat/preparation.js";
 import { REGLES } from "../../js/combat/regles.js";
+import { etatsEssai } from "./photographies_essai.js";
 
 const CHAMPS_D_UN_GESTE = [
   "finDeTour",
@@ -92,6 +106,7 @@ const CHAMPS_D_UN_GESTE = [
   "localisation",
   "decale",
   "esquive",
+  "blessure",
 ];
 
 const echouer = (quoi, phrase) => {
@@ -210,6 +225,10 @@ function regler(partie, qui, ecrit, quoi) {
   if ([ecrit.contre, ecrit.sur, ecrit.sansCible].filter((champ) => champ !== undefined).length > 1) {
     echouer(quoi, "« contre », « sur » et « sansCible » ne vont pas ensemble.");
   }
+  // Une façon Centrée offre ses cibles, cochées d'office, et non une cible.
+  if ((ecrit.contre !== undefined || ecrit.sur !== undefined) && Object.hasOwn(offre(partie.etat).reglages, "cibles")) {
+    echouer(quoi, `« ${ecrit.joue} » est Centrée : ses cibles se cochent d'office, sans « contre » ni « sur ».`);
+  }
   if (ecrit.contre !== undefined) {
     const cible = parNomCourt(partie.etat, ecrit.contre, quoi);
     if (campDe(cible) === campDe(qui)) echouer(quoi, `« contre » vise un adversaire, et ${ecrit.contre} est du même camp : écrivez « sur ».`);
@@ -248,6 +267,20 @@ function degatsEcrits(etat, ecrit) {
   };
 }
 
+// Les blessures que choisit le scénario, une par zone blessée, dans l'ordre
+// des dés : l'événement « blessure » de chacune. Une capacité se nomme ; elle
+// se prend, figée, dans le bloc de blessure de la banque.
+function blessuresEcrites(ecrit, etats, quoi) {
+  if (ecrit.blessure === undefined) return [];
+  return (Array.isArray(ecrit.blessure) ? ecrit.blessure : [ecrit.blessure]).map((choix) => {
+    if (typeof choix?.libre === "string") return { type: "blessure", libre: choix.libre };
+    if (typeof choix !== "string") echouer(quoi, "« blessure » est le nom d'une capacité du bloc de blessure, ou { libre }.");
+    const capacite = etats.blessure.find(({ nom }) => nom === choix);
+    if (capacite === undefined) echouer(quoi, `le bloc de blessure n'a pas de capacité « ${choix} » (${etats.blessure.map(({ nom }) => nom).join(", ") || "aucune"}).`);
+    return { type: "blessure", capacite };
+  });
+}
+
 /**
  * Joue une capacité : « capacite », les réglages, puis ce que l'offre attend,
  * tant que le geste est ouvert. S'arrête, sans le finir, une fois lancés
@@ -264,7 +297,9 @@ function jouerUneCapacite(partie, ecrit, quoi, desPermis) {
   const d20 = pioche(ecrit.localisation, "localisation", quoi);
   const gardes = new Set(ecrit.garde ?? []);
   const faits = { degats: ecrit.degats === undefined, decale: ecrit.decale === undefined, esquive: ecrit.esquive === undefined };
+  const blessures = blessuresEcrites(ecrit, partie.etats, quoi);
   let lances = 0;
+  let blesse = 0;
 
   while (gesteEnCours(partie.etat) !== null) {
     const offert = offre(partie.etat);
@@ -277,6 +312,8 @@ function jouerUneCapacite(partie, ecrit, quoi, desPermis) {
       // Les dés permis sont lancés, et les choix du jet qui les suivaient
       // sont faits : on s'arrête là, en plein geste.
       return false;
+    } else if (offert.types.includes("critique")) {
+      echouer(quoi, "le coup critique s'offre, et le scénario ne sait pas le jouer.");
     } else if (offert.types.includes("confirmer")) {
       jouer({ type: "confirmer" });
     } else if (offert.degats !== null && !faits.degats) {
@@ -287,7 +324,15 @@ function jouerUneCapacite(partie, ecrit, quoi, desPermis) {
       const { faces, combien, motif } = offert.de;
       jouer({ type: "de", faces, valeurs: (motif === "localisation" ? d20 : des).prendre(combien, faces) });
       lances += 1;
+    } else if (offert.types.includes("laisser")) {
+      // La contre-attaque qui s'offre se laisse passer.
+      jouer({ type: "laisser" });
+    } else if (offert.types.includes("blessure")) {
+      if (blesse >= blessures.length) echouer(quoi, `une blessure est à choisir, et « blessure » n'en écrit ${blessures.length === 0 ? "aucune" : `que ${blessures.length}`}.`);
+      jouer(blessures[blesse]);
+      blesse += 1;
     } else if (offert.types.includes("appliquer")) {
+      // La fin de l'étape « Interventions », ou d'un geste qui attend après son jet.
       if (!faits.decale) {
         for (const { de, valeur, raison } of ecrit.decale) jouer(raison === undefined ? { type: "decaler", de, valeur } : { type: "decaler", de, valeur, raison });
         faits.decale = true;
@@ -308,6 +353,7 @@ function jouerUneCapacite(partie, ecrit, quoi, desPermis) {
     if (!faite) echouer(quoi, `« ${consigne} » est écrit, mais le geste a fini sans que le moteur l'offre.`);
   }
   if (gardes.size > 0) echouer(quoi, `aucun dé n'était à garder à la place ${[...gardes].join(", ")}.`);
+  if (blesse < blessures.length) echouer(quoi, `« blessure » en écrit ${blessures.length}, et le moteur n'en a demandé que ${blesse}.`);
   return true;
 }
 
@@ -353,6 +399,10 @@ function lireLArret(jusqua, nombre) {
  *   exploser) sont faits, et rien d'autre : ni dégâts fixés, ni esquive, ni
  *   « Appliquer ». À 0, le geste est réglé, et rien n'est payé. Un geste que
  *   ce dé finit, ou qui n'en lance pas tant, lève : on ne s'y arrête pas.
+ * - banque : la banque d'où viennent les photographies. Elle ne sert qu'à
+ *   trouver, figée, la capacité qu'un geste nomme dans « blessure » ; sans
+ *   elle, ce sont les états de la démonstration, recopiés à la main
+ *   (etatsEssai, tests/outils/photographies_essai.js).
  *
  * Rend { contenu, etat, casesDOffice } :
  * - contenu : { regles, revision: 1, miseEnPlace, evenements }, ce qu'un
@@ -361,12 +411,13 @@ function lireLArret(jusqua, nombre) {
  * - casesDOffice : la case où chaque ajout s'est posé de lui-même, dans
  *   l'ordre des ajouts, avant les déplacements de « cases ».
  */
-export function versContenu(scenario, photos, { jusqua } = {}) {
+export function versContenu(scenario, photos, { jusqua, banque = null } = {}) {
   const { miseEnPlace, casesDOffice } = mettreEnPlace(scenario, photos);
   const evenements = [];
   let quoi = "Le lancement";
   const partie = {
     etat: ouvrirCombat(miseEnPlace),
+    etats: banque === null ? etatsEssai() : etatsDeLaBanque(banque),
     jouer(evenement) {
       const { etat, refus } = appliquer(partie.etat, evenement);
       if (refus) echouer(quoi, `l'événement ${JSON.stringify(evenement)} est refusé (${refus.code}) : ${refus.message}`);

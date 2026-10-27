@@ -1777,9 +1777,9 @@ Toute dépendance future est justifiée ici, avant son arrivée.
   le classeur d'avant, refabriqué, § 11). Mesuré le 12/10/2026 : 37 blocs,
   46 capacités (51 variantes), 22 éléments, 2 classes d'adversaires,
   5 adversaires ; 40 anomalies, dont 15 erreurs, comme avant. Le classeur
-  d'essai n'a toujours ni paramètre `loc_multiple`, ni élément
+  d'essai n'avait alors ni paramètre `loc_multiple`, ni élément
   « Localisation multiple » ou « Centré », ni bloc de type État ou
-  Blessure.
+  Blessure (le lot 4.3 en ajoute, plus bas).
 
   **Au lot 5**, ses descriptions écrivent « (s) » ou « (x) » partout où un
   nombre ou une expression précède un nom au pluriel (§ 6.2), dans des
@@ -1799,6 +1799,27 @@ Toute dépendance future est justifiée ici, avant son arrivée.
   Vif et Costaud (« [N] aux … ») ne changent pas : « aux » est exclu
   d'I6. Le classeur propre des contrôles s'écrit de même, et les contrôles
   qui citent ces textes mot pour mot les suivent.
+
+  **Au lot 4.3** (la fin du combat, mission du lot 4.3, § 10 ; § 17.10),
+  il porte ce que la blessure, les états et plusieurs cibles demandent,
+  toujours fictif, en fin de feuille ou dans une cellule existante :
+  - `Eléments` : **Centré** (« Touche toute la case de son auteur. »),
+    que reçoit Moulinet farineux, dont la cellule était vide ;
+  - `Blocs` : deux blocs de type État, **Blessure** (le bloc de blessure,
+    reconnu par son nom, faute d'un bloc de type Blessure) et
+    **Condition**, chacun de trois capacités en ensemble facultatif,
+    « [Cheville tordue | Main brûlée | Côtes froissées] » et « [Étourdi |
+    En nage | Affamé] » ;
+  - `Capacites` : ces six capacités, de puissance 0, à l'élément Passif,
+    sans coût, d'origine « État », aux textes de la maquette (« Vos
+    déplacements coûtent une action de plus. », « Désavantage avec une
+    arme précise. »…).
+
+  Aucune ligne ne change de numéro, aucune anomalie ne s'ajoute, aucune
+  valeur d'un adversaire ne change. Mesuré le 26/10/2026 : 39 blocs,
+  52 capacités, 23 éléments ; 40 anomalies, les mêmes qu'avant. Il n'a
+  toujours ni paramètre `loc_multiple`, ni élément « Localisation
+  multiple », ni bloc de type Blessure.
 - Messages de commit en prose française : un titre, puis ce qui a changé, ce
   qui a été mesuré, ce qui a été laissé.
 - **Le dépôt est public, l'historique aussi** : chaque commit porte le nom et
@@ -2232,18 +2253,23 @@ jetons, les noms courts) ne sont pas des règles du jeu : elles sont au
     un adversaire : un décalage jusqu'à 20 sur un personnage reste exclu
     (25/10 : la convention ne change pas, c'est au livret d'en décider).
     Sections « Jets de localisation » et « Contre-attaque », à accorder.
-13. **Les blessures** : le −1 par zone sans résistance vaut pour les dés de
-    la chaîne, pas pour le dé de localisation. Section « Ressources ».
+13. **Les blessures** : remplacé par le point 47 au lot 4.3. Le livret du
+    25/10/2026 (« Ressources ») a ôté le −1 par zone sans endurance, qui
+    valait jusque-là pour les dés de la chaîne, pas pour le dé de
+    localisation. Section « Ressources ».
 14. **Les adversaires** : leur souffle ne se recharge pas pendant un
-    combat, et n'annule pas de dégâts (11/10) ; une zone sans résistance
-    est « blessée », sans effet calculé (11/10) ; ils meurent à 0 de corps
+    combat, et n'annule pas de dégâts (11/10) ; une zone est « blessée »,
+    sans effet calculé (11/10), sous la condition du point 47 depuis le
+    lot 4.3 : un coup qui laisse son endurance à 0 et ôte au moins un point
+    de corps (jusque-là, une zone sans résistance) ; ils meurent à 0 de corps
     (11/10) ; un coût en lien ne se paie pas, et le journal le dit ; **ils
     choisissent leur puissance de 1 à leur rang, parmi celles qui ont une
     variante, comme un personnage de 1 à son niveau (25/10)**, et une
     capacité qui n'évolue pas garde sa seule puissance (jusqu'au groupe 1,
     ils jouaient leurs capacités à leur rang) ; ils n'ont que les capacités
     de leur ligne : sans capacité de déplacement, un adversaire ne se
-    déplace pas, sauf par le clic droit (groupe 3) ; les bonus et malus +N des
+    déplace pas, sauf par le MJ ou un effet de la palette (groupe 3) ; les
+    bonus et malus +N des
     passifs ne s'appliquent pas à eux. Section « Caractéristiques d'un
     adversaire » (lot 3, plus haut).
 15. **Les effets « jusqu'à votre prochain tour »** cessent au début du
@@ -2373,8 +2399,10 @@ réversible, et **à écrire dans le livret** de même, ou, pour ce qui tient
     coup, demandent un nombre et une raison, et vont à la résistance de la
     zone touchée (le reste au corps) ou droit au corps, sans toucher
     l'armure. Section « Armure, résistance et corps ».
-40. **Une seule esquive par attaque** (groupes 1 et 2) : elle s'offre au
-    personnage visé tant qu'il lui reste une action et du souffle, et que
+40. **Une seule esquive par attaque** (depuis le groupe 1 ; au groupe 3,
+    dans l'étape « Interventions », et à la victime d'un report) : elle
+    s'offre au personnage visé tant qu'il lui reste une action et du
+    souffle, et que
     les dégâts dépassent 0 ; elle annule de 1 au plus petit de son souffle
     et du total des dégâts. Section « Ressources ».
 41. **Après une face de contre-attaque**, les dés de localisation restants
@@ -2412,6 +2440,65 @@ réversible, et **à écrire dans le livret** de même, ou, pour ce qui tient
     relances dans un jet. À confirmer. Section « Avantage et
     désavantage ».
 
+**Les conventions du lot 4.3** (mission du lot 4.3, § 11, 26/10/2026), à la
+suite des précédentes : la blessure du livret du 25/10/2026, les
+interventions, la contre-attaque, le coup critique, la palette et plusieurs
+cibles les ont demandées (§ 17.3 à § 17.6). Le point 47 remplace le 13, et
+le point 14 dit la condition neuve de la blessure d'un adversaire. Comme
+les autres, **chacune est à écrire dans le livret**, à la section dite, ou
+dans le classeur et son `lisez_moi` pour ce qui tient à une cellule.
+
+47. **La blessure** : une par zone et par geste ; le joueur la choisit avec
+    le MJ ; jusqu'à la fin du combat ; aucune si le coup tue, ni pour des
+    dégâts directs au corps (§ 17.5). Section « Ressources ».
+48. **Le bloc de blessure** : un bloc de type Blessure, sinon le bloc de
+    type État dont le nom a pour clé « blessure » (§ 17.2). Section
+    « Ressources », et le `lisez_moi` du classeur.
+49. **La contre-attaque** : seulement avec une action restante ; elle
+    n'ouvre jamais de contre-attaque (§ 17.3). Section « Contre-attaque ».
+50. **Attendre** : une action, et le protagoniste a joué ; la capacité
+    gardée (une ligne, donc une puissance) est une intervention jusqu'au
+    prochain tour de son camp, jouable à chaque action d'ici là (§ 17.3).
+    Sections « Actions de jeu » et « Temporalité ».
+51. **Les interventions** : l'étape revient jusqu'à « Passer » ; les deux
+    camps en ont une ; une intervention n'ouvre rien ; la pile a trois
+    étages au plus (§ 17.3). Section « Actions de jeu ».
+52. **Les passifs non câblés** : en bouton pendant les jets de leur
+    porteur ; un passif payant se paie quand un effet s'applique ; un
+    passif sert une fois par jet (§ 17.6). Section « Capacités ».
+53. **Plusieurs cibles** : ni allié ni auteur cochés d'office ; un coût ;
+    la portée ne se juge pas pour Centré, et sur la première cible pour
+    « toute la case » ; une face de contre-attaque n'annule que le coup de
+    sa cible (§ 17.3, § 17.5). Section « Jets d'attaque » (point 22).
+54. **±N chez un personnage** : N à chaque dé de ses jets de ce genre
+    (§ 17.4). Section « Jets ».
+55. **L'ordre des dégâts** : la lettre, le critique, la palette, l'armure,
+    l'endurance, le corps (§ 17.5). Section « Armure, endurance et
+    corps ».
+56. **Le primordial** (règle de l'auteur du 26/10/2026, mission du lot
+    4.3, § 8.3) ; une capacité du primordial à puissance fixée à 0 se
+    reçoit au niveau 0. La section du livret qui dit le primordial.
+57. **Un paramètre écrit avec des « / »**, hors de `RANGS` : une suite de
+    valeurs (mission du lot 4.3, § 9, point 2). Le `lisez_moi` du
+    classeur.
+58. **L'inversion**, et la relance de la palette, portent sur le dernier
+    dé lancé de la chaîne, avant le dé suivant ; sous désavantage, sur le
+    dé gardé ; jamais sur un d20 de localisation. Un dé inversé ne se
+    relance plus ; s'il montre alors sa face maximale, il peut exploser
+    (§ 17.4). Section « Dé miroir » (point 4).
+59. **Un passif payant** : son X se choisit dans la palette, avant
+    « Appliquer » (§ 17.6). Section « Capacités ».
+60. **Le critique** : « +1 réussite » ne dépasse jamais trois et n'ouvre
+    pas le critique ; pour un jet prêté sans dégâts, « coup critique,
+    touché » ; le surplus de « dégrossir » s'écrit doublé (§ 17.4,
+    § 17.9). Section « Coup critique » (point 6).
+61. **Les durées** ne valent que pour l'onglet Cible ; les onglets Dés,
+    Zone et Dégâts portent sur le geste en cours (§ 17.6). Section
+    « Temporalité ».
+62. **L'auteur d'un effet** : celui qui joue le geste ; hors d'un geste,
+    le porteur de l'état ; la source « MJ » hors d'un geste se dit du camp
+    qui joue (§ 17.6). Section « Temporalité » (point 15).
+
 **Ce qui manque encore, et que le simulateur laisse à la main**, par une
 saisie ou un choix, sans rien inventer :
 
@@ -2428,6 +2515,36 @@ saisie ou un choix, sans rien inventer :
 - **Les charges des consommables, les points d'historique, la recharge du
   souffle et du lien, les effets de terrain d'une case** : hors du lot ;
   rien n'en est calculé.
+
+Le lot 4.3 en a relevé quatre de plus, que le Word ne dit pas (relu le
+26/10/2026) ; le code ne les invente pas, et dit ce qu'il fait en
+attendant :
+
+- **Le jet contre un allié ou contre soi.** Une façon Centrée, ou « toute
+  la case », peut atteindre un allié de son auteur, ou l'auteur lui-même
+  (mission du lot 4.3, § 4.9 : « que l'on peut cocher »), mais rien ne dit
+  quel jet se lance : un personnage contre un personnage n'a pas de
+  défense à opposer, et un adversaire contre un adversaire ne lance aucun
+  dé. En attendant, ils se voient, inactifs, avec la raison « Le jet contre
+  un allié ou contre soi n'est pas encore écrit dans les règles. », et une
+  liste de cibles qui en porte un est refusée (§ 17.3 ; contrat du lot
+  4.3, choix 10). **À écrire dans le Word, section « Plusieurs cibles ».**
+- **La puissance d'un passif non câblé.** Un passif ne se joue pas, et
+  rien ne dit à quelle puissance se lisent son coût et ses éléments. En
+  attendant, la plus haute de ses façons jouables, de 1 au niveau, ou au
+  rang chez un adversaire (§ 17.6 ; contrat du lot 4.3, choix 14). **À
+  écrire dans le Word, section « Capacités ».**
+- **Un passif dont le texte porte deux effets.** « Un passif sert une fois
+  par jet » (point 52) empêche d'appliquer le second dans le même jet ; le
+  Word ne dit pas si c'est voulu. En attendant, une seule application par
+  jet et par passif ; le second effet, s'il le faut, par le MJ (§ 17.6 ;
+  contrat du lot 4.3, choix 15). **À écrire dans le Word, section
+  « Capacités ».**
+- **±N sans plancher.** Un ±N de la palette peut rendre nulle ou négative
+  l'attaque ou la défense d'un adversaire, et le Word ne dit pas si elle a
+  un plancher. En attendant, aucun : une difficulté de 0 ou moins fait
+  réussir tout dé (§ 17.4 ; contrat du lot 4.3, choix 19). **À écrire dans
+  le Word, section « Caractéristiques d'un adversaire ».**
 
 **Des bornes et des phrases que la mission ne donne pas**, posées le
 12/10/2026 par les corrections de la relecture de fin de groupe (§ 14),
@@ -5123,10 +5240,14 @@ arrêts d'essais (§ 13) : le combat jouable (groupe 1) ; l'ergonomie et les
 correctifs (groupe 2, complément du 25/10/2026,
 `plans/complement_lot4_groupe2.md`, validé par l'auteur avec la maquette
 d'ergonomie `plans/maquette_ergonomie.html`, qui prime sur la mission) ;
-les règles fines et la main du MJ (groupe 3). **Ce paragraphe décrit les
-groupes 1 et 2** ; le § 17.12 dit ce que le groupe 3 ajoutera. Partout où
-la mission dit « groupe 2 » pour le contenu de son § 13, il faut lire
-« groupe 3 ».
+les règles fines et la main du MJ (groupe 3, dit « lot 4.3 » : complément
+du 26/10/2026, `plans/complement_lot4_groupe3.md`, appelé ici « mission du
+lot 4.3 » ; son contrat d'écriture, `plans/lot4_travail/groupe3/contrat_v1.md`,
+appelé « contrat du lot 4.3 », dont les choix numérotés sont ceux de l'agent
+principal, réversibles). **Ce paragraphe décrit les groupes 1 et 2, et le
+noyau du groupe 3** ; le § 17.12 dit ce qui est fait du groupe 3 et ce qui
+reste à son écran. Partout où la mission dit « groupe 2 » pour le contenu
+de son § 13, il faut lire « groupe 3 ».
 
 **Ce qu'il est.** Un écran, `#/combat`, où l'on pose sur une carte de
 10 × 10 cases des personnages du site et des adversaires de la banque, puis
@@ -5144,7 +5265,8 @@ se télécharge.
   en texte libre, **s'applique à la main** : sa description s'affiche
   toujours, et le groupe 1 donne pour cela des réglages simples (un
   modificateur, des avantages, des dégâts fixés, une face décalée), que le
-  groupe 3 complétera d'une palette. Sont câblés, c'est-à-dire joués sans
+  groupe 3 complète d'une palette d'effets, chacun avec sa source (§ 17.4
+  à § 17.6). Sont câblés, c'est-à-dire joués sans
   qu'on dise comment : le bloc de base, les attaques, les maîtrises et huit
   passifs (§ 17.6).
 - **Il se joue à la main.** Aucune intelligence artificielle :
@@ -5202,23 +5324,28 @@ l'écran.
 **Le noyau** (`js/combat/`) n'a ni page, ni banque, ni hasard, ni heure. Il
 n'importe que lui-même, `js/banque/noms.js` (la clé d'un nom) et
 `js/personnage/regles.js` (les neuf caractéristiques, le dé d'un jet), sans
-cycle ; un contrôle tient ce graphe (§ 11). Le groupe 2 n'y a ajouté aucun
-fichier.
+cycle, hors un seul, admis au groupe 3 : `offre.js` et `effets.js`
+s'importent l'un l'autre (l'offre demande aux effets ce que la palette peut
+appliquer ; les effets prennent à l'offre le prix d'un geste), et aucun des
+deux n'appelle l'autre au chargement. Un contrôle tient ce graphe (§ 11) :
+il ôte cette boucle, puis n'en veut aucune autre. Le groupe 2 n'y a ajouté
+aucun fichier ; le groupe 3, un seul, `effets.js`.
 
 | Module | Ce qu'il fait |
 |---|---|
-| `regles.js` | les constantes du combat, chacune avec sa source en commentaire : la carte, les plafonds, les deux actions d'un personnage, les trois réussites, la grille des personnages, les faces de contre-attaque, les libellés des difficultés du livret, les noms des éléments lus, les quinze rôles (les quatorze du tableau du § 17.6, et celui de l'attaque à mains nues, qui ne tient pas à un nom), les signes du journal, les bornes d'un combat (ses 15 000 événements, l'alerte à 13 500, la tranche du rejeu, ses identifiants, les tirages d'un dé), d'une saisie et d'une photographie ; l'écriture d'un nombre par tranches de trois chiffres, séparées d'une espace ordinaire ; l'annulation vide, que l'ouverture pose ; la version des règles du rejeu, 2 |
-| `forme.js` | la forme de ce qui se garde : un événement (seize types), une photographie, un contenu entier ; chaque champ attendu, typé et borné, un champ inconnu refusé ; rien de ce qui se relit n'est cru |
+| `regles.js` | les constantes du combat, chacune avec sa source en commentaire : la carte, les plafonds, les deux actions d'un personnage, les trois réussites, la grille des personnages, les faces de contre-attaque, les libellés des difficultés du livret, les noms des éléments lus, les quinze rôles (les quatorze du tableau du § 17.6, et celui de l'attaque à mains nues, qui ne tient pas à un nom), les signes du journal, les bornes d'un combat (ses 15 000 événements, l'alerte à 13 500, la tranche du rejeu, ses identifiants, les tirages d'un dé), d'une saisie et d'une photographie ; depuis le groupe 3, les genres de la palette et du MJ, les durées d'un effet, les ressources que « rendre » rend, et leurs bornes (§ 17.8) ; l'écriture d'un nombre par tranches de trois chiffres, séparées d'une espace ordinaire ; l'annulation vide, que l'ouverture pose ; la version des règles du rejeu, 4 (§ 17.8) |
+| `forme.js` | la forme de ce qui se garde : un événement (vingt-trois types depuis le groupe 3 ; « effet » et « mj » ont des genres, chacun ses champs), une photographie, une capacité figée (§ 17.2), un contenu entier ; chaque champ attendu, typé et borné, un champ inconnu refusé ; rien de ce qui se relit n'est cru |
 | `plateau.js` | les cases (« D4 »), la distance entre deux cases, les cases à portée, la case où un ajout se pose d'office. Dans le code, la carte du combat s'appelle « le plateau » : « carte » y désigne déjà la carte d'adversaire (§ 16.5) |
 | `noms.js` | le nom entier, le nom court, le jeton et les initiales de chaque protagoniste, calculés pour la liste entière (§ 17.2) |
 | `preparation.js` | la mise en place d'avant le lancement : ajouter, retirer, poser, régler qui commence ; les plafonds ; la fabrique des identifiants |
-| `jet.js` | la chaîne d'un jet : les réussites, l'avantage, le désavantage, le dé explosif ; il ne tire aucun dé, et ne garde aucun total (§ 17.4) |
-| `valeurs.js` | toute lecture d'un protagoniste et du geste en cours : ce qui bouge se lit dans l'état, ce qui ne bouge pas dans la photographie |
-| `circonstances.js` | de quoi ouvrir un jet : qui lance, quel dé, contre quoi, les modificateurs, les avantages et les désavantages, chacun avec sa source (le rôle et la capacité d'un passif compris), dans un ordre écrit ; la défense choisie à égalité ; les causes qu'une ligne montre avant toute cible ; les passifs câblés d'une fiche |
-| `degats.js` | la lettre que valent des réussites, la zone que touche un d20, ce que perdent l'armure, l'endurance et le corps, « dégrossir », l'esquive, la blessure, la mort (§ 17.5) |
-| `offre.js` | **la seule porte** : ce qui est permis à cet instant, et pourquoi le reste ne l'est pas ; une entrée par façon jouable, le mode d'un geste à son ouverture, la façon que joue une case d'arrivée, l'annulation et ses trois raisons |
-| `moteur.js` | le réducteur : d'un état et d'un événement, l'état suivant ; la pile d'annulation ; le rejeu d'un combat gardé, linéaire, d'une traite ou par tranches |
-| `journal.js` | chaque ligne du journal, ses segments typés et ses phrases, la ligne en cours d'un geste, la ligne « Annulé », le nom d'un geste, son en-tête, le nom du fichier, et ce que la région d'annonce dit après chaque dé (§ 17.9) |
+| `jet.js` | la chaîne d'un jet : les réussites, l'avantage, le désavantage, le dé explosif ; depuis le groupe 3, le coup critique, l'inversion du dernier dé, sa relance par la palette et « +1 réussite » ; il ne tire aucun dé, et ne garde aucun total (§ 17.4) |
+| `valeurs.js` | toute lecture d'un protagoniste et du geste en cours : ce qui bouge se lit dans l'état, ce qui ne bouge pas dans la photographie ; depuis le groupe 3, qui est vivant (ni mort, ni retiré du combat), l'attaque et la défense d'un adversaire écartées par la palette, les effets durables qu'il porte, et le nom de la source d'un effet |
+| `circonstances.js` | de quoi ouvrir un jet : qui lance, quel dé, contre quoi, les modificateurs, les avantages et les désavantages, chacun avec sa source (le rôle et la capacité d'un passif compris, et, depuis le groupe 3, les effets de la palette), dans un ordre écrit ; la défense choisie à égalité ; les causes qu'une ligne montre avant toute cible ; les passifs câblés d'une fiche |
+| `degats.js` | la lettre que valent des réussites, la zone que touche un d20, ce que perdent l'armure, l'endurance et le corps, « dégrossir », l'esquive, la blessure, la mort (§ 17.5) ; depuis le groupe 3, l'ordre des dégâts (le critique, l'ajustement à la main, les opérations de la palette), la victime d'un report, la zone choisie, et les zones blessées qu'un personnage doit encore choisir |
+| `offre.js` | **la seule porte** : ce qui est permis à cet instant, et pourquoi le reste ne l'est pas ; une entrée par façon jouable, le mode d'un geste à son ouverture, la façon que joue une case d'arrivée, l'annulation et ses trois raisons ; depuis le groupe 3, les interventions, la contre-attaque, le critique, la blessure à choisir, les cibles d'une façon Centrée, la garde d'attendre, et, par `effets.js`, la palette et les gestes du MJ |
+| `effets.js` | depuis le groupe 3 : l'événement « effet » (la palette, les passifs non câblés, les états) et l'événement « mj » (les gestes du MJ), leur juge et leur application, et les effets durables, leur échéance comprise (§ 17.6) ; pur comme le moteur, il ne gèle rien et n'écrit pas au journal : l'offre et le moteur l'appellent, pour qu'un effet n'ait qu'un juge |
+| `moteur.js` | le réducteur : d'un état et d'un événement, l'état suivant ; la pile des gestes, trois étages au plus depuis le groupe 3 (§ 17.3) ; la pile d'annulation ; le rejeu d'un combat gardé, linéaire, d'une traite ou par tranches |
+| `journal.js` | chaque ligne du journal, ses segments typés et ses phrases, la ligne en cours d'un geste, la ligne « Annulé », le nom d'un geste, son en-tête, le nom du fichier, et ce que la région d'annonce dit après chaque dé (§ 17.9) ; depuis le groupe 3, les phrases des gestes emboîtés, de la palette, des états, de la blessure, de chaque cible, et les lignes d'une échéance, d'un geste du MJ et d'un effet hors d'un geste (mission du lot 4.3, § 7) |
 | `lecture.js` | les vues que l'écran affiche : la barre (avec « Annuler le dernier geste », sa question, et l'alerte des 13 500 événements), la carte, une fiche, la bulle (le panneau du groupe 1, déplacé), la préparation, le journal et le bandeau ; toute phrase qui dépend de l'état y est écrite, sans page (§ 17.7) |
 
 **Cinq règles tiennent le noyau** (ce que les contrôles en tiennent :
@@ -5227,7 +5354,13 @@ fichier.
 - **`appliquer(etat, evenement)` est pure.** Elle ne lit ni l'heure, ni le
   hasard, ni la banque, ni l'écran, ni la langue de l'appareil. Les dés et
   l'heure du lancement sont dans les événements, les photographies dans la
-  mise en place. Elle ne modifie rien de ce qu'elle reçoit : elle rend un
+  mise en place ; depuis le groupe 3, ce qu'un geste tire de la banque (la
+  capacité d'un état ou d'une blessure, la photographie que le MJ
+  recalcule) entre figé dans son événement : **le rejeu ne relit jamais la
+  banque**. Elle ne lit pas non plus le Mode MJ : le moteur accepte tout ce
+  que la mission du lot 4.3 réserve à ce mode (une source d'effet au choix,
+  les gestes du MJ), et c'est l'écran qui le réserve. Elle ne modifie rien
+  de ce qu'elle reçoit : elle rend un
   état neuf, gelé, qui partage avec le précédent tout ce qui n'a pas
   changé : ce qui est déjà gelé n'est pas reparcouru, et un clic ne coûte
   pas le parcours du combat. Le journal suit la même règle : une ligne naît
@@ -5270,7 +5403,7 @@ fichier.
 |---|---|
 | `js/combat/des.js` | la source de dés de l'écran : `crypto.getRandomValues`, un tirage rejeté et refait au-delà du plus grand multiple du nombre de faces, pour qu'aucune face ne sorte plus souvent qu'une autre. Les contrôles et le banc lui substituent des dés imposés (`tests/outils/des_imposes.js`), que rien dans la page, ni adresse ni réglage, ne permet de lui substituer |
 | `js/combat/roles.js` | le seul tableau qui lie un rôle câblé à un nom (§ 17.6) |
-| `js/combat/photographie.js` | fige à l'ajout tout ce que le combat lira d'un protagoniste, et dit qui ne s'ajoute pas (§ 17.2) |
+| `js/combat/photographie.js` | fige à l'ajout tout ce que le combat lira d'un protagoniste, et dit qui ne s'ajoute pas (§ 17.2) ; depuis le groupe 3, fige de même les états de la banque (`etatsDeLaBanque`, § 17.2), qu'un événement porte ensuite tout figés |
 | `js/personnage/disponibles.js` | les personnages qu'on peut ajouter, lus sans rien écrire sur l'appareil (§ 17.2) |
 | `js/combat/enregistrement.js` | le chiffrement du combat, sa base, la file des écritures, la révision (§ 17.8) |
 | `js/combat/seance.js` | le lien entre l'écran, le moteur et l'enregistrement : elle tient le combat du moment, passe chaque commande au moteur, donne chaque changement à garder, et rouvre un combat gardé en rendant la main au navigateur entre deux tranches du rejeu |
@@ -5468,6 +5601,46 @@ cher à rejouer ou à afficher.
   plus de 20 façons. », « la source de la photographie dépasse 200 000
   signes. »
 
+**Les états de la banque** (groupe 3 ; mission du lot 4.3, § 4.7 et
+§ 4.10 ; contrat du lot 4.3, § 9). Un état est une capacité d'un bloc de
+type État ou Blessure (§ 6), ou un état libre (§ 17.6). Le rejeu ne lit pas
+la banque : l'événement qui pose un état de la banque, ou qui choisit une
+blessure, porte donc **la capacité figée**, au format d'une capacité de
+photographie.
+
+- **`etatsDeLaBanque(banque)`** (`js/combat/photographie.js`, pure, sans
+  rien changer à la banque) rend les blocs de type État ou Blessure, dans
+  l'ordre de la banque (un nom répété : le premier), chacun avec ses
+  capacités figées, et les capacités du **bloc de blessure** : le premier
+  bloc de type Blessure, sinon le premier bloc de type État dont le nom a
+  pour clé « blessure » (§ 6.3 ; § 12, point 48) ; aucune sans un tel bloc.
+  Un bloc donne toutes les capacités que cite sa cellule, quelle qu'en soit
+  la forme (« [a | b | c] » compris), une fois chacune ; une capacité
+  absente de la banque ne compte pas.
+- **Une capacité figée** : son nom ; aucun rôle, aucune jauge, ni
+  « inactive » ; le niveau 0, sans évolution ; rangée sous le nom de son
+  bloc ; une seule façon, de puissance 0, passive ou d'intervention si ses
+  éléments le disent, qui n'attaque pas (ni dégâts, portée 0, un d20, sans
+  désavantage ni maîtrise), au coût lu à la puissance 0, et la description
+  de sa variante, lue avec les paramètres de son bloc, sans
+  caractéristiques. Sans variante de puissance 0, sa façon n'a ni
+  description ni coût lisible. `validerCapaciteFigee` (`js/combat/forme.js`)
+  la juge comme une capacité de photographie, et refuse en plus un rôle,
+  « inactive », une arme ou une jauge : une capacité forgée de rôle câblé
+  n'entre pas dans une photographie par une blessure. Reste connu : un nom
+  de plus de 200 signes, ou une description de plus de 4 000, donnerait une
+  capacité figée que la forme refuse ; `etatsDeLaBanque` ne l'écarte pas.
+
+**La photographie peut changer en combat**, depuis le groupe 3, par deux
+événements seulement, qui portent ce qu'ils posent : **la blessure d'un
+personnage** ajoute la capacité choisie à la fin des capacités de sa
+photographie, pour ce combat (§ 17.5) ; une blessure qui ferait passer la
+photographie au-delà de ses bornes (200 capacités, 600 façons) est refusée,
+avec sa raison (contrat du lot 4.3, choix 20). **« Changer l'équipement… »**,
+un geste du MJ, remplace ses valeurs par celles d'une photographie
+recalculée, du même protagoniste (§ 17.3). Republier la banque ou modifier
+un personnage n'y change toujours rien.
+
 **Les noms** (`js/combat/noms.js`) sont des règles d'interface. Un nom est
 une donnée hostile : il n'est jamais interprété, seulement découpé.
 
@@ -5548,32 +5721,82 @@ changement se garde (§ 17.8).
   Le lancement fige la mise en place et les noms, et porte l'heure locale
   de l'appareil : c'est le seul endroit où une heure entre dans un combat.
 
-**Les événements.** Il y en a seize, et tout ce qui se joue en est un :
+**Les événements.** Il y en a vingt-trois depuis le groupe 3 (seize aux
+groupes 1 et 2, sept neufs : contrat du lot 4.3, § 5 et § 6), et tout ce
+qui se joue en est un :
 
 | Événement | Ce qu'il fait |
 |---|---|
 | `lancer` | lance le combat : la ligne du lancement, puis celle du premier tour |
 | `capacite` | ouvre un geste : tel protagoniste joue telle capacité, de telle façon (une puissance, une arme). C'est lui qui dit qui joue : choisir un protagoniste n'est pas un événement |
-| `regler` | règle le geste avant qu'il soit payé : la façon, le jet d'arme prêté et son arme, la cible, la case d'arrivée, les caractéristiques, la difficulté, X, la jauge de lien, le modificateur et les avantages à la main, et, depuis le groupe 2, le type de défense à égalité de dés (§ 17.4) |
+| `regler` | règle le geste avant qu'il soit payé : la façon, le jet d'arme prêté et son arme, la cible, la case d'arrivée, les caractéristiques, la difficulté, X, la jauge de lien, le modificateur et les avantages à la main, depuis le groupe 2 le type de défense à égalité de dés (§ 17.4), et, depuis le groupe 3, **deux réglages neufs** : `garde`, la ligne qu'attendre garde, et `cibles`, celles d'une façon Centrée, dans l'ordre des jets (plus bas) ; ni l'un ni l'autre ne revient à vide ni ne prend de raison |
 | `revenir` | retire le geste : rien n'est dépensé |
-| `confirmer` | joue un geste sans jet, ou un déplacement : il paie, et le geste est fini |
+| `confirmer` | joue un geste sans jet, un déplacement, ou attendre : il paie, et le geste est fini |
 | `de` | donne ses valeurs au dé attendu ; le premier dé d'un geste le paie |
 | `relancer`, `garder` | devant un dé qui échoue, quand il reste une relance d'avantage |
 | `exploser` | devant un dé qui peut exploser |
 | `degats` | fixe les dégâts, à la fin du jet ; le dernier compte |
 | `decaler` | décale la face d'un dé de localisation |
-| `esquive` | le personnage visé paie une action et X points de souffle |
-| `appliquer` | applique les dégâts : le geste est fini |
+| `esquive` | le personnage qui va recevoir les dégâts paie une action et X points de souffle, dans l'étape « Interventions » |
+| `appliquer` | applique les dégâts, ou passe l'étape « Interventions » ; il finit aussi un geste dont le jet a manqué, et un jet de caractéristique (plus bas) |
 | `passer` | un protagoniste passe son tour |
 | `fin_de_tour` | finit le tour du camp qui joue |
 | `annuler` | défait le dernier geste fini depuis le lancement (groupe 2 ; plus bas) ; il ne porte aucun champ |
+| `intervenir` | groupe 3 : tel protagoniste joue telle capacité, de telle façon, en intervention : dans l'étape « Interventions », ou entre deux gestes (« Intervenir… ») |
+| `contre_attaquer` | groupe 3 : le jeté contre-attaque, de telle capacité et telle façon |
+| `laisser` | groupe 3 : le jeté laisse passer la contre-attaque |
+| `critique` | groupe 3 : le joueur tente le coup critique, ou garde ses trois réussites (`tenter`) |
+| `effet` | groupe 3 : un effet de la palette, avec sa source et les champs de son genre (dix-neuf genres, § 17.4 à § 17.6) |
+| `blessure` | groupe 3 : la blessure choisie pour une zone, une capacité figée du bloc de blessure ou un état libre (§ 17.5) |
+| `mj` | groupe 3 : un geste du MJ, l'un de cinq genres (plus bas) |
 
-**Un geste a des moments** : il se prépare (tout se règle, rien n'est
-payé) ; son jet se lance ; l'attaque a touché, ses dégâts se fixent ; ses
-dés de localisation se lancent ; viennent les suites (décaler, esquiver),
-puis « Appliquer ». Un moment sans choix se passe de lui-même. Un geste
-dont rien n'est payé cède la place : jouer autre chose, passer ou finir le
-tour l'emportent, sans rien dépenser.
+**Un geste a des moments**, dans cet ordre (contrat du lot 4.3, § 4.1) :
+la **préparation** (tout se règle, rien n'est payé) ; le **jet** ; depuis le
+groupe 3, le **critique**, quand il s'offre (§ 17.4) ; le **bilan** (le
+geste a touché, ses dégâts se fixent) ; la **localisation** (ses d20) ;
+depuis le groupe 3, la **contre-attaque**, quand une face de contre-attaque
+l'ouvre ; les **suites** (l'étape « Interventions », décaler, esquiver),
+puis « Appliquer » ; depuis le groupe 3, la **blessure**, une étape par
+zone blessée d'un personnage (§ 17.5) ; et la fin. Un moment sans choix se
+passe de lui-même ; le moment ne change qu'en un seul endroit du moteur,
+sur le geste au sommet de la pile. Un geste racine dont rien n'est payé
+cède la place : jouer autre chose, passer ou finir le tour l'emportent,
+sans rien dépenser.
+
+- **Un jet ne clôt jamais le geste de lui-même** (contrat du lot 4.3,
+  choix 1) : une attaque manquée (une attaque sans réussite, une défense à
+  trois réussites) et un jet de caractéristique mènent aux suites, et le
+  geste attend « Appliquer » (pour une attaque manquée,
+  après l'étape « Interventions » s'il y en a une), qui le finit sans
+  dégâts. Jusqu'au groupe 2, ces gestes finissaient avec leur dernier dé :
+  la palette n'aurait pas pu inverser ce dé, le relancer, ni ajouter une
+  réussite (§ 17.4).
+- **Le moment se relit d'après le jet**, au bilan, et aux suites tant
+  qu'aucun d20 n'est lancé, ni aucune intervention ou esquive jouée : un
+  effet de la palette a pu changer le jet. Un jet rouvert y retourne (les
+  dégâts posés retombent) ; un manqué devenu touché passe au bilan, un
+  touché devenu manqué aux suites.
+
+**La pile** (groupe 3 ; mission du lot 4.3, § 4.1 ; § 12, point 51). Le
+geste en cours est le sommet d'une pile de **trois étages au plus** : le
+geste racine (une capacité jouée, « Intervenir… » entre deux gestes,
+attendre), sa contre-attaque, une intervention. Une intervention jouée dans
+l'étape « Interventions », ou une contre-attaque, **s'empile** sur le geste
+qu'elle interrompt, qui attend à son moment ; l'offre lit le sommet.
+
+- **Un geste emboîté n'ouvre rien** : ni étape « Interventions », ni
+  contre-attaque ; sa propre face de contre-attaque l'annule, sans plus.
+  **Une contre-attaque, elle, a son étape « Interventions »** (l'attaqué y
+  est l'acteur du geste racine, avec ses alliés) : une intervention s'y
+  empile alors, au troisième étage.
+- Un geste emboîté en préparation ne cède pas la place : ni une autre
+  capacité, ni « Passer », ni « Fin de tour » ne le retirent ; « Revenir »
+  le retire, rien payé, et rend le dessous à son moment.
+- **Fini, il quitte la pile sans écrire de ligne** et rejoint le geste du
+  dessous : parmi ses interventions, ou comme sa contre-attaque jouée. Sa
+  victime qui tombe à 0 de corps meurt à cet instant ; la fin du combat ne
+  se juge qu'à la fin du geste racine (contrat du lot 4.3, choix 2). Le
+  journal écrit tout dans la ligne du geste racine (§ 17.9).
 
 **Les tours** (livret, « Tours de jeu » et « Temporalité »).
 
@@ -5583,8 +5806,8 @@ tour l'emportent, sans rien dépenser.
 - **Qui agit.** Dans le camp qui joue, l'utilisateur choisit qui agit, dans
   l'ordre qu'il veut : tout vivant qui n'a pas joué. Il peut changer de
   protagoniste entre deux actions (§ 12, point 16).
-- **Un protagoniste a joué** quand il n'a plus d'action, ou qu'il a passé
-  son tour.
+- **Un protagoniste a joué** quand il n'a plus d'action, qu'il a passé
+  son tour, ou, depuis le groupe 3, qu'il a attendu (plus bas).
 - **La fin du tour d'un camp.** Quand tous ses vivants ont joué, ce tour
   finit de lui-même. « Fin de tour » le finit à tout moment, sauf au milieu
   d'une action payée. Un camp qui commence sans pouvoir agir (des
@@ -5600,9 +5823,13 @@ tour l'emportent, sans rien dépenser.
 **Les actions.**
 
 - **Ce qui coûte une action** : jouer une capacité (livret, « Capacités »),
-  sauf un passif, qui ne se joue pas ; une intervention.
+  sauf un passif, qui ne se joue pas ; une intervention, l'esquive
+  comprise ; depuis le groupe 3, attendre et la contre-attaque. Chacune
+  coûte ensuite le coût de sa capacité.
 - **Ce qui ne coûte rien de plus** : le jet de défense, la localisation, et
-  les effets d'une capacité.
+  les effets d'une capacité ; depuis le groupe 3, un déplacement par la
+  palette ou par le MJ, et une capacité d'attaque jouée par qui porte une
+  attaque en plus (§ 17.6), qui n'a pas d'action à payer.
 - **Une capacité qui ne se joue pas** : sa ligne est inactive et dit
   pourquoi, la première raison qui tient. Ce qui tient à la capacité
   d'abord : « absente de la banque » ; « coût illisible dans la banque » ;
@@ -5615,22 +5842,153 @@ tour l'emportent, sans rien dépenser.
   d'un coup, au premier dé lancé, ou à la confirmation d'une capacité sans
   jet. Jusque-là, « Revenir » annule le choix sans rien dépenser (règle
   d'interface). Ce que le joueur a lu avant de lancer est ce qui
-  s'applique : les circonstances du jet se figent au même instant.
+  s'applique : les circonstances du jet se figent au même instant. Un
+  geste à plusieurs cibles paie une fois, au premier dé de la première
+  (plus bas, « Plusieurs cibles »).
 
 **« Passer son tour »** est toujours proposé, par un bouton du simulateur :
 la capacité de la banque qui porte ce rôle (§ 17.6) n'a pas de bouton à
 elle. Passer ne coûte rien ; le protagoniste a joué (§ 12, point 35).
 
 **La mort** (§ 12, point 14, pour un adversaire). À 0 point de corps, un
-protagoniste meurt, à la fin du geste qui le tue. Il ne joue plus et ne se
-cible plus ; sa fiche dit « mort au tour N » ; son jeton est grisé et
-barré, et sa fiche se replie. Ses actions ne remontent plus.
+protagoniste meurt, à la fin du geste qui le tue ; depuis le groupe 3, à
+la fin de chaque cible d'un geste à plusieurs cibles, de chaque geste
+emboîté, et d'un geste du MJ (contrat du lot 4.3, choix 2). Il ne joue plus
+et ne se cible plus ; sa fiche dit « mort au tour N » ; son jeton est grisé
+et barré, et sa fiche se replie. Ses actions ne remontent plus. Les effets
+durables qu'il porte s'en vont, sans ligne ; ceux qu'il a lancés durent
+jusqu'à leur échéance (§ 17.6).
+
+**Un vivant**, depuis le groupe 3, est présent, ni mort ni **retiré du
+combat** par le MJ (plus bas) : un retiré ne joue plus, ne se cible plus,
+n'est l'allié de personne et ne compte plus pour la fin.
 
 **La fin.** Quand un camp n'a plus de vivant, le combat est terminé :
 « Combat terminé : victoire des PJ. » (ou « … des adversaires. »). La ligne
 suit celle de la mort, sans « Fin du tour » : personne ne retrouve ses
-actions. On ne joue plus, sauf à défaire le geste qui a fini le combat ;
-le journal se copie et se télécharge toujours.
+actions. Depuis le groupe 3, elle se juge à la fin d'un geste racine (non
+d'une cible ni d'un geste emboîté) et à la fin d'un geste du MJ. On ne joue
+plus, sauf à défaire le geste qui a fini le combat ; le journal se copie
+et se télécharge toujours.
+
+**Les interventions** (groupe 3 ; mission du lot 4.3, § 4.1 ; contrat du
+lot 4.3, § 6.1 ; § 12, points 7 et 51). **Une option d'intervention** d'un
+protagoniste est une façon de ses capacités qui porte l'élément
+Intervention (une par puissance), ou la ligne que garde son attente
+(plus bas), et qui se paie : une action, puis son coût. L'esquive n'en est
+pas une : elle garde son événement (§ 17.5).
+
+- **L'étape « Interventions »** : aux suites d'une attaque (ou d'un jet
+  prêté) d'un geste racine joué comme une capacité, ou d'une
+  contre-attaque, touchée ou non, ses dégâts pas encore appliqués. Une
+  attaque annulée par sa face de contre-attaque n'en a pas, ni un jet de
+  caractéristique, ni une intervention. Elle s'offre à l'attaqué et à ses
+  alliés vivants qui ont encore une action et au moins une option qui se
+  paie ; l'esquive, au seul personnage qui va recevoir les dégâts, une fois
+  par attaque (§ 12, point 40). Une intervention jouée s'empile ; finie,
+  l'étape revient, avec ceux qui peuvent encore, jusqu'à « Appliquer »
+  (« Passer : appliquer les dégâts »). Sans intervenant ni esquive, le
+  geste attend « Appliquer » comme avant. Les deux camps ont la leur.
+- **« Intervenir… »**, entre deux gestes seulement : le camp qui ne joue
+  pas, ses vivants qui ont une action et au moins une option. Le geste
+  ouvert est un geste racine (« X intervient : … », § 17.9), qui suit le
+  chemin d'une capacité (réglages, dés ou confirmation, dégâts) et se
+  défait comme elle. L'esquive ne s'y offre pas.
+
+**Attendre** (groupe 3 ; mission du lot 4.3, § 4.2 ; contrat du lot 4.3,
+§ 6.2 ; § 12, point 50). La capacité du rôle `attendre` a sa ligne depuis le
+groupe 3 (§ 17.6), pour qui la porte et a encore une action.
+
+- Son geste **se règle** : `garde`, une ligne de ce protagoniste, donc une
+  capacité et une puissance, sauf celles d'attendre et de l'esquive ; il
+  n'est prêt qu'avec elle (« Choisissez la capacité à garder. »). Puis
+  « confirmer » le paie (une action, puis son coût) et le finit : **le
+  protagoniste a joué**.
+- Il pose un effet durable de garde (`guet`, § 17.6), qui dure jusqu'au
+  prochain tour du camp de son auteur. D'ici là, **la ligne gardée est une
+  option d'intervention**, jouable à chaque action ; jouée, elle reste
+  gardée, et son geste dit la garde (§ 17.9).
+
+**La contre-attaque** (groupe 3 ; livret, « Contre-attaque » ; mission du
+lot 4.3, § 4.3 ; contrat du lot 4.3, § 6.4 ; § 12, points 12 et 49).
+
+- **Quand** : à la localisation d'un geste racine joué comme une capacité,
+  le dernier d20 montre la face de contre-attaque du jeté ; l'attaque est
+  annulée, comme avant (§ 17.5). Un geste emboîté n'ouvre jamais de
+  contre-attaque : sa propre face l'annule, sans plus.
+- **Ses options** : les façons d'attaque que donne l'arme du jeté (un
+  personnage : l'arme tenue, sinon ses mains nues ; un adversaire : chacune
+  de ses armes), une par puissance ; actives quand elles se paient et que
+  l'attaquant est à leur portée. Elle est possible dès qu'une option est à
+  portée ; sinon, la première raison, dans cet ordre : plus d'action ;
+  aucune arme (ou aucune façon d'attaque qu'elle donne) ; hors de portée
+  (le nom et la portée de sa première arme, et la distance, pour le
+  journal). Impossible, le geste finit, et le journal dit pourquoi.
+- **L'étape « Contre-attaque »** : `contre_attaquer` empile le geste, qui
+  vise l'attaquant, déjà posé, ou `laisser` la laisse passer. Son jet est
+  celui d'une attaque : un personnage lance son attaque ; un adversaire qui
+  contre-attaque un personnage, c'est ce personnage qui lance sa défense
+  (§ 17.4, l'inversion). Elle a son étape « Interventions ». Une
+  contre-attaque Centrée vise l'attaquant seul (contrat du lot 4.3,
+  choix 12).
+
+**Plusieurs cibles** (groupe 3 ; mission du lot 4.3, § 4.9 ; contrat du lot
+4.3, § 4.4 ; § 12, points 22 et 53).
+
+- **Une façon Centrée** (élément Centré, lu sur la façon), jouée en attaque
+  ou en jet prêté par un geste racine, ne règle pas `cible` mais `cibles` :
+  les vivants de la case de son auteur, dans l'ordre d'ajout ; **d'office,
+  les adversaires de l'auteur sur sa case**, jamais un allié ni l'auteur ;
+  la portée ne se juge pas. **Le jet contre un allié ou contre soi n'est
+  écrit nulle part** (§ 12, « Ce qui manque encore ») : un allié ou
+  l'auteur s'y voient, inactifs, avec la raison « Le jet contre un allié ou
+  contre soi n'est pas encore écrit dans les règles. », et une liste qui en
+  porte un est refusée, avec la même phrase (contrat du lot 4.3, choix 10).
+  Une liste vide n'est pas prête : « Choisissez une cible. » Elle compte de
+  1 à 72 cibles distinctes, le plafond des protagonistes d'un combat
+  (contrat du lot 4.3, choix 13).
+- **Les cibles se figent au premier dé**. Une seule : une attaque
+  ordinaire, sans liste. Plusieurs : **un jet par cible**, dans l'ordre ;
+  le coût se paie une fois ; chaque cible a son étape « Interventions »,
+  ses dégâts, sa contre-attaque (une face de contre-attaque n'annule que le
+  coup de sa cible) et sa ligne de journal. Le jet de la cible suivante
+  s'ouvre dès la fin de la précédente, sans rien payer ; une cible morte ou
+  retirée entre-temps est sautée (contrat du lot 4.3, choix 2).
+- **« Toute la case »**, un effet de la palette, fait d'une attaque à une
+  cible une attaque à plusieurs, une fois les dégâts de la première
+  calculés (§ 17.5).
+
+**Le MJ** (groupe 3 ; mission du lot 4.3, § 4.8 ; contrat du lot 4.3,
+§ 6.3). L'événement `mj` a cinq genres. Chacun se joue **entre deux gestes
+seulement**, sur un protagoniste présent et vivant, et chacun est un geste
+de l'annulation ; sa ligne dit « MJ : … » (§ 17.9). Un corps mis à 0 tue à
+la fin de ce geste, et la fin du combat se juge.
+
+- **`valeurs`** (« Modifier une valeur… ») : de 1 à 20 valeurs, chacune de
+  0 à 999, chacune une fois : attaque et défense (d'un adversaire), souffle
+  et son maximum, actions et leur maximum, le lien d'une jauge (d'un
+  personnage), corps, armure et endurance d'une zone, défense du bouclier
+  (de qui en porte un). Elles ne sont pas bornées par leur maximum : le MJ
+  décide (contrat du lot 4.3, choix 16) ; un maximum posé sous la valeur
+  courante l'entraîne. Aucune valeur qui change : « Aucune valeur ne
+  change. »
+- **`equipement`** (« Changer l'équipement… ») : l'événement porte les
+  valeurs d'une photographie recalculée (§ 17.2) du même protagoniste,
+  avec autant de zones, jugées comme celles d'un ajout, et les changements
+  que le journal dit (l'arme tenue, la qualité d'un objet, la cellule
+  Équipement d'un adversaire). L'armure de chaque zone garde les dégâts
+  reçus ; l'endurance, le corps, le souffle, les actions et les liens
+  restent ; l'attaque, la défense et le bouclier suivent la photographie.
+  Les capacités qu'une blessure a ajoutées se remettent au bout de la
+  nouvelle liste ; les effets durables et les gardes suivent leur capacité
+  par son nom, et s'en vont, sans ligne, si elle a disparu (contrat du lot
+  4.3, choix 17).
+- **`etat`** : ajouter un état (une capacité figée ou un état libre),
+  jusqu'au prochain tour du camp qui joue ou jusqu'à la fin du combat, de
+  source MJ ; ou retirer un état qu'il porte, une blessure comprise.
+- **`deplacer`** : vers une autre case, sans action.
+- **`retirer`** : il quitte le combat (plus haut, « Un vivant ») ; les
+  effets qu'il porte s'en vont, ceux qu'il a lancés restent.
 
 **« Annuler le dernier geste »** (groupe 2, décision de l'auteur du
 25/10/2026 ; complément, § 4.10). Ce qu'englobe un geste est une règle
@@ -5644,6 +6002,22 @@ d'interface, non du jeu.
   protagonistes, le tour, le camp, les actions, les morts, le geste en
   cours, le vainqueur) redevient celui d'avant ce geste. Un geste ouvert
   sans être payé, que la passe ou la fin de tour a retiré, ne revient pas.
+- **Depuis le groupe 3** (contrat du lot 4.3, § 10), un geste est aussi
+  « Intervenir… » entre deux gestes, attendre, chaque geste du MJ, et
+  chaque effet de la palette appliqué hors d'un geste. **Un geste racine se
+  défait avec tout ce qu'il porte** : ses gestes emboîtés, les effets
+  appliqués pendant lui, toutes ses cibles ; la plage de ses lignes court de
+  sa première ligne (la première cible) à la fin du journal. Une échéance ne
+  se défait pas seule : elle suit la fin de tour qui l'a causée.
+- **Pendant la préparation d'un geste** (rien de payé), la palette n'offre
+  que les effets « pour ce jet » (avantages, désavantages, ±N « pour ce
+  jet »), d'une source capacité jouée ou d'un passif, et seulement à un
+  geste qui a un jet ; les autres genres y sont inactifs : « Le geste n'est
+  pas encore payé. » Le prix d'un passif payé pendant la préparation se
+  rend quand le geste est retiré (« Revenir », une autre capacité, la
+  passe, la fin de tour) : « Revenir » l'efface (mission du lot 4.3, § 4.6),
+  et le journal n'écrit rien d'un geste retiré, ni de ses effets (contrat
+  du lot 4.3, choix 11).
 - **Ce qu'il ne défait pas** : le journal, qui ne recule pas, et le compte
   des événements. Les lignes que le geste a écrites restent, barrées à
   l'écran, et une ligne « Annulé : … » s'ajoute à la fin (§ 17.9). Les dés
@@ -5665,8 +6039,11 @@ d'interface, non du jeu.
   avec son état tout ce qui est gelé. « Annuler » reprend l'instantané, y
   remet le journal courant, avec la ligne « Annulé », et dépile : il coûte
   comme un clic, et le rejeu reste linéaire, annulations comprises. Seul
-  le geste racine compte : les gestes empilés (une intervention, une
-  contre-attaque) sont au groupe 3.
+  le geste racine compte : depuis le groupe 3, ce qui l'engage met de côté
+  l'état d'avant lui, et le maillon se
+  pose quand il est fini, sa dernière cible comprise ; les gestes empilés
+  et les effets d'un geste n'ont pas de maillon à eux. Un geste du MJ et un
+  effet hors d'un geste ont le leur, pris de l'état d'avant eux.
 
 **Trois bornes**, celles que tient la lecture d'un combat gardé
 (§ 17.8) : le jeu les tient aussi, sans quoi un combat se garderait, puis
@@ -5763,12 +6140,16 @@ arrondie au pair inférieur (§ 15.2).
 | 3 | « bonus de Précision » | il mobilise la Précision | +N |
 | 4 | « petit » | un jet de défense | +N |
 | 5 | « petit » | le jet mobilise la Force | −1 |
-| 6 | **les blessures** du lanceur (livret, « Ressources ») | k zones dont l'endurance est à 0 | −k |
+| 6 | **les ±N** de la palette sur le lanceur (groupe 3 ; § 12, point 54) | un jet d'attaque, ou de défense, du genre de l'écart | ±N à chaque dé, au nom de sa source : ses effets durables, dans l'ordre où ils ont été posés, puis ceux « pour ce jet » du geste |
 | 7 | la main | un réglage, avant le premier dé | ±N, avec sa raison |
 
 Seul un personnage lance : les lignes 1 à 6 ne s'appliquent jamais à un
-adversaire (§ 12, point 14). Le −1 d'une blessure vaut pour les dés de la
-chaîne, pas pour le dé de localisation (point 13).
+adversaire (§ 12, point 14) ; un ±N sur un adversaire écarte sa valeur
+(plus bas, « ±N »). Un jet de caractéristique n'a aucun ±N : l'écart porte
+sur l'attaque ou sur la défense. **Une blessure ne retire plus rien aux
+jets** depuis le groupe 3 (livret du 25/10/2026, « Ressources » ; § 12,
+point 47) : la ligne « les blessures » (−1 par zone dont l'endurance est à
+0) a quitté la table.
 
 **L'avantage et le désavantage** (livret, « Avantage et désavantage »). On
 compte les avantages et les désavantages du jet, chacun avec sa source. Ils
@@ -5779,7 +6160,9 @@ s'annulent, et seule la différence reste.
   dé, et la chaîne continue si elle réussit. Une relance est dépensée dès
   qu'elle est choisie. Un dé relancé qui échoue encore se relance, tant
   qu'il reste une relance : les relances ne se comptent pas par dé (lecture
-  retenue, à confirmer par l'auteur : § 12, point 46 ; § 17.9).
+  retenue, à confirmer par l'auteur : § 12, point 46 ; § 17.9). Depuis le
+  groupe 3, une relance de la palette n'en dépense aucune, et tenter le
+  coup critique en dépense une (plus bas).
 - **Avec k désavantages**, chaque dé de la chaîne se lance k + 1 fois, et
   l'on garde le pire (§ 12, point 3) ; cent lancers au plus par dé
   (§ 17.3).
@@ -5797,7 +6180,8 @@ s'annulent, et seule la différence reste.
 | 7 | l'autre | « en meute » | il attaque, un allié vivant sur sa case | N désavantages |
 | 8 | l'autre | « esprit de corps » | il se défend, un allié vivant sur sa case | N désavantages |
 | 9 | l'autre | la maîtrise | son attaque, hors maîtrise | 1 avantage |
-| 10 | la main | un réglage, avant le premier dé | toujours | k avantages, ou k désavantages, avec sa raison |
+| 10 | la palette (groupe 3) | un effet « k avantages » ou « k désavantages, pour ce jet », dans l'ordre où ils s'appliquent | avant le premier dé | k avantages, ou k désavantages, au nom de sa source, jamais inversés |
+| 11 | la main | un réglage, avant le premier dé | toujours | k avantages, ou k désavantages, avec sa raison |
 
 - **L'inversion** (règle de l'auteur du 11/10/2026 ; § 12, point 1) : les
   lignes 6 à 9. Un avantage d'un adversaire devient un désavantage du
@@ -5809,8 +6193,11 @@ s'annulent, et seule la différence reste.
 - **Le corps-à-corps** : l'attaquant et la cible sur la même case.
   **Un allié** : un protagoniste vivant du même camp, autre que soi (§ 12,
   points 11 et 37).
-- **Un jet de caractéristique** n'a ni passif d'avantage ni maîtrise : seule
-  la main lui donne un avantage ou un désavantage.
+- **Un jet de caractéristique** n'a ni passif d'avantage ni maîtrise : seules
+  la palette (depuis le groupe 3) et la main lui donnent un avantage ou un
+  désavantage.
+- **Un effet « pour ce jet »** vaut pour tous les jets du geste qui le
+  porte, chacune de ses cibles comprise (contrat du lot 4.3, choix 6).
 
 **Le dé explosif** (livret, « Dé explosif » ; § 12, points 5 et 36).
 
@@ -5841,7 +6228,70 @@ ainsi toujours, dégâts directs compris. C'est le moteur qui vérifie la
 raison, pas l'écran : elle entre au journal et dans le fichier
 téléchargé.
 
-Le coup critique et le dé miroir sont au groupe 3 (§ 17.12).
+**Le coup critique** (groupe 3 ; livret, « Coup critique » ; mission du lot
+4.3, § 4.4 ; § 12, points 6 et 60).
+
+- **Quand** : le jet d'un personnage, d'attaque ou de caractéristique,
+  jamais de défense (donc jamais sur l'attaque d'un adversaire), finit à
+  trois réussites de ses dés, et il lui reste au moins une relance
+  d'avantage. Le geste passe au moment du critique ; aussi pour le jet
+  d'une intervention ou d'une contre-attaque d'un personnage (contrat du
+  lot 4.3, choix 8).
+- **L'événement `critique`** : le garder, et le jet reste à trois
+  réussites ; ou le tenter, ce qui dépense une relance et fait lancer un
+  quatrième dé, à la quatrième place. Les relances restantes le relancent
+  s'il échoue, et il explose comme les autres ; la chaîne finit à cette
+  place, réussie ou non.
+- **Réussi**, c'est un coup critique : quatre réussites d'attaque valent
+  C, et le critique double les dégâts de la lettre, ou de l'arme prêtée,
+  avant toute autre opération (§ 17.5), ainsi que le surplus de
+  « dégrossir ». Un jet de caractéristique ne double rien, ni un jet prêté
+  sans dégâts : le journal dit seulement le coup critique (§ 17.9).
+- « +1 réussite » n'ouvre jamais le critique : il se juge sur les dés
+  seuls.
+
+**Le dé miroir et la palette des dés** (groupe 3 ; livret, « Dé miroir » ;
+mission du lot 4.3, § 4.5 et § 4.6 ; § 12, points 4 et 58). Trois effets de
+la palette portent sur le jet du geste au sommet de la pile, tant qu'aucun
+d20 n'est lancé, ni aucune intervention ou esquive jouée :
+
+- **« Inverser »** le dernier dé de la chaîne (sa dernière place, son
+  dernier essai), quand il est posé : avant le dé suivant, jamais pendant
+  qu'une relance ou une explosion attend son dé, jamais un d20. Sa valeur
+  gardée (le pire, sous désavantage) devient faces + 1 − valeur, puis le
+  modificateur s'ajoute ; réussite et échec se rejugent, et la chaîne
+  reprend d'après eux : un échec devenu réussite la poursuit (ou la finit à
+  trois), une réussite devenue échec la finit ; montrant sa face maximale
+  sous la difficulté, il peut exploser. **Un dé inversé ne se relance plus
+  et ne s'inverse plus** ; un essai qui a déjà explosé ne s'inverse pas
+  (contrat du lot 4.3, choix 4).
+- **Relancer** ce même dernier dé : un essai de plus à la même place, comme
+  une relance d'avantage, mais sans en dépenser une ; le jet attend alors
+  son dé. Un dé inversé ne se relance pas.
+- **« +1 réussite »**, sur un jet fini à moins de trois réussites : les
+  réussites du jet sont celles de ses dés, plus ces bonus, **jamais plus de
+  trois** (quatre seulement pour un coup critique réussi).
+
+Le critique, l'inversion et la relance de la palette rouvrent un jet qui
+semblait fini : c'est pourquoi un jet ne clôt plus le geste de lui-même
+(§ 17.3).
+
+**±N** (groupe 3 ; mission du lot 4.3, § 4.6 ; § 12, point 54). Un effet de
+la palette, « attaque » ou « défense », de −20 à 20, jamais 0, pour ce jet,
+jusqu'au prochain tour de son auteur, ou jusqu'à la fin du combat
+(§ 17.6) :
+
+- **chez un personnage**, N à chaque dé de ses jets de ce genre (plus haut,
+  ligne 6 des modificateurs) ;
+- **chez un adversaire**, sa valeur : son attaque ou sa défense écartée
+  (`attaqueDe`, `defenseDe` : la base, la liste des écarts et leur somme),
+  qui fait la difficulté du jet d'un personnage ; elle se lit à
+  l'ouverture du jet, et s'y fige avec les circonstances. **Aucun
+  plancher** : un écart peut la rendre nulle ou négative, et tout dé
+  réussit alors (le Word n'en dit rien : § 12, « Ce qui manque encore » ;
+  contrat du lot 4.3, choix 19) ;
+- un ±N « pour ce jet » ne se pose qu'avant le premier dé du geste, et ne
+  vaut que pour les jets de ce geste.
 
 ### 17.5 L'attaque, la localisation et les dégâts
 
@@ -5854,7 +6304,10 @@ Le coup critique et le dé miroir sont au groupe 3 (§ 17.12).
    pour 1, B pour 2, C pour 3 (livret, « Jets d'attaque »). À la fin de
    cette étape, avant la localisation, le joueur peut fixer les dégâts
    (plus bas).
-3. Viennent la localisation, l'esquive, puis les dégâts.
+3. Viennent la localisation, l'étape « Interventions » (§ 17.3), où
+   s'offre l'esquive, puis les dégâts ; depuis le groupe 3, la
+   contre-attaque après une face de contre-attaque (§ 17.3), et la blessure
+   après les dégâts (plus bas).
 
 **Une attaque d'un adversaire** suit la même suite : la capacité, puis la
 cible ; puis **le jet de défense du personnage**, contre l'attaque de
@@ -5881,24 +6334,33 @@ trois en défense pour un personnage attaqué.
 - **À la main** : décaler la face de ±N, avec sa raison (une capacité qui
   fait viser), tant que ni l'esquive ni « Appliquer » n'ont été joués. La
   face décalée reste sur une zone.
+- **La zone choisie** (groupe 3 ; mission du lot 4.3, § 4.6) : un effet de
+  la palette remplace la zone d'un d20 lancé, tant que les dégâts ne sont
+  pas appliqués ; la face reste, que le journal garde. Une face de
+  contre-attaque ne se choisit pas.
 - **La face de contre-attaque** (20 sur un personnage, 1 sur un
   adversaire ; § 12, point 12) **annule toute l'attaque** et ses effets,
-  même parmi plusieurs dés. Elle se lit sur le dé brut : un décalage ne la
-  crée ni ne l'efface. Les dés de localisation restants ne se lancent pas,
-  et le geste est fini ; l'action et le coût de l'attaquant restent payés
-  (§ 12, point 41). Les groupes 1 et 2 l'écrivent au journal ; le groupe 3
-  proposera la contre-attaque.
+  même parmi plusieurs dés. Elle se lit sur le dé brut, et sur la grille du
+  jeté, même quand les dégâts sont reportés : un décalage ne la crée ni ne
+  l'efface. Les dés de localisation restants ne se lancent pas ; l'action
+  et le coût de l'attaquant restent payés (§ 12, point 41). Depuis le
+  groupe 3, la contre-attaque du jeté s'offre alors (§ 17.3), ou le
+  journal dit pourquoi elle ne se peut pas ; dans un geste à plusieurs
+  cibles, la face n'annule que le coup de sa cible.
 - Sans dégâts, aucune zone ne perd rien : le geste se finit quand même par
   « Appliquer », un seul chemin.
 
-**L'esquive** est la seule intervention des groupes 1 et 2 (§ 12, points 8 et
-40). Elle est proposée au personnage qui va recevoir des dégâts, s'il porte
-la capacité de ce rôle, qu'il lui reste une action et du souffle, une seule
-fois par attaque : X points de souffle annulent X dégâts, X allant de 1 au
-plus petit de son souffle et du total des dégâts (la somme des dégâts de
-chaque zone touchée). Elle se paie tout de suite : une action, X de
-souffle. Avec plusieurs zones touchées, elle s'impute zone après zone, dans
-l'ordre des dés. Le souffle d'un adversaire n'annule rien.
+**L'esquive** (§ 12, points 8 et 40) est la seule intervention des groupes
+1 et 2 ; depuis le groupe 3, elle s'offre dans l'étape « Interventions »
+(§ 17.3), à côté des autres, et garde son événement. Elle est proposée au
+personnage qui va recevoir des dégâts (la victime : un report la suit),
+s'il porte la capacité de ce rôle, qu'il lui reste une action et du
+souffle, une seule fois par attaque : X points de souffle annulent X
+dégâts, X allant de 1 au plus petit de son souffle et du total des dégâts
+(la somme des dégâts de chaque zone touchée). Elle se paie tout de suite :
+une action, X de souffle. Avec plusieurs zones touchées, elle s'impute zone
+après zone, dans l'ordre des dés. Le souffle d'un adversaire n'annule
+rien.
 
 **Les dégâts** (livret, « Armure, endurance et corps »). Sur chaque zone
 touchée, dans l'ordre des dés :
@@ -5908,12 +6370,34 @@ touchée, dans l'ordre des dés :
 3. le reste passe au corps, qui n'est pas localisé. Ce qui dépasse 0 de
    corps se perd.
 
-Une zone dont l'endurance tombe à 0 est **une blessure** (livret,
-« Ressources ») : pour un personnage, −1 à ses jets par zone blessée,
-cumulés ; pour un adversaire, sans effet calculé (§ 12, point 14).
+**La blessure** (livret du 25/10/2026, « Ressources » ; mission du lot 4.3,
+§ 4.10 ; contrat du lot 4.3, § 5.9 ; § 12, points 14, 47 et 48). Depuis le
+groupe 3, une zone dont l'endurance tombe à 0 n'est plus une blessure à
+elle seule, et **le −1 à ses jets a disparu** (point 13, remplacé par le
+47) :
+
+- **La condition** : un coup sur une zone qui laisse son endurance à 0
+  **et** ôte au moins un point de corps blesse cette zone. Une blessure par
+  zone et par geste, même si deux coups la remplissent (le premier
+  compte) ; aucune si les coups tuent (la victime à 0 de corps à la fin des
+  coups) ; aucune pour des dégâts directs au corps.
+- **Un personnage** choisit sa blessure, avec le MJ, au moment de la
+  blessure, après les dégâts : une étape par zone blessée, dans l'ordre des
+  dés, et le geste ne finit qu'avec ce choix. L'événement `blessure` porte
+  une capacité du bloc de blessure, figée (§ 17.2), ou un état libre, d'un
+  nom de 1 à 40 signes. La capacité **rejoint celles de sa photographie,
+  pour ce combat** (une capacité active y aurait une ligne ; un passif n'en
+  a pas), et un effet durable de type état, marqué blessure, la montre
+  jusqu'à la fin du combat, avec sa zone (contrat du lot 4.3, choix 18) ;
+  un état libre n'est que cet effet. Ses effets s'appliquent à la main
+  (§ 17.6).
+- **Un adversaire** : la même condition ; sa zone est « blessée », sans
+  effet calculé (§ 12, point 14), sans étape.
 
 **Fixer les dégâts**, à la fin de l'étape du jet. Les dégâts d'un geste
-sont une base et, au plus, une opération :
+sont une base et, au plus, une opération à la main, l'ajustement ; depuis
+le groupe 3, la palette y ajoute les siennes (plus bas, « L'ordre des
+dégâts ») :
 
 - **une attaque** a les dégâts du rang de ses réussites. Le joueur peut les
   ajuster : un nombre, de 0 à 999, et une raison (par défaut, le nom de la
@@ -5927,18 +6411,58 @@ sont une base et, au plus, une opération :
   remplacent ceux du coup et passent à l'endurance de la zone touchée (le
   reste au corps), ou droit au corps, sans toucher l'armure (point 39) ;
 - **des dégâts de 0 ou moins** n'enlèvent rien ; la localisation se fait
-  quand même.
+  quand même ;
+- **« ajusté à » sans effet** (décision de l'auteur du 26/10/2026 ;
+  mission du lot 4.3, § 6) : une correction égale à la valeur calculée ne
+  s'écrit plus et ne fait aucun événement ; s'il y avait un ajustement,
+  elle fait un événement `degats` sans opération, qui le défait. Le moteur
+  n'y change rien.
 
 L'étape « Dégâts » montre le détail, zone par zone, après l'esquive, et
 s'applique par « Appliquer », sans nouveau changement. Ce détail est
 calculé par la fonction même qui l'appliquera.
+
+**L'ordre des dégâts** (groupe 3 ; mission du lot 4.3, § 4.6 ; § 12,
+point 55 ; `degatsFixes`, `js/combat/degats.js`), pour la cible en cours :
+
+1. la base : la lettre, l'arme prêtée, ou rien ;
+2. le coup critique : ×2 (« C = 8 → 16 », § 17.4) ;
+3. l'ajustement à la main, s'il y en a un : il remplace la valeur (contrat
+   du lot 4.3, choix 3) ;
+4. les opérations de la palette, **dans l'ordre où elles s'appliquent** :
+   ×k (de 2 à 10), +N, −N (jamais sous 0), des dégâts directs (la valeur
+   devient N, et la nature celle qu'ils disent : l'endurance ou le corps) ;
+5. l'armure : le surplus de « dégrossir », doublé par le critique, qui
+   compte aussi les réussites de « +1 réussite », puis les « +N contre
+   l'armure » de la palette, tels quels ; sur des dégâts nuls, ceux-ci ne
+   retirent rien (contrat du lot 4.3, choix 19 : deux lectures à
+   confirmer) ;
+6. l'endurance, puis le corps.
+
+Le détail garde chaque étape et sa source, pour le journal. Ces effets ne
+s'offrent qu'aux dégâts calculés et pas encore appliqués (au bilan, à la
+localisation, aux suites).
+
+- **Reporter les dégâts** sur un autre protagoniste vivant : la victime
+  n'est plus la cible. Les d20 se lisent alors sur sa grille, par leur
+  face, la zone choisie comprise si sa grille l'a ; une face hors de ses
+  zones va à la zone la plus proche, la première à égalité (contrat du lot
+  4.3, choix 5). L'esquive et la blessure suivent la victime. Reporter
+  vers la victime du moment est refusé.
+- **« Toute la case »**, sur le geste racine, à sa première cible, une fois
+  ses dégâts calculés : les vivants de la case de cette cible deviennent
+  ses cibles suivantes, dans l'ordre dit, un jet chacune (§ 17.3) ; la
+  portée ne s'est jugée que sur la première. Le jet contre un allié ou
+  contre soi y est refusé comme pour une façon Centrée (§ 17.3).
+- **Une attaque en plus** : § 17.6.
 
 ### 17.6 Les capacités et les rôles câblés
 
 **Le mode assisté.** Toute capacité se joue, sauf un passif. Elle coûte une
 action, son souffle et son lien. Sa description s'affiche, évaluée à la
 puissance jouée (§ 15.2). Ce qu'elle fait de plus que les règles générales
-s'applique à la main.
+s'applique à la main : depuis le groupe 3, par les effets de la palette
+(plus bas, « La palette »), chacun un événement, avec sa source.
 
 **Les attaques.**
 
@@ -5968,7 +6492,8 @@ s'applique à la main.
   Frappe de la Mouette chapardeuse n'a ni l'un ni l'autre, et se joue sans
   jet, ou par le jet prêté « sans arme ».
 - **Les interventions** se jouent aussi à son propre tour, comme toute
-  capacité.
+  capacité ; depuis le groupe 3, dans l'étape « Interventions » d'une
+  attaque, ou par « Intervenir… » pendant le tour adverse (§ 17.3).
 
 **Les coûts et la puissance** (§ 12, points 26 et 27).
 
@@ -6026,8 +6551,10 @@ tableau des rôles, plus bas.
   points 10 et 28).
 - **L'esquive** : une intervention (§ 17.5).
 - **Passer son tour** : un bouton du simulateur (§ 17.3). **Le jet de
-  défense** : automatique, il n'a pas de bouton. **L'attente** : au
-  groupe 3 ; la capacité de ce rôle n'a pas de ligne aux groupes 1 et 2.
+  défense** : automatique, il n'a pas de bouton. **L'attente** : depuis le
+  groupe 3, la capacité de ce rôle a sa ligne, qui se règle (la ligne
+  gardée), puis se confirme (§ 17.3, « Attendre ») ; elle n'en avait pas
+  aux groupes 1 et 2.
 
 **Les passifs câblés** (proposition acceptée par l'auteur le 11/10/2026).
 Leur N est **le niveau de cette capacité** chez le personnage (§ 15.2), ou
@@ -6082,6 +6609,94 @@ calcul (§ 12, point 24).
   s'appliquent pas à lui, et sa fiche le dit (« ne s'applique pas à un
   adversaire »).
 
+**Les passifs non câblés** (groupe 3 ; mission du lot 4.3, § 4.5 ; contrat
+du lot 4.3, § 5 ; § 12, points 52 et 59). Une capacité dont la façon, à sa
+puissance tenue, porte l'élément Passif, sans rôle câblé, payante ou non.
+Elle ne se joue pas : ses effets s'appliquent par la palette, la capacité
+pour source.
+
+- **Sa puissance tenue** : la plus haute de ses façons jouables, de 1 au
+  niveau, ou au rang chez un adversaire (contrat du lot 4.3, choix 14). Le
+  Word ne le dit pas (§ 12, « Ce qui manque encore »).
+- **Un passif payant** (un coût en souffle ou en lien non nul, X compris)
+  **se paie quand un effet s'applique**, par son porteur, jamais à
+  l'ouverture : le souffle, et le lien sur la jauge que dirait le prix d'un
+  geste de ce coût ; un adversaire paie son souffle, jamais son lien
+  (§ 12, point 14). Son X se choisit avec l'effet, de 0 à ce qui reste.
+- **Un passif sert une fois par jet** : une seconde application est
+  refusée (« Ce passif a déjà servi pour ce jet. »), même si son texte
+  porte deux effets ; le second passe, s'il le faut, par le MJ (contrat du
+  lot 4.3, choix 15 ; § 12, « Ce qui manque encore »). Un passif câblé,
+  qui a un rôle, ne se paie pas et ne compte pas ici.
+- Ses avantages (Minutie, « [N] avantage(s) ») passent par « k avantages,
+  pour ce jet » (§ 17.4, ligne 10 des sources), et se nomment dans la
+  phrase des sources.
+
+**La palette** (groupe 3 ; mission du lot 4.3, § 4.6 ; contrat du lot 4.3,
+§ 5). L'événement `effet` a dix-neuf genres, en quatre familles : **les
+dés** (des avantages ou des désavantages pour ce jet, de 1 à 20 ; relancer
+ou inverser le dernier dé ; +1 réussite : § 17.4) ; **la zone** d'un d20
+(§ 17.5) ; **les dégâts** (×k, +N, −N, +N contre l'armure, des dégâts
+directs, reporter, toute la case : § 17.5 ; une attaque en plus : plus
+bas) ; **la cible** (rendre, ±N en attaque ou en défense : § 17.4, un état,
+déplacer).
+
+- **Le moment.** Un effet sur le geste en cours (les dés, la zone, les
+  dégâts) ne s'offre qu'au moment où il a prise ; sinon il est refusé, avec
+  sa raison (« Aucun dé lancé. », « Aucun d20 lancé. », « Aucuns dégâts
+  calculés. », « Hors d'un geste. », « Un dé est déjà lancé. »…). Hors d'un
+  geste, entre deux gestes, ne s'offrent que rendre, ±N et un état
+  (jusqu'au prochain tour ou jusqu'à la fin du combat), et déplacer.
+  Pendant la préparation d'un geste : § 17.3.
+- **La source** : une capacité de l'acteur du geste, du jeté, ou du porteur
+  d'un état ; un état porté ; ou le MJ. Hors d'un geste : un état, une
+  capacité de son porteur, ou le MJ. Le moteur les accepte toutes.
+- **L'auteur** (§ 12, point 62) : celui qui joue le geste ; hors d'un geste,
+  le porteur de l'état ou de la capacité source ; avec la source « MJ »
+  hors d'un geste, personne, et sa durée se dit du camp qui joue.
+- **Le prix** : seul un passif non câblé payant coûte (plus haut) ; toute
+  autre source ne coûte rien.
+- **Chaque effet est un événement** : pendant un geste, il reste à ce geste,
+  le journal le dit dans sa ligne, et il se défait avec lui ; hors d'un
+  geste, il écrit sa ligne, et se défait seul (§ 17.3).
+- **Rendre** : du souffle, le lien d'une jauge (d'un personnage), l'armure
+  ou l'endurance d'une zone, du corps, de 1 à 999, **sans passer le
+  maximum** ; au maximum, il est refusé (« Déjà au maximum. »). Un mort ne
+  se soigne pas.
+- **Déplacer** : vers une autre case de la carte, sans action.
+- **Un état** : une capacité figée d'un bloc d'état (§ 17.2), ou un état
+  libre, d'un nom de 1 à 40 signes, donnée hostile ; pour ce jet, jusqu'au
+  prochain tour de son auteur, ou jusqu'à la fin du combat. Ses effets
+  s'appliquent à la main, par la palette, l'état pour source. Un état posé
+  par la palette ou par le MJ n'est jamais une blessure : seul l'événement
+  `blessure` en pose une (§ 17.5).
+- **Une attaque en plus** (contrat du lot 4.3, § 5.5, choix 9) : son auteur
+  la porte jusqu'au prochain tour de son camp ; d'ici là, il peut jouer,
+  même sans action restante et même s'il a passé, **une capacité
+  d'attaque** (une façon qui attaque, ou un jet prêté) comme geste racine,
+  sans action à payer, et le geste la consomme à son paiement. Une autre
+  capacité se paie comme d'habitude et ne la consomme pas.
+
+**Les effets durables** (groupe 3 ; contrat du lot 4.3, § 3 ; § 12,
+points 15 et 62). Un ±N ou un état qui dure jusqu'au prochain tour ou
+jusqu'à la fin du combat, la garde d'attendre et une attaque en plus
+entrent dans la liste des effets du combat, dans l'ordre où ils sont
+posés, chacun avec son porteur, son auteur, le camp qui le finira, sa
+durée et sa source ; un effet « pour ce jet » reste au geste.
+
+- **L'échéance** : au début du prochain tour du camp de son auteur (pour le
+  MJ hors d'un geste, du camp qui jouait), chaque effet de ce camp qui
+  dure « jusqu'au prochain tour » s'en va, dans l'ordre de la liste, et
+  écrit sa ligne juste après « — Tour … — » (§ 17.9). Un effet « jusqu'à la
+  fin du combat » ne finit jamais, et rien ne s'écrit à la fin du combat
+  (contrat du lot 4.3, choix 7). La mort ou le retrait de l'auteur n'y
+  change rien ; un effet que porte un mort ou un retiré s'en va avec lui,
+  sans ligne.
+- **La garde d'attendre** est un effet durable de son auteur, qui dure
+  jusqu'au prochain tour de son camp : tant qu'il est là, la ligne gardée
+  est une option d'intervention (§ 17.3) ; à son échéance, elle n'est plus
+  gardée.
+
 **Les rôles et les noms** (`js/combat/roles.js`). Le simulateur reconnaît
 une capacité câblée **à son nom, et à lui seul** : l'élément Passif ne
 décide que de l'absence de ligne. Un seul module porte le tableau ; les
@@ -6093,7 +6708,7 @@ et le noyau ne lit ensuite que lui, jamais un nom.
 | déplacement | Pas chassé | mène à une case, à une distance de 1 à P |
 | jet de caractéristique | Goûter | un jet d'un dé au choix, contre une difficulté de 2 à 10 |
 | esquive | Pas de côté | l'intervention qui annule X dégâts pour X de souffle |
-| attendre | Guetter | rien aux groupes 1 et 2 : pas de ligne (groupe 3) |
+| attendre | Guetter | une ligne depuis le groupe 3 : garde une autre ligne, qui devient une intervention jusqu'au prochain tour de son camp (aucune ligne aux groupes 1 et 2) |
 | passer son tour | — | pas de bouton à elle : « Passer son tour » est un bouton du simulateur |
 | jet de défense | — | pas de bouton : la défense se lance d'elle-même quand un adversaire attaque |
 | bonus de Force | Costaud | passif : +N |
@@ -7198,21 +7813,56 @@ banque, qui ne s'écrit jamais en clair sur un appareil.
   événement refusé arrête tout : la suite n'est jamais tronquée en
   silence. Un contenu refusé, ou un rejeu refusé, est
   une donnée abîmée.
+- **Les événements du groupe 3** se lisent de même, chacun avec ses champs,
+  eux seuls, typés et bornés. Ce qui ne dépend pas du moment se juge à la
+  forme ; le reste (un maximum, une case autre que la sienne, un indice
+  qui existe, qui est vivant) à l'offre.
+  - « effet » et « mj » ont un **genre**, et chaque genre ses champs, eux
+    seuls. La source d'un effet est une capacité (`qui`, `capacite`), un
+    état porté (l'identifiant de son effet durable) ou le MJ ; un X, un
+    entier positif ou nul, ne vient qu'avec une capacité.
+  - Les bornes de la palette : des avantages ou des désavantages, de 1 à
+    20 ; ×k, de 2 à 10 ; +N, −N, +N contre l'armure et rendre, de 1 à
+    999 ; des dégâts directs, de 0 à 999, à l'endurance ou au corps ; ±N,
+    de −20 à 20, jamais 0 ; une durée « jet », « tour » ou « combat » ;
+    une zone exactement pour l'armure et l'endurance, une jauge exactement
+    pour le lien ; plusieurs cibles, de 1 à 72, distinctes (le plafond des
+    protagonistes d'un combat ; contrat du lot 4.3, choix 13), comme le
+    réglage `cibles`.
+  - **Une capacité figée** (un état, une blessure, l'ajout d'un état par le
+    MJ) se lit comme une capacité de photographie, sans rôle, ni
+    « inactive », ni arme, ni jauge (§ 17.2) ; un état libre, de 1 à 40
+    signes, lu comme un texte d'une ligne de photographie (ni caractère de
+    contrôle, ni demi-codet isolé), car il entre au journal ; l'un des
+    deux, jamais les deux.
+  - Le MJ : de 1 à 20 valeurs, chacune de 0 à 999, chacune une fois ; la
+    photographie d'un changement d'équipement, lue comme celle d'un ajout,
+    pour le camp de `qui`, et de 1 à 40 changements (une cellule, de 0 à
+    40 noms) ; un état ajouté, jusqu'au prochain tour ou jusqu'à la fin du
+    combat, jamais « pour ce jet » ; un état retiré, par l'identifiant de
+    son effet.
+  - Les autres : `intervenir` porte qui, la capacité et sa façon ;
+    `contre_attaquer`, la capacité et sa façon ; `critique`, un booléen ;
+    `laisser`, rien ; `blessure`, une capacité figée ou un état libre ;
+    le réglage `garde`, une capacité et une façon.
 - **La version des règles** est dans le contenu (`REGLES`,
   `js/combat/regles.js`). Toute correction qui change un nombre, un mot du
   journal ou un moment la fait monter ; un combat d'une autre version ne
-  se rejoue pas, et se dit. **Elle vaut 3 depuis le lot 5** : des mots du
-  journal changent, « endurance » au lieu de « résistance », et l'ordre
-  des caractéristiques d'un dé au choix (« Savoir sauvage + Sens »,
-  § 17.9). Un combat gardé d'avant le lot, en version 1 ou 2, se dit
-  « commencé avec une autre version du simulateur » et ne se reprend pas :
-  sur chaque appareil, et dans chaque mode, un combat commence par
-  « Nouveau combat ». Le groupe 3 du lot 4 la passera à 4. Elle valait 2
-  depuis le groupe 2 du lot 4 (décision de l'auteur, 25/10/2026 :
-  l'événement « annuler », la puissance au choix des adversaires et la
-  défense à égalité changent le rejeu), et 1 au groupe 1, dont les
-  corrections de la relecture de fin de groupe ne l'avaient pas fait
-  monter.
+  se rejoue pas, et se dit. **Elle vaut 4 depuis le groupe 3 du lot 4**
+  (lot 4.3) : sept événements neufs, des moments neufs (le critique, la
+  contre-attaque, la blessure), un manqué et un jet de caractéristique qui
+  attendent « Appliquer », et la fin du −1 des blessures, qui change les
+  nombres d'un combat : un combat d'avant ne se rejouerait pas à
+  l'identique. **Un combat gardé en version 1, 2 ou 3** se dit « commencé
+  avec une autre version du simulateur » et ne se reprend pas : sur chaque
+  appareil, et dans chaque mode, un combat commence par « Nouveau
+  combat ». Elle valait 3 depuis le lot 5 (des mots du journal,
+  « endurance » au lieu de « résistance », et l'ordre des caractéristiques
+  d'un dé au choix, « Savoir sauvage + Sens », § 17.9) ; 2 depuis le
+  groupe 2 du lot 4 (décision de l'auteur, 25/10/2026 : l'événement
+  « annuler », la puissance au choix des adversaires et la défense à
+  égalité changent le rejeu) ; et 1 au groupe 1, dont les corrections de
+  la relecture de fin de groupe ne l'avaient pas fait monter.
 
 **Quand.** Après chaque événement, et après chaque changement de la
 préparation, dans **une file à une seule place** : jamais deux écritures à
@@ -7309,7 +7959,10 @@ le comparent mot pour mot, au signe près.
   entier, au moment de copier ou de télécharger.
 - **Le groupe 2 ne change aucun gabarit**, sauf la ligne nouvelle
   « Annulé : … » (plus bas, « L'annulation ») : le combat de référence et
-  le banc se retrouvent mot pour mot.
+  le banc se retrouvent mot pour mot. **Le groupe 3 en ajoute**, ceux de la
+  mission du lot 4.3, § 7, mot pour mot (plus bas, « Les gabarits du
+  groupe 3 »), et change la blessure : huit lignes du combat de référence
+  changent (§ 17.10).
 
 **Les segments et les phrases** (groupe 2 ; complément, § 4.8). Chaque
 ligne garde son texte, inchangé, et la liste de ses **segments typés**, qui
@@ -7324,7 +7977,9 @@ après « ajusté à » ; la phrase de la mort ; « Fin du tour… » ;
 jet, son cadre et son dé. Une ligne connaît aussi le genre de chacune de
 ses phrases (le lancement, le tour, l'ouverture, les sources, le jet, la
 localisation, l'intervention, les dégâts, les blessures, la mort,
-l'annulation…), que le bandeau lit pour se couper (§ 17.7). **L'écran ne
+l'annulation… ; depuis le groupe 3, la contre-attaque, le critique,
+l'effet, l'état, l'échéance et le MJ), que le bandeau lit pour se couper
+(§ 17.7). **L'écran ne
 relit jamais le texte** pour y chercher un nom : un nom est une donnée
 hostile. Les couleurs, les cadres, la coupe du bandeau et les lignes
 barrées se lisent dans les segments et dans les plages des lignes
@@ -7437,7 +8092,8 @@ geste.
   Marmiton n° 2) et son désavantage (types d'armure mêlés) laissent
   1 avantage. »
 - **Le dé** : « d10+1 contre 5 ». Le modificateur est la somme nette :
-  « d6−1 » avec une blessure, « d10 » s'il est nul. Un modificateur à la
+  « d6−1 » avec un ±N de −1 (§ 17.4 ; une blessure le donnait jusqu'au
+  groupe 2), « d10 » s'il est nul. Un modificateur à la
   main se dit après la difficulté : « d8+2 contre 5 (+1 à la main :
   Minutie) ». Le reste net d'avantages ou de désavantages suit, s'il n'est
   pas nul : « , 1 avantage », « , 2 désavantages » ; celui qui vient de la
@@ -7446,7 +8102,7 @@ geste.
   suivi de ✓ ou ✗ : « 5 ✓, 9 ✓, 4 ✗ ». Une relance : « 4 ✗, relancé
   6 ✓ ». Un dé à désavantage : « 9/3 → 3 ✗ ». Une explosion : « 5 explose,
   + 6 = 11 ✓ » ; enchaînée : « 7 explose, + 6 explose, + 2 = 15 ✓ ». Une
-  valeur passée sous zéro (un 1 tiré avec deux blessures, sans bonus)
+  valeur passée sous zéro (un 1 tiré sous un modificateur de −2)
   porte le moins du journal, celui du modificateur, jamais un trait
   d'union : « −1 ✗ ». Avant la relecture de fin de groupe, elle s'écrivait
   par la simple conversion du nombre.
@@ -7494,24 +8150,76 @@ geste.
   endurance 5 → 0, corps 10 → 0. » ; armure déjà nulle : « Endurance
   5 → 0. » ; sur plusieurs zones : « Torse : armure 30 → 22. Jambe
   gauche : armure 10 → 2. »
-- **Une blessure**, quand l'endurance d'une zone tombe à 0 : d'un
-  personnage, « Blessure (jambe gauche) : −1 à ses jets. », puis « Blessure
-  (bras gauche) : −2 à ses jets. » ; d'un adversaire, « Blessure (jambe
-  droite), sans effet calculé. » ; rien, si le coup tue.
+- **Une blessure**, après les dégâts appliqués, quand un coup la donne
+  (§ 17.5) : d'un personnage, depuis le groupe 3, la capacité choisie,
+  « Blessure (bras gauche) : Main brûlée. », ou un état libre, « Blessure
+  (bras gauche) : « Tablier roussi » (état libre). » ; d'un adversaire,
+  inchangée, « Blessure (jambe droite), sans effet calculé. » ; rien, si le
+  coup tue. Jusqu'au groupe 2, c'était, à chaque zone dont l'endurance
+  tombait à 0, « Blessure (jambe gauche) : −1 à ses jets. ».
 - La mort : « Marmiton n° 1 meurt. »
 
-*L'annulation* (groupe 2, le seul gabarit neuf ; § 17.3), une ligne
-ajoutée à la fin du journal, en texte seul :
+*L'annulation* (groupe 2, le seul gabarit neuf de ce groupe ; § 17.3),
+une ligne ajoutée à la fin du journal, en texte seul :
 
 - une capacité ou un déplacement, par le nom court, la capacité et sa
   puissance : « Annulé : Aubépine — Taloche [1]. » ;
 - une passe : « Annulé : Aubépine — passer son tour. » ;
 - une fin de tour : « Annulé : la fin du tour des PJ. » (ou « des
-  adversaires »).
+  adversaires ») ;
+- depuis le groupe 3, un geste du MJ (« Annulé : MJ — défense de
+  Marmiton n° 2. ») et un effet hors d'un geste (« Annulé : effet de Boire
+  le bouillon sur Aubépine. ») ; un geste emboîté s'annule avec son geste
+  racine, sous la ligne de celui-ci.
 
 Elle porte la plage des lignes que le geste a écrites, qui restent : la
-sienne, puis, s'il y a lieu, « Fin du tour… », « — Tour … — », « Combat
-terminé… ». La région d'annonce la dit.
+sienne (pour un geste à plusieurs cibles, celles de toutes ses cibles),
+puis, s'il y a lieu, « Fin du tour… », les échéances, « — Tour … — »,
+« Combat terminé… ». La région d'annonce la dit.
+
+*Les gabarits du groupe 3* (mission du lot 4.3, § 7, qui les donne tous,
+mot pour mot ; les règles de ce paragraphe priment sur ses exemples, dont
+les nombres et les sources ne sont pas calculés sur la démonstration).
+Seuls les principes sont redits ici :
+
+- **Dans la ligne du geste qu'elles suivent**, comme l'esquive : une
+  intervention (« Aubépine intervient : … »), la capacité gardée jouée (sa
+  parenthèse dit « gardée par Guetter »), la contre-attaque jouée,
+  laissée ou impossible (« Aubépine ne contre-attaque pas. »), après la
+  phrase de la localisation, ou après le bilan sans localisation, et
+  avant les dégâts appliqués ; la blessure garde sa place, après eux.
+  **La phrase de la contre-attaque suit désormais celle de la localisation
+  qui annule.** Quand personne n'intervient, rien ne s'écrit.
+- **Dans le cadre du jet** : le 4e dé du critique (« 4e dé 6 ✓ : coup
+  critique, C = 8, doublés : 16 ») ; un dé inversé, avec sa source et son
+  prix (« 3 ✗ inversé (Nez fin, 1 souffle) → 8 ✓ ») ; une relance de la
+  palette, avec sa source ; « (dont 1 par Émincer) » après les réussites
+  d'un « +1 réussite ».
+- **Après la lettre**, le résultat après chaque opération de la palette,
+  dans leur ordre (« , ×2 (Flambage) : 16 ») ; « +N contre l'armure » dans
+  la forme de « dégrossir » ; les dégâts directs dans leur forme
+  d'aujourd'hui ; un report, « , reportés sur … (…) », et les dégâts
+  appliqués à un autre que la cible commencent par son nom. Une zone
+  choisie se dit dans la localisation (« zone choisie (Minutie) : torse »).
+- **Les phrases d'effet** (rendre, ±N, un état, déplacer) appliquées
+  pendant un geste viennent après la phrase des sources si elles précèdent
+  le premier dé, sinon après les dégâts et la blessure, avant la mort ;
+  plusieurs, dans l'ordre où elles s'appliquent. Chaque phrase de dégâts
+  appliqués commence par le nom de qui les reçoit dès qu'une ligne en
+  porte deux bilans ; une zone ne prend pas d'article.
+- **Leur propre ligne** : « Intervenir… » hors d'une attaque, attendre
+  (« Aubépine : Guetter, garde Taloche [1] jusqu'au prochain tour des
+  PJ. »), chaque cible d'un geste à plusieurs cibles (« cible 1 sur 2 »,
+  le coût sur la première ; une seule cible : la ligne d'une attaque
+  ordinaire), une attaque en plus (« (attaque en plus : Flambage) »),
+  chaque échéance, juste après « — Tour … — » (« Fin de l'état Étourdi
+  pour Marmiton n° 2. »), chaque geste du MJ (« MJ : … », une phrase par
+  valeur changée), et chaque effet appliqué hors d'un geste.
+- **Les segments neufs** suivent les règles plus haut : le nom de qui
+  intervient ou contre-attaque, en tête de sa phrase, est un nom de tête ;
+  la capacité qui le suit, l'accent ; le 4e dé et « inversé » entrent dans
+  le cadre du jet ; « Fin de … » s'écrit comme « Fin du tour… » ; « MJ : »
+  en italique, couleur secondaire.
 
 **Là où la mission permettait deux lectures**, le combat de référence
 (§ 17.10) en retient une, à confirmer par l'auteur :
@@ -7535,8 +8243,10 @@ terminé… ». La région d'annonce la dit.
   c'est un contrôle du jet et un contrôle du journal qui tiennent cette
   lecture (§ 12, point 46) ;
 - après un jet qui a touché, une face de contre-attaque laisse le bilan tel
-  quel (« Aubépine reçoit C = 19. »), et rien ne suit la phrase de la
-  localisation qui annule ;
+  quel (« Aubépine reçoit C = 19. ») ; jusqu'au groupe 2, rien ne suivait
+  la phrase de la localisation qui annule ; depuis le groupe 3, la phrase
+  de la contre-attaque la suit (mission du lot 4.3, § 10 : « Aubépine ne
+  contre-attaque pas. ») ;
 - le combat finit sans « Fin du tour » ;
 - une capacité que donnent l'arme tenue et une arme au sac ne porte pas le
   nom de l'arme entre parenthèses : l'arme au sac ne donne rien ;
@@ -7555,7 +8265,7 @@ premiers.
 | Cas | Texte |
 |---|---|
 | la source du désavantage des types d'armure mêlés | « types d'armure mêlés » |
-| une face de contre-attaque après un jet qui a touché | le bilan reste tel quel (lettre, ajustement, « dégrossir ») ; rien ne suit la phrase de la localisation |
+| une face de contre-attaque après un jet qui a touché | le bilan reste tel quel (lettre, ajustement, « dégrossir ») ; depuis le groupe 3, seule la phrase de la contre-attaque suit celle de la localisation |
 | un passif de niveau N > 1 dans la phrase des sources | cité une fois, compté N fois : « Ses 2 avantages (Solo du chef) et son désavantage (types d'armure mêlés) laissent 1 avantage. » |
 | la phrase des sources, quand il reste des désavantages | « Son avantage (…) et ses 2 désavantages (…, …) laissent 1 désavantage. » |
 | le net, quand la phrase des sources a déjà nommé la main | « , 1 avantage », sans redire la main |
@@ -7572,7 +8282,7 @@ premiers.
 | un coût en lien non payé | seul dans sa parenthèse : « (coût en lien non payé : un adversaire n'a pas de lien) » ; après un coût, le point-virgule entre deux espaces, comme partout au journal : « (5 souffle ; coût en lien non payé : un adversaire n'a pas de lien) » |
 | l'esquive, dès que le geste a plusieurs dés de localisation | chaque coup qu'elle change porte sa zone, même s'il est seul : « Aubépine intervient : Pas de côté (1 action, 3 souffle), torse 12 → 9. » |
 | les dégâts sur plusieurs dés, dont certains ne changent rien | la forme « Torse : … » reste ; un coup sans changement ne s'écrit pas |
-| plusieurs blessures dans un même geste | une phrase par zone, dans l'ordre des dés : « Blessure (jambe gauche) : −1 à ses jets. Blessure (torse) : −2 à ses jets. » ; aucune si le geste tue |
+| plusieurs blessures dans un même geste | une phrase par zone, dans l'ordre des dés, chacune avec ce qui a été choisi (depuis le groupe 3 ; jusqu'au groupe 2 : « Blessure (jambe gauche) : −1 à ses jets. Blessure (torse) : −2 à ses jets. ») ; aucune si le geste tue |
 | la face de contre-attaque avant le dernier dé | « Localisation 3 d20 → 6 : torse ; 20 : contre-attaque, l'attaque est annulée. » : le nombre est celui des dés du geste, les dés écrits sont ceux qui ont été lancés |
 | deux armes de même nom chez un adversaire | « Spatule souple », « Spatule souple (2) » |
 | l'heure avant dix heures | « à 9 h 05 » ; le fichier : `combat-2026-10-12-09h05.txt` |
@@ -7616,10 +8326,19 @@ Adversaires : Chef de partie ; Marmiton de corvée n° 1 et n° 2
 base, Pas de côté et Guetter. Aucune valeur d'un adversaire n'en change.
 Elle permet un combat complet : Aubépine contre le Chef de partie et deux
 Marmitons de corvée. Elle n'a ni paramètre `loc_multiple`, ni élément
-« Localisation multiple » ou « Centré », ni bloc de type État : ces cas, et
-les rôles qu'elle n'a pas (`bonus_precision`, `petit`, `esprit_de_corps`),
-se contrôlent sur des banques fabriquées en mémoire et sur des
-photographies écrites à la main (`tests/outils/photographies_essai.js`).
+« Localisation multiple », ni bloc de type Blessure : ces cas, et les rôles
+qu'elle n'a pas (`bonus_precision`, `petit`, `esprit_de_corps`), se
+contrôlent sur des banques fabriquées en mémoire et sur des photographies
+écrites à la main (`tests/outils/photographies_essai.js`). **Depuis le
+groupe 3** (mission du lot 4.3, § 10 ; § 10.3), elle a l'élément **Centré**,
+que porte Moulinet farineux, la capacité Centrée du Chef de partie et des
+Marmitons ; et **deux blocs de type État**, « Blessure », le bloc de
+blessure, reconnu par son nom (§ 17.2), aux capacités Cheville tordue,
+Main brûlée et Côtes froissées, et « Condition », à Étourdi, En nage et
+Affamé : **six capacités** de puissance 0, passives, sans coût, aux textes
+de la maquette. Aucune valeur d'un adversaire n'en change ; les copies de
+la démonstration parmi les photographies d'essai portent Centré comme
+elle.
 Depuis le groupe 2, sans que la banque change : le Chef de partie a deux
 puissances de déplacement, Pas chassé [1], gratuit, et [2], pour
 1 souffle ; Aubépine a deux types d'armure à égalité de dés, agile et
@@ -7644,29 +8363,52 @@ pendant fictif du combat de la maquette.
   (Savoir sauvage + Sens) contre 6 (compliqué) → … ». Aucun dé, aucun
   nombre, ni l'état final ne change ; le même combat, écrit en version 1 ou
   2 des règles, se dit d'une autre version et ne se rejoue pas (§ 17.8).
+  **Au groupe 3** (mission du lot 4.3, § 10), il s'est refait au début du
+  lot, de la même façon : la mission en a redonné huit lignes mot pour
+  mot, et rien d'autre (lignes 17, 20, 23, 27, 28, 31, 34 et 35). Sans le
+  −1 des blessures, les jets d'Aubépine d'après le geste 12 gagnent +1 :
+  pour garder les mêmes réussites et les mêmes dégâts, les dés bruts de
+  sept gestes baissent d'autant (14, 16, 19, 20, 22, 24 et 25). Aux gestes
+  12 et 16, Moulinet farineux, Centré, n'a qu'une cible cochée d'office,
+  Aubépine : une attaque ordinaire. Au geste 16, Aubépine laisse passer la
+  contre-attaque (ligne 23, « Aubépine ne contre-attaque pas. ») ; au
+  geste 22, elle choisit sa blessure, Main brûlée (ligne 31). L'étape
+  « Interventions » se passe partout. Le journal attendu ne porte plus
+  aucun signe moins : les cinq qu'il avait venaient du −1.
 - **Son déroulé** : vingt-cinq étapes, dont sept fins automatiques de
-  tour, sur cinq tours ; 105 événements, dont 48 événements de dé (37 de
-  chaîne, 11 de localisation), qui portent 50 lancers : deux dés lancés
-  sous désavantage donnent chacun deux valeurs. Les dés sont donnés bruts,
-  dans l'ordre où ils tombent.
+  tour, sur cinq tours ; **104 événements** depuis le groupe 3, dont
+  **46 événements de dé** (35 de chaîne, 11 de localisation), qui portent
+  48 lancers : deux dés lancés sous désavantage donnent chacun deux
+  valeurs. Les dés sont donnés bruts, dans l'ordre où ils tombent. Treize
+  « Appliquer », dont trois finissent un geste qui attend (la défense à
+  trois réussites du geste 6, le jet de caractéristique du 14, le manqué
+  du 20) ; un « laisser », une « blessure » ; plus aucune explosion. Au
+  groupe 2, il comptait 105 événements, dont 48 de dé (37 de chaîne), qui
+  portaient 50 lancers.
 - **Ce qu'il couvre** : les ajouts posés d'office (A1, J1, J2, J2), puis
   déplacés ; un déplacement gratuit et un déplacement payant ; un avantage
   et un désavantage de maîtrise qui s'annulent ; des dégâts fixés à la
   main, et « dégrossir » ; une mort par l'armure, l'endurance et le
   corps ; un coup sur une zone sans armure d'un adversaire, et sa blessure
   sans effet calculé ; deux coups sur une même zone d'Aubépine, le premier
-  vidant l'armure, le second l'endurance, puis un jet d'Aubépine à −1 ;
-  une défense avec relance d'avantage, venue par inversion du désavantage
-  de maîtrise d'un Marmiton, et une défense à trois réussites ; une
-  esquive pendant le tour adverse, et l'action qui manque ensuite ; une
-  capacité sans dégâts jouée avec un jet d'attaque, et sa localisation ; un
-  dé explosif, deux fois ; un jet de caractéristique et une attaque à mains
-  nues ; une face de contre-attaque qui annule une attaque déjà payée ;
-  « Passer son tour », la fin automatique des tours, « Fin de tour » ; la
-  fin du combat.
+  vidant l'armure, le second l'endurance, sans blessure, faute de corps
+  perdu ; un coup au bras gauche qui ôte du corps, et la blessure
+  qu'Aubépine choisit ; une défense avec relance d'avantage, venue par
+  inversion du désavantage de maîtrise d'un Marmiton, et une défense à
+  trois réussites ; une esquive pendant le tour adverse, et l'action qui
+  manque ensuite ; une capacité sans dégâts jouée avec un jet d'attaque, et
+  sa localisation ; un jet de caractéristique et une attaque à mains
+  nues ; une capacité Centrée à une seule cible ; une face de
+  contre-attaque qui annule une attaque déjà payée, et la contre-attaque
+  laissée ; « Passer son tour », la fin automatique des tours, « Fin de
+  tour » ; la fin du combat. Le dé explosif, qu'il couvrait deux fois
+  jusqu'au groupe 2 grâce au −1, se contrôle depuis sur des photographies
+  écrites à la main ; les autres règles du groupe 3, sur des combats
+  fabriqués aux dés imposés : le combat de référence ne s'allonge pas.
 - **Son état final** : Aubépine en D4, 0 action sur 2, 2 de souffle sur
-  10, 0 de lien sur 1, 4 de corps sur 10, deux blessures ; les trois
-  adversaires morts, aux tours 2, 5 et 5.
+  10, 0 de lien sur 1, 4 de corps sur 10, **une blessure, Main brûlée, au
+  bras gauche, jusqu'à la fin du combat** (au groupe 2 : deux zones
+  blessées) ; les trois adversaires morts, aux tours 2, 5 et 5.
 - **Un lecteur de scénario** (`tests/outils/scenario.js`) le traduit en
   événements : un scénario s'écrit avec des noms et des dés tels qu'ils
   tombent ; tous les dés d'une liste sont lancés, et aucun autre ; un dé de
@@ -7679,7 +8421,15 @@ pendant fictif du combat de la maquette.
   lecture (la plus haute puissance payable, sinon la plus basse) ; plus
   d'une façon possible arrête tout. Deux champs neufs : `annuler: true`,
   qui joue « Annuler le dernier geste », et `defense`, après la cible, le
-  type de défense à égalité.
+  type de défense à égalité. **Depuis le groupe 3**, il laisse passer toute
+  contre-attaque qui s'offre, passe l'étape « Interventions » et finit
+  d'« Appliquer » un geste qui attend ; une façon Centrée prend ses cibles
+  d'office (une cible écrite pour elle arrête tout) ; un champ neuf,
+  `blessure`, nomme la capacité choisie (lue dans la banque par
+  `etatsDeLaBanque`), ou un état libre, une par zone blessée, dans l'ordre
+  des dés : une blessure qui s'offre sans être écrite, ou écrite sans
+  s'offrir, arrête tout. Il ne sait jouer ni une intervention, ni une
+  contre-attaque, ni le critique : un critique qui s'offre arrête tout.
 - **Il est retrouvé mot pour mot à chaque étage** : par le moteur, sur la
   banque de démonstration publiée, avec ses cases d'office et son état
   final ; par le journal seul, sur des gestes écrits à la main ; par la
@@ -8696,49 +9446,54 @@ rendu de ce groupe.
 
 Les règles fines et la main du MJ (mission, § 13, que la mission appelle
 « groupe 2 » ; spécification 1.8, la 1.7 étant celle de la nouvelle
-fiche de personnage, § 13). Il ne commence que sur la parole de
-l'auteur, après l'arrêt d'essais du groupe 2 et `/clear` (§ 13) ; un
-complément (`plans/complement_lot4_groupe3.md`) pourra l'écrire.
+fiche de personnage, § 13). Il a commencé sur la parole de l'auteur, après
+l'arrêt d'essais du groupe 2, avec son complément, la mission du lot 4.3
+(`plans/complement_lot4_groupe3.md`, 26/10/2026), qui prime sur la mission
+pour ce qu'il dit. **Le noyau se fait d'abord, l'écran ensuite** (§ 17.7).
 
-- **Les interventions** : une étape « Interventions » après chaque jet
-  d'une attaque, touchée ou non, qui propose les leurs au protagoniste
-  attaqué et à ses alliés vivants ; un bouton « Intervenir… », à tout
-  moment du tour adverse ; **attendre**, qui fait jouer une capacité en
-  intervention jusqu'au prochain tour du camp de son auteur.
-- **La contre-attaque** (livret, « Contre-attaque ») : après une face de
-  contre-attaque, si l'attaquant est à la portée de l'arme du défenseur,
-  pour une action.
-- **Le coup critique** (livret, « Coup critique ») : à trois réussites,
-  avec un avantage non dépensé, un quatrième dé, qui double les dégâts.
-- **Le dé miroir** (livret, « Dé miroir ») : « Inverser » un dé lancé.
-- **Les passifs payants**, qui coûtent du souffle ou du lien, en boutons
-  pendant les jets qu'ils visent.
-- **La palette** de modificateurs, avec le texte de la capacité jouée : sur
-  les dés, la localisation, les dégâts (multiplier, ajouter, annuler,
-  reporter, toute la case, une attaque en plus, rendre), la cible
-  (défense, attaque, état, déplacement), chaque effet avec sa source et sa
-  durée.
-- **Les états** : ceux des blocs de type État de la banque, ou un état
-  libre, avec une durée.
-- **Le clic droit**, ou l'appui long sur téléphone, et un bouton
-  « Modifier… » pour le clavier : il ne change que le combat en cours, et
-  l'écrit au journal (modifier une valeur, changer l'équipement, un état,
-  déplacer sans action, retirer du combat).
-- **Plusieurs cibles**, avec un jet par cible.
+**Ce qui est fait, dans le noyau** (`js/combat/`) :
 
-La palette, « Intervenir… » et le menu du clic droit gardent leur place à
-dire : le groupe 3 la dira dans la bulle (§ 17.7), et sur un téléphone.
+- **les interventions** : l'étape « Interventions » après chaque jet
+  d'une attaque, touchée ou non, « Intervenir… » entre deux gestes, et
+  **attendre**, qui garde une ligne en intervention jusqu'au prochain tour
+  du camp de son auteur ; la pile de trois étages (§ 17.3) ;
+- **la contre-attaque**, jouée, laissée ou impossible (§ 17.3) ;
+- **le coup critique**, **le dé miroir**, la relance de la palette,
+  « +1 réussite » et ±N (§ 17.4) ;
+- **la palette** et ses dix-neuf effets, **les passifs non câblés**, payants
+  ou non, **les états** et les effets durables, avec leur échéance (§ 17.5,
+  § 17.6) ;
+- **les gestes du MJ** : modifier une valeur, changer l'équipement, ajouter
+  ou retirer un état, déplacer sans action, retirer du combat (§ 17.3) ;
+- **plusieurs cibles**, un jet par cible, par une façon Centrée ou « toute
+  la case » (§ 17.3, § 17.5) ;
+- **la blessure** du livret du 25/10/2026, choisie dans le bloc de
+  blessure, et la fin du −1 à ses jets (§ 17.5) ;
+- les états de la banque, figés (§ 17.2) ; les gabarits neufs du journal
+  (§ 17.9) ; la version 4 des règles et la forme des événements neufs
+  (§ 17.8) ; la démonstration et le combat de référence refaits (§ 17.10) ;
+  « ajusté à » sans effet (§ 17.5).
 
-**Les groupes 1 et 2 tiennent déjà ses points d'accroche** : le geste en
-cours est le sommet d'une pile, qui recevra l'intervention ou la
-contre-attaque, et l'annulation ne garde aujourd'hui que le geste racine
-(§ 17.3) ; les dégâts sont une base et une suite d'opérations, où
-entreront multiplier, ajouter et reporter ; la victime est un paramètre du
-calcul des dégâts, jamais la cible du geste ; le prix d'un geste est un
-objet ; l'attaque et la défense d'un protagoniste se lisent chacune par une
-seule fonction (`attaqueDe`, `defenseDe`), qui rend déjà une valeur, sa
-base et la liste de ses écarts ; le jet garde ses dés place par place, sans
-aucun total ; la bulle et sa ligne par façon recevront les lignes neuves ;
-une ligne du journal porte ses segments typés. **La version des règles
-passera à 3** : un combat du groupe 2 se dira alors « commencé avec une
-autre version du simulateur », sans se rejouer.
+**Ce qui reste à l'écran** (§ 17.7, à écrire avec lui) : montrer et
+commander tout cela, dans la bulle et sur un téléphone : l'étape
+« Interventions » et « Intervenir… », la garde d'attendre, l'étape
+« Contre-attaque », celle du critique, la palette et les boutons des
+passifs, les états sur les jetons et les fiches, le menu du MJ et le Mode
+MJ, l'étape « Cible » d'un geste à plusieurs cibles, et l'étape « La
+blessure ». Le noyau tient déjà, pour chacune, ce que l'offre permet et
+pourquoi le reste ne l'est pas.
+
+**Les groupes 1 et 2 tenaient ses points d'accroche**, et le noyau du
+groupe 3 s'y est branché sans en changer le principe : le geste en cours
+est le sommet d'une pile, qui reçoit l'intervention et la contre-attaque,
+et l'annulation ne garde que le geste racine (§ 17.3) ; les dégâts sont une
+base et une suite d'opérations, où sont entrées celles de la palette ; la
+victime est un paramètre du calcul des dégâts, jamais la cible du geste ;
+le prix d'un geste est un objet, que paie aussi un passif ; l'attaque et la
+défense d'un protagoniste se lisent chacune par une seule fonction
+(`attaqueDe`, `defenseDe`), qui rend une valeur, sa base et la liste de
+ses écarts, où entrent les ±N ; le jet garde ses dés place par place, sans
+aucun total, ce qui permet d'inverser ou de relancer le dernier ; une
+ligne du journal porte ses segments typés. **La version des règles est
+passée à 4** (§ 17.8) : un combat gardé avant le groupe 3 se dit
+« commencé avec une autre version du simulateur », sans se rejouer.

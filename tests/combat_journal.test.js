@@ -17,7 +17,9 @@
 // Les états et les gestes sont écrits à la main, sans le moteur : une ligne
 // est une fonction du geste fini, des noms et des photographies. Les jets,
 // eux, sont montés par js/combat/jet.js, dé après dé, comme le moteur les
-// tient. Tous les noms viennent de la démonstration.
+// tient. Tous les noms viennent de la démonstration. Les gabarits neufs de la
+// fin du combat (lot 4.3, mission § 7) se contrôlent sur des combats joués
+// par le moteur, dans tests/combat_g3_journal.test.js.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -28,6 +30,8 @@ import {
   ecrireBlessures,
   ecrireDe,
   ecrireDegats,
+  ecrireEcheance,
+  ecrireEffet,
   ecrireHeure,
   ecrireIntervention,
   ecrireJet,
@@ -63,6 +67,7 @@ import {
   capaciteEssai,
   chefDePartieEssai,
   etatEssai,
+  etatsEssai,
   faconEssai,
   marmitonDeCorveeEssai,
   miseEnPlaceEssai,
@@ -95,6 +100,20 @@ const GESTE_NEUTRE = {
   interventions: [],
   resultat: null,
   parent: null,
+  // Le groupe 3 (contrat de la vague 1, § 4).
+  genre: "geste",
+  garde: null,
+  gardee: null,
+  cibles: null,
+  rang: 0,
+  faites: [],
+  effets: [],
+  passifs: [],
+  critique: null,
+  contre: null,
+  blessures: [],
+  attaqueEnPlus: null,
+  sourceDeLAttaqueEnPlus: null,
 };
 
 // Un geste tel que le moteur le tient (§ 17), gelé : le journal qui le
@@ -138,7 +157,10 @@ function chaineFinie(circonstances, ...pas) {
 }
 
 const VIF = { genre: "passif", nom: "Vif", valeur: 1 };
-const blessures = (nombre) => ({ genre: "blessures", nom: null, valeur: -nombre });
+// Un ±N de la palette sur un personnage (convention 54) : n à chaque dé de
+// ses jets. Depuis la fin du −1 des blessures (lot 4.3), c'est lui, ou la
+// main, qui fait passer un dé sous zéro.
+const ecart = (n) => ({ genre: "effet", nom: "Cheville tordue", valeur: n });
 const aLaMain = (valeur, raison) => ({ genre: "main", nom: raison, valeur });
 
 const SOLO = { genre: "passif", nom: "Solo du chef", nombre: 1, de: null };
@@ -185,6 +207,9 @@ function zone(etat, id, code) {
   assert.notEqual(rang, -1, `${id} n'a pas la zone « ${code} »`);
   return rang;
 }
+
+// La blessure que la démonstration donne à Aubépine (lot 4.3), figée.
+const MAIN_BRULEE = etatsEssai().blessure.find((capacite) => capacite.nom === "Main brûlée");
 
 const brioche = () =>
   pjEssai((valeurs) => {
@@ -320,7 +345,9 @@ function referenceEcritePar(ecrivain) {
         jet: chaineFinie(defense({ difficulte: 4, avantages: [SOLO, horsMaitrise("Moulinet farineux", "Marmiton n° 2")] }), [6], [2], "relancer", [4], [1]),
         degats: LETTRE,
         localisation: [d20(12)],
-        resultat: resultat([touche(AUBEPINE, "jambe_gauche", { resistance: [5, 0], blessure: true, blessures: 1 })]),
+        // L'endurance tombe à 0 sans que le corps perde rien : ce n'est plus une
+        // blessure (mission, § 4.10).
+        resultat: resultat([touche(AUBEPINE, "jambe_gauche", { resistance: [5, 0], blessures: 1 })]),
       }),
     ),
     ecrivain.finDeTour("adv"),
@@ -340,30 +367,26 @@ function referenceEcritePar(ecrivain) {
             mobilisees: ["savoir_sauvage", "sens"],
             difficulte: 6,
             libelle: DIFFICULTES[6],
-            modificateurs: [blessures(1)],
           },
           [6],
-          "exploser",
           [6],
-          [6],
-          "exploser",
           [2],
-          [3],
         ),
       }),
     ),
     ecrivain.finDeTour("pj"),
     ecrivain.tour({ numero: 3, camp: "adv" }),
     // La face de contre-attaque annule l'attaque, mais le bilan du jet reste
-    // écrit, et rien ne suit la localisation.
+    // écrit ; Aubépine laisse passer la contre-attaque, et la ligne le dit.
     ecrivain.geste(
       etat,
       joue(CHEF, "Moulinet farineux", {
         prix: prix({ souffle: 5 }),
         cible: AUBEPINE,
-        jet: chaineFinie(defense({ difficulte: 5, modificateurs: [VIF, blessures(1)] }), [4]),
+        jet: chaineFinie(defense({ difficulte: 5 }), [3]),
         degats: LETTRE,
         localisation: [d20(20)],
+        contre: { statut: "laissee" },
       }),
     ),
     ecrivain.passe(etat, MARMITON_2),
@@ -378,7 +401,7 @@ function referenceEcritePar(ecrivain) {
         armePretee: 0,
         prix: prix({ souffle: 1, lien: 1, jauge: 0 }),
         cible: CHEF,
-        jet: chaineFinie(attaque({ difficulte: 7, modificateurs: [VIF, blessures(1)], avantages: [SOLO] }), [9], [5], "garder"),
+        jet: chaineFinie(attaque({ difficulte: 7, avantages: [SOLO] }), [8], [4], "garder"),
         degats: AUCUN,
         localisation: [d20(6)],
         resultat: resultat([touche(CHEF, "torse", { armure: [38, 38] })]),
@@ -388,7 +411,7 @@ function referenceEcritePar(ecrivain) {
       etat,
       joue(AUBEPINE, "Frappe", {
         cible: CHEF,
-        jet: chaineFinie(attaque({ difficulte: 7, modificateurs: [VIF, blessures(1)], avantages: [SOLO], desavantages: [horsMaitrise("Frappe")] }), [6]),
+        jet: chaineFinie(attaque({ difficulte: 7, avantages: [SOLO], desavantages: [horsMaitrise("Frappe")] }), [5]),
       }),
     ),
     ecrivain.finDeTour("pj"),
@@ -397,10 +420,12 @@ function referenceEcritePar(ecrivain) {
       etat,
       joue(CHEF, "Frappe", {
         cible: AUBEPINE,
-        jet: chaineFinie(defense({ difficulte: 5, modificateurs: [VIF, blessures(1)] }), [6], [4]),
+        jet: chaineFinie(defense({ difficulte: 5 }), [5], [3]),
         degats: LETTRE,
         localisation: [d20(16)],
         resultat: resultat([touche(AUBEPINE, "bras_gauche", { armure: [1, 0], resistance: [5, 0], corps: [10, 4], blessure: true, blessures: 2 })]),
+        // La blessure qu'Aubépine choisit dans le bloc de blessure.
+        blessures: [{ zone: zone(etat, AUBEPINE, "bras_gauche"), capacite: MAIN_BRULEE, libre: null }],
       }),
     ),
     ecrivain.finDeTour("adv"),
@@ -409,7 +434,7 @@ function referenceEcritePar(ecrivain) {
       etat,
       joue(AUBEPINE, "Frappe", {
         cible: MARMITON_2,
-        jet: chaineFinie(attaque({ difficulte: 5, modificateurs: [VIF, blessures(2)], avantages: [SOLO], desavantages: [horsMaitrise("Frappe")] }), [6], [9], [5]),
+        jet: chaineFinie(attaque({ difficulte: 5, avantages: [SOLO], desavantages: [horsMaitrise("Frappe")] }), [4], [7], [3]),
         degats: LETTRE,
         localisation: [d20(15)],
         resultat: resultat([touche(MARMITON_2, "jambe_droite", { resistance: [0, 0], corps: [7, 0], blessures: 1 })], true),
@@ -419,7 +444,7 @@ function referenceEcritePar(ecrivain) {
       etat,
       joue(AUBEPINE, "Frappe", {
         cible: CHEF,
-        jet: chaineFinie(attaque({ difficulte: 7, modificateurs: [VIF, blessures(2)], avantages: [SOLO], desavantages: [horsMaitrise("Frappe")] }), [8], [10], [9]),
+        jet: chaineFinie(attaque({ difficulte: 7, avantages: [SOLO], desavantages: [horsMaitrise("Frappe")] }), [6], [8], [7]),
         degats: LETTRE,
         localisation: [d20(13)],
         resultat: resultat([touche(CHEF, "jambe_gauche", { resistance: [5, 0], corps: [10, 0], blessure: true, blessures: 1 })], true),
@@ -447,7 +472,8 @@ const GENRES_DE_REFERENCE = [
   ...["geste", "geste", "fin"],
 ];
 
-const TYPES = ["texte", "acteur", "capacite", "cible", "reussi", "echoue", "lettre", "ajuste", "mort", "fin_de_tour", "tour", "suite"];
+// Au groupe 3, « echeance » (« Fin de … ») et « mj » (« MJ : »).
+const TYPES = ["texte", "acteur", "capacite", "cible", "reussi", "echoue", "lettre", "ajuste", "mort", "fin_de_tour", "tour", "suite", "echeance", "mj"];
 
 // Ce que toute ligne fabriquée tient (contrat du groupe 2, § 3.1) : gelée ;
 // ses segments redonnent son texte (la règle d'or) ; aucun n'est vide ;
@@ -532,7 +558,8 @@ test("le combat de référence : les phrases de chaque ligne de geste sont celle
   assert.deepEqual(vues[5].ligne.phrases, ["ouverture", "sources", "jet", "localisation", "degats", "mort"], "l'Émincer qui tue");
   assert.deepEqual(vues[7].ligne.phrases, ["ouverture", "sources", "jet", "localisation", "intervention", "degats"], "la défense au Pas de côté");
   assert.deepEqual(vues[9].ligne.phrases, ["jet"], "le jet de caractéristique tient en une phrase");
-  assert.deepEqual(vues[10].ligne.phrases, ["ouverture", "sources", "jet", "localisation"], "la face de contre-attaque");
+  assert.deepEqual(vues[10].ligne.phrases, ["ouverture", "sources", "jet", "localisation", "contre_attaque"], "la face de contre-attaque, puis la contre-attaque laissée");
+  assert.deepEqual(vues[13].ligne.phrases, ["ouverture", "sources", "jet", "localisation", "degats", "blessures"], "la blessure choisie");
 });
 
 // ─── Le cadre ───────────────────────────────────────────────────────────────
@@ -772,11 +799,11 @@ test("le dé porte la somme nette de ses modificateurs, main comprise, et rien q
   const de = (modificateurs, faces = 10) => ecrireDe({ faces, modificateurs });
   assert.equal(de([]), "d10");
   assert.equal(de([VIF]), "d10+1");
-  assert.equal(de([blessures(1)], 8), "d8−1");
-  assert.equal(de([VIF, blessures(1)]), "d10", "un bonus et une blessure s'effacent");
+  assert.equal(de([ecart(-1)], 8), "d8−1");
+  assert.equal(de([VIF, ecart(-1)]), "d10", "un bonus et un écart s'effacent");
   assert.equal(de([VIF, aLaMain(1, "Minutie")], 8), "d8+2");
-  assert.equal(de([VIF, blessures(2), aLaMain(-2, "Fumée")], 12), "d12−3");
-  assert.equal(de([blessures(1)], 8).codePointAt(2), 0x2212, "le moins du journal n'est pas le trait d'union");
+  assert.equal(de([VIF, ecart(-2), aLaMain(-2, "Fumée")], 12), "d12−3");
+  assert.equal(de([ecart(-1)], 8).codePointAt(2), 0x2212, "le moins du journal n'est pas le trait d'union");
 });
 
 test("un dé de la chaîne : sa valeur modificateur compris, puis ✓ ou ✗", () => {
@@ -826,14 +853,15 @@ test("une explosion : la première valeur modificateur compris, chaque ajout bru
   assert.equal(ecrirePlace(apresRelance, apresRelance.places[0]), "4 ✗, relancé 6 explose, + 5 = 11 ✓");
 });
 
-// Relecture de fin de groupe (lot 4) : un personnage à deux blessures, sans
-// bonus, qui tire 1. Ni le combat de référence ni les gabarits ci-dessus
-// n'avaient de dé sous zéro, et le nombre s'écrivait avec le trait d'union.
+// Relecture de fin de groupe (lot 4) : un personnage à −2 à chaque dé (au lot
+// 4, deux blessures ; depuis le lot 4.3, un ±N de la palette), sans bonus, qui
+// tire 1. Ni le combat de référence ni les gabarits ci-dessus n'avaient de dé
+// sous zéro, et le nombre s'écrivait avec le trait d'union.
 const TRAIT_D_UNION = String.fromCodePoint(0x2d);
 const sansTraitDUnion = (texte) => assert.ok(!texte.includes(TRAIT_D_UNION), `« ${texte} » porte un trait d'union`);
 
 test("une valeur de dé passée sous zéro porte le moins du journal : le dé seul, la relance, les lancers d'un désavantage et le pire, l'explosion et sa somme", () => {
-  const blesse = (champs = {}) => ({ genre: "attaque", faces: 8, difficulte: 5, modificateurs: [blessures(2)], ...champs });
+  const blesse = (champs = {}) => ({ genre: "attaque", faces: 8, difficulte: 5, modificateurs: [ecart(-2)], ...champs });
   const places = (jet) => jet.places.map((place) => ecrirePlace(jet, place));
 
   const seul = chaineFinie(blesse(), [1]);
@@ -847,11 +875,11 @@ test("une valeur de dé passée sous zéro porte le moins du journal : le dé se
 
   const desavantage = chaineFinie(blesse({ desavantages: [horsMaitrise("Émincer")] }), [2, 1]);
   assert.deepEqual(places(desavantage), ["0/−1 → −1 ✗"]);
-  const trois = chaineFinie(blesse({ modificateurs: [blessures(2), aLaMain(-3, "Fumée")], desavantages: [horsMaitrise("Émincer"), MELES] }), [8, 1, 6]);
+  const trois = chaineFinie(blesse({ modificateurs: [ecart(-2), aLaMain(-3, "Fumée")], desavantages: [horsMaitrise("Émincer"), MELES] }), [8, 1, 6]);
   assert.deepEqual(places(trois), ["3/−4/1 → −4 ✗"], "chaque lancer porte son signe, et le pire gardé aussi");
 
   // Un d6 à −8 : sa face maximale vaut −2, sous la difficulté ; il explose.
-  const accable = { genre: "caracteristique", faces: 6, difficulte: 6, modificateurs: [blessures(6), aLaMain(-2, "Fumée")] };
+  const accable = { genre: "caracteristique", faces: 6, difficulte: 6, modificateurs: [ecart(-6), aLaMain(-2, "Fumée")] };
   const ratee = chaineFinie(accable, [6], "exploser", [1]);
   assert.deepEqual(places(ratee), ["−2 explose, + 1 = −1 ✗"], "la première valeur et la somme ; l'ajout, brut, n'a pas de signe");
   const enchainee = chaineFinie(accable, [6], "exploser", [6], "exploser", [6], [1]);
@@ -975,27 +1003,27 @@ test("la ligne d'un jet au dé négatif : le modificateur et la valeur portent l
     capacite: indice(etat, "pj1", "Goûter"),
     caracteristiques: sens,
     difficulte: 6,
-    jet: chaineFinie({ genre: "caracteristique", lanceur: "pj1", faces: 6, caracteristiques: sens, mobilisees: sens, difficulte: 6, libelle: DIFFICULTES[6], modificateurs: [blessures(2)] }, [1]),
+    jet: chaineFinie({ genre: "caracteristique", lanceur: "pj1", faces: 6, caracteristiques: sens, mobilisees: sens, difficulte: 6, libelle: DIFFICULTES[6], modificateurs: [ecart(-2)] }, [1]),
   });
   const ligne = ligneDuGeste(etat, gouter);
   assert.equal(ligne, "Aubépine : Goûter, d6−2 (Savoir sauvage + Sens) contre 6 (compliqué) → −1 ✗ : aucune réussite.");
   assert.equal([...ligne].filter((signe) => signe === SIGNES.moins).length, 2, "le modificateur et la valeur");
   sansTraitDUnion(ligne);
 
-  // En défense, sous un désavantage : la troisième attaque sur un personnage deux fois blessé.
+  // En défense, sous un désavantage : une attaque sur un personnage à −2 à chaque dé de défense.
   const frappe = gesteEssai({
     acteur: "adv2",
     capacite: indice(etat, "adv2", "Frappe"),
     cible: "pj1",
-    jet: chaineFinie(defenseDuPj({ modificateurs: [blessures(2)], desavantages: [MELES] }), [2, 1]),
+    jet: chaineFinie(defenseDuPj({ modificateurs: [ecart(-2)], desavantages: [MELES] }), [2, 1]),
     degats: LETTRE,
     localisation: [d20(5)],
-    resultat: resultat([coup(zone(etat, "pj1", "torse"), { resistance: [5, 0], blessure: true, blessures: 3 })]),
+    resultat: resultat([coup(zone(etat, "pj1", "torse"), { resistance: [5, 0], blessures: 1 })]),
   });
   const recue = ligneDuGeste(etat, frappe);
   assert.equal(
     recue,
-    "Marmiton : Frappe contre Aubépine. Aubépine lance sa défense, d8−2 contre 4, 1 désavantage → 0/−1 → −1 ✗ : aucune réussite, Aubépine reçoit C = 15. Localisation d20 → 5 : torse. Endurance 5 → 0. Blessure (torse) : −3 à ses jets.",
+    "Marmiton : Frappe contre Aubépine. Aubépine lance sa défense, d8−2 contre 4, 1 désavantage → 0/−1 → −1 ✗ : aucune réussite, Aubépine reçoit C = 15. Localisation d20 → 5 : torse. Endurance 5 → 0.",
   );
   sansTraitDUnion(recue);
 });
@@ -1310,8 +1338,10 @@ test("une face décalée : le dé, la face d'arrivée, la raison, puis la zone d
   assert.equal(ecrireLocalisation(etat, frappe(d20(14, { valeur: 3, raison: "Nez fin" }))), "Localisation d20 → 14, décalée à 17 (Nez fin) : bras gauche.");
   assert.equal(ecrireLocalisation(etat, frappe(d20(14, null))), "Localisation d20 → 14 : jambe droite.", "sans décalage");
   assert.equal(ecrireLocalisation(etat, frappe(d20(14, { valeur: 0, raison: "Minutie" }))), "Localisation d20 → 14 : jambe droite.", "un décalage nul n'en est pas un");
-  // L'offre ne permet pas de sortir de la grille ; le journal, lui, ne lève pas.
-  assert.equal(ecrireLocalisation(etat, frappe(d20(14, { valeur: 20, raison: "Minutie" }))), "Localisation d20 → 14, décalée à 34 (Minutie) : ?.");
+  // L'offre ne permet pas de sortir de la grille ; une face au-delà va à la
+  // zone la plus proche (contrat de la vague 1, § 12, choix 5), et le journal
+  // ne lève pas.
+  assert.equal(ecrireLocalisation(etat, frappe(d20(14, { valeur: 20, raison: "Minutie" }))), "Localisation d20 → 14, décalée à 34 (Minutie) : bras droit.");
 
   const deux = duel({ adv: aPlusieursD20(2) });
   const double = gesteEssai({ acteur: "adv2", capacite: indice(deux, "adv2", "Frappe"), cible: "pj1", localisation: [d20(6), d20(14, { valeur: -2, raison: "Minutie" })] });
@@ -1424,29 +1454,33 @@ test("les dégâts appliqués sur plusieurs d20 : une phrase par coup qui change
   assert.equal(ecrireDegats(etat, applique(coup(torse, { armure: [30, 30] }), coup(jambe, { armure: [15, 15] }))), null);
 });
 
-test("la blessure, quand une endurance tombe à 0 : le malus d'un PJ, rien de calculé pour un adversaire, rien si le coup tue", () => {
+test("la blessure : celle qu'un PJ a choisie, une capacité ou un état libre ; rien de calculé pour un adversaire ; rien si le coup tue", () => {
   const etat = duel({
     adv: (valeurs) => {
       Object.assign(valeurs.zones[1], { nom: "Aile gauche", ecrit: "Aile gauche", code: null });
     },
   });
-  const surLePj = (coups, mort = false) => gesteEssai({ acteur: "adv2", capacite: indice(etat, "adv2", "Frappe"), cible: "pj1", localisation: [d20(12)], resultat: resultat(coups, mort) });
+  const surLePj = (coups, choisies = [], mort = false) =>
+    gesteEssai({ acteur: "adv2", capacite: indice(etat, "adv2", "Frappe"), cible: "pj1", localisation: [d20(12)], resultat: resultat(coups, mort), blessures: choisies });
   const surLAdversaire = (coups, mort = false) => gesteEssai({ capacite: indice(etat, "pj1", "Frappe"), cible: "adv2", localisation: [d20(12)], resultat: resultat(coups, mort) });
   const jambe = zone(etat, "pj1", "jambe_gauche");
   const bras = zone(etat, "pj1", "bras_gauche");
 
-  assert.equal(ecrireBlessures(etat, surLePj([coup(jambe, { resistance: [5, 0], blessure: true, blessures: 1 })])), "Blessure (jambe gauche) : −1 à ses jets.");
-  assert.equal(ecrireBlessures(etat, surLePj([coup(bras, { resistance: [5, 0], blessure: true, blessures: 2 })])), "Blessure (bras gauche) : −2 à ses jets.");
+  const blesse = (indice) => coup(indice, { resistance: [5, 0], corps: [10, 8], blessure: true, blessures: 1 });
+  assert.equal(ecrireBlessures(etat, surLePj([blesse(jambe)], [{ zone: jambe, capacite: MAIN_BRULEE, libre: null }])), "Blessure (jambe gauche) : Main brûlée.");
+  assert.equal(ecrireBlessures(etat, surLePj([blesse(bras)], [{ zone: bras, capacite: null, libre: "Doigt entaillé" }])), "Blessure (bras gauche) : « Doigt entaillé » (état libre).");
+  // Le −1 à ses jets n'est plus (mission, § 4.10) : un coup qui blesse, sans blessure choisie, n'écrit rien.
+  assert.equal(ecrireBlessures(etat, surLePj([blesse(jambe)])), null, "la blessure d'un PJ est celle qu'il a choisie");
   assert.equal(ecrireBlessures(etat, surLAdversaire([coup(1, { resistance: [5, 0], blessure: true, blessures: 1 })])), "Blessure (aile gauche), sans effet calculé.");
 
   assert.equal(ecrireBlessures(etat, surLePj([coup(jambe, { resistance: [5, 1] })])), null, "l'endurance tient");
   assert.equal(ecrireBlessures(etat, surLePj([coup(jambe, { resistance: [0, 0], corps: [10, 6], blessures: 1 })])), null, "déjà blessée : pas une blessure de plus");
-  assert.equal(ecrireBlessures(etat, surLePj([coup(jambe, { resistance: [5, 0], corps: [3, 0], blessure: true, blessures: 1 })], true)), null, "le coup tue");
+  assert.equal(ecrireBlessures(etat, surLePj([coup(jambe, { resistance: [5, 0], corps: [3, 0], blessures: 1 })], [], true)), null, "le coup tue");
   assert.equal(ecrireBlessures(etat, surLAdversaire([coup(1, { resistance: [5, 0], corps: [2, 0], blessure: true, blessures: 1 })], true)), null);
   assert.equal(ecrireBlessures(etat, gesteEssai({ capacite: indice(etat, "pj1", "Frappe"), cible: "adv2" })), null, "rien n'a été appliqué");
 });
 
-test("plusieurs blessures dans un même geste : une phrase par zone, dans l'ordre des dés", () => {
+test("plusieurs blessures dans un même geste : une phrase par zone, dans l'ordre des dés, chacune celle qui a été choisie", () => {
   const etat = duel({ adv: aPlusieursD20(2) });
   const frappe = gesteEssai({
     acteur: "adv2",
@@ -1454,11 +1488,15 @@ test("plusieurs blessures dans un même geste : une phrase par zone, dans l'ordr
     cible: "pj1",
     localisation: [d20(12), d20(6)],
     resultat: resultat([
-      coup(zone(etat, "pj1", "jambe_gauche"), { resistance: [5, 0], blessure: true, blessures: 1 }),
-      coup(zone(etat, "pj1", "torse"), { resistance: [5, 0], blessure: true, blessures: 2 }),
+      coup(zone(etat, "pj1", "jambe_gauche"), { resistance: [5, 0], corps: [10, 9], blessure: true, blessures: 1 }),
+      coup(zone(etat, "pj1", "torse"), { resistance: [5, 0], corps: [9, 7], blessure: true, blessures: 2 }),
     ]),
+    blessures: [
+      { zone: zone(etat, "pj1", "jambe_gauche"), capacite: MAIN_BRULEE, libre: null },
+      { zone: zone(etat, "pj1", "torse"), capacite: null, libre: "Doigt entaillé" },
+    ],
   });
-  assert.equal(ecrireBlessures(etat, frappe), "Blessure (jambe gauche) : −1 à ses jets. Blessure (torse) : −2 à ses jets.");
+  assert.equal(ecrireBlessures(etat, frappe), "Blessure (jambe gauche) : Main brûlée. Blessure (torse) : « Doigt entaillé » (état libre).");
 });
 
 test("la mort : « meurt », avec le nom court de la cible ; rien si elle survit", () => {
@@ -1606,7 +1644,7 @@ test("l'annonce d'une explosion : ce que le dé peut faire, puis la somme et son
   assert.equal(annonce(etat, gouter(chaine(de6(), [6])), DE), "1er dé : 6, il peut exploser.");
   assert.equal(annonce(etat, gouter(chaine(de6(), [6], "exploser", [3])), DE), "Le dé explose : 6 plus 3, 9, réussi.");
   assert.equal(annonce(etat, gouter(chaine(de6({ difficulte: 13 }), [6], "exploser", [6])), DE), "Le dé explose : 6 plus 6, 12, il peut encore exploser.");
-  assert.equal(annonce(etat, gouter(chaine(de6({ difficulte: 13, modificateurs: [blessures(1)] }), [6], "exploser", [6], "exploser", [2])), DE), "Le dé explose : 5 plus 6 plus 2, 13, réussi.");
+  assert.equal(annonce(etat, gouter(chaine(de6({ difficulte: 13, modificateurs: [ecart(-1)] }), [6], "exploser", [6], "exploser", [2])), DE), "Le dé explose : 5 plus 6 plus 2, 13, réussi.");
   assert.equal(
     annonce(etat, gouter(chaine(de6({ difficulte: 12, avantages: [mainAvantageuse(1, "Minutie")] }), [6], "exploser", [3])), DE),
     "Le dé explose : 6 plus 3, 9, échec. Relancer ou garder ?",
@@ -1673,14 +1711,14 @@ test("l'annonce d'un dé passé sous zéro porte le moins du journal, comme sa l
   const enCours = (jet) => gesteEssai({ capacite: indice(etat, "pj1", "Frappe"), cible: "adv2", moment: "jet", jet });
   // En défense, sous un désavantage, le dé qui échoue finit la chaîne : le bilan suit.
   const recue = (desavantages, ...pas) =>
-    gesteEssai({ acteur: "adv2", capacite: indice(etat, "adv2", "Frappe"), cible: "pj1", moment: "bilan", jet: chaineFinie(defenseDuPj({ modificateurs: [blessures(2)], desavantages }), ...pas), degats: LETTRE });
+    gesteEssai({ acteur: "adv2", capacite: indice(etat, "adv2", "Frappe"), cible: "pj1", moment: "bilan", jet: chaineFinie(defenseDuPj({ modificateurs: [ecart(-2)], desavantages }), ...pas), degats: LETTRE });
   const dites = [
-    [annonce(etat, enCours(chaine(attaqueDuPj({ modificateurs: [blessures(2)], avantages: [SOLO] }), [1])), DE), "1er dé : −1, échec. Relancer ou garder ?"],
+    [annonce(etat, enCours(chaine(attaqueDuPj({ modificateurs: [ecart(-2)], avantages: [SOLO] }), [1])), DE), "1er dé : −1, échec. Relancer ou garder ?"],
     [annonce(etat, recue([MELES], [2, 1]), DE), "1er dé : 0 et −1, on garde −1, échec. Aucune réussite, Aubépine reçoit C = 15."],
     [annonce(etat, recue([MELES, mainAvantageuse(1, "Fumée")], [2, 1, 3]), DE), "1er dé : 0, −1 et 1, on garde −1, échec. Aucune réussite, Aubépine reçoit C = 15."],
   ];
   const gouter = (jet) => gesteEssai({ mode: "caracteristique", capacite: indice(etat, "pj1", "Goûter"), moment: "jet", jet });
-  const accable = { genre: "caracteristique", lanceur: "pj1", faces: 6, difficulte: 6, modificateurs: [blessures(6), aLaMain(-2, "Fumée")], avantages: [mainAvantageuse(1, "Minutie")] };
+  const accable = { genre: "caracteristique", lanceur: "pj1", faces: 6, difficulte: 6, modificateurs: [ecart(-6), aLaMain(-2, "Fumée")], avantages: [mainAvantageuse(1, "Minutie")] };
   dites.push(
     [annonce(etat, gouter(chaine(accable, [6])), DE), "1er dé : −2, il peut exploser."],
     [annonce(etat, gouter(chaine(accable, [6], "exploser", [1])), DE), "Le dé explose : −2 plus 1, −1, échec. Relancer ou garder ?"],
@@ -1928,22 +1966,65 @@ test("aucune espace insécable : ni dans le source du journal, ni dans ce qu'il 
   assert.ok(`a${INSECABLES[0]}b` !== "a b", "le témoin est bien une espace insécable");
 });
 
-test("le journal de référence porte cinq signes moins, et le journal les écrit par leur code", () => {
+// Le journal de référence n'a plus de signe moins (mission, § 10) : les cinq
+// qu'il portait venaient du −1 des blessures, qui n'est plus. Ceux du journal
+// viennent désormais des gabarits neufs (mission, § 7) : « −3 (…) : 17 »,
+// « −1 à chaque dé », « plus de −1 à chaque dé de défense » ; le signe fois
+// de « ×2 » et les guillemets d'un état libre s'écrivent, eux aussi, par leur
+// code.
+test("le journal de référence ne porte plus de signe moins ; les gabarits neufs écrivent le leur, le signe fois et les guillemets, par leur code", () => {
   const moins = [...journalAttendu.join("")].filter((signe) => signe === SIGNES.moins).length;
-  assert.equal(moins, 5);
+  assert.equal(moins, 0, "le −1 des blessures n'est plus");
   assert.equal(SIGNES.moins.codePointAt(0), 0x2212);
   // Aucun nombre ne s'y écrit avec le trait d'union : ni dans le journal
   // attendu, ni dans les lignes que les fonctions du journal en tirent.
   for (const ligne of [...journalAttendu, ...lignesDeReference()]) assert.doesNotMatch(ligne, /-\d/, ligne);
   assert.match(`d8${TRAIT_D_UNION}1`, /-\d/, "le motif voit un trait d'union devant un chiffre");
 
+  // Les gabarits neufs qui portent un moins, le signe fois, des guillemets.
+  const etat = duel();
+  const MJ = { genre: "mj" };
+  const parLeMj = { source: MJ, prix: null, auteur: null, camp: "pj", rang: 0, durable: null };
+  const frappe = gesteEssai({
+    capacite: indice(etat, "pj1", "Frappe"),
+    cible: "adv2",
+    jet: chaineFinie(attaqueDuPj(), [6], [7], [2]),
+    degats: LETTRE,
+    effets: [
+      { type: "effet", genre: "multiplier", k: 2, ...parLeMj },
+      { type: "effet", genre: "retrancher", n: 3, ...parLeMj },
+    ],
+  });
+  const ecrits = [
+    [ecrireBilan(etat, frappe), "2 réussites, B = 10, ×2 (MJ) : 20, −3 (MJ) : 17"],
+    [ecrireEffet(etat, { type: "effet", genre: "defense", sur: "pj1", n: -1, duree: "combat", ...parLeMj }), "Défense d'Aubépine : −1 à chaque dé (MJ), jusqu'à la fin du combat."],
+    [ecrireEcheance(etat, { id: 3, genre: "modif", porteur: "pj1", auteur: null, camp: "pj", duree: "tour", source: MJ, valeur: "defense", n: -1 }), "Fin de MJ pour Aubépine : plus de −1 à chaque dé de défense."],
+    [ecrireEffet(etat, { type: "effet", genre: "etat", sur: "pj1", libre: "Couvert de farine", duree: "combat", ...parLeMj }), "Aubépine : état « Couvert de farine » (MJ), jusqu'à la fin du combat."],
+  ];
+  for (const [ecrit, attendu] of ecrits) {
+    assert.equal(ecrit, attendu);
+    assert.doesNotMatch(ecrit, /-\d/, ecrit);
+  }
+  const tout = ecrits.map(([ecrit]) => ecrit).join("");
+  assert.equal([...tout].filter((signe) => signe === SIGNES.moins).length, 3, "trois moins, celui de SIGNES");
+  assert.equal([...tout].filter((signe) => signe.codePointAt(0) === 0x00d7).length, 1, "le signe fois, U+00D7");
+  assert.deepEqual([0x00ab, 0x00bb].map((point) => tout.includes(String.fromCodePoint(point))), [true, true], "les guillemets");
+
   // Hors des commentaires, le source n'écrit aucun des signes : il les prend
   // à SIGNES, pour qu'aucun éditeur ne remplace l'un par son voisin.
   const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   assert.ok(code.includes("SIGNES.fleche") && code.includes("SIGNES.moins"), "le code lu est bien celui du journal");
   for (const [nom, signe] of Object.entries(SIGNES)) assert.ok(!code.includes(signe), `le signe « ${nom} » est écrit en dur`);
-  // Les points de suspension de la ligne en cours (groupe 2) aussi.
-  assert.ok(!code.includes(String.fromCodePoint(0x2026)), "les points de suspension sont écrits en dur");
+  // Les points de suspension de la ligne en cours (groupe 2) aussi, et, au
+  // groupe 3, le signe fois et les guillemets.
+  for (const [nom, point] of [
+    ["les points de suspension", 0x2026],
+    ["le signe fois", 0x00d7],
+    ["le guillemet ouvrant", 0x00ab],
+    ["le guillemet fermant", 0x00bb],
+  ]) {
+    assert.ok(!code.includes(String.fromCodePoint(point)), `${nom} : écrit en dur`);
+  }
 });
 
 test("le journal n'importe que le noyau qu'on lui permet, et ne lit rien de l'appareil", () => {

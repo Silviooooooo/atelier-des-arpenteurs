@@ -44,13 +44,14 @@ import { texteDuJournal } from "../js/combat/journal.js";
 import { vueBarre, vueFiche, vuePanneau, vuePlateau } from "../js/combat/lecture.js";
 import { appliquer, gesteEnCours, ouvrirCombat, rejeu, rejouer } from "../js/combat/moteur.js";
 import { boutons, candidats, offre } from "../js/combat/offre.js";
-import { photographierAdversaire, photographierPersonnage } from "../js/combat/photographie.js";
+import { etatsDeLaBanque, photographierAdversaire, photographierPersonnage } from "../js/combat/photographie.js";
 import { tableDesRoles } from "../js/combat/roles.js";
 import { indexerCreation } from "../js/personnage/calcul.js";
 import { accepter, lirePersonnage } from "../js/personnage/format.js";
 import { CARACTERISTIQUES } from "../js/personnage/regles.js";
 import { ouvrirAvecMotDePasse } from "../js/securite/chiffrement.js";
 import { journalAttendu, scenario } from "./outils/combat_reference.js";
+import { adversaireEssai, miseEnPlaceEssai, pjEssai } from "./outils/photographies_essai.js";
 import { versContenu } from "./outils/scenario.js";
 
 // ─── Le combat de référence, par les photographies de la démonstration ──────
@@ -71,7 +72,8 @@ const PHOTOS = {
   "Marmiton de corvée": photoDe(photographierAdversaire(ADVERSAIRES, "Marmiton de corvée", { banque: BANQUE, roles: ROLES })),
 };
 
-const { contenu: CONTENU } = versContenu(scenario, PHOTOS);
+// La blessure du geste 22 se prend dans le bloc de blessure de la banque (lot 4.3).
+const { contenu: CONTENU } = versContenu(scenario, PHOTOS, { banque: BANQUE });
 const NOMBRE = CONTENU.evenements.length;
 const prefixe = (n, contenu = CONTENU) => ({ ...contenu, evenements: contenu.evenements.slice(0, n) });
 
@@ -150,7 +152,11 @@ test("la sonde des écarts dit où deux états se séparent, et se tait sur deux
 });
 
 test("le combat de référence, rejoué, rend son journal attendu : c'est bien lui que ces contrôles éprouvent", () => {
-  assert.equal(NOMBRE, 105);
+  // Recompté sur le scénario au lot 4.3 (mission, § 10) : trois « Appliquer »
+  // de plus (deux manqués et un jet de caractéristique), une contre-attaque
+  // laissée, une blessure choisie, deux cibles Centrées que l'on ne règle plus,
+  // et les dés des gestes que la fin du −1 a changés.
+  assert.equal(NOMBRE, 104);
   assert.deepEqual(lignesDe(FINAL), journalAttendu);
   assert.equal(FINAL.phase, "termine");
 });
@@ -196,7 +202,7 @@ test("préfixes : le rejeu s'arrête au premier refus et dit lequel, sans tronqu
   // Un événement qui ne se répète jamais (le lancement, une confirmation, « Appliquer »), glissé deux fois de suite :
   // le second n'est plus attendu.
   const sansReplique = CONTENU.evenements.flatMap((evenement, rang) => (["lancer", "confirmer", "appliquer"].includes(evenement.type) ? [rang + 1] : []));
-  assert.equal(sansReplique.length, 13);
+  assert.equal(sansReplique.length, 16);
   for (const n of sansReplique) {
     const abime = { ...CONTENU, evenements: [...CONTENU.evenements.slice(0, n), CONTENU.evenements[n - 1], ...CONTENU.evenements.slice(n)] };
     const rejoue = rejouer(abime);
@@ -299,11 +305,25 @@ test("gel : un événement refusé rend l'état reçu, l'objet même, à chaque 
 });
 
 test("gel : un état partage avec le précédent ce qui n'a pas changé", () => {
+  let blessures = 0;
   for (let n = 2; n <= NOMBRE; n += 1) {
+    // Au lot 4.3, une blessure choisie prolonge la photographie de sa victime
+    // (contrat de la vague 1, § 5.9) : seule celle-là change, les autres restent
+    // l'objet même, et ses capacités d'avant aussi.
+    if (CONTENU.evenements[n - 1].type === "blessure") {
+      blessures += 1;
+      const changees = TENUS[n].ordre.filter((id) => TENUS[n].photos[id] !== TENUS[n - 1].photos[id]);
+      assert.deepEqual(changees, ["pj1"], "seule la photographie de la victime est prolongée");
+      const [avant, apres] = [TENUS[n - 1].photos.pj1.capacites, TENUS[n].photos.pj1.capacites];
+      assert.equal(apres.length, avant.length + 1);
+      assert.ok(avant.every((capacite, rang) => apres[rang] === capacite), "ses capacités d'avant ne sont pas recopiées");
+      continue;
+    }
     assert.equal(TENUS[n].photos, TENUS[n - 1].photos, "les photographies ne sont jamais recopiées");
     assert.equal(TENUS[n].noms, TENUS[n - 1].noms, "les noms sont figés au lancement");
     assert.equal(TENUS[n].ordre, TENUS[n - 1].ordre);
   }
+  assert.equal(blessures, 1, "le combat de référence a sa blessure : ce contrôle la voit");
   // Un dé de la chaîne ne touche à aucun protagoniste hors de celui qui paie.
   const premierDe = CONTENU.evenements.findIndex((evenement) => evenement.type === "de");
   const [avant, apres] = [TENUS[premierDe], TENUS[premierDe + 1]];
@@ -441,11 +461,20 @@ test("ni banque : le noyau ne lit jamais la source ni les avertissements d'une p
   assert.equal(rejoue.erreur, undefined, rejoue.erreur?.message);
   memeEtat(rejoue.etat, FINAL, "le combat rejoué sur des photographies piégées");
 
-  // L'état ne porte ni la mise en place ni une source : seulement les valeurs, par référence.
+  // L'état ne porte ni la mise en place ni une source : seulement les valeurs, par référence. Au lot 4.3,
+  // la photographie d'Aubépine est prolongée par sa blessure : ses autres champs restent ceux de la photo.
   for (const [rang, { id, photo }] of CONTENU.miseEnPlace.protagonistes.entries()) {
-    assert.equal(FINAL.photos[id], photo.valeurs, `protagoniste n° ${rang + 1}`);
+    if (id !== "pj1") {
+      assert.equal(FINAL.photos[id], photo.valeurs, `protagoniste n° ${rang + 1}`);
+      continue;
+    }
+    for (const [champ, valeur] of Object.entries(photo.valeurs)) {
+      if (champ !== "capacites") assert.equal(FINAL.photos[id][champ], valeur, `protagoniste n° ${rang + 1}, ${champ}`);
+    }
+    assert.ok(photo.valeurs.capacites.every((capacite, indice) => FINAL.photos[id].capacites[indice] === capacite));
   }
-  assert.equal(JSON.stringify(sansAnnulation(FINAL)).includes('"source"'), false);
+  // La source d'une photographie n'y est pas ; celle d'un effet durable est la sienne (contrat, § 3).
+  assert.equal(JSON.stringify(FINAL.photos).includes('"source"'), false);
   assert.equal(JSON.stringify(sansAnnulation(FINAL)).includes('"miseEnPlace"'), false);
 });
 
@@ -465,11 +494,15 @@ const NOYAU = {
   "valeurs.js": [],
   "circonstances.js": ["valeurs.js", "plateau.js", "regles.js", "../personnage/regles.js"],
   "degats.js": ["valeurs.js", "jet.js", "regles.js"],
-  "offre.js": ["valeurs.js", "circonstances.js", "degats.js", "jet.js", "plateau.js", "forme.js", "regles.js", "../personnage/regles.js"],
+  // Au lot 4.3 (contrat de la vague 1, § 7.5) : les effets, que l'offre juge et que le moteur applique ;
+  // ils n'importent de l'offre que le prix d'un geste. L'offre lit l'élément Centré par la clé des noms.
+  "effets.js": ["valeurs.js", "jet.js", "degats.js", "offre.js", "regles.js"],
+  "offre.js": ["valeurs.js", "circonstances.js", "degats.js", "effets.js", "jet.js", "plateau.js", "forme.js", "regles.js", "../personnage/regles.js", "../banque/noms.js"],
   "journal.js": ["regles.js", "valeurs.js", "jet.js", "degats.js", "../personnage/regles.js"],
-  "moteur.js": ["regles.js", "forme.js", "plateau.js", "noms.js", "preparation.js", "jet.js", "valeurs.js", "circonstances.js", "degats.js", "offre.js", "journal.js", "../personnage/regles.js"],
-  // Au groupe 2, les cases hachurées d'une portée (casesEntre) : contrat du groupe, § 1.
-  "lecture.js": ["offre.js", "circonstances.js", "valeurs.js", "degats.js", "jet.js", "journal.js", "preparation.js", "plateau.js", "noms.js", "regles.js", "../personnage/regles.js"],
+  "moteur.js": ["regles.js", "forme.js", "plateau.js", "noms.js", "preparation.js", "jet.js", "valeurs.js", "circonstances.js", "degats.js", "effets.js", "offre.js", "journal.js", "../personnage/regles.js"],
+  // Au groupe 2, les cases hachurées d'une portée (casesEntre) : contrat du groupe, § 1. Au lot 4.3, la raison
+  // d'une capacité de blessure inactive (effets.js, refusDeLaBlessure).
+  "lecture.js": ["offre.js", "circonstances.js", "valeurs.js", "degats.js", "effets.js", "jet.js", "journal.js", "preparation.js", "plateau.js", "noms.js", "regles.js", "../personnage/regles.js"],
 };
 // Le bord : ce qui touche la banque, le hasard, la clé ou l'appareil.
 const BORD = ["des.js", "enregistrement.js", "photographie.js", "roles.js", "seance.js"];
@@ -493,7 +526,7 @@ test("le graphe : la lecture des imports voit chaque forme d'import, sur plusieu
 test("le graphe : tout fichier de js/combat/ est du noyau ou du bord, et aucun n'est oublié", () => {
   const fichiers = readdirSync(new URL("js/combat/", racine)).sort();
   assert.deepEqual(fichiers, [...Object.keys(NOYAU), ...BORD].sort(), "un fichier neuf de js/combat/ se range ici, dans le noyau ou dans le bord");
-  assert.equal(Object.keys(NOYAU).length, 13);
+  assert.equal(Object.keys(NOYAU).length, 14);
 });
 
 test("le graphe : chaque fichier du noyau n'importe que ce que sa ligne permet, et rien à la volée", () => {
@@ -564,8 +597,15 @@ test("le graphe : aucun cycle d'import dans js/combat/", () => {
       .map((importe) => resoudre(chemin, importe))
       .filter((importe) => importe.startsWith("js/combat/"));
   }
-  assert.equal(Object.keys(graphe).length, 18);
-  assert.equal(cycleDans(graphe), null);
+  assert.equal(Object.keys(graphe).length, 19);
+  // Au lot 4.3, une seule boucle, voulue (contrat de la vague 1, § 7.5) : l'offre importe les effets,
+  // qui n'importent d'elle que le prix d'un geste, appelé dans leurs fonctions et jamais au chargement.
+  // Armé : elle est bien là ; désarmé : sans elle, aucun cycle.
+  const boucle = cycleDans(graphe);
+  assert.ok(["js/combat/offre.js → js/combat/effets.js → js/combat/offre.js", "js/combat/effets.js → js/combat/offre.js → js/combat/effets.js"].includes(boucle), boucle);
+  assert.match(sourceDe("js/combat/effets.js"), /^import \{ prixDuGeste \} from "\.\/offre\.js";$/m);
+  const sansLaBoucle = { ...graphe, "js/combat/effets.js": graphe["js/combat/effets.js"].filter((importe) => importe !== "js/combat/offre.js") };
+  assert.equal(cycleDans(sansLaBoucle), null);
 });
 
 test("le graphe : le texte du noyau ne nomme ni l'horloge, ni le hasard, ni la langue de l'appareil, ni la page, ni la base", () => {
@@ -604,7 +644,9 @@ function evenementOffert(etat, { suivant, entier, parmi }) {
   // Ce qui abandonne le geste en cours se tire rarement, pour que les suites aillent au bout de leurs gestes ;
   // l'annulation de même, pour qu'elles avancent.
   const rare = { fin_de_tour: 0.08, revenir: 0.1, passer: 0.1, annuler: 0.25, ...(gesteEnCours(etat) === null ? {} : { capacite: 0.1, regler: 0.6 }) };
-  const types = offert.types.filter((type) => !Object.hasOwn(rare, type) || suivant() < rare[type]);
+  // La palette et le menu du MJ (lot 4.3) ont leurs propres contrôles (combat_g3_effets.test.js) : leurs
+  // événements, faits de leur source et de leur genre, ne se tirent pas ici.
+  const types = offert.types.filter((type) => type !== "effet" && type !== "mj" && (!Object.hasOwn(rare, type) || suivant() < rare[type]));
   if (types.length === 0) return null;
   const type = parmi(types);
   const fabriques = {
@@ -621,6 +663,9 @@ function evenementOffert(etat, { suivant, entier, parmi }) {
       const champ = parmi(Object.keys(offert.reglages));
       const reglage = offert.reglages[champ];
       if (champ === "caracteristiques") return { type, champ, valeur: [...new Set([parmi(reglage.options), parmi(reglage.options)])] };
+      // Les cibles d'une façon Centrée (lot 4.3) : une liste, dans l'ordre des jets. Sans adversaire sur sa
+      // case, elle n'en offre aucune (contrat, § 12, choix 10) : le tireur passe son tour, comme pour « cible ».
+      if (champ === "cibles") return reglage.options.length === 0 ? null : { type, champ, valeur: [...new Set([parmi(reglage.options), parmi(reglage.options)])] };
       if (reglage.options) return reglage.options.length === 0 ? null : { type, champ, valeur: parmi(reglage.options) };
       const valeur = reglage.raison ? entier(-3, 3) : entier(reglage.min, reglage.max);
       return reglage.raison && valeur !== 0 ? { type, champ, valeur, raison: "Minutie" } : { type, champ, valeur };
@@ -637,6 +682,19 @@ function evenementOffert(etat, { suivant, entier, parmi }) {
       return valeur === 0 ? { type, de, valeur } : { type, de, valeur, raison: "Tour de main" };
     },
     esquive: () => ({ type, x: entier(offert.esquive.min, offert.esquive.max) }),
+    // Le lot 4.3 : une intervention et une contre-attaque parmi les options actives ; le critique, tenté ou
+    // gardé ; une blessure, un état libre.
+    intervenir() {
+      const { qui, options } = parmi(offert.interventions.intervenants);
+      const { capacite, facon } = parmi(options.filter((option) => option.actif));
+      return { type, qui, capacite, facon };
+    },
+    contre_attaquer() {
+      const { capacite, facon } = parmi(offert.contre.options.filter((option) => option.actif));
+      return { type, capacite, facon };
+    },
+    critique: () => ({ type, tenter: suivant() < 0.5 }),
+    blessure: () => ({ type, libre: "Brûlure" }),
   };
   return Object.hasOwn(fabriques, type) ? fabriques[type]() : { type };
 }
@@ -792,7 +850,11 @@ test("événements au hasard : 5 000 événements bien et mal faits ; le moteur 
   // L'annulation refusée pour chacune de ses trois raisons.
   t.diagnostic(`annulations refusées : ${JSON.stringify(Object.fromEntries(compte.annulations))}`);
   assert.deepEqual([...compte.annulations.keys()].sort(), ["Revenez d'abord sur le geste en cours.", "Rien à annuler depuis le lancement.", "Terminez d'abord le geste en cours."]);
-  const sansLancement = (types) => types.filter((type) => type !== "lancer").sort();
+  // Les types neufs du lot 4.3 n'ont pas tous leur moment dans ces suites : chacun a ses contrôles dans
+  // combat_g3_pile.test.js et combat_g3_regles.test.js. Et depuis la fin du −1, la face maximale des dés de
+  // ce combat atteint presque toujours la difficulté : « exploser » ne s'y tire plus qu'au hasard d'un jet de
+  // caractéristique ; il a ses contrôles dans combat_evenements.test.js, et son rechargement plus bas.
+  const sansLancement = (types) => types.filter((type) => type !== "lancer" && type !== "exploser" && TYPES.includes(type)).sort();
   assert.deepEqual(sansLancement(Object.keys(compte.types)), sansLancement(TYPES), "chaque type d'événement a été accepté une fois au moins (le lancement ne s'offre qu'à une suite partie d'avant lui)");
   assert.ok(compte.departs.size > 60, `${compte.departs.size} moments de départ différents`);
   assert.ok(compte.termines > 0, "des suites sont allées jusqu'à la fin d'un combat");
@@ -863,8 +925,28 @@ test("un dé n'est jamais relancé : rechargé en plein geste, le combat attend 
   // Le contrôle ne passe pas à vide : le combat de référence s'arrête à chaque sorte de moment.
   t.diagnostic(`${vus.enGeste} moments en plein geste sur ${NOMBRE + 1}`);
   assert.ok(vus.enGeste > 60, `${vus.enGeste} moments en plein geste`);
-  assert.deepEqual([...vus.motifs].sort(), ["chaine", "explosion", "localisation", "relance"]);
-  assert.deepEqual([...vus.choix].sort(), ["exploser", "garder", "relancer"]);
+  // Depuis le lot 4.3, le combat de référence n'a plus d'explosion (les dés qu'a changés la fin du −1) :
+  // un dé qui peut exploser, puis le dé de l'explosion, se rechargent ici, sur les photographies rondes.
+  assert.deepEqual([...vus.motifs].sort(), ["chaine", "localisation", "relance"]);
+  assert.deepEqual([...vus.choix].sort(), ["garder", "relancer"]);
+  const miseEnPlace = miseEnPlaceEssai([{ photo: pjEssai(), case: "D4" }, { photo: adversaireEssai(), case: "D4" }]);
+  const explosion = [
+    LANCER,
+    { type: "capacite", qui: "pj1", capacite: 0, facon: 0 },
+    { type: "regler", champ: "cible", valeur: "adv2" },
+    { type: "regler", champ: "modificateur", valeur: -5, raison: "Vapeur" },
+    { type: "de", faces: 8, valeurs: [8] },
+    { type: "exploser" },
+  ];
+  let tenu = ouvrirCombat(miseEnPlace);
+  for (const [rang, evenement] of explosion.entries()) {
+    tenu = appliquer(tenu, evenement).etat;
+    const recharge = rejouer(JSON.parse(JSON.stringify({ regles: CONTENU.regles, revision: CONTENU.revision, miseEnPlace, evenements: explosion.slice(0, rang + 1) }))).etat;
+    assert.deepStrictEqual(offre(recharge).de, offre(tenu).de, `l'explosion, après ${rang + 1} événement(s)`);
+    assert.deepStrictEqual(offre(recharge).choix, offre(tenu).choix);
+    if (evenement.type === "de") assert.deepEqual(offre(recharge).choix, ["exploser"], "8 − 5 sous 5 : le dé peut exploser");
+  }
+  assert.equal(offre(tenu).de.motif, "explosion");
 });
 
 test("un dé n'est jamais relancé : hors d'un geste, aucun dé n'est attendu, avant comme après un rechargement", () => {
@@ -898,12 +980,16 @@ function completer(saisie, valeur) {
   const { evenement } = saisie.gabarit;
   if (evenement.type === "degats") return { ...evenement, operations: [{ op: "ajuster", valeur, raison: saisie.raison ?? saisie.raisonParDefaut }] };
   if (evenement.type === "esquive") return { ...evenement, x: valeur };
+  // Le lot 4.3 : l'état libre d'une blessure se complète de son nom.
+  if (evenement.type === "blessure") return { ...evenement, libre: valeur };
   if (Array.isArray(valeur) || valeur === 0 || !("raisonParDefaut" in saisie)) return { ...evenement, valeur };
   return { ...evenement, valeur, raison: saisie.raison ?? saisie.raisonParDefaut };
 }
 
-// Les valeurs avec lesquelles éprouver une saisie : ses bornes, et 0 quand il est entre elles.
+// Les valeurs avec lesquelles éprouver une saisie : ses bornes, et 0 quand il est entre elles ; pour un nom
+// (l'état libre d'une blessure), un nom court et un nom à sa longueur la plus grande.
 function valeursDEpreuve(saisie) {
+  if (saisie.gabarit.evenement.type === "blessure") return ["Genou en vrac", "Genou en vrac".padEnd(saisie.max, ".")];
   if (saisie.options) return [[saisie.options[0].code], [saisie.options[1].code, saisie.options[0].code]];
   const bornes = [saisie.min, saisie.max];
   if (saisie.min < 0 && saisie.max > 0) bornes.push(0);
@@ -935,7 +1021,13 @@ function unDeChaqueType(etat) {
   };
 }
 
-const vuesDe = (etat, choisi) => ({ barre: vueBarre(etat), plateau: vuePlateau(etat, choisi), fiches: etat.ordre.map((id) => vueFiche(etat, id, choisi)), panneau: vuePanneau(etat, choisi) });
+// Le panneau reçoit, comme à l'écran, les capacités du bloc de blessure de la banque (lot 4.3).
+const BLESSURES = etatsDeLaBanque(BANQUE).blessure;
+const vuesDe = (etat, choisi) => ({ barre: vueBarre(etat), plateau: vuePlateau(etat, choisi), fiches: etat.ordre.map((id) => vueFiche(etat, id, choisi)), panneau: vuePanneau(etat, choisi, { blessures: BLESSURES }) });
+
+// Les événements du lot 4.3 que l'offre annonce, et qu'aucune vue ne porte encore. La blessure et la
+// contre-attaque laissée ont la leur (lecture.js).
+const SANS_VUE_ENCORE = ["intervenir", "contre_attaquer", "critique", "effet", "mj"];
 
 test("concordance : les événements d'épreuve sont bien faits, un de chaque type", () => {
   for (const etat of [TENUS[0], TENUS[1], TENUS[52], FINAL]) {
@@ -1021,8 +1113,9 @@ test("concordance : à chaque pas du combat de référence, tout ce que porte un
     if (aLancer !== null) portes.add("de");
 
     // Tout ce que l'offre annonce se joue depuis une vue : l'écran ne laisse aucun geste hors d'atteinte.
+    // Les types neufs du lot 4.3 n'ont pas encore de vue (la vague 3 du lot les leur donne).
     for (const type of offert.types) {
-      if (type === "lancer") continue;
+      if (type === "lancer" || SANS_VUE_ENCORE.includes(type)) continue;
       assert.ok(portes.has(type), `${ou} : l'offre annonce « ${type} », qu'aucune vue ne porte`);
     }
     for (const type of portes) typesPortes.add(type);
@@ -1052,5 +1145,11 @@ test("concordance : à chaque pas du combat de référence, tout ce que porte un
   assert.ok(compte.inactifs > 50, `${compte.inactifs} boutons inactifs refusés`);
   assert.ok(compte.refuses > 1000, `${compte.refuses} événements d'un autre type refusés`);
   assert.deepEqual([...typesRefuses].sort(), [...TYPES].sort(), "chaque type a été refusé à un moment où il ne s'offrait pas");
-  assert.deepEqual([...typesPortes].sort(), TYPES.filter((type) => type !== "lancer").sort(), "chaque type d'événement est porté par une vue à un moment du combat, sauf le lancement, qui est une commande de la préparation");
+  // Le lancement est une commande de la préparation ; le combat de référence n'explose plus (mission du lot 4.3,
+  // § 10), et « exploser » se voit porté dans les contrôles de l'écran. Les types du lot 4.3 que ce combat
+  // traverse et qu'une vue porte déjà : la blessure, la contre-attaque laissée ; les autres viendront avec leurs
+  // vues (vague 3).
+  const ATTENDUS = [...TYPES.filter((type) => type !== "lancer" && type !== "exploser"), "blessure", "laisser"];
+  assert.deepEqual(ATTENDUS.filter((type) => !typesPortes.has(type)), [], "chaque type d'événement est porté par une vue à un moment du combat");
+  assert.deepEqual([...typesPortes].filter((type) => !TYPES.includes(type) && !SANS_VUE_ENCORE.includes(type) && !ATTENDUS.includes(type)), [], "une vue ne porte rien d'autre");
 });

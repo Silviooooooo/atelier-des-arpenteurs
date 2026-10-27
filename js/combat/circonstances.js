@@ -10,7 +10,7 @@
 // tables : une fiche ne peut pas dire « actif » ce que le jet n'applique pas.
 //
 // Ce qu'il applique (livret, « Avantage et désavantage », « Asymétrie des
-// rôles lors des combats », « Ressources » ; § 17 pour les passifs câblés) :
+// rôles lors des combats » ; § 17 pour les passifs câblés) :
 // - seuls les joueurs lancent des dés : quand un adversaire attaque, c'est le
 //   PJ visé qui lance sa défense, contre l'attaque de l'adversaire ;
 // - le N d'un passif câblé est le niveau de cette capacité chez le PJ, son
@@ -22,8 +22,7 @@
 //   l'adversaire ;
 // - le corps-à-corps : l'attaquant et la cible sur la même case ;
 // - un allié : un vivant du même camp, autre que soi ;
-// - les bonus et malus +N d'un passif ne s'appliquent pas à un adversaire, et
-//   ses blessures n'ont pas d'effet calculé ;
+// - les bonus et malus +N d'un passif ne s'appliquent pas à un adversaire ;
 // - des types d'armure mêlés donnent 1 désavantage en défense ;
 // - un jet prêté ne porte pas le désavantage de maîtrise, ni pour qui le
 //   lance, ni par inversion.
@@ -43,11 +42,24 @@
 // - à égalité de dés de défense, le joueur choisit le type (livret, « Jets
 //   de défense ») : le geste le porte, et le jet en prend les
 //   caractéristiques, donc les bonus ; le dé reste celui de la photographie.
+//
+// Au groupe 3 (mission, § 4.5, § 4.6 et § 4.10 ; contrat de la vague 1,
+// § 5.7 et § 7.3 ; convention 54) :
+// - la fin du −1 : les blessures ne retirent plus rien aux jets (la
+//   convention 13 est retirée) ; une blessure est un état, appliqué à la main ;
+// - ±N chez un personnage : N à chaque dé de ses jets de ce genre (« attaque »
+//   ou « defense »), d'après ses effets durables, puis ceux « pour ce jet » du
+//   geste ; chez un adversaire, sa valeur écartée fait la difficulté
+//   (attaqueDe, defenseDe) ;
+// - les avantages et désavantages « pour ce jet » de la palette entrent après
+//   ceux d'aujourd'hui et avant la main, dans l'ordre de leur application,
+//   avec le nom de leur source ; ils valent pour tous les jets du geste. La
+//   palette dit lesquels : ni l'inversion ni le corps-à-corps n'y touchent.
 
 import { TYPES_OBJET, deDuJet } from "../personnage/regles.js";
 import { distance } from "./plateau.js";
 import { DIFFICULTES, SIGNES } from "./regles.js";
-import { alliesSurLaCase, attaqueDe, blessuresDe, campDe, capaciteDe, courantDe, defenseDe, faconDe, photoDe } from "./valeurs.js";
+import { alliesSurLaCase, attaqueDe, campDe, capaciteDe, courantDe, defenseDe, effetsDuGeste, effetsDurablesDe, faconDe, nomDeLaSource, photoDe } from "./valeurs.js";
 
 const manque = (phrase) => ({ manque: phrase });
 const CHOISIR_UNE_CIBLE = "Choisissez une cible.";
@@ -78,17 +90,29 @@ const BONUS = [
   { role: "petit", quand: ({ mobilisees }) => mobilisees.includes("force"), valeur: () => -1 },
 ];
 
+// Les ±N d'un personnage pour un jet de ce genre (convention 54) : ses
+// effets durables « modif » de ce genre, dans l'ordre d'application, puis
+// les ±N « pour ce jet » du geste dont il est la cible. Un jet de
+// caractéristique n'en a aucun : ±N porte sur l'attaque ou sur la défense.
+function ecartsDuPj(etat, id, genre, geste) {
+  if (genre !== "attaque" && genre !== "defense") return [];
+  const durables = effetsDurablesDe(etat, id).filter((effet) => effet.genre === "modif" && effet.valeur === genre);
+  const duJet = effetsDuGeste(geste).filter((effet) => effet.genre === genre && effet.sur === id && effet.duree === "jet");
+  return [...durables, ...duJet].map((effet) => ({ genre: "effet", nom: nomDeLaSource(etat, effet.source), valeur: effet.n }));
+}
+
 /**
  * Ce qui s'ajoute à chaque dé d'un jet que lance ce protagoniste, hors de
- * tout réglage à la main : ses bonus câblés, puis ses blessures (−1 par zone
- * dont l'endurance est à 0). « genre » est celui du jet (« attaque »,
- * « defense », « caracteristique ») ; « mobilisees », les caractéristiques
- * qui font son dé. Un nombre nul n'entre pas dans la liste.
+ * tout réglage à la main : ses bonus câblés, puis ses ±N (« effet », au nom de
+ * leur source) : les durables, puis ceux « pour ce jet » du geste donné.
+ * « genre » est celui du jet (« attaque », « defense », « caracteristique ») ;
+ * « mobilisees », les caractéristiques qui font son dé. Un nombre nul
+ * n'entre pas dans la liste. Les blessures n'y sont plus (mission, § 4.10).
  *
- * Rien pour un adversaire : il ne lance aucun dé, et ni ses bonus ni ses
- * blessures ne s'appliquent.
+ * Rien pour un adversaire : il ne lance aucun dé, et ni ses bonus ni ses ±N
+ * n'y entrent (ses ±N écartent sa valeur : attaqueDe, defenseDe).
  */
-export function modificateursDe(etat, id, { genre = null, mobilisees = [] } = {}) {
+export function modificateursDe(etat, id, { genre = null, mobilisees = [], geste = null } = {}) {
   if (campDe(etat, id) !== "pj") return [];
   const jet = { genre, mobilisees: mobilisees ?? [] };
   const liste = [];
@@ -99,8 +123,7 @@ export function modificateursDe(etat, id, { genre = null, mobilisees = [] } = {}
       if (nombre !== 0) liste.push({ genre: "passif", nom, valeur: nombre });
     }
   }
-  const blessures = blessuresDe(etat, id);
-  if (blessures > 0) liste.push({ genre: "blessures", nom: null, valeur: -blessures });
+  liste.push(...ecartsDuPj(etat, id, genre, geste).filter((ecart) => ecart.valeur !== 0));
   return liste;
 }
 
@@ -146,8 +169,8 @@ const nomCourt = (etat, id) => etat.noms?.[id]?.court ?? photoDe(etat, id)?.nom 
 /**
  * Les avantages et les désavantages d'un jet d'attaque ou de défense, chacun
  * avec sa source, dans l'ordre écrit : ceux du lanceur (ses passifs, sa
- * maîtrise, ses types d'armure mêlés), ceux de l'autre, inversés, puis la
- * main.
+ * maîtrise, ses types d'armure mêlés), ceux de l'autre, inversés, ceux de la
+ * palette « pour ce jet », puis la main.
  * - lanceur : le PJ qui lance ; autre : l'adversaire qu'il vise, ou qui
  *   l'attaque ;
  * - genre : « attaque » quand le PJ attaque, « defense » quand il se défend.
@@ -170,8 +193,20 @@ function sourcesDuJet(etat, geste, { genre, lanceur, autre }) {
   desavantages.push(...avantagesDesPassifs(etat, autre, { sens: sensDeLAutre, corpsACorps, de: deLAutre }));
   if (genre === "defense" && horsMaitrise) avantages.push({ genre: "maitrise", nom: jouee, nombre: 1, de: deLAutre });
 
+  ajouterLesEffets(etat, geste, avantages, desavantages);
   ajouterLaMain(geste, avantages, desavantages);
   return { avantages, desavantages };
+}
+
+// Les avantages et désavantages « pour ce jet » de la palette (contrat,
+// § 5.1 et § 7.3) : ceux du geste, dans l'ordre de leur application, chacun
+// au nom de sa source. La palette a dit de quel côté ils vont : rien ne les
+// inverse.
+function ajouterLesEffets(etat, geste, avantages, desavantages) {
+  for (const effet of effetsDuGeste(geste)) {
+    if (effet.genre !== "avantages" && effet.genre !== "desavantages") continue;
+    (effet.genre === "avantages" ? avantages : desavantages).push({ genre: "effet", nom: nomDeLaSource(etat, effet.source), nombre: effet.nombre, de: null });
+  }
 }
 
 // Le réglage à la main : k avantages s'il est positif, |k| désavantages s'il
@@ -226,9 +261,10 @@ function duJetDeCaracteristique(etat, geste) {
   if (!Number.isInteger(difficulte) || !Object.hasOwn(DIFFICULTES, difficulte)) return manque("Choisissez une difficulté.");
 
   // Ni passif d'avantage, ni maîtrise : un jet de caractéristique n'est ni
-  // une attaque ni une défense. Seule la main lui en donne.
+  // une attaque ni une défense. Seules la palette et la main lui en donnent.
   const avantages = [];
   const desavantages = [];
+  ajouterLesEffets(etat, geste, avantages, desavantages);
   ajouterLaMain(geste, avantages, desavantages);
   return {
     genre: "caracteristique",
@@ -238,7 +274,7 @@ function duJetDeCaracteristique(etat, geste) {
     mobilisees: de.mobilisees,
     difficulte,
     libelle: DIFFICULTES[difficulte],
-    modificateurs: [...modificateursDe(etat, lanceur, { genre: "caracteristique", mobilisees: de.mobilisees }), ...modificateurALaMain(geste)],
+    modificateurs: [...modificateursDe(etat, lanceur, { genre: "caracteristique", mobilisees: de.mobilisees, geste }), ...modificateurALaMain(geste)],
     avantages,
     desavantages,
   };
@@ -270,7 +306,9 @@ function dUneAttaque(etat, geste) {
     de = { faces: deDefense.faces, caracteristiques: null, mobilisees: [...TYPES_OBJET[type].defense] };
   }
 
-  const difficulte = attaqueDuPj ? defenseDe(etat, autre).valeur : attaqueDe(etat, autre).valeur;
+  // La difficulté est la valeur écartée de l'adversaire, ses ±N « pour ce
+  // jet » compris : elle se fige à l'ouverture du jet.
+  const difficulte = attaqueDuPj ? defenseDe(etat, autre, geste).valeur : attaqueDe(etat, autre, geste).valeur;
   if (difficulte === null) return manque(CHOISIR_UNE_CIBLE);
 
   return {
@@ -281,7 +319,7 @@ function dUneAttaque(etat, geste) {
     mobilisees: de.mobilisees,
     difficulte,
     libelle: null,
-    modificateurs: [...modificateursDe(etat, lanceur, { genre, mobilisees: de.mobilisees }), ...modificateurALaMain(geste)],
+    modificateurs: [...modificateursDe(etat, lanceur, { genre, mobilisees: de.mobilisees, geste }), ...modificateurALaMain(geste)],
     ...sourcesDuJet(etat, geste, { genre, lanceur, autre }),
   };
 }

@@ -9,7 +9,9 @@
 // qui ne reste plus.
 //
 // Les jets s'ouvrent sur des circonstances écrites à la main : ce module ne
-// sait ni qui lance ni pourquoi.
+// sait ni qui lance ni pourquoi. Le coup critique, l'inversion, la relance de
+// la palette et « +1 réussite » (groupe 3) sont contrôlés dans
+// tests/combat_calcul_g3.test.js.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -78,8 +80,24 @@ function estGeleEnProfondeur(valeur) {
 test("ouvrirJet : le jet reprend ses circonstances, attend un dé, et n'a aucune place", () => {
   const donnees = circonstances({ modificateurs: [1], avantages: 1, libelle: "compliqué", caracteristiques: ["sens", "parole"] });
   const jet = ouvrirJet(donnees);
-  assert.deepEqual(jet, { ...donnees, attente: "de", places: [] });
-  assert.deepEqual(Object.keys(jet), ["genre", "lanceur", "faces", "caracteristiques", "mobilisees", "difficulte", "libelle", "modificateurs", "avantages", "desavantages", "attente", "places"]);
+  assert.deepEqual(jet, { ...donnees, attente: "de", places: [], bonus: 0, critique: null, relanceParPalette: false });
+  assert.deepEqual(Object.keys(jet), [
+    "genre",
+    "lanceur",
+    "faces",
+    "caracteristiques",
+    "mobilisees",
+    "difficulte",
+    "libelle",
+    "modificateurs",
+    "avantages",
+    "desavantages",
+    "attente",
+    "places",
+    "bonus",
+    "critique",
+    "relanceParPalette",
+  ]);
 });
 
 test("ouvrirJet : le jet est gelé, sans geler ni partager ce qu'on lui a donné", () => {
@@ -687,7 +705,7 @@ test("evaluerEssai : rien de ce qu'il calcule n'est gardé dans le jet", () => {
     assert.deepEqual(Object.keys(place), ["essais"]);
     for (const essai of place.essais) assert.deepEqual(Object.keys(essai), ["tirages", "explosions"]);
   }
-  assert.equal(Object.keys(jet).length, 12);
+  assert.equal(Object.keys(jet).length, 15);
 });
 
 test("reussites : une place vaut par son dernier essai", () => {

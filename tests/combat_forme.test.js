@@ -10,6 +10,10 @@
 // combat (15 000 événements, l'alerte, la tranche du rejeu) et leur écriture,
 // la version 2 des règles, l'événement « annuler », le réglage « defense »,
 // la maîtrise d'une façon, l'égalité du dé de défense, SANS_ANNULATION.
+//
+// Au groupe 3 du lot 4 : la version 4 des règles, attendre qui a son bouton.
+// Les événements neufs du groupe ont leurs contrôles à part
+// (tests/combat_forme_g3.test.js).
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -128,9 +132,9 @@ test("regles — la face de contre-attaque d'un adversaire est celle de la notat
 });
 
 test("regles — le plateau, les plafonds, les bornes", () => {
-  // La version 3, celle du lot 5 : l'endurance et l'ordre des caractéristiques
-  // (le groupe 3 du lot 4 la passera à 4).
-  assert.equal(REGLES, 3);
+  // La version 4, celle du groupe 3 du lot 4 : les règles fines, le MJ, la
+  // blessure du livret du 25/10 (la 3 était celle du lot 5).
+  assert.equal(REGLES, 4);
   assert.equal(COTE, 10);
   assert.equal(COLONNES, "ABCDEFGHIJ");
   assert.equal(COLONNES.length, COTE);
@@ -221,14 +225,15 @@ test("regles — les difficultés du livret, de 2 à 10, en minuscules", () => {
   assert.equal(DIFFICULTES[11], undefined);
 });
 
-test("regles — quinze rôles, dont huit passifs et trois sans bouton", () => {
+test("regles — quinze rôles, dont huit passifs et deux sans bouton ; attendre a le sien depuis le groupe 3", () => {
   assert.deepEqual(ROLES, [
     "deplacement", "jet_de_caracteristique", "esquive", "attendre", "passer_son_tour", "jet_de_defense", "bonus_force", "bonus_agilite",
     "bonus_precision", "petit", "seul_sur_sa_case", "en_meute", "esprit_de_corps", "degrossir", "mains_nues",
   ]);
   assert.equal(new Set(ROLES).size, 15);
   assert.deepEqual(ROLES_PASSIFS, ["bonus_force", "bonus_agilite", "bonus_precision", "petit", "seul_sur_sa_case", "en_meute", "esprit_de_corps", "degrossir"]);
-  assert.deepEqual(ROLES_SANS_BOUTON, ["passer_son_tour", "jet_de_defense", "attendre"]);
+  assert.deepEqual(ROLES_SANS_BOUTON, ["passer_son_tour", "jet_de_defense"]);
+  assert.ok(ROLES.includes("attendre") && !ROLES_SANS_BOUTON.includes("attendre"));
   for (const role of [...ROLES_PASSIFS, ...ROLES_SANS_BOUTON]) assert.ok(ROLES.includes(role), role);
   assert.ok(!ROLES_PASSIFS.some((role) => ROLES_SANS_BOUTON.includes(role)));
 });
@@ -1626,7 +1631,9 @@ test("validerContenu — une autre version des règles se dit, avant tout autre 
   assert.deepEqual(validerContenu(contenuEssai((contenu) => (contenu.regles = 1)), OPTIONS), { autreVersion: { regles: 1 } });
   // Un combat d'avant le lot 5, tel quel : la version 2 ne se reprend pas non plus.
   assert.deepEqual(validerContenu(contenuEssai((contenu) => (contenu.regles = 2)), OPTIONS), { autreVersion: { regles: 2 } });
-  assert.deepEqual(validerContenu({ regles: 4 }, OPTIONS), { autreVersion: { regles: 4 } });
+  // Un combat du lot 5, d'avant le groupe 3 du lot 4, tel quel : la version 3 non plus.
+  assert.deepEqual(validerContenu(contenuEssai((contenu) => (contenu.regles = 3)), OPTIONS), { autreVersion: { regles: 3 } });
+  assert.deepEqual(validerContenu({ regles: 5 }, OPTIONS), { autreVersion: { regles: 5 } });
   assert.deepEqual(validerContenu({ regles: 0 }, OPTIONS), { autreVersion: { regles: 0 } });
   assert.ok(validerContenu({ regles: 0 }, OPTIONS).autreVersion, "ce qui est rendu se teste d'un simple « if »");
   // La même cinquième clé, à la version d'ici, est une donnée abîmée.

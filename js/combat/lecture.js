@@ -14,7 +14,8 @@
 //   rien), le protagoniste à choisir, ou l'ordre de préparation ;
 // - chaque bouton inactif porte « actif: false » et sa raison ;
 // - chaque saisie porte ses bornes et un « gabarit » : l'événement, qu'il ne
-//   reste qu'à compléter du nombre saisi et, s'il y a lieu, de sa raison ;
+//   reste qu'à compléter du nombre saisi et, s'il y a lieu, de sa raison (au
+//   lot 4.3, l'état libre d'une blessure se complète d'un nom, « libre ») ;
 // - chaque phrase d'écran est écrite ici : la cause d'un avantage, la portée
 //   d'une ligne, son coût, la question d'« Annuler le dernier geste ».
 //
@@ -55,16 +56,33 @@
 // dégâts à fixer, « Une action est en cours. », et les phrases d'écran que le
 // contrat du groupe 2 a dû écrire (son annexe B). Ils restent à lui faire
 // confirmer.
+//
+// À la vague 1 du lot 4.3 (contrat de la vague, § 4, § 11 et § 12), l'écran
+// suit le noyau neuf sans en dessiner les vues, qui viendront à la vague 3 :
+// - les d20 se lisent sur la grille de la victime (un report la suit), la
+//   face de contre-attaque sur celle du jeté ;
+// - un jet ne clôt jamais le geste : un manqué et un jet de caractéristique
+//   attendent « Terminer » ;
+// - à chaque moment neuf, le moindre bouton qui fait continuer : garder ou
+//   tenter le critique, laisser passer la contre-attaque, la blessure (une
+//   capacité du bloc de blessure, ou un état libre) ; la ligne d'attendre se
+//   règle (la capacité gardée) ;
+// - une façon Centrée coche ses cibles, au lieu d'en régler une ;
+// - « Ajusté à » la valeur calculée ne fait aucun événement, ou défait
+//   l'ajustement d'avant (mission du lot, § 6) ;
+// - la palette et le menu du MJ ne se montrent pas encore.
 
 import { CARACTERISTIQUES, deDuJet } from "../personnage/regles.js";
 import { circonstances, modificateursDe, passifsDe, sourcesSansCible } from "./circonstances.js";
-import { coupsDuGeste, degatsFixes, frapper, lettreDe, localiser } from "./degats.js";
+import { coupsDuGeste, degatsFixes, frapper, lettreDe, lettreDuGeste, localisationsDuGeste, victimeDe } from "./degats.js";
+import { refusDeLaBlessure } from "./effets.js";
 import { evaluerEssai, modificateurDe, netDe, ouvrirJet, relancesRestantes, reussites } from "./jet.js";
 import { ecrireBilan, ecrireSource, ligneDeFin, ligneEnCours, nommerLeGeste } from "./journal.js";
 import { acteurCourant, annulation, boutons, candidats, cibles, esquiveOfferte, faconDeLArrivee, modeDeLaFacon, offre } from "./offre.js";
 import { casesEntre } from "./plateau.js";
 import { ajouterAdversaires, ajouterPersonnage, peutLancer } from "./preparation.js";
 import {
+  BORNES_EFFET,
   DIFFICULTES,
   EVENEMENTS_ALERTE,
   EVENEMENTS_MAX,
@@ -83,13 +101,15 @@ import { aJoue, attaqueDe, campDe, capaciteDe, courantDe, defenseDe, faconDe, ge
 const CAMPS = { pj: "PJ", adv: "adversaires" };
 const UN_DU_CAMP = { pj: "personnage", adv: "adversaire" };
 const POIDS = { lourde: "lourde", agile: "agile", precise: "précise" };
-const RANGS = ["1er dé", "2e dé", "3e dé"];
+// Le quatrième dé est celui du coup critique tenté.
+const RANGS = ["1er dé", "2e dé", "3e dé", "4e dé"];
 
 const ACTION_EN_COURS = "Une action est en cours.";
 
 // Les modes d'un geste qui visent une cible de l'autre camp, et que le PJ
 // visé contre par sa défense quand un adversaire les joue.
 const MODES_D_ATTAQUE = ["attaque", "jet_prete"];
+const MODES_A_JET = ["attaque", "jet_prete", "caracteristique"];
 
 const present = (valeur) => valeur !== null && valeur !== undefined;
 const somme = (nombres) => nombres.reduce((total, nombre) => total + nombre, 0);
@@ -299,6 +319,11 @@ export function vueBandeau(etat) {
 
 // ─── Le plateau ─────────────────────────────────────────────────────────────
 
+// Un geste engagé : payé, ou emboîté sur un geste payé (une intervention, une
+// contre-attaque). Plus rien ne se choisit alors hors de lui : ni qui joue,
+// ni une autre capacité.
+const engage = (etat, geste) => geste !== null && (geste.paye === true || (etat.pile?.length ?? 0) > 1);
+
 // Le geste qui se règle encore, tant qu'il attend une cible ou une arrivée :
 // c'est pendant ce choix que le plateau marque ce qui se choisit, et écarte
 // le reste.
@@ -360,7 +385,7 @@ export function vuePlateau(etat, choisi) {
   const acteur = acteurCourant(etat, choisi);
   const geste = gesteEnCours(etat);
   const enChoix = choixSurLePlateau(etat);
-  const paye = geste !== null && geste.paye === true;
+  const paye = engage(etat, geste);
   const quiPeutJouer = paye ? [] : candidats(etat);
   const quiAttend = paye ? candidats(etat).filter((id) => id !== acteur) : [];
 
@@ -474,7 +499,7 @@ export function vueFiche(etat, id, choisi) {
   const situation = situationDe(etat, id, acteur);
   const estUnPj = courant.camp === "pj";
   const geste = gesteEnCours(etat);
-  const libre = (geste === null || geste.paye !== true) && choixSurLePlateau(etat) === null;
+  const libre = !engage(etat, geste) && choixSurLePlateau(etat) === null;
 
   return {
     id,
@@ -693,12 +718,12 @@ function degatsDeLaLigne(mode, facon) {
 }
 
 // Les lignes de qui joue, une par façon que l'offre lui donne (offre.js,
-// boutons), chacune avec le groupe où elle se range. Une fois le geste payé,
-// plus aucune ne se joue.
+// boutons), chacune avec le groupe où elle se range. Une fois le geste
+// engagé (payé, ou emboîté), plus aucune ne se joue.
 function lignesVues(etat, acteur, geste, hachures) {
   const photo = photoDe(etat, acteur);
   const camp = campDe(etat, acteur);
-  const paye = geste !== null && geste.paye === true;
+  const paye = engage(etat, geste);
   return boutons(etat, acteur).map((offert) => {
     const capacite = photo.capacites[offert.capacite];
     const facon = element(capacite.facons, offert.facon);
@@ -778,11 +803,17 @@ function etapesDe(etat, acteur, geste, offerts) {
   if (geste.mode === "deplacement") return { noms: ["Capacité", "Arrivée"], enCours: 1 };
   if (geste.mode === "sans_jet") return { noms: ["Capacité", "Cible"], enCours: 1 };
   if (geste.mode === "caracteristique") return { noms: ["Capacité", jet], enCours: 1 };
+  if (geste.mode === "attendre") return { noms: ["Capacité", "Garde"], enCours: 1 };
+  // Les moments neufs se rangent sous les étapes d'aujourd'hui : le critique
+  // sous le jet, la contre-attaque sous la localisation, la blessure sous les
+  // dégâts.
   const parMoment = {
     preparation: offerts.pret?.ok ? 2 : 1,
     jet: 2,
+    critique: 2,
     bilan: 2,
     localisation: 3,
+    contre_attaque: 3,
     suites: offerts.esquive !== null ? 4 : 5,
   };
   return { noms: entieres, enCours: parMoment[geste.moment] ?? 5 };
@@ -800,7 +831,7 @@ function etapesVues(etat, acteur, geste, offerts) {
 // qu'il manque de quoi l'ouvrir.
 function jetDe(etat, geste) {
   if (geste.jet) return geste.jet;
-  if (!["attaque", "jet_prete", "caracteristique"].includes(geste.mode)) return null;
+  if (!MODES_A_JET.includes(geste.mode)) return null;
   const lues = circonstances(etat, geste);
   return lues.manque ? null : ouvrirJet(lues);
 }
@@ -898,11 +929,15 @@ function chaineVue(jet) {
 
 // Ce que dit le bilan pendant la chaîne, selon ce que le jet attend. La
 // relance reprend la tête, comme sur la maquette : « 1 réussite pour
-// l'instant. Avantage dépensé : … ».
+// l'instant. Avantage dépensé : … ». Une relance de la palette ne dépense
+// aucun avantage (jet.relanceParPalette) : elle ne le dit donc pas.
 const BILANS_DU_JET = {
   de: (jet, tete) => `${tete} Cliquez sur le d${jet.faces} pour lancer le ${RANGS[jet.places.length]}.`,
   choix_relance: (jet, tete) => `${tete} Le ${RANGS[jet.places.length - 1]} échoue : il reste ${compter(relancesRestantes(jet), "avantage")}.`,
-  de_relance: (jet, tete) => `${tete} Avantage dépensé : cliquez sur le d${jet.faces} pour relancer le ${RANGS[jet.places.length - 1]}.`,
+  de_relance: (jet, tete) => {
+    const clic = `cliquez sur le d${jet.faces} pour relancer le ${RANGS[jet.places.length - 1]}.`;
+    return `${tete} ${jet.relanceParPalette === true ? majuscule(clic) : `Avantage dépensé : ${clic}`}`;
+  },
   choix_explosion: (jet) => `Le ${RANGS[jet.places.length - 1]} montre sa face maximale sans atteindre la difficulté : il peut exploser.`,
   de_explosion: (jet) => `Cliquez sur le d${jet.faces} pour faire exploser le ${RANGS[jet.places.length - 1]}.`,
 };
@@ -960,6 +995,13 @@ const LIBELLES_DE_NATURE = { normaux: "Dégâts normaux", resistance: "Directs, 
 // nature. Choisir une base retire le nombre saisi ; des dégâts directs
 // exigent un nombre et une raison, que la commande d'une nature porte donc
 // toujours (à défaut, les dégâts du moment et le nom de la capacité).
+//
+// Le nombre saisi est l'ajustement à la main, qui vient après la lettre et
+// le critique, avant la palette (contrat de la vague 1, § 12, choix 3) : la
+// saisie montre donc la valeur ajustée, sinon la valeur calculée. « Ajusté
+// à » la valeur calculée ne change rien (mission du lot, § 6 ; contrat, § 11) :
+// en dégâts normaux, « sansEffet » dit ce nombre, et ce qu'il émet : rien,
+// ou, s'il y avait un ajustement, des dégâts sans opération, qui le défont.
 function degatsVus(etat, geste, capacite, facon, offerts) {
   if (offerts.degats === null) return null;
   const fixes = degatsFixes(etat, geste);
@@ -967,6 +1009,8 @@ function degatsVus(etat, geste, capacite, facon, offerts) {
   const saisi = operations.findLast((operation) => operation.op === "ajuster") ?? null;
   const raisonParDefaut = raisonDepuis(capacite.nom);
   const commande = (base, lesOperations, nature) => ({ evenement: { type: "degats", base, operations: lesOperations, nature } });
+  const calculee = fixes.etapes.find((etape) => etape.genre === "critique")?.resultat ?? fixes.deBase;
+  const nature = geste.degats?.nature ?? "normaux";
   const lettre = lettreDe(geste.jet.genre, reussites(geste.jet));
   const chiffrer = (tarif) => (tarif !== null && lettre !== null ? ` (${LETTRES[lettre]} = ${tarif[lettre]})` : "");
   const libelles = {
@@ -977,12 +1021,13 @@ function degatsVus(etat, geste, capacite, facon, offerts) {
   return {
     bases: offerts.degats.bases.map((base) => ({ libelle: libelles[base], choisie: fixes.base === base, commande: commande(base, [], "normaux") })),
     saisie: {
-      valeur: fixes.valeur,
+      valeur: saisi?.valeur ?? calculee,
       raison: saisi?.raison ?? null,
       raisonParDefaut,
       min: 0,
       max: offerts.degats.max,
-      gabarit: { evenement: { type: "degats", base: fixes.base, nature: fixes.nature } },
+      gabarit: { evenement: { type: "degats", base: fixes.base, nature } },
+      sansEffet: nature === "normaux" ? { valeur: calculee, commande: saisi === null ? null : commande(fixes.base, [], nature) } : null,
     },
     natures: offerts.degats.natures.map((nature) => {
       const directs = saisi !== null ? [saisi] : [{ op: "ajuster", valeur: Math.min(fixes.valeur, offerts.degats.max), raison: raisonParDefaut }];
@@ -992,12 +1037,15 @@ function degatsVus(etat, geste, capacite, facon, offerts) {
 }
 
 // Les d20 lancés, chacun avec sa face, sa zone, et le décalage qu'on peut
-// encore lui donner.
+// encore lui donner. La zone se lit sur la grille de la victime (un report la
+// suit), la face de contre-attaque sur celle du jeté (degats.js,
+// localisationsDuGeste).
 function localisationVue(etat, geste, offerts) {
-  const victime = photoDe(etat, geste.cible);
-  if (victime === null || geste.localisation.length === 0) return null;
+  const victime = photoDe(etat, victimeDe(geste));
+  const lus = localisationsDuGeste(etat, geste);
+  if (victime === null || lus.length === 0) return null;
   return geste.localisation.map(({ brut, decalage }, rang) => {
-    const lu = localiser(victime, brut, decalage?.valeur ?? 0);
+    const lu = lus[rang];
     if (lu.contre) return { brut, face: brut, zone: "contre-attaque", decaler: null };
     const borne = offerts.decalages.find((un) => un.de === rang) ?? null;
     return {
@@ -1019,11 +1067,12 @@ function localisationVue(etat, geste, offerts) {
   });
 }
 
-// Le détail des dégâts, avant « Appliquer » : ce que chaque coup changerait,
-// esquive comprise. Les coups frappent une copie : rien n'est appliqué.
+// Le détail des dégâts, avant « Appliquer » : ce que chaque coup changerait
+// à la victime, esquive comprise. Les coups frappent une copie : rien n'est
+// appliqué.
 function detailVu(etat, geste) {
-  const victime = photoDe(etat, geste.cible);
-  const courant = courantDe(etat, geste.cible);
+  const victime = photoDe(etat, victimeDe(geste));
+  const courant = courantDe(etat, victimeDe(geste));
   if (victime === null || courant === null) return null;
   const change = ([avant, apres], mot) => (avant === apres ? null : `${mot} ${avant} ${SIGNES.fleche} ${apres}`);
   return frapper(courant, coupsDuGeste(etat, geste)).coups.map((coup) => {
@@ -1065,17 +1114,38 @@ function caracteristiquesVues(etat, geste, offerts) {
   };
 }
 
+// La cible d'une contre-attaque est l'attaquant, posée à l'empilement : elle
+// ne se règle pas (contrat de la vague 1, § 4.2).
+const CIBLE_POSEE = "La cible de ce geste est déjà posée.";
+
+// Les cibles d'une façon Centrée (contrat de la vague 1, § 4.4) : les vivants
+// de la case de son auteur, chacun actif ou non avec sa raison, ceux qu'elle
+// coche d'office enfoncés tant que rien n'est réglé. Un appui coche ou
+// décoche ; la dernière cochée ne se décoche pas, une liste vide n'étant pas
+// un réglage.
+function ciblesCochees(etat, reglage) {
+  const cochees = reglage.valeur ?? reglage.dOffice;
+  return reglage.vivants.map(({ id, actif, raison }) => {
+    const choisie = cochees.includes(id);
+    const apres = choisie ? cochees.filter((autre) => autre !== id) : [...cochees, id];
+    return { id, libelle: nomEntier(etat, id), choisie, actif, raison, commande: apres.length === 0 ? null : regler("cibles", apres) };
+  });
+}
+
 // Les cibles du geste. Tant qu'il se règle : celles qu'il pourrait viser,
-// possibles ou non, chacune avec sa raison. Une fois payé : la seule cible
-// choisie, enfoncée et inactive. La rangée « Cible : » reste ainsi montrée
+// possibles ou non, chacune avec sa raison (une façon Centrée : celles
+// qu'elle coche). Une fois payé, ou quand sa cible est posée d'avance : la
+// seule cible, enfoncée et inactive. La rangée « Cible : » reste ainsi montrée
 // pendant le jet, comme sur la maquette, sans rien offrir : le moteur
 // refuserait d'en changer.
-function ciblesVues(etat, geste) {
-  if (geste.moment === "preparation") {
+function ciblesVues(etat, geste, offerts) {
+  const enPreparation = geste.moment === "preparation";
+  if (enPreparation && Object.hasOwn(offerts.reglages, "cibles")) return ciblesCochees(etat, offerts.reglages.cibles);
+  if (enPreparation && Object.hasOwn(offerts.reglages, "cible")) {
     return cibles(etat).map(({ id, possible, raison }) => ({ id, libelle: nomEntier(etat, id), choisie: geste.cible === id, actif: possible, raison, commande: regler("cible", id) }));
   }
   if (!present(geste.cible)) return [];
-  return [{ id: geste.cible, libelle: nomEntier(etat, geste.cible), choisie: true, actif: false, raison: ACTION_EN_COURS, commande: regler("cible", geste.cible) }];
+  return [{ id: geste.cible, libelle: nomEntier(etat, geste.cible), choisie: true, actif: false, raison: enPreparation ? CIBLE_POSEE : ACTION_EN_COURS, commande: regler("cible", geste.cible) }];
 }
 
 const LIBELLES_DE_CHOIX = {
@@ -1084,25 +1154,96 @@ const LIBELLES_DE_CHOIX = {
   exploser: () => "Faire exploser",
 };
 
+// Les choix du moment : ceux de la chaîne ; garder ou tenter le coup
+// critique (mission du lot, § 4.4 : « Garder C = 8 », pour un jet sans
+// lettre « Garder 3 réussites », puis « Tenter le critique ») ; laisser passer
+// la contre-attaque (§ 4.3). Les lignes de la contre-attaque viendront avec
+// les vues de son étape (vague 3) : « Laisser passer » suffit à continuer.
+function choixVus(etat, geste, offerts) {
+  const choix = offerts.choix.map((cle) => ({ cle, libelle: LIBELLES_DE_CHOIX[cle](geste.jet), commande: { evenement: { type: cle } } }));
+  if (offerts.types.includes("critique")) {
+    const { lettre, deBase } = degatsFixes(etat, geste);
+    const garder = lettre === null ? `Garder ${compter(REUSSITES_MAX, "réussite")}` : `Garder ${LETTRES[lettre]} = ${deBase}`;
+    choix.push({ cle: "critique_garde", libelle: garder, commande: { evenement: { type: "critique", tenter: false } } });
+    choix.push({ cle: "critique_tente", libelle: "Tenter le critique", commande: { evenement: { type: "critique", tenter: true } } });
+  }
+  if (offerts.types.includes("laisser")) choix.push({ cle: "laisser", libelle: "Laisser passer", commande: { evenement: { type: "laisser" } } });
+  return choix;
+}
+
+// La capacité qu'attendre garde (contrat de la vague 1, § 6.2) : un bouton
+// par ligne de qui attend, sauf celles d'attendre ; on en choisit une.
+function gardesVues(etat, geste, offerts) {
+  const reglage = offerts.reglages.garde ?? null;
+  if (reglage === null) return null;
+  const garde = geste.garde ?? null;
+  return reglage.options.map(({ capacite, facon }) => {
+    const laCapacite = capaciteDe(etat, geste.acteur, capacite);
+    return {
+      libelle: libelleDe(laCapacite, element(laCapacite.facons, facon)),
+      choisie: garde?.capacite === capacite && garde?.facon === facon,
+      commande: regler("garde", { capacite, facon }),
+    };
+  });
+}
+
+const SANS_BLOC_DE_BLESSURE = "La banque n'a pas de bloc de blessure.";
+const UNE_AUTRE = `Une autre${String.fromCodePoint(0x2026)}`;
+
+// L'étape « La blessure » (mission du lot, § 4.10) : la zone blessée de la
+// victime ; les capacités du bloc de blessure, figées, que l'écran apporte de
+// la banque (photographie.js, etatsDeLaBanque), chacune active ou non avec sa
+// raison (effets.js, refusDeLaBlessure) ; puis « Une autre… », un état libre
+// nommé à la main (BORNES_EFFET.libre signes au plus). Le geste ne finit
+// qu'avec ce choix, une zone après l'autre. Ce que le coup a fait viendra
+// avec les vues de l'étape (vague 3).
+function blessureVue(etat, geste, offerts, capacites) {
+  if (offerts.blessure === null) return null;
+  const victime = victimeDe(geste);
+  const zone = element(photoDe(etat, victime)?.zones, offerts.blessure.zone)?.nom ?? "?";
+  return {
+    titre: `Blessure : ${court(etat, victime)}, ${minuscule(zone)}`,
+    options: capacites.map((capacite, rang) => {
+      const raison = refusDeLaBlessure(etat, capacite);
+      return {
+        cle: `blessure:${rang}`,
+        libelle: capacite.nom,
+        description: faconDuPassif(capacite)?.description ?? "",
+        actif: raison === null,
+        raison,
+        commande: { evenement: { type: "blessure", capacite } },
+      };
+    }),
+    vide: capacites.length === 0 ? SANS_BLOC_DE_BLESSURE : null,
+    libre: { libelle: UNE_AUTRE, max: BORNES_EFFET.libre, gabarit: { evenement: { type: "blessure" } } },
+  };
+}
+
 // Le geste en cours, tel que la bulle le montre : ce qui se règle, le
 // contexte du jet, la chaîne, le bilan, puis les choix du moment.
-function gesteVu(etat, geste, offerts, hachures) {
+// « blessures » : les capacités du bloc de blessure (vuePanneau).
+function gesteVu(etat, geste, offerts, hachures, blessures) {
   const capacite = capaciteDe(etat, geste.acteur, geste.capacite);
   const facon = faconDe(etat, geste);
   if (capacite === null || facon === null) return null;
   const photo = photoDe(etat, geste.acteur);
   const enPreparation = geste.moment === "preparation";
+  // Une façon Centrée porte déjà sa première cible cochée (moteur.js,
+  // viserLaCase) : son jet se lit comme celui d'une cible réglée.
   const jet = jetDe(etat, geste);
-  const aJet = ["attaque", "jet_prete", "caracteristique"].includes(geste.mode);
+  const aJet = MODES_A_JET.includes(geste.mode);
   const reglables = offerts.reglages;
   const offert = (champ) => Object.hasOwn(reglables, champ);
   const esquive = esquiveOfferte(etat);
+  // Un jet ne clôt jamais le geste (contrat de la vague 1, § 12, choix 1) :
+  // un manqué et un jet de caractéristique attendent « Terminer », sans dégâts.
+  const terminer = lettreDuGeste(etat, geste) === null;
 
   return {
     description: facon.description,
     jetPrete: jetPreteVu(etat, geste, offerts, hachures),
     armes: offert("arme_pretee") ? reglables.arme_pretee.options.map((rang) => ({ libelle: photo.armes[rang].libelle, choisie: geste.armePretee === rang, commande: regler("arme_pretee", rang) })) : null,
-    cibles: ciblesVues(etat, geste),
+    cibles: ciblesVues(etat, geste, offerts),
     sansCible: offert("cible") && reglables.cible.options.includes(null) ? { choisie: geste.cible === null, commande: regler("cible", null) } : null,
     cases: offert("arrivee") ? reglables.arrivee.options.map((nom) => ({ case: nom, nom: nomDArrivee(nom), choisie: geste.arrivee === nom, commande: commandeDArrivee(etat, geste, nom) })) : null,
     caracteristiques: caracteristiquesVues(etat, geste, offerts),
@@ -1114,17 +1255,19 @@ function gesteVu(etat, geste, offerts, hachures) {
       : null,
     x: offert("x") ? { valeur: reglables.x.valeur, min: reglables.x.min, max: reglables.x.max, gabarit: gabaritDe("x") } : null,
     jauges: offert("jauge") ? reglables.jauge.options.map((rang) => ({ nom: photo.liens[rang].nom, choisie: reglables.jauge.valeur === rang, commande: regler("jauge", rang) })) : null,
+    gardes: gardesVues(etat, geste, offerts),
     contexte: aJet ? contexteVu(etat, geste, capacite, jet, offerts) : null,
     chaine: jet === null ? [] : chaineVue(jet),
     aLancer: offerts.de === null ? null : { faces: offerts.de.faces, combien: offerts.de.combien, libelle: `d${offerts.de.faces}`, motif: offerts.de.motif },
     bilan: bilanVu(etat, geste, jet, offerts),
     lettres: lettresVues(etat, geste, facon, jet),
-    choix: offerts.choix.map((cle) => ({ cle, libelle: LIBELLES_DE_CHOIX[cle](geste.jet), commande: { evenement: { type: cle } } })),
+    choix: choixVus(etat, geste, offerts),
     degats: degatsVus(etat, geste, capacite, facon, offerts),
     localisation: localisationVue(etat, geste, offerts),
-    esquive: esquive === null ? null : { libelle: capaciteDe(etat, geste.cible, esquive.capacite)?.nom ?? "", min: esquive.min, max: esquive.max, gabarit: { evenement: { type: "esquive" } } },
+    esquive: esquive === null ? null : { libelle: capaciteDe(etat, victimeDe(geste), esquive.capacite)?.nom ?? "", min: esquive.min, max: esquive.max, gabarit: { evenement: { type: "esquive" } } },
     detail: geste.moment === "suites" ? detailVu(etat, geste) : null,
-    appliquer: offerts.types.includes("appliquer") ? { libelle: "Appliquer", commande: { evenement: { type: "appliquer" } } } : null,
+    blessure: blessureVue(etat, geste, offerts, blessures),
+    appliquer: offerts.types.includes("appliquer") ? { libelle: terminer ? "Terminer" : "Appliquer", commande: { evenement: { type: "appliquer" } } } : null,
     confirmer:
       enPreparation && !aJet ? { libelle: "Confirmer", actif: offerts.pret.ok, raison: offerts.pret.ok ? null : offerts.pret.manque, commande: { evenement: { type: "confirmer" } } } : null,
     revenir: enPreparation ? { commande: { evenement: { type: "revenir" } } } : null,
@@ -1138,9 +1281,11 @@ function focusDe(geste, vu, offerts) {
   if (vu.aLancer !== null) return "de";
   if (vu.choix.length > 0) return `choix:${vu.choix[0].cle}`;
   if (vu.appliquer !== null) return "appliquer";
+  if (vu.blessure !== null) return vu.blessure.options.find((option) => option.actif)?.cle ?? "blessure:libre";
   if (geste.moment !== "preparation") return null;
   if (offerts.pret.ok) return vu.confirmer !== null ? "confirmer" : null;
   if (vu.cases !== null && !vu.cases.some((une) => une.choisie)) return vu.cases.length > 0 ? `case:${vu.cases[0].case}` : null;
+  if (vu.gardes !== null && !vu.gardes.some((une) => une.choisie)) return vu.gardes.length > 0 ? "garde:0" : null;
   const possible = vu.cibles.find((cible) => cible.actif) ?? null;
   if (["attaque", "jet_prete"].includes(geste.mode) && !vu.cibles.some((cible) => cible.choisie && cible.actif)) return possible === null ? null : `cible:${possible.id}`;
   if (vu.caracteristiques !== null && vu.caracteristiques.choisies.length === 0) return `caracteristique:${vu.caracteristiques.options[0]?.code ?? ""}`;
@@ -1190,7 +1335,7 @@ function defenseurDe(etat, geste) {
 // dépensé, l'écran revient d'abord sur le geste) ; « Réduire » après le
 // premier dé, en un onglet qui la rouvre.
 function fermetureDe(etat, geste) {
-  if (geste === null || geste.paye !== true) return { genre: "fermer", libelle: "Fermer", commande: { choisir: null } };
+  if (!engage(etat, geste)) return { genre: "fermer", libelle: "Fermer", commande: { choisir: null } };
   const capacite = capaciteDe(etat, geste.acteur, geste.capacite);
   const libelle = capacite === null ? "" : libelleDe(capacite, faconDe(etat, geste));
   return { genre: "reduire", libelle: "Réduire", onglet: `${libelle} : rouvrir` };
@@ -1211,8 +1356,13 @@ const PANNEAU_VIDE = { candidats: [], nom: null, entete: null, defenseur: null, 
  * « annonce » est ce que dit la région d'annonce ; « focus », la commande qui
  * attend. Les cases hachurées d'un même départ, d'un même minimum et d'un
  * même maximum ne se calculent qu'une fois par vue.
+ *
+ * « apports » est ce que l'écran sait de la banque, que le combat ne garde
+ * pas : « blessures », les capacités figées du bloc de blessure
+ * (js/combat/photographie.js, etatsDeLaBanque), que l'étape « La blessure »
+ * propose ; aucune par défaut.
  */
-export function vuePanneau(etat, choisi) {
+export function vuePanneau(etat, choisi, apports = {}) {
   const annonce = etat.annonce ?? null;
   if (etat.phase === "preparation") return { genre: "preparation", ...PANNEAU_VIDE, annonce };
   if (etat.phase !== "combat") return { genre: "termine", ...PANNEAU_VIDE, annonce, vainqueur: present(etat.vainqueur) ? ligneDeFin(etat.vainqueur) : null };
@@ -1235,7 +1385,7 @@ export function vuePanneau(etat, choisi) {
   const geste = gesteEnCours(etat);
   const offerts = offre(etat);
   const libre = offerts.types.includes("passer") && candidats(etat).includes(acteur);
-  const vu = geste === null ? null : gesteVu(etat, geste, offerts, hachures);
+  const vu = geste === null ? null : gesteVu(etat, geste, offerts, hachures, Array.isArray(apports?.blessures) ? apports.blessures : []);
   const groupes = grouper(lignesVues(etat, acteur, geste, hachures), courant.camp !== "pj");
   const passer = { actif: libre, raison: libre ? null : ACTION_EN_COURS, commande: { evenement: { type: "passer", qui: acteur } } };
   return {

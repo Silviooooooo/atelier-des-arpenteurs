@@ -50,10 +50,14 @@ export function sansAdversaires(base = CLASSEUR_ESSAI) {
 
 // Ce que le lot 4 a ajouté au classeur d'essai pour le simulateur de combat
 // (§ 10.3), et ce que portait avant lui la colonne « Éléments propres » des
-// capacités qu'il a touchées.
-const ELEMENTS_DU_COMBAT = ["Intervention", "Passif"];
-const CAPACITES_DU_COMBAT = ["Pas de côté", "Guetter"];
+// capacités qu'il a touchées ; puis ce qu'y a ajouté la fin du combat (lot
+// 4.3) : l'élément Centré, posé sur Moulinet farineux, deux blocs de type
+// État et leurs six capacités.
+const ELEMENTS_DU_COMBAT = ["Intervention", "Passif", "Centré"];
+const CAPACITES_DU_COMBAT = ["Pas de côté", "Guetter", "Cheville tordue", "Main brûlée", "Côtes froissées", "Étourdi", "En nage", "Affamé"];
+const BLOCS_DU_COMBAT = ["Blessure", "Condition"];
 const ELEMENTS_PROPRES_D_AVANT = {
+  "Moulinet farineux": _,
   Vif: _,
   "Nez fin": _,
   Costaud: _,
@@ -72,8 +76,9 @@ const ELEMENTS_PROPRES_D_AVANT = {
 
 /**
  * Le classeur d'essai tel qu'il était avant les ajouts du simulateur de
- * combat (lot 4) : sans les deux éléments, sans les deux capacités du bloc
- * de base, chaque capacité touchée rendue à ses éléments propres d'avant.
+ * combat (lot 4, puis lot 4.3) : sans les trois éléments, sans les deux
+ * capacités du bloc de base, sans les deux blocs d'état et leurs six
+ * capacités, chaque capacité touchée rendue à ses éléments propres d'avant.
  * Il sert à vérifier que ces ajouts ne changent aucun adversaire.
  */
 export function sansAjoutsDuCombat() {
@@ -82,6 +87,7 @@ export function sansAjoutsDuCombat() {
   const sans = (nom, retires) => (feuille(nom).lignes = feuille(nom).lignes.filter((ligne) => !retires.includes(ligne?.[0])));
   sans("Eléments", ELEMENTS_DU_COMBAT);
   sans("Capacites", CAPACITES_DU_COMBAT);
+  sans("Blocs", BLOCS_DU_COMBAT);
   for (const ligne of feuille("Capacites").lignes) if (Object.hasOwn(ELEMENTS_PROPRES_D_AVANT, ligne[0] ?? "")) ligne[4] = ELEMENTS_PROPRES_D_AVANT[ligne[0]];
   feuille("Blocs").lignes.find((ligne) => ligne[0] === "Gestes de cuisine")[2] = "Pas chassé, Goûter, Taloche";
   return description;

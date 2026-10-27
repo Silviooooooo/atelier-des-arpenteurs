@@ -26,7 +26,7 @@ test("import — la banque a le format du § 5.1, avec la source et son empreint
   assert.equal(b.format, 1);
   const empreinte = `sha256:${createHash("sha256").update(ESSAI).digest("hex")}`;
   assert.deepEqual(b.sources, [{ classeur: "regles", fichier: "classeur_essai.xlsx", empreinte }]);
-  assert.deepEqual([b.blocs.length, b.capacites.length, b.elements.length, b.lisez_moi.length], [37, 46, 22, 5]);
+  assert.deepEqual([b.blocs.length, b.capacites.length, b.elements.length, b.lisez_moi.length], [39, 52, 23, 5]);
   assert.deepEqual([b.types_adversaires.length, b.adversaires.length], [2, 5]);
 });
 
@@ -205,11 +205,13 @@ test("import — les ajouts du simulateur de combat : deux éléments, Passif et
   };
   assert.deepEqual(element("Intervention"), { nom: "Intervention", parametres_recus: [], description: "Se joue pendant le tour adverse.", ligne: 23 });
   assert.deepEqual(element("Passif"), { nom: "Passif", parametres_recus: [], description: "Agit sans action.", ligne: 24 });
-  // Les capacités qui portent chacun des deux éléments, dans l'ordre de la feuille : douze passifs, trois interventions.
+  // Les capacités qui portent chacun des deux éléments, dans l'ordre de la feuille : douze passifs, trois interventions ;
+  // depuis la fin du combat (lot 4.3), les six capacités d'état, passives, suivent en fin de feuille.
   const portent = (nom) => b.capacites.filter((c) => c.variantes.some((v) => v.elements.some((e) => e.nom === nom))).map((c) => c.nom);
   assert.deepEqual(portent("Passif"), [
     "Vif", "Nez fin", "Costaud", "Palais d'acier", "Réduction", "Feuilletage",
     "Solo du chef", "Brigade", "Minutie", "Maîtrise du lourd", "Maîtrise de l'agile", "Maîtrise du précis",
+    "Cheville tordue", "Main brûlée", "Côtes froissées", "Étourdi", "En nage", "Affamé",
   ]);
   assert.deepEqual(portent("Intervention"), ["Dressage minute", "Coup de chalumeau", "Pas de côté"]);
   // Un style de combat et une maîtrise gardent leur élément d'avant, devant le nouveau.
@@ -237,9 +239,40 @@ test("import — les ajouts du simulateur de combat : deux éléments, Passif et
       ligne: 53,
     },
   ]);
-  // Posés en fin de feuille : les dernières lignes d'Eléments et de Capacites, et aucune anomalie sur elles.
-  assert.deepEqual([b.elements.at(-1).nom, b.capacites.at(-1).nom], ["Passif", "Guetter"]);
+  // Posés en fin de feuille : les dernières lignes d'Eléments et de Capacites, et aucune anomalie sur elles. La fin du
+  // combat (lot 4.3) a posé après elles un élément et six capacités.
+  assert.deepEqual([b.elements.at(-2).nom, b.capacites.at(-7).nom], ["Passif", "Guetter"]);
   assert.deepEqual(b.anomalies.filter((a) => (a.feuille === "Eléments" && a.ligne >= 23) || (a.feuille === "Capacites" && a.ligne >= 52)), []);
+});
+
+test("import — les ajouts de la fin du combat (lot 4.3) : l'élément Centré, deux blocs de type État, leurs six capacités, en fin de feuille", async () => {
+  const b = await banque();
+  const { brut, ...centre } = b.elements.find((e) => e.nom === "Centré");
+  assert.deepEqual({ ...centre, ligne: brut.ligne }, { nom: "Centré", parametres_recus: [], description: "Touche toute la case de son auteur.", ligne: 25 });
+  assert.deepEqual(b.capacites.find((c) => c.nom === "Moulinet farineux").variantes.map((v) => v.elements), [[{ nom: "Centré" }]]);
+  // Les deux blocs, en fin de Blocs : un ensemble facultatif chacun.
+  const bloc = (nom) => {
+    const { type, capacites, elements, parametres, brut: { ligne } } = b.blocs.find((un) => un.nom === nom);
+    return { type, capacites, elements, parametres, ligne };
+  };
+  assert.deepEqual(bloc("Blessure"), { type: "État", capacites: [{ forme: "facultatif", options: ["Cheville tordue", "Main brûlée", "Côtes froissées"] }], elements: [], parametres: [], ligne: 40 });
+  assert.deepEqual(bloc("Condition"), { type: "État", capacites: [{ forme: "facultatif", options: ["Étourdi", "En nage", "Affamé"] }], elements: [], parametres: [], ligne: 41 });
+  assert.deepEqual(b.blocs.slice(-2).map((un) => un.nom), ["Blessure", "Condition"]);
+  // Les six capacités, cellule par cellule : puissance 0, sans coût, passives, origine « État ».
+  const textes = {
+    "Cheville tordue": "Vos déplacements coûtent une action de plus.",
+    "Main brûlée": "Désavantage avec une arme précise.",
+    "Côtes froissées": "Vos interventions coûtent 1 souffle de plus.",
+    "Étourdi": "Votre prochaine action coûte une action de plus.",
+    "En nage": "Vos jets de défense ont un désavantage.",
+    "Affamé": "Vous ne regagnez pas de souffle.",
+  };
+  assert.deepEqual(
+    b.capacites.slice(-6).map(({ nom, variantes }) => [nom, variantes.map(({ brut, ...variante }) => ({ ...variante, ligne: brut.ligne }))]),
+    Object.entries(textes).map(([nom, description], rang) => [nom, [{ puissance: "0", cout_souffle: "", cout_lien: "", elements: [{ nom: "Passif" }], description, notes: "État", ligne: 54 + rang }]]),
+  );
+  // Aucune anomalie sur les lignes neuves.
+  assert.deepEqual(b.anomalies.filter((a) => (a.feuille === "Eléments" && a.ligne >= 25) || (a.feuille === "Capacites" && a.ligne >= 54) || (a.feuille === "Blocs" && a.ligne >= 40)), []);
 });
 
 test("import — les valeurs restent des chaînes, telles qu'écrites", async () => {

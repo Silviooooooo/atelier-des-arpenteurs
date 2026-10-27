@@ -3,19 +3,31 @@
 //
 // Les règles du combat ne fouillent jamais l'état d'elles-mêmes : elles
 // demandent ici ce que vaut un protagoniste (son camp, sa case, son attaque,
-// sa défense, ses blessures, ses alliés, ses capacités) et quel geste est en
-// cours. Ce module existe pour que ces lectures n'aient qu'un chemin : au
-// groupe 2, un effet à durée (« défense −1 jusqu'au prochain tour ») changera
-// ce que valent une attaque et une défense, et il se branchera ici, sans
-// qu'aucune règle ne change. C'est pourquoi attaqueDe() et defenseDe() rendent
-// déjà une valeur, sa base et la liste de ses écarts.
+// sa défense, ses alliés, ses capacités, ses effets) et quel geste est en
+// cours. Ce module existe pour que ces lectures n'aient qu'un chemin : un
+// effet à durée (« défense −1 jusqu'au prochain tour ») change ce que valent
+// une attaque et une défense, et il se branche ici, sans qu'aucune règle ne
+// change. C'est pourquoi attaqueDe() et defenseDe() rendent une valeur, sa
+// base et la liste de ses écarts.
 //
 // Deux sources, qui ne se mêlent pas (§ 17) :
 // - ce qui bouge pendant le combat (case, actions, souffle, corps, armure,
-//   endurance, attaque, défense, mort) se lit dans etat.protagonistes ;
+//   endurance, attaque, défense, mort, retrait, effets durables) se lit dans
+//   etat.protagonistes et etat.effets ;
 // - ce qui ne bouge pas (capacités, armes, passifs, grille, caractéristiques)
 //   se lit dans etat.photos, qui porte les valeurs de chaque photographie,
-//   jamais sa source.
+//   jamais sa source. Au groupe 3, une photographie peut être remplacée (le
+//   MJ change l'équipement) ou prolongée (une capacité de blessure).
+//
+// Au groupe 3 (contrat de la vague 1, § 3, § 5.7 et § 7.3) :
+// - un vivant est présent, ni mort ni retiré du combat par le MJ ;
+// - ±N sur un adversaire écarte son attaque ou sa défense : les effets
+//   durables « modif » qu'il porte, puis ceux « pour ce jet » du geste ;
+// - la source d'un effet se nomme ici (nomDeLaSource) : une capacité, un état
+//   porté, ou « MJ » ;
+// - le −1 par zone sans endurance a disparu (mission, § 4.10) : une blessure
+//   est un effet durable ; blessuresDe() ne compte plus que les zones sans
+//   endurance, pour le banc.
 //
 // Ce fichier n'importe rien : l'offre, le journal et les vues y prennent le
 // geste en cours sans passer par le moteur, donc sans cycle d'import.
@@ -32,8 +44,8 @@ const element = (liste, indice) => (Array.isArray(liste) && Number.isInteger(ind
 
 /**
  * Le geste en cours, ou null entre deux gestes. C'est le sommet de la pile :
- * au groupe 1 elle n'a jamais plus d'un geste, au groupe 2 une intervention
- * ou une contre-attaque s'empilera sur le geste qu'elle interrompt.
+ * au groupe 3, une intervention ou une contre-attaque s'empile sur le geste
+ * qu'elle interrompt (trois étages au plus).
  */
 export function gesteEnCours(etat) {
   const pile = etat?.pile;
@@ -55,10 +67,13 @@ export function campDe(etat, id) {
   return courantDe(etat, id)?.camp ?? null;
 }
 
-/** Vrai tant qu'il n'est pas mort. Un mort ne joue plus, ne se cible plus, et n'est l'allié de personne. */
+/**
+ * Vrai tant qu'il est présent, ni mort ni retiré du combat par le MJ. Un mort
+ * ou un retiré ne joue plus, ne se cible plus, et n'est l'allié de personne.
+ */
 export function vivant(etat, id) {
   const courant = courantDe(etat, id);
-  return courant !== null && courant.mort === null;
+  return courant !== null && courant.mort === null && courant.retire !== true;
 }
 
 /** Les vivants d'un camp, dans l'ordre d'ajout (le seul ordre des protagonistes). */
@@ -76,30 +91,92 @@ export function aJoue(etat, id) {
   return courant === null || courant.passe === true || courant.actions <= 0;
 }
 
-// Au groupe 1, rien ne modifie une attaque ni une défense : la valeur est la
-// base, et la liste des écarts est vide.
-const sansEcart = (base) => ({ valeur: base, base, ecarts: [] });
+// ─── Les effets ─────────────────────────────────────────────────────────────
+
+/** Les effets durables qu'il porte (etat.effets), dans leur ordre d'application. */
+export function effetsDurablesDe(etat, id) {
+  const effets = Array.isArray(etat?.effets) ? etat.effets : [];
+  return effets.filter((effet) => effet.porteur === id);
+}
+
+/** Ses gardes actives : les effets durables « guet » qu'il porte (attendre), dans leur ordre. */
+export function gardesDe(etat, id) {
+  return effetsDurablesDe(etat, id).filter((effet) => effet.genre === "guet");
+}
+
+/**
+ * Les effets appliqués pendant un geste, dans l'ordre : ceux des cibles déjà
+ * finies (geste.faites), puis les siens. Un effet « pour ce jet » vaut pour
+ * tous les jets du geste, ses cibles comprises (contrat, § 12, choix 6). Un
+ * effet tenu deux fois (la même entrée) ne compte qu'une. Rien pour null.
+ */
+export function effetsDuGeste(geste) {
+  if (geste === null || typeof geste !== "object") return [];
+  const faites = Array.isArray(geste.faites) ? geste.faites.flatMap((faite) => (Array.isArray(faite?.effets) ? faite.effets : [])) : [];
+  return [...new Set([...faites, ...(Array.isArray(geste.effets) ? geste.effets : [])])];
+}
+
+/**
+ * Le nom d'une source d'effet (contrat, § 5) : le nom de la capacité ; pour
+ * un état porté, celui de sa capacité figée, ou son texte libre ; « MJ » pour
+ * le MJ. null pour ce qui n'existe pas (ou plus).
+ */
+export function nomDeLaSource(etat, source) {
+  if (source === null || typeof source !== "object") return null;
+  if (source.genre === "mj") return "MJ";
+  if (source.genre === "capacite") return capaciteDe(etat, source.qui, source.capacite)?.nom ?? null;
+  if (source.genre === "etat") {
+    const effet = (Array.isArray(etat?.effets) ? etat.effets : []).find((un) => un.id === source.effet) ?? null;
+    return effet?.capacite?.nom ?? effet?.libre ?? null;
+  }
+  return null;
+}
+
+// ─── L'attaque et la défense ────────────────────────────────────────────────
+
+// Les écarts de son attaque ou de sa défense (« valeur ») : les effets
+// durables « modif » qu'il porte, dans l'ordre d'application, puis les ±N
+// « pour ce jet » du geste dont il est la cible (« sur »). Chacun avec le nom
+// de sa source, et l'effet même.
+function ecartsDe(etat, id, valeur, geste) {
+  const durables = effetsDurablesDe(etat, id).filter((effet) => effet.genre === "modif" && effet.valeur === valeur);
+  const duJet = effetsDuGeste(geste).filter((effet) => effet.genre === valeur && effet.sur === id && effet.duree === "jet");
+  return [...durables, ...duJet].map((effet) => ({ nom: nomDeLaSource(etat, effet.source), source: effet.source ?? null, n: effet.n, effet }));
+}
+
+// La valeur écartée : la base et la somme des écarts ; null sans base (un PJ).
+function ecartee(etat, id, valeur, geste) {
+  const base = courantDe(etat, id)?.[valeur] ?? null;
+  const ecarts = ecartsDe(etat, id, valeur, geste);
+  return { valeur: base === null ? null : base + ecarts.reduce((total, ecart) => total + ecart.n, 0), base, ecarts };
+}
 
 /**
  * L'attaque d'un adversaire : la difficulté du jet de défense du PJ qu'il
- * vise. Sa valeur est null pour un PJ, dont l'attaque est un dé.
+ * vise. { valeur, base, ecarts: [{ nom, source, n, effet }] } : la base, que
+ * le MJ peut changer, écartée par les ±N actifs (contrat, § 5.7) ; ceux
+ * « pour ce jet » ne valent que pour le geste donné. Sa valeur est null pour
+ * un PJ, dont l'attaque est un dé : ses ±N sont des modificateurs de ses jets
+ * (circonstances).
  */
-export function attaqueDe(etat, id) {
-  return sansEcart(courantDe(etat, id)?.attaque ?? null);
+export function attaqueDe(etat, id, geste = null) {
+  return ecartee(etat, id, "attaque", geste);
 }
 
 /**
  * La défense d'un adversaire : la difficulté du jet d'attaque du PJ qui le
- * vise. Sa valeur est null pour un PJ, dont la défense est un dé.
+ * vise, écartée comme son attaque. Sa valeur est null pour un PJ, dont la
+ * défense est un dé.
  */
-export function defenseDe(etat, id) {
-  return sansEcart(courantDe(etat, id)?.defense ?? null);
+export function defenseDe(etat, id, geste = null) {
+  return ecartee(etat, id, "defense", geste);
 }
 
 /**
- * Le nombre de ses blessures : une par zone dont l'endurance est à 0
- * (livret, « Ressources »). Pour un PJ, chacune retire 1 à ses jets ; pour un
- * adversaire, le compte n'a pas d'effet calculé (convention provisoire, § 12).
+ * Le nombre de ses zones dont l'endurance est à 0. Depuis la fin du −1
+ * (mission du lot 4.3, § 4.10), ce compte ne pèse plus sur aucun jet, et ce
+ * n'est plus celui de ses blessures (l'endurance à 0 et du corps perdu,
+ * degats.js) : il reste pour qui le lit, le banc sur le classeur réel.
  */
 export function blessuresDe(etat, id) {
   const zones = courantDe(etat, id)?.zones ?? [];
@@ -114,10 +191,7 @@ export function blessuresDe(etat, id) {
 export function alliesSurLaCase(etat, id) {
   const courant = courantDe(etat, id);
   if (courant === null) return [];
-  return etat.ordre.filter((autre) => {
-    const voisin = courantDe(etat, autre);
-    return autre !== id && voisin !== null && voisin.mort === null && voisin.camp === courant.camp && voisin.case === courant.case;
-  });
+  return etat.ordre.filter((autre) => autre !== id && vivant(etat, autre) && campDe(etat, autre) === courant.camp && courantDe(etat, autre).case === courant.case);
 }
 
 /** Une capacité d'un protagoniste, par son indice dans sa photographie ; null si elle n'existe pas. */

@@ -76,8 +76,9 @@ const d8 = (...valeurs) => ({ type: "de", faces: 8, valeurs });
 const d20 = (valeur) => ({ type: "de", faces: 20, valeurs: [valeur] });
 const passer = (qui) => ({ type: "passer", qui });
 
-// Une Frappe d'Aubépine qui manque : le premier dé paie, et clôt le geste.
-const frappeManquee = (etat, qui = "pj1", cible = "adv2") => [capacite(etat, qui, "Frappe"), viser(cible), d8(1)];
+// Une Frappe d'Aubépine qui manque : le premier dé paie ; depuis le lot 4.3,
+// « Appliquer » passe l'étape « Interventions » et clôt le geste.
+const frappeManquee = (etat, qui = "pj1", cible = "adv2") => [capacite(etat, qui, "Frappe"), viser(cible), d8(1), APPLIQUER];
 // Une Frappe qui touche et tue : les dégâts sont fixés à la main, droit au corps.
 const coupMortel = (etat, qui, cible) => [
   capacite(etat, qui, "Frappe"),
@@ -132,15 +133,15 @@ test("chaque genre de geste se défait : l'état d'avant revient, hors du journa
   assert.equal(frappe.protagonistes.adv2.zones[0].armure, 5, "la Frappe avait porté");
   assert.equal(frappe.protagonistes.pj1.actions, 1);
 
-  // Un jet de caractéristique.
-  defaire(depart, [capacite(depart, "pj1", "Goûter"), regler("caracteristiques", ["sens", "parole"]), regler("difficulte", 6), d8(7), d8(4)], "Annulé : Aubépine — Goûter.");
+  // Un jet de caractéristique, fini par « Appliquer » (lot 4.3).
+  defaire(depart, [capacite(depart, "pj1", "Goûter"), regler("caracteristiques", ["sens", "parole"]), regler("difficulte", 6), d8(7), d8(4), APPLIQUER], "Annulé : Aubépine — Goûter.");
   // Un déplacement : la case d'avant revient.
   const { fini: deplace } = defaire(depart, [capacite(depart, "pj1", "Pas chassé", 1), regler("arrivee", "F6"), CONFIRMER], "Annulé : Aubépine — Pas chassé [2].");
   assert.deepEqual([deplace.protagonistes.pj1.case, deplace.protagonistes.pj1.souffle], ["F6", 9]);
   // Une capacité sans jet : son souffle revient.
   const { fini: flambe } = defaire(depart, [capacite(depart, "pj1", "Flambage", 1), viser("adv2"), CONFIRMER], "Annulé : Aubépine — Flambage [2].");
   assert.equal(flambe.protagonistes.pj1.souffle, 0);
-  // Un dé manqué qui paie et clôt le geste d'un coup.
+  // Un dé manqué qui paie, puis « Appliquer » qui clôt le geste.
   const { fini: manque } = defaire(depart, frappeManquee(depart), "Annulé : Aubépine — Frappe.");
   assert.equal(manque.protagonistes.pj1.actions, 1);
   // Une passe, sans fin de tour (Ciboulette n'a pas joué).
@@ -192,7 +193,8 @@ test("la mort et la fin du combat se défont avec le geste qui les a faites", ()
   assert.deepEqual(textes(fini, 3), ["Combat terminé : victoire des PJ."]);
   assert.deepEqual(annule.journal.at(-1).barre, [2, 4]);
   assert.deepEqual([annule.phase, annule.vainqueur], ["combat", null]);
-  assert.deepEqual(offre(annule).types, ["capacite", "passer", "fin_de_tour"], "rien n'est plus à annuler, et l'on rejoue");
+  // La palette et le menu du MJ (lot 4.3) s'offrent aussi entre deux gestes.
+  assert.deepEqual(offre(annule).types, ["capacite", "effet", "mj", "passer", "fin_de_tour"], "rien n'est plus à annuler, et l'on rejoue");
   assert.deepEqual(candidats(annule), ["pj1"]);
 });
 
@@ -230,7 +232,7 @@ test("on annule geste après geste jusqu'au lancement, qui ne se défait pas ; p
     [capacite(lance, "pj1", "Pas chassé", 0), regler("arrivee", "E5"), CONFIRMER],
     [passer("pj3")],
     frappeManquee(lance),
-    [capacite(lance, "adv2", "Frappe"), viser("pj3"), d8(8), d8(8), d8(8)],
+    [capacite(lance, "adv2", "Frappe"), viser("pj3"), d8(8), d8(8), d8(8), APPLIQUER],
   ];
   for (const geste of gestes) etapes.push(jouer(etapes.at(-1), geste));
   const fin = etapes.at(-1);

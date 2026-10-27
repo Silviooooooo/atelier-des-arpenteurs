@@ -42,7 +42,9 @@ const ESPACE = " ";
 
 // La classe de chaque type de segment qui se colore ; tout autre type est du
 // texte. Le nom de qui agit et celui de la cible prennent la couleur de leur
-// camp.
+// camp, où qu'il soit dans la ligne (au lot 4.3, qui intervient ou
+// contre-attaque se nomme au milieu de la ligne du geste). L'échéance d'un
+// effet et un geste du MJ (lot 4.3) se lisent comme la fin d'un tour.
 const CLASSES = Object.freeze({
   capacite: "combat-seg-capacite",
   reussi: "combat-seg-reussite",
@@ -51,6 +53,8 @@ const CLASSES = Object.freeze({
   ajuste: "combat-seg-valeur",
   mort: "combat-mort",
   fin_de_tour: "combat-seg-fin",
+  echeance: "combat-seg-fin",
+  mj: "combat-seg-fin",
   tour: "combat-seg-tour",
 });
 const CAMPS = Object.freeze({ pj: "combat-seg-pj", adv: "combat-seg-adv" });

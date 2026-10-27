@@ -139,7 +139,8 @@ test("A10 — deux pièces d'armure d'un même type sur une même zone : le pack
       gravite: "avertissement",
       code: "A10",
       feuille: "Blocs",
-      ligne: 40,
+      // La ligne qui suit la dernière du classeur d'essai (le bloc Condition, lot 4.3).
+      ligne: 42,
       message:
         "Des pièces d'armure de type agile couvrent une même zone (torse : « Tablier de cuir » et « Brassière de cuir » ; bras gauche : « Maniques » et « Brassière de cuir ») : le pack agile n'est pas proposé au créateur de personnage.",
     },

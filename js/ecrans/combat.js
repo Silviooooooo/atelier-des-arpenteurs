@@ -51,7 +51,7 @@ import { sourceAleatoire } from "../combat/des.js";
 import { creerGardien, ouvrirMagasinCombat } from "../combat/enregistrement.js";
 import { nomDuFichier, texteDuJournal } from "../combat/journal.js";
 import { vueBandeau, vueBarre, vueFiche, vueJournal, vuePanneau, vuePlateau, vuePreparation } from "../combat/lecture.js";
-import { photographierAdversaire, photographierPersonnage } from "../combat/photographie.js";
+import { etatsDeLaBanque, photographierAdversaire, photographierPersonnage } from "../combat/photographie.js";
 import { PLAFOND_ADVERSAIRES } from "../combat/regles.js";
 import { ecrireAbsents, tableDesRoles } from "../combat/roles.js";
 import { creerSeance } from "../combat/seance.js";
@@ -303,6 +303,16 @@ function photographier(faire, phrase) {
   }
 }
 
+// De même, un bloc de blessure qui ne se lit pas ne propose aucune capacité :
+// l'étape « La blessure » garde l'état libre.
+function blocDeBlessure(banque) {
+  try {
+    return etatsDeLaBanque(banque).blessure;
+  } catch {
+    return [];
+  }
+}
+
 /** Le protagoniste d'une vue de la bulle : elle ne le nomme que dans la commande de « Passer son tour ». */
 const protagonisteDe = (vue) => vue?.passer?.commande?.evenement?.qui ?? null;
 
@@ -383,6 +393,9 @@ function monter(visite) {
   const { banque } = contexte.etat;
   const outils = outilsDe(contexte);
   const resolution = () => (outils.resolution ??= contexte.etat.index?.adversaires?.() ?? indexerAdversaires(banque));
+  // Les capacités du bloc de blessure, figées une fois par banque, que
+  // l'étape « La blessure » propose (lot 4.3).
+  const blessures = () => (outils.blessures ??= blocDeBlessure(banque));
   const enDemonstration = contexte.etat.mode === "demo";
 
   // Après un oubli, ou quand une autre visite a pris la suite, les boutons
@@ -1411,7 +1424,9 @@ function monter(visite) {
     }
     // La zone se rend même quand elle n'est pas montrée : sa région
     // d'annonce se vide avec le combat, et ne redit rien d'un combat d'avant.
-    const vueDuPanneau = vuePanneau(etat, choisi);
+    // Le bloc de blessure ne se lit dans la banque qu'au premier geste qui
+    // en demande une.
+    const vueDuPanneau = vuePanneau(etat, choisi, { blessures: gesteEnCours(etat)?.moment === "blessure" ? blessures() : [] });
     const origine = origineDeLaCible(etat);
     const refait = action.rendre(vueDuPanneau, { etroit, origineDeLaCible: origine });
     if (aMontrer === preparation) preparation.rendre(vuePreparation(seance.miseEnPlace(), apports()), { demonstration: enDemonstration, phraseDeDemonstration });

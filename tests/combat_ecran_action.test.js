@@ -252,6 +252,7 @@ const gesteVu = (champs = {}) => ({
   difficultes: null,
   x: null,
   jauges: null,
+  gardes: null,
   contexte: { de: "d8", detail: "Force 4 + Agilité 5", modificateurs: ["+1 (Vif)"], difficulte: "5, sa défense", causes: CAUSES, defense: null, reglages: null },
   chaine: [
     { titre: "1er dé", etat: "reussi", valeur: 9, detail: "8 + 1" },
@@ -269,6 +270,7 @@ const gesteVu = (champs = {}) => ({
   localisation: null,
   esquive: null,
   detail: null,
+  blessure: null,
   appliquer: null,
   confirmer: null,
   revenir: null,
@@ -1859,6 +1861,135 @@ test("jet — fixer les dégâts : la base, la nature, et un nombre avec sa rais
 
     rendre(vueJet({ geste: gesteVu({ degats: null }) }));
     assert.equal(boutons(noeud, "Fixer les dégâts").length, 0);
+  });
+});
+
+test("jet — « ajusté à » la valeur calculée ne change rien (lot 4.3) : sans ajustement, rien ne part ; avec, la commande de la vue, sans raison ; un autre nombre, l'opération « ajuster »", () => {
+  avecLeTelephone(({ noeud, rendre, appels }) => {
+    const gabarit = { evenement: { type: "degats", base: "lettre", nature: "normaux" } };
+    const saisie = { valeur: 8, raison: null, raisonParDefaut: "Frappe", min: 0, max: 999, gabarit, sansEffet: { valeur: 8, commande: null } };
+    const champs = () => tous(leBouton(noeud, "Fixer les dégâts").parentNode, "input");
+    rendre(vueJet({ geste: gesteVu({ choix: [], degats: { bases: [], natures: [], saisie } }) }));
+    let [nombre, raison] = champs();
+    assert.equal(nombre.value, "8");
+    leBouton(noeud, "Fixer les dégâts").click();
+    raison.value = "";
+    leBouton(noeud, "Fixer les dégâts").click();
+    assert.deepEqual(appels, [], "la valeur calculée, sans ajustement : aucun événement, raison ou non");
+    assert.equal(noeud.querySelector("[aria-invalid]"), null, "et rien n'est refusé");
+    nombre.value = "9";
+    raison.value = "Frappe";
+    leBouton(noeud, "Fixer les dégâts").click();
+    assert.deepEqual(appels.map((appel) => appel.commande.evenement.operations), [[{ op: "ajuster", valeur: 9, raison: "Frappe" }]], "un autre nombre s'ajuste");
+
+    // Un ajustement à défaire : la valeur calculée émet la commande de la vue, des dégâts sans opération.
+    appels.length = 0;
+    const defaire = { evenement: { type: "degats", base: "lettre", operations: [], nature: "normaux" } };
+    rendre(vueJet({ geste: gesteVu({ choix: [], degats: { bases: [], natures: [], saisie: { ...saisie, valeur: 12, raison: "Coup de feu", sansEffet: { valeur: 8, commande: defaire } } } }) }));
+    [nombre, raison] = champs();
+    assert.deepEqual([nombre.value, raison.value], ["12", "Coup de feu"]);
+    nombre.value = "8";
+    leBouton(noeud, "Fixer les dégâts").click();
+    assert.deepEqual(appels, [{ commande: defaire, origine: "panneau" }]);
+
+    // Sans « sansEffet » (des dégâts directs), le nombre part toujours.
+    appels.length = 0;
+    rendre(vueJet({ geste: gesteVu({ choix: [], degats: { bases: [], natures: [], saisie: { ...saisie, sansEffet: null, gabarit: { evenement: { ...gabarit.evenement, nature: "corps" } } } } }) }));
+    leBouton(noeud, "Fixer les dégâts").click();
+    assert.deepEqual(appels.map((appel) => appel.commande.evenement.operations), [[{ op: "ajuster", valeur: 8, raison: "Frappe" }]]);
+  });
+});
+
+test("jet — les choix du lot 4.3 : garder ou tenter le critique, laisser passer la contre-attaque ; « Terminer » à la place d'« Appliquer »", () => {
+  avecLeTelephone(({ noeud, rendre, appels }) => {
+    const critique = (tenter) => ({ evenement: { type: "critique", tenter } });
+    rendre(
+      vueJet({
+        geste: gesteVu({ choix: [{ cle: "critique_garde", libelle: "Garder C = 15", commande: critique(false) }, { cle: "critique_tente", libelle: "Tenter le critique", commande: critique(true) }] }),
+        focus: "choix:critique_garde",
+      }),
+    );
+    assert.equal(leBouton(noeud, "Garder C = 15").getAttribute("data-focus"), "choix:critique_garde");
+    leBouton(noeud, "Tenter le critique").click();
+    rendre(vueJet({ geste: gesteVu({ choix: [{ cle: "laisser", libelle: "Laisser passer", commande: { evenement: { type: "laisser" } } }] }), focus: "choix:laisser" }));
+    leBouton(noeud, "Laisser passer").click();
+    rendre(vueJet({ geste: gesteVu({ choix: [], appliquer: { libelle: "Terminer", commande: { evenement: { type: "appliquer" } } } }), focus: "appliquer" }));
+    assert.equal(boutons(noeud, "Appliquer").length, 0);
+    leBouton(noeud, "Terminer").click();
+    assert.deepEqual(
+      appels.map((appel) => appel.commande.evenement),
+      [{ type: "critique", tenter: true }, { type: "laisser" }, { type: "appliquer" }],
+    );
+  });
+});
+
+test("jet — la capacité gardée d'attendre (lot 4.3) : « Garder : » et un bouton par ligne, la choisie enfoncée ; un clic émet sa commande", () => {
+  avecLeTelephone(({ noeud, rendre, appels }) => {
+    const gardes = [
+      { libelle: "Frappe", choisie: true, commande: regler("garde", { capacite: 0, facon: 0 }) },
+      { libelle: "Taloche [1]", choisie: false, commande: regler("garde", { capacite: 15, facon: 0 }) },
+    ];
+    rendre(vueJet({ geste: gesteVu({ choix: [], gardes }), focus: "garde:1" }));
+    const rangee = noeud.querySelector(".combat-gardes");
+    assert.equal(rangee.getAttribute("role"), "group");
+    assert.equal(texteDe(rangee.children[0]), "Garder :");
+    const lignes = tous(rangee, "button");
+    assert.deepEqual(lignes.map((b) => [texteDe(b), b.getAttribute("aria-pressed")]), [["Frappe", "true"], ["Taloche [1]", "false"]]);
+    assert.equal(lignes[1].getAttribute("data-focus"), "garde:1");
+    lignes[1].click();
+    assert.deepEqual(appels, [{ commande: gardes[1].commande, origine: "panneau" }]);
+    rendre(vueJet({ geste: gesteVu({ choix: [], gardes: null }) }));
+    assert.equal(noeud.querySelector(".combat-gardes"), null);
+  });
+});
+
+test("jet — la blessure (lot 4.3) : son titre, une option par capacité et son texte, la phrase d'une banque sans bloc, puis l'état libre, nommé de 1 à 40 signes", () => {
+  avecLeTelephone(({ noeud, rendre, appels }) => {
+    const main = { evenement: { type: "blessure", capacite: { nom: "Main brûlée" } } };
+    const cotes = { evenement: { type: "blessure", capacite: { nom: "Côtes froissées" } } };
+    const PHOTO_PLEINE = "La photographie compterait plus de 200 capacités.";
+    const blessure = {
+      titre: "Blessure : Aubépine, bras gauche",
+      options: [
+        { cle: "blessure:0", libelle: "Main brûlée", description: "Désavantage avec une arme précise.", actif: true, raison: null, commande: main },
+        { cle: "blessure:1", libelle: "Côtes froissées", description: "", actif: false, raison: PHOTO_PLEINE, commande: cotes },
+      ],
+      vide: null,
+      libre: { libelle: `Une autre${String.fromCodePoint(0x2026)}`, max: 40, gabarit: { evenement: { type: "blessure" } } },
+    };
+    rendre(vueJet({ geste: gesteVu({ choix: [], blessure }), focus: "blessure:0" }));
+    const bloc = noeud.querySelector(".combat-blessure");
+    assert.equal(texteDe(bloc.querySelector(".combat-blessure-titre")), "Blessure : Aubépine, bras gauche");
+    assert.equal(leBouton(bloc, "Main brûlée").getAttribute("data-focus"), "blessure:0");
+    assert.ok(texteDe(bloc).includes("Désavantage avec une arme précise."), "le texte de la capacité");
+    assert.equal(leBouton(bloc, "Côtes froissées").getAttribute("aria-disabled"), "true");
+    assert.ok(texteDe(bloc).includes(PHOTO_PLEINE), "la raison de l'option inactive");
+    leBouton(bloc, "Main brûlée").click();
+    leBouton(bloc, "Côtes froissées").click();
+    assert.deepEqual(appels, [{ commande: main, origine: "panneau" }], "l'option inactive ne fait rien");
+
+    // L'état libre : un nom vide ou trop long ne part pas, et le dit.
+    appels.length = 0;
+    const champ = bloc.querySelector("input[type=text]");
+    assert.equal(champ.getAttribute("maxlength"), "40");
+    assert.equal(texteDe(champ.parentNode), `Une autre${String.fromCodePoint(0x2026)}`);
+    leBouton(bloc, "Choisir").click();
+    assert.equal(champ.getAttribute("aria-invalid"), "true");
+    assert.ok(texteDe(bloc).includes("Un nom de 1 à 40 signes est attendu."));
+    champ.value = "x".repeat(41);
+    leBouton(bloc, "Choisir").click();
+    assert.deepEqual(appels, []);
+    champ.value = "  Échaudé ";
+    champ.declencher("keydown", { key: "Enter", preventDefault() {} });
+    assert.deepEqual(appels, [{ commande: { evenement: { type: "blessure", libre: "Échaudé" } }, origine: "panneau" }]);
+    assert.equal(champ.hasAttribute("aria-invalid"), false);
+
+    // Sans bloc de blessure : la phrase, et l'état libre seul, qui attend.
+    rendre(vueJet({ geste: gesteVu({ choix: [], blessure: { ...blessure, options: [], vide: "La banque n'a pas de bloc de blessure." } }), focus: "blessure:libre" }));
+    const seul = noeud.querySelector(".combat-blessure");
+    assert.equal(tous(seul, "button").length, 1, "« Choisir » seul");
+    assert.ok(texteDe(seul).includes("La banque n'a pas de bloc de blessure."));
+    assert.equal(seul.querySelector("input[type=text]").getAttribute("data-focus"), "blessure:libre");
   });
 });
 

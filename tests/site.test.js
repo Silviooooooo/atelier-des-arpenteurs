@@ -407,7 +407,7 @@ test("démonstration — la banque se déchiffre avec le mot de passe public et 
   assert.equal(date, enveloppe.publiee_le);
   assert.deepEqual(reste, attendue, "banque périmée : relancer node outils/banque_demo.js");
   // Ce que le simulateur de combat y lit (lot 4, § 15.7) est dans le fichier publié, mot pour mot.
-  assert.deepEqual([banque.blocs.length, banque.capacites.length, banque.elements.length, banque.adversaires.length], [37, 46, 22, 5]);
+  assert.deepEqual([banque.blocs.length, banque.capacites.length, banque.elements.length, banque.adversaires.length], [39, 52, 23, 5]);
   assert.deepEqual(["Intervention", "Passif"].map((nom) => banque.elements.find((e) => e.nom === nom)?.description), ["Se joue pendant le tour adverse.", "Agit sans action."]);
   assert.deepEqual(banque.blocs.find((b) => b.nom === "Gestes de cuisine").capacites.map((c) => c.nom), ["Pas chassé", "Goûter", "Taloche", "Pas de côté", "Guetter"]);
   const variante = (nom) => banque.capacites.find((c) => c.nom === nom)?.variantes[0];

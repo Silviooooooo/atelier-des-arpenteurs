@@ -185,11 +185,13 @@ test("l'offre allégée rend le verdict du groupe 1 sur des photographies piég�
   const mep = (options) => miseEnPlaceEssai([PIEGEE, ADVERSAIRE_PIEGE, pjEssai()].map((photo) => ({ photo, case: "D4" })), options);
   const lance = jouer(ouvrirCombat(mep()), { type: "lancer", le: "2026-10-12T21:30" });
   const frappe = { type: "capacite", qui: "pj1", capacite: 0, facon: 0 };
+  // Depuis le lot 4.3, un manqué attend « Appliquer » pour finir.
+  const manque = [{ type: "regler", champ: "cible", valeur: "adv2" }, { type: "de", faces: 8, valeurs: [1] }, { type: "appliquer" }];
   const etats = {
     "le tour des PJ": lance,
     "un geste en préparation": jouer(lance, frappe, { type: "regler", champ: "cible", valeur: "adv2" }),
-    "une action dépensée": jouer(lance, frappe, { type: "regler", champ: "cible", valeur: "adv2" }, { type: "de", faces: 8, valeurs: [1] }),
-    "plus d'action": jouer(lance, frappe, { type: "regler", champ: "cible", valeur: "adv2" }, { type: "de", faces: 8, valeurs: [1] }, frappe, { type: "regler", champ: "cible", valeur: "adv2" }, { type: "de", faces: 8, valeurs: [1] }),
+    "une action dépensée": jouer(lance, frappe, ...manque),
+    "plus d'action": jouer(lance, frappe, ...manque, frappe, ...manque),
     "un geste payé": jouer(lance, frappe, { type: "regler", champ: "cible", valeur: "adv2" }, { type: "de", faces: 8, valeurs: [8] }),
     "le tour des adversaires": jouer(lance, { type: "fin_de_tour" }),
     "un essoufflé": jouer(ouvrirCombat(miseEnPlaceEssai([pjEssai((champs) => (champs.souffle = 4)), ADVERSAIRE_PIEGE].map((photo) => ({ photo, case: "D4" })))), { type: "lancer", le: "2026-10-12T21:30" }),
@@ -217,8 +219,9 @@ test("l'offre allégée rend le verdict du groupe 1 sur des photographies piég�
   // Les branches, vues une à une sur le PJ piégé, au tour des PJ.
   const indice = (nom) => PIEGEE.valeurs.capacites.findIndex((une) => une.nom === nom);
   const juger = (nom, facon = 0) => accepte(lance, { type: "capacite", qui: "pj1", capacite: indice(nom), facon });
-  assert.deepEqual(juger("Guetter"), refus("hors_bornes", "Cette capacité ne se joue pas."), "un rôle tenu par le simulateur");
-  assert.deepEqual(juger("Lever le couvercle"), refus("hors_bornes", "Cette capacité ne se joue pas."));
+  // Attendre a sa ligne depuis le lot 4.3 (contrat de la vague 1, § 6.2) : il se joue.
+  assert.deepEqual(juger("Guetter"), OUI, "attendre se joue");
+  assert.deepEqual(juger("Lever le couvercle"), refus("hors_bornes", "Cette capacité ne se joue pas."), "un rôle tenu par le simulateur");
   assert.deepEqual(juger("Costaud"), refus("hors_bornes", "Cette capacité ne se joue pas."), "toute passive");
   assert.deepEqual(juger("Recette perdue"), refus("interdit", "absente de la banque"));
   assert.deepEqual(juger("Flambage", 0), refus("interdit", "Passif à cette puissance."), "une passive parmi d'autres");
