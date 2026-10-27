@@ -660,8 +660,10 @@ test("le module — un en-tête qui dit le pourquoi et le § 17 ; rien de ce que
   // Le clic au-dehors se voit en capture, sur l'écran ; Échap aussi.
   assert.match(SOURCE, /racine\.addEventListener\("click", \(evenement\) => auClicDansLaPage\(evenement\), true\);/);
   assert.match(SOURCE, /racine\.addEventListener\("keydown", /);
-  // Ni « Intervenir… », ni palette, ni menu du clic droit : au groupe 3.
-  assert.doesNotMatch(SOURCE, /Intervenir|contextmenu|palette/i);
+  // Ni « Intervenir… », ni palette, ni menu du clic droit : au groupe 3. La
+  // souche de la palette s'importe déjà (contrat de la vague 3, § 8.0) ; la
+  // part C1 ôte cette règle quand l'écran s'en sert.
+  assert.doesNotMatch(SOURCE.replace(/^import \* as partiePalette from "\.\/combat_palette\.js";$/m, ""), /Intervenir|contextmenu|palette/i);
 
   // Ni signe invisible, ni espace insécable ; des fins de ligne d'un seul genre.
   for (const code of [0xa0, 0x202f, 0xad, 0xfeff, 0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x2028, 0x2029, 0x202a, 0x202b, 0x202c, 0x202d, 0x202e, 0x2060, 0x21b6]) {

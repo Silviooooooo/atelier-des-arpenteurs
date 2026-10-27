@@ -2849,7 +2849,22 @@ test("concordance : là où le combat de référence ne passe pas (X, jauge, dé
 // ─── Le module ──────────────────────────────────────────────────────────────
 
 test("module : ses vues, et elles seules (vueLigne a disparu) ; il n'importe jamais le moteur, seulement ce que le contrat lui permet, et rien de l'appareil ni de la page", () => {
-  assert.deepEqual(Object.keys(lecture).sort(), ["questionDAnnulation", "vueBandeau", "vueBarre", "vueFiche", "vueJournal", "vuePanneau", "vuePlateau", "vuePreparation"]);
+  // La vague 3 du lot 4.3 (contrat de la vague, § 3.5 et § 8.0) : les vignettes, le dé en surimpression, et la
+  // palette et le menu du MJ, que lecture.js réexporte de lecture_mj.js.
+  assert.deepEqual(Object.keys(lecture).sort(), [
+    "questionDAnnulation",
+    "vueBandeau",
+    "vueBarre",
+    "vueDuDe",
+    "vueFiche",
+    "vueJournal",
+    "vueMenuMj",
+    "vuePalette",
+    "vuePanneau",
+    "vuePlateau",
+    "vuePreparation",
+    "vueVignettes",
+  ]);
   const source = readFileSync(new URL("../js/combat/lecture.js", import.meta.url), "utf8");
   const imports = [...source.matchAll(/^import [^;]+ from "([^"]+)";$/gm)].map((trouve) => trouve[1]).sort();
   const permis = [

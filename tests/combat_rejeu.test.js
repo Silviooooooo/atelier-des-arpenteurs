@@ -502,7 +502,10 @@ const NOYAU = {
   "moteur.js": ["regles.js", "forme.js", "plateau.js", "noms.js", "preparation.js", "jet.js", "valeurs.js", "circonstances.js", "degats.js", "effets.js", "offre.js", "journal.js", "../personnage/regles.js"],
   // Au groupe 2, les cases hachurées d'une portée (casesEntre) : contrat du groupe, § 1. Au lot 4.3, la raison
   // d'une capacité de blessure inactive (effets.js, refusDeLaBlessure).
-  "lecture.js": ["offre.js", "circonstances.js", "valeurs.js", "degats.js", "effets.js", "jet.js", "journal.js", "preparation.js", "plateau.js", "noms.js", "regles.js", "../personnage/regles.js"],
+  // À la vague 3 du lot 4.3 (contrat de la vague, § 8.0), la palette et le menu du MJ, que lecture.js réexporte.
+  "lecture.js": ["offre.js", "circonstances.js", "valeurs.js", "degats.js", "effets.js", "jet.js", "journal.js", "preparation.js", "plateau.js", "noms.js", "regles.js", "../personnage/regles.js", "lecture_mj.js"],
+  // Posé en souche : il n'importe encore rien ; sa part y range ses imports, jamais le moteur.
+  "lecture_mj.js": [],
 };
 // Le bord : ce qui touche la banque, le hasard, la clé ou l'appareil.
 const BORD = ["des.js", "enregistrement.js", "photographie.js", "roles.js", "seance.js"];
@@ -526,7 +529,7 @@ test("le graphe : la lecture des imports voit chaque forme d'import, sur plusieu
 test("le graphe : tout fichier de js/combat/ est du noyau ou du bord, et aucun n'est oublié", () => {
   const fichiers = readdirSync(new URL("js/combat/", racine)).sort();
   assert.deepEqual(fichiers, [...Object.keys(NOYAU), ...BORD].sort(), "un fichier neuf de js/combat/ se range ici, dans le noyau ou dans le bord");
-  assert.equal(Object.keys(NOYAU).length, 14);
+  assert.equal(Object.keys(NOYAU).length, 15);
 });
 
 test("le graphe : chaque fichier du noyau n'importe que ce que sa ligne permet, et rien à la volée", () => {
@@ -597,7 +600,8 @@ test("le graphe : aucun cycle d'import dans js/combat/", () => {
       .map((importe) => resoudre(chemin, importe))
       .filter((importe) => importe.startsWith("js/combat/"));
   }
-  assert.equal(Object.keys(graphe).length, 19);
+  // Vingt depuis la souche de lecture_mj.js (contrat de la vague 3 du lot 4.3, § 8.0).
+  assert.equal(Object.keys(graphe).length, 20);
   // Au lot 4.3, une seule boucle, voulue (contrat de la vague 1, § 7.5) : l'offre importe les effets,
   // qui n'importent d'elle que le prix d'un geste, appelé dans leurs fonctions et jamais au chargement.
   // Armé : elle est bien là ; désarmé : sans elle, aucun cycle.

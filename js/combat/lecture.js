@@ -96,6 +96,11 @@ import {
 } from "./regles.js";
 import { aJoue, attaqueDe, campDe, capaciteDe, courantDe, defenseDe, faconDe, gesteEnCours, photoDe } from "./valeurs.js";
 
+// La palette et le menu du MJ (contrat de la vague 3, § 3.5) vivent dans un
+// module à part, qu'écrit une autre part ; l'écran les lit ici, avec les
+// autres vues.
+export { vueMenuMj, vuePalette } from "./lecture_mj.js";
+
 // ─── Les mots ───────────────────────────────────────────────────────────────
 
 const CAMPS = { pj: "PJ", adv: "adversaires" };
@@ -1476,4 +1481,32 @@ export function vuePreparation(miseEnPlace, apports) {
     absents: apports.absents ?? null,
     avertissements,
   };
+}
+
+// ─── Les vues neuves de la vague 3 (souches) ────────────────────────────────
+//
+// Posées avant le départ de la vague 3 (contrat de la vague, § 8.0), pour que
+// l'écran et les contrôles se chargent pendant que chaque part écrit la
+// sienne. Elles rendent null ; leur forme est celle du contrat (§ 3.5).
+
+/**
+ * Les vignettes du téléphone (mission du lot 4.3, § 3 ; contrat de la vague
+ * 3, § 3.5) : null hors d'un combat en cours ; sinon { camp, vignettes: [{
+ * id, initiales, nom, etiquette, actions: { reste, max, texte }, jeu,
+ * choisie, garde, pastille, choix, inactif, raison, menuMj }] }, un vivant du
+ * camp qui joue par vignette, dans l'ordre d'ajout ; « choix », « inactif »
+ * et « raison » sont ceux de son jeton (vuePlateau).
+ */
+export function vueVignettes(etat, choisi) {
+  return null;
+}
+
+/**
+ * Le dé en surimpression (mission du lot 4.3, § 3, A5 et B2 ; contrat de la
+ * vague 3, § 3.5) : l'événement « de » que la séance vient de jouer, lu sur
+ * l'état d'avant, sans le moteur. null, ou { titre: "1er dé · d8+1", valeur:
+ * "8", verdict: "✓ réussite", genre: "reussite" | "echec" | "localisation" }.
+ */
+export function vueDuDe(avant, evenement) {
+  return null;
 }

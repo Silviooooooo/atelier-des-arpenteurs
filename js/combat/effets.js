@@ -309,12 +309,15 @@ function auteurDe(etat, geste, source) {
   return null;
 }
 
-// La façon tenue d'une capacité (contrat, § 12, choix 14) : la plus haute de
-// ses façons jouables, celle de la plus haute puissance qui ne passe pas son
-// niveau (son rang, chez un adversaire ; la photographie ne garde que les
-// puissances jouables), la première à égalité ; à défaut, la première. null
-// pour une capacité sans façon.
-function faconTenue(capacite) {
+/**
+ * La façon tenue d'une capacité (contrat, § 12, choix 14) : la plus haute de
+ * ses façons jouables, celle de la plus haute puissance qui ne passe pas son
+ * niveau (son rang, chez un adversaire ; la photographie ne garde que les
+ * puissances jouables), la première à égalité ; à défaut, la première. null
+ * pour une capacité sans façon. Exportée pour les vues (contrat de la vague 3,
+ * D12) : les boutons des passifs non câblés.
+ */
+export function faconTenue(capacite) {
   let tenue = null;
   capacite.facons.forEach((facon, indice) => {
     if (facon.puissance > capacite.niveau) return;
@@ -323,11 +326,14 @@ function faconTenue(capacite) {
   return tenue ?? (capacite.facons.length > 0 ? 0 : null);
 }
 
-// Le passif non câblé d'une source : { capacite, facon } quand elle est une
-// capacité sans rôle câblé, passive à la puissance tenue ; null sinon. Un
-// passif câblé (dégrossir, un bonus…) se calcule de lui-même : il ne se paie
-// pas, et peut servir plus d'une fois.
-function passifDe(etat, source) {
+/**
+ * Le passif non câblé d'une source : { capacite, facon } quand elle est une
+ * capacité sans rôle câblé, passive à la puissance tenue ; null sinon. Un
+ * passif câblé (dégrossir, un bonus…) se calcule de lui-même : il ne se paie
+ * pas, et peut servir plus d'une fois. Exportée pour les vues (contrat de la
+ * vague 3, D12) : les boutons des passifs, près des dés.
+ */
+export function passifDe(etat, source) {
   if (source?.genre !== "capacite") return null;
   const capacite = capaciteDe(etat, source.qui, source.capacite);
   if (capacite === null || capacite.role !== null) return null;

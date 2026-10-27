@@ -64,9 +64,15 @@ import * as partieAction from "./combat_action.js";
 import * as partieBulle from "./combat_bulle.js";
 import * as partieFiches from "./combat_fiches.js";
 import { creerBandeau, creerListe } from "./combat_journal.js";
+// Les parties de la vague 3 du lot 4.3, posées en souches avant son départ
+// (contrat de la vague, § 8.0) : l'écran ne s'en sert pas encore.
+import * as partieMenus from "./combat_menus.js";
+import * as partiePalette from "./combat_palette.js";
 import * as partiePlateau from "./combat_plateau.js";
 import * as partiePreparation from "./combat_preparation.js";
+import * as partieVignettes from "./combat_vignettes.js";
 import { el, sansSensForce, telecharger, titre } from "./dom.js";
+import { ecrireModeMj, lireModeMj } from "./mode_mj.js";
 import { lirePersonnageDeDemonstration, phraseDuPersonnageGarde } from "./partage.js";
 import { garderRecu } from "./personnages.js";
 import * as rencontre from "./rencontre.js";
