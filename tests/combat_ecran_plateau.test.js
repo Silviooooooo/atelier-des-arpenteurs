@@ -1329,6 +1329,30 @@ test("l'appui long d'une demi-seconde, au minuteur : en Mode MJ le menu du MJ, h
   }
 });
 
+test("l'appui long qui aboutit demande à l'écran d'avaler le clic qui le suit, où qu'il tombe (vague 4, W1 n° 5, R2 n° 11) : une fois, après le menu ; relâché avant, rien ; le jeton n'avale alors rien lui-même (C4)", () => {
+  const minuteur = minuteurSimule();
+  const vue = vueDe({ jetons: { pj1: { menuMj: MODIFIER, choix: CHOISIR("pj1") } } });
+  const { partie, appels, espion, retirer } = monter(vue, { modeMj: true }, { minuteur });
+  try {
+    const avales = [];
+    espion.actions.avalerLeClicSuivant = () => avales.push(appels.length);
+    const jeton = () => jetonDe(partie, "pj1");
+    jeton().declencher("pointerdown", { pointerType: "touch", button: 0 });
+    jeton().declencher("pointerup");
+    assert.deepEqual(avales, [], "relâché avant la demi-seconde : rien à avaler");
+    jeton().declencher("pointerdown", { pointerType: "touch", button: 0 });
+    minuteur.avancer();
+    assert.deepEqual(appels.map(([nom]) => nom), ["ouvrirMenuMj"]);
+    assert.deepEqual(avales, [1], "une fois, le menu ouvert");
+    // L'écran avale ce clic-là : le jeton n'avale rien lui-même. Le menu fermé, Entrée sur lui (un clic sans
+    // pointerdown, qui n'a pas suivi l'appui) choisit (vague 4, C4).
+    jeton().click();
+    assert.deepEqual(appels.at(-1), ["executer", { choisir: "pj1" }, "plateau"], "Entrée après le menu : le choix, pas un clic avalé");
+  } finally {
+    retirer();
+  }
+});
+
 test("la surimpression : un div caché aux lecteurs d'écran, dernier enfant de la grille, que les rendus ne touchent jamais", () => {
   const { partie, retirer } = monter(null);
   try {
@@ -1371,14 +1395,15 @@ test("la légende du téléphone dit « portée de la capacité choisie » ; sur
   }
 });
 
-test("demanderUneCase : chaque case sauf l'exclue devient un bouton nommé par qui la demande ; un appui finit la demande puis rappelle ; Échap ou finirLaDemande la finissent sans rien", () => {
+test("demanderUneCase : chaque case sauf l'exclue devient un bouton nommé par qui la demande ; un appui finit la demande puis rappelle ; Échap ou finirLaDemande la finissent sans rien ; elle rend vrai si la case est demandée (vague 4, C2)", () => {
   const { partie, appels, retirer } = monter(vueDe({ jetons: { pj1: { marque: "joue" } }, cases: { D4: { active: true } } }));
   try {
     const rappels = [];
     const nommer = (nom) => `Case ${nom} : y déplacer Marmiton de corvée n° 2`;
-    partie.demanderUneCase({ exclue: "E5", nommer }, (nom) => {
+    const demandee = partie.demanderUneCase({ exclue: "E5", nommer }, (nom) => {
       rappels.push([nom, partie.noeud.querySelectorAll(".combat-case-choix").length]);
     });
+    assert.equal(demandee, true, "demandée : l'écran peut effacer la feuille qui la demande");
     assert.equal(partie.noeud.querySelectorAll(".combat-case-choix").length, 99);
     assert.equal(choixDe(partie, "E5"), null, "la case exclue ne se choisit pas");
     assert.equal(choixDe(partie, "D5").getAttribute("aria-label"), "Case D5 : y déplacer Marmiton de corvée n° 2");
@@ -1397,12 +1422,12 @@ test("demanderUneCase : chaque case sauf l'exclue devient un bouton nommé par q
     assert.equal(rappels.length, 1);
     // Avant le lancement, et quand on ne joue pas : rien ne se demande.
     partie.rendre(vueDe(), { arrete: true });
-    partie.demanderUneCase({ exclue: null, nommer }, () => rappels.push(["?"]));
+    assert.equal(partie.demanderUneCase({ exclue: null, nommer }, () => rappels.push(["?"])), false, "refusée : rien ne s'efface");
     assert.equal(partie.noeud.querySelectorAll(".combat-case-choix").length, 0);
     partie.rendre(vueDe(), {});
     assert.equal(partie.noeud.querySelectorAll(".combat-case-choix").length, 0, "une demande refusée ne revient pas quand on rejoue");
     partie.rendre(vueDe({ phase: "preparation" }), {});
-    partie.demanderUneCase({ exclue: null, nommer }, () => rappels.push(["?"]));
+    assert.equal(partie.demanderUneCase({ exclue: null, nommer }, () => rappels.push(["?"])), false);
     assert.equal(partie.noeud.querySelectorAll(".combat-case-choix").length, 0);
   } finally {
     retirer();

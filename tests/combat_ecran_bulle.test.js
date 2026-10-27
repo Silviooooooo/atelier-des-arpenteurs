@@ -1807,6 +1807,135 @@ test("bulle — le Mode MJ passe au contenu : sans lui, ni réglages à la main,
   );
 });
 
+// ——— h) La vague 4 : le volet réduit à sa tête, le pied qui colle ou suit ———
+
+test("bulle — au téléphone, « – » réduit le volet à sa tête (vague 4, A5) : ce qui défile se cache et la carte regagne la place ; « + » (« Taloche [1] : rouvrir ») le rouvre, du haut, le focus sur la commande qui attend ; jamais d'onglet ; le geste suivant se montre entier", () => {
+  avecLaBulle(
+    (monte) => {
+      const { noeud, onglet, defile } = monte;
+      monte.afficher(vueJet());
+      const fermer = leFermer(monte);
+      assert.deepEqual([fermer.textContent, fermer.getAttribute("aria-label"), defile.hidden], [REDUIRE, "Réduire", false]);
+      fermer.click();
+      assert.deepEqual(monte.appels, [], "rien n'est émis : le geste attend");
+      assert.equal(noeud.hidden, false, "le volet garde sa tête");
+      assert.equal(defile.hidden, true, "ce qui défile se cache");
+      assert.equal(onglet.hidden, true, "jamais d'onglet au téléphone");
+      assert.deepEqual([fermer.textContent, fermer.getAttribute("aria-label")], ["+", "Taloche [1] : rouvrir"]);
+      assert.deepEqual(monte.jetons, ["pj1"], "le focus au jeton, comme sur PC");
+      // Un dé de plus (une autre annonce) : toujours réduit ; Échap et le clic au-dehors n'y font rien.
+      monte.afficher(vueJet({ annonce: { pas: 13, texte: "3e dé : 7, réussi." } }));
+      assert.equal(defile.hidden, true);
+      assert.equal(monte.echap(), null, "déjà réduit, Échap n'est pas pris");
+      monte.auDehors();
+      assert.equal(defile.hidden, true);
+      // « + » le rouvre, du haut, et met le focus sur la commande qui attend.
+      defile.scrollTop = 200;
+      const focusAvant = globalThis.document.focalisations.length;
+      fermer.click();
+      assert.equal(defile.hidden, false);
+      assert.equal(defile.scrollTop, 0, "rouvert : du haut");
+      assert.deepEqual([fermer.textContent, fermer.getAttribute("aria-label")], [REDUIRE, "Réduire"]);
+      assert.equal(globalThis.document.focalisations.length, focusAvant + 1);
+      assert.equal(dernierFocus().noeud.textContent, "Relancer le 2e dé");
+      assert.deepEqual(dernierFocus().options, { preventScroll: true });
+      assert.deepEqual(monte.appels, []);
+      // Échap réduit aussi, sans bouger le focus ; le geste fini, la liste revient entière, « ✕ » pour la fermer.
+      assert.equal(monte.echap(), "reduite");
+      assert.equal(defile.hidden, true);
+      monte.afficher(vueListe());
+      assert.deepEqual([defile.hidden, fermer.textContent], [false, FERMER]);
+    },
+    { etroit: true },
+  );
+  // Sur PC, rien ne change : réduite, la bulle se cache et l'onglet paraît ; ce qui défile n'est jamais caché.
+  avecLaBulle((monte) => {
+    monte.afficher(vueJet());
+    leFermer(monte).click();
+    assert.deepEqual([monte.noeud.hidden, monte.onglet.hidden], [true, false]);
+    monte.onglet.click();
+    assert.equal(monte.defile.hidden, false);
+  });
+});
+
+test("bulle — au téléphone, le pied du geste colle au bas de ce qui défile tant qu'il en prend la moitié au plus, et au-delà suit le contenu (data-libre) ; ce qui reçoit le focus s'arrête au-dessus du pied collant (vague 4, F11 : WCAG 2.4.11)", () => {
+  avecLaBulle(
+    (monte) => {
+      const { defile } = monte;
+      // Un geste qui a son pied : « Appliquer l'effet de Taloche… ».
+      const AU_PIED = { appliquerEffet: { libelle: "Appliquer l'effet de Taloche…", source: { genre: "capacite", qui: "pj1", capacite: 15 } } };
+      monte.afficher(vueJet({ geste: gesteVu(AU_PIED) }));
+      const pied = defile.querySelector(".combat-pied");
+      assert.notEqual(pied, null, "le geste a son pied");
+      memeNoeud(defile.children.at(-1), pied, "le pied, dernier de ce qui défile");
+      const relancer = leBouton(defile, "Relancer le 2e dé");
+      assert.equal(pied.contains(relancer), false);
+      const redimensionner = () => monte.ecoutes.find(([type]) => type === "resize")[1]();
+      // 305 px de partie vue (464 à 769), un pied de 60 px : il colle, de 709 à 769.
+      defile.rectangle = { left: 0, top: 464, width: 390, height: 305 };
+      pied.rectangle = { left: 0, top: 709, width: 390, height: 60 };
+      redimensionner();
+      assert.equal(pied.hasAttribute("data-libre"), false);
+      // Le focus sur « Relancer », de 700 à 744 : sous le pied ; amené au-dessus de lui (744 − 709 = 35).
+      relancer.rectangle = { left: 0, top: 700, width: 390, height: 44 };
+      defile.scrollTop = 0;
+      monte.focaliser();
+      memeNoeud(dernierFocus().noeud, relancer);
+      assert.equal(defile.scrollTop, 35, "au-dessus du pied collant, non au bas de la partie vue");
+      // Au-dessus du pied, rien ne bouge.
+      relancer.rectangle = { left: 0, top: 600, width: 390, height: 44 };
+      monte.focaliser();
+      assert.equal(defile.scrollTop, 35);
+      // Un pied de 160 px, plus de la moitié de 305 : libre, il suit le contenu ; le bas de la partie vue redevient la borne.
+      pied.rectangle = { left: 0, top: 609, width: 390, height: 160 };
+      redimensionner();
+      assert.equal(pied.hasAttribute("data-libre"), true);
+      relancer.rectangle = { left: 0, top: 700, width: 390, height: 44 };
+      defile.scrollTop = 0;
+      monte.focaliser();
+      assert.equal(defile.scrollTop, 0, "un pied libre ne couvre rien");
+      // Il redevient collant quand la place revient, et se rejuge à chaque rendu (une autre annonce, le corps gardé).
+      pied.rectangle = { left: 0, top: 709, width: 390, height: 60 };
+      redimensionner();
+      assert.equal(pied.hasAttribute("data-libre"), false);
+      pied.rectangle = { left: 0, top: 609, width: 390, height: 160 };
+      monte.afficher(vueJet({ annonce: { pas: 13, texte: "3e dé : 7, réussi." }, geste: gesteVu(AU_PIED) }));
+      memeNoeud(defile.querySelector(".combat-pied"), pied, "le corps gardé");
+      assert.equal(pied.hasAttribute("data-libre"), true, "jugé au rendu");
+      // Le corps refait (un dé) juge son pied neuf avant de rendre le focus : libre, il ne repousse pas la commande qui
+      // attend (de 700 à 744, dans la partie vue).
+      pied.rectangle = { left: 0, top: 709, width: 390, height: 60 };
+      redimensionner();
+      relancer.focus({ preventScroll: true });
+      const creerAvant = globalThis.document.createElement;
+      globalThis.document.createElement = (balise) => {
+        const cree = creerAvant(balise);
+        const boite = () => (cree.className === "combat-pied" ? { left: 0, top: 609, width: 390, height: 160 } : cree.textContent === "Relancer le 2e dé" ? { left: 0, top: 700, width: 390, height: 44 } : null);
+        Object.defineProperty(cree, "rectangle", { get: boite, set: () => {}, configurable: true });
+        return cree;
+      };
+      try {
+        defile.scrollTop = 0;
+        monte.afficher(vueJet({ annonce: { pas: 14, texte: "4e dé : 2, échec." }, geste: gesteVu({ ...AU_PIED, bilan: "Bilan 13." }) }));
+      } finally {
+        globalThis.document.createElement = creerAvant;
+      }
+      const piedRefait = defile.querySelector(".combat-pied");
+      assert.notEqual(piedRefait, pied, "le corps refait");
+      assert.equal(piedRefait.hasAttribute("data-libre"), true, "160 px sur 305 : libre dès le corps refait");
+      assert.equal(dernierFocus().noeud.textContent, "Relancer le 2e dé", "le focus rendu à la commande qui attend");
+      assert.equal(defile.scrollTop, 0, "jugé avant le focus : le pied libre ne la couvre pas");
+      // Réduit, rien ne se juge : la place revenue, le pied reste tel quel.
+      leFermer(monte).click();
+      assert.equal(defile.hidden, true);
+      defile.rectangle = { left: 0, top: 0, width: 390, height: 1000 };
+      redimensionner();
+      assert.equal(piedRefait.hasAttribute("data-libre"), true);
+    },
+    { etroit: true },
+  );
+});
+
 // ——— f) Le module ———
 
 test("combat_bulle.js — dom.js et echelle.js seuls ; tout focus sans défiler, aucun défilement ; aucun style écrit ; ni modale ni région ; les signes neufs par leur code ; son en-tête dit le § 17 et le contrat", () => {

@@ -15,7 +15,9 @@
 //   de style en fait le volet qui monte du bas, sans flèche : au repos
 //   (« À qui le tour ? », la fin du combat), la liste, puis le geste pas à
 //   pas (lot 4.3, contrat de la vague 3, § 4.2) ; la zone sous la carte reste
-//   vide ;
+//   vide. Réduit, le volet garde sa tête, et « + » le rouvre ; son pied
+//   colle au bas de ce qui défile tant qu'il en prend la moitié au plus
+//   (vague 4) ;
 // - les infobulles (creerInfobulles) : une par déclencheur (une ligne, un
 //   passif, le nombre des causes, « Jet d'attaque »), cachée et remplie
 //   d'emblée, liée à lui, jamais focalisable, ouverte au survol et au focus,
@@ -77,6 +79,15 @@ const SIGNE_FERMER = "\u2715";
 const SIGNE_REDUIRE = "\u2013";
 const LIBELLE_FERMER = "Fermer";
 const LIBELLE_REDUIRE = "Réduire";
+// Au téléphone, le volet réduit à sa tête (le tiret) se rouvre par « + », qui
+// prend le nom de l'onglet du PC (« Taloche [1] : rouvrir »).
+const SIGNE_ROUVRIR = "+";
+const LIBELLE_ROUVRIR = "Rouvrir";
+// Le pied d'un geste colle au bas de ce qui défile tant qu'il en prend la
+// moitié au plus ; au-delà, il suit le contenu (l'attribut, que la feuille
+// lit) : collé, il couvrait ce qu'on y choisissait (vague 4).
+const PIED = "combat-pied";
+const PIED_LIBRE = "data-libre";
 
 // Les côtés essayés pour la bulle et son onglet, dans l'ordre du complément
 // (§ 4.1) : à droite de la case, puis à gauche, dessous, dessus.
@@ -393,9 +404,9 @@ function ecrire(noeud, texte) {
 }
 
 /**
- * La bulle. `actions` : { executer(commande, origine), lancerLeDe(),
+ * La bulle. `actions` : { executer(commande, origine), lancerLeDe(origine),
  * hachurer(noms | null), focusSurLeJeton(id), focusSurLaCase(nomDeCase),
- * fermerLaCase(), rafraichir(), ouvrirPalette(source, ancre),
+ * fermerLaCase(), rafraichir(), replacerLeMenu(), ouvrirPalette(source, ancre),
  * ouvrirFiches(id), ouvrirJournal(), demanderLAnnulation(), finDeTour(),
  * ouvrirMenuDuCombat() } ; composerListe et composerGeste fabriquent son
  * contenu (combat_action.js) ; dernierAppui() dit le genre du dernier appui
@@ -436,7 +447,8 @@ function ecrire(noeud, texte) {
  * au jeton (l'écran se refait pendant executer, comme au groupe 1). Quand la
  * fenêtre change de taille, l'infobulle ouverte se ferme, l'écran se refait
  * si la largeur a changé (actions.rafraichir : le téléphone se juge à la
- * largeur, que la bulle ne lit pas), puis la bulle se replace.
+ * largeur, que la bulle ne lit pas), puis la bulle se replace, et le menu
+ * du MJ avec elle (actions.replacerLeMenu ; vague 4, C6).
  *
  * Deux mémoires, reduite et celle du contenu (l'aperçu ouvert, les réglages
  * dépliés, l'explication des causes), remise à zéro quand le geste change ;
@@ -499,9 +511,15 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
   // Ce que le contenu émet passe par ici : le geste fini, la bulle cachée et
   // la vue qui dit « Qui joue ? », le focus va au jeton de qui jouait.
   function executerPuisSuivre(commande, origine = ORIGINE) {
+    suivre(() => actions.executer(commande, origine));
+  }
+
+  // De même pour le dé : au téléphone, le d20 qui finit le geste referme le
+  // volet, comme « Terminer » (relecture finale, R4).
+  function suivre(faire) {
     const montraitUneAction = contenuMontre === "liste" || contenuMontre === "jet";
     const qui = protagonisteDe(derniereVue);
-    actions.executer(commande, origine);
+    faire();
     const montreUneAction = contenuMontre === "liste" || contenuMontre === "jet";
     if (montraitUneAction && !montreUneAction && contenuMontre !== "case" && derniereVue?.genre === "qui_joue") actions.focusSurLeJeton?.(qui);
   }
@@ -518,13 +536,37 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
     if (!noeud || !defile.contains(noeud)) return;
     const vue = defile.getBoundingClientRect();
     const boite = noeud.getBoundingClientRect();
+    // Le pied collant couvre le bas de la partie vue : ce qui n'est pas en
+    // lui s'arrête au-dessus de lui (WCAG 2.4.11 ; vague 4, F11).
+    const pied = piedDuGeste();
+    const bas = pied !== null && !pied.hasAttribute(PIED_LIBRE) && !pied.contains(noeud) ? Math.min(vue.bottom, pied.getBoundingClientRect().top) : vue.bottom;
     if (boite.top < vue.top) defile.scrollTop -= vue.top - boite.top;
-    else if (boite.bottom > vue.bottom) defile.scrollTop += Math.min(boite.bottom - vue.bottom, boite.top - vue.top);
+    else if (boite.bottom > bas) defile.scrollTop += Math.min(boite.bottom - bas, boite.top - vue.top);
+  }
+
+  /** Le pied du geste, dernier de ce qui défile, ou null. */
+  const piedDuGeste = () => [...defile.children].find((enfant) => String(enfant.className ?? "").split(/\s+/).includes(PIED)) ?? null;
+
+  /**
+   * Le pied colle au bas de ce qui défile tant qu'il en prend la moitié au
+   * plus ; au-delà (un téléphone bas, des boutons qui passent à la ligne),
+   * il suit le contenu, et ce qu'on y choisit reste visible. Jugé à chaque
+   * corps refait, à chaque rendu et quand la fenêtre change de taille.
+   */
+  function jugerLePied() {
+    const pied = piedDuGeste();
+    if (pied === null || defile.hidden) return;
+    const libre = 2 * pied.getBoundingClientRect().height > defile.getBoundingClientRect().height;
+    if (libre === pied.hasAttribute(PIED_LIBRE)) return;
+    if (libre) pied.setAttribute(PIED_LIBRE, "");
+    else pied.removeAttribute(PIED_LIBRE);
   }
 
   const actionsDuContenu = {
     executer: (commande, origine) => executerPuisSuivre(commande, origine),
-    lancerLeDe: () => actions.lancerLeDe?.(),
+    // Le dé vient de la bulle : au téléphone, s'il finit le geste, l'écran
+    // referme le volet (vague 4, C3), et le focus va au jeton (R4).
+    lancerLeDe: () => suivre(() => actions.lancerLeDe?.("bulle")),
     hachurer: (noms) => actions.hachurer?.(noms),
     // L'aperçu qui s'ouvre sous une ligne se montre dans la partie vue.
     montrer: (noeud) => montrerDansLaBulle(noeud),
@@ -671,6 +713,8 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
       }
       defile.replaceChildren(...[noeuds].flat(Infinity).filter(present));
     }
+    // Le pied jugé avant le focus : focaliser le sait collant ou non.
+    jugerLePied();
     if (avaitLeFocus) focaliser();
   }
 
@@ -729,8 +773,12 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
       fiche.hidden = !(contenu === "liste" || contenu === "jet") || protagonisteDe(vue) === null;
       nommer();
       const parReduction = contenu !== "case" && vue.fermeture?.genre === "reduire";
-      ecrire(fermer, parReduction ? SIGNE_REDUIRE : SIGNE_FERMER);
-      fermer.setAttribute("aria-label", parReduction ? (vue.fermeture.libelle ?? LIBELLE_REDUIRE) : contenu === "case" ? LIBELLE_FERMER : (vue.fermeture?.libelle ?? LIBELLE_FERMER));
+      // Au téléphone, réduit par le tiret : le volet n'est plus que sa tête, et
+      // la carte regagne la place ; « + » le rouvre (vague 4).
+      const reduitIci = etroit && parReduction && reduite;
+      defile.hidden = reduitIci;
+      ecrire(fermer, reduitIci ? SIGNE_ROUVRIR : parReduction ? SIGNE_REDUIRE : SIGNE_FERMER);
+      fermer.setAttribute("aria-label", reduitIci ? (vue.fermeture.onglet ?? LIBELLE_ROUVRIR) : parReduction ? (vue.fermeture.libelle ?? LIBELLE_REDUIRE) : contenu === "case" ? LIBELLE_FERMER : (vue.fermeture?.libelle ?? LIBELLE_FERMER));
       // Le repos n'a rien à fermer.
       fermer.hidden = contenu === "repos";
       // La signature de ce que montre le corps : un rendu égal ne le refait pas.
@@ -748,6 +796,7 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
       // Ouverte, elle se lit du haut : un défilement d'avant cacherait sa
       // première ligne, qui va recevoir le focus.
       if (ouverture) montrerDansLaBulle(null, { duHaut: true });
+      jugerLePied();
     }
 
     const ongletMontre = !etroit && vue.genre === "action" && reduite;
@@ -788,6 +837,9 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
       actions.rafraichir?.();
     }
     placer(fenetreFraiche(dernierEcran));
+    jugerLePied();
+    // Le menu du MJ, posé contre son jeton sur PC, se replace avec elle (vague 4, C6).
+    actions.replacerLeMenu?.();
   }
 
   /** Le focus dans la bulle : la commande qui attend, sinon la première ligne active, sinon le titre. */
@@ -802,9 +854,12 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
     return true;
   }
 
-  // Réduite après le premier dé : la bulle se cache, l'onglet paraît contre la case.
+  // Réduite après le premier dé : la bulle se cache, l'onglet paraît contre
+  // la case ; au téléphone, le volet garde sa tête, et « + » le rouvre. Déjà
+  // réduite, rien à faire.
   function reduire() {
     if (derniereVue?.genre !== "action" || derniereVue.fermeture?.genre !== "reduire") return false;
+    if (reduite && etroitMontre) return false;
     reduite = true;
     rendre(derniereVue, dernierEcran);
     replacer();
@@ -837,10 +892,15 @@ export function creer(actions, { composerListe, composerGeste, dernierAppui = nu
     return null;
   }
 
-  // La croix ferme, le tiret réduit ; le focus va au jeton.
+  // La croix ferme, le tiret réduit ; le focus va au jeton. Au téléphone,
+  // « + » rouvre le volet réduit.
   function surLeBoutonFermer() {
     if (contenuMontre === "case") {
       actions.fermerLaCase?.();
+      return;
+    }
+    if (reduite && etroitMontre) {
+      rouvrir();
       return;
     }
     const fermeture = derniereVue?.fermeture ?? null;

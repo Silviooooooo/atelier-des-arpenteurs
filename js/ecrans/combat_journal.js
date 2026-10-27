@@ -167,6 +167,10 @@ const poser = (ligne) => ({ li: el("li", { classe: classesDeLaLigne(ligne) }, li
  * comme la vue les barre (une ligne « Annulé » déjà montrée couvre aussi
  * celles qui arrivent), et garde à sa place la ligne lue : la liste descend
  * de la hauteur posée au-dessus. Rend { ajoutees, restantes }.
+ *
+ * allerALaFin() la fait défiler en elle-même jusqu'à sa dernière ligne :
+ * rendre le fait quand des lignes arrivent ; l'écran, quand la liste,
+ * cachée jusque-là, se montre (vague 4, W1 n° 6).
  */
 export function creerListe({ vueJournal, parPage = PAR_PAGE }) {
   const noeud = el("ol", { classe: "combat-lignes", tabindex: "0", "aria-label": "Journal du combat" });
@@ -215,10 +219,15 @@ export function creerListe({ vueJournal, parPage = PAR_PAGE }) {
     }
     premiere = journal[0] ?? null;
     derniere = journal[debut + posees.length - 1] ?? null;
-    // La dernière ligne reste visible : la liste défile en elle-même, jamais
-    // la page.
-    if (ajoutees > 0 || !suite) noeud.scrollTop = noeud.scrollHeight;
+    if (ajoutees > 0 || !suite) allerALaFin();
     return { ajoutees, reposee: !suite, restantes: debut };
+  }
+
+  // La dernière ligne reste visible : la liste défile en elle-même, jamais
+  // la page. L'écran le redemande quand la liste, cachée jusque-là, se
+  // montre (le journal en plein écran, au téléphone).
+  function allerALaFin() {
+    noeud.scrollTop = noeud.scrollHeight;
   }
 
   function precedentes() {
@@ -237,7 +246,7 @@ export function creerListe({ vueJournal, parPage = PAR_PAGE }) {
     return { ajoutees: neuves.length, restantes: debut };
   }
 
-  return { noeud, rendre, precedentes };
+  return { noeud, rendre, precedentes, allerALaFin };
 }
 
 // ─── La coupe ───────────────────────────────────────────────────────────────

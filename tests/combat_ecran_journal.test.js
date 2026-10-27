@@ -1054,8 +1054,12 @@ test("le module : dom.js seul, ni HTML ni style, aucun défilement de la page, l
   const finDeLaListe = SOURCE.indexOf("\n}", debutDeLaListe);
   assert.equal(ecritures.length, 2, "deux écritures de scrollTop, celles de la liste du journal");
   assert.ok(ecritures.every((i) => i > debutDeLaListe && i < finDeLaListe), "toutes deux dans creerListe");
-  // Les chaînes que le contrôle du défilement retouche (contrat de la vague 3, § 5.5) restent mot pour mot.
-  assert.ok(SOURCE.replaceAll("\r\n", "\n").includes("    if (ajoutees > 0 || !suite) noeud.scrollTop = noeud.scrollHeight;\n"));
+  // Les chaînes que le contrôle du défilement retouche (contrat de la vague 3, § 5.5) restent mot pour mot. À la vague 4
+  // (W1 n° 6), la première écriture vit dans allerALaFin(), que rendre appelle quand des lignes arrivent, et l'écran
+  // quand le journal s'ouvre en plein écran.
+  assert.ok(SOURCE.replaceAll("\r\n", "\n").includes("  function allerALaFin() {\n    noeud.scrollTop = noeud.scrollHeight;\n  }\n"));
+  assert.ok(SOURCE.replaceAll("\r\n", "\n").includes("    if (ajoutees > 0 || !suite) allerALaFin();\n"));
+  assert.match(SOURCE, /return \{ noeud, rendre, precedentes, allerALaFin \};/);
   assert.ok(SOURCE.includes("export function creerBandeau("));
   // Le texte d'une ligne ne se relit jamais pour y chercher un nom.
   assert.doesNotMatch(SOURCE, /\.texte\.(?:split|indexOf|includes|match|search|replace|startsWith|endsWith)\(/);

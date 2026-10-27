@@ -217,14 +217,19 @@ export function creer(actions, { minuteur = MINUTEUR_DE_LA_PAGE } = {}) {
    * Le menu du MJ d'un jeton (mission du lot 4.3, § 4.8) : en Mode MJ, il
    * s'ouvre près du jeton, ou dit pourquoi il ne s'ouvre pas (un geste en
    * cours) ; hors Mode MJ, l'appui long dit où le trouver. Rien pour un jeton
-   * sans menu (un mort, avant le lancement), ni quand on ne joue pas.
+   * sans menu (un mort, avant le lancement), ni quand on ne joue pas. Rend
+   * vrai s'il l'a ouvert.
    */
   function ouvrirLeMenu(fiche) {
     const menu = fiche.etat?.menuMj ?? null;
-    if (menu === null) return;
+    if (menu === null) return false;
     if (!modeMj) actions.dire?.(MENU_EN_MODE_MJ);
     else if (menu.actif === false) actions.dire?.(menu.raison);
-    else actions.ouvrirMenuMj?.(fiche.id, fiche.noeud);
+    else {
+      actions.ouvrirMenuMj?.(fiche.id, fiche.noeud);
+      return true;
+    }
+    return false;
   }
 
   function finirLAppui() {
@@ -236,7 +241,13 @@ export function creer(actions, { minuteur = MINUTEUR_DE_LA_PAGE } = {}) {
   // L'appui se pose au pointerdown du bouton principal, et s'oublie au
   // pointerup, au pointercancel et au pointerleave (contrat de la vague 3,
   // § 4.2). L'appui long qui aboutit avale le clic qui le suit, et le clic
-  // droit qu'un téléphone envoie après lui.
+  // droit qu'un téléphone envoie après lui. Le menu ouvert, ce clic tombe
+  // sur ce qui vient de paraître sous le doigt (le voile, une entrée), et
+  // non sur le jeton : l'écran l'avale, où qu'il tombe (vague 4, W1 n° 5,
+  // R2 n° 11). Le jeton n'avale alors rien lui-même : il avalerait le clic
+  // suivant, une touche Entrée sur lui, menu fermé (C4). Sans menu ouvert
+  // (la phrase, la raison), ou sans l'écran (une partie montée seule), c'est
+  // lui qui avale le clic qui suit l'appui.
   function auDebutDeLAppui(fiche, evenement) {
     finirLAppui();
     avaler = null;
@@ -246,9 +257,9 @@ export function creer(actions, { minuteur = MINUTEUR_DE_LA_PAGE } = {}) {
       id: fiche.id,
       numero: minuteur.poser(() => {
         appui = null;
-        avaler = fiche.id;
         parLAppui = fiche.id;
-        ouvrirLeMenu(fiche);
+        if (ouvrirLeMenu(fiche) && typeof actions.avalerLeClicSuivant === "function") actions.avalerLeClicSuivant();
+        else avaler = fiche.id;
       }, APPUI_LONG),
     };
   }
@@ -612,12 +623,14 @@ export function creer(actions, { minuteur = MINUTEUR_DE_LA_PAGE } = {}) {
    * « exclue », devient un bouton nommé par « nommer(nomDeCase) » ; un appui
    * met fin à la demande, puis appelle « rappel(nomDeCase) ». Échap, ou
    * « finirLaDemande », y met fin sans rien appeler. Avant le lancement, et
-   * quand on ne joue pas, rien ne se demande.
+   * quand on ne joue pas, rien ne se demande. Rend vrai si la case est
+   * demandée (vague 4, C2 : l'écran efface alors la feuille qui la demande).
    */
   function demanderUneCase({ exclue = null, nommer }, rappel) {
-    if (vue === null || preparation() || arrete) return;
+    if (vue === null || preparation() || arrete) return false;
     demande = { exclue, nommer, rappel };
     dessiner();
+    return true;
   }
 
   function finirLaDemande() {

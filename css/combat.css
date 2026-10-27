@@ -12,9 +12,10 @@
    bulle (sur un téléphone, le volet qui monte du bas), la zone sous la
    carte, les deux camps, le journal. Les deux autres dispositions ne font
    que placer. Toutes les valeurs viennent de jetons.css ; seules les deux
-   largeurs des conditions @media (56rem, 80rem) sont écrites ici, car CSS
-   n'y lit pas de variable. La troisième condition, la souris (pointer:
-   fine), n'en a pas.
+   largeurs des conditions @media (56rem, 80rem), et la hauteur d'une
+   fenêtre trop basse pour la colonne du téléphone (30rem, vague 4), sont
+   écrites ici, car CSS n'y lit pas de variable. La condition de la souris
+   (pointer: fine) n'en a pas.
 
    La place de la bulle, de son onglet et des infobulles se calcule dans
    js/ecrans/echelle.js, qui l'écrit sur elles en quatre propriétés (la
@@ -30,9 +31,12 @@
    vignettes, la carte, puis le volet, qui n'est plus fixé ; quand il
    s'ouvre, la carte se réduit au lieu d'être couverte. Les fiches et le
    journal y passent en plein écran. À 56rem, chaque règle de ce téléphone
-   est rendue à ce qu'elle était, dans le premier @media. Les classes
-   d'état sont celles du contrat de la vague 3 (§ 5.2), et rien n'y bouge :
-   ni animation, ni opacité ; le dé tiré paraît et disparaît.
+   est rendue à ce qu'elle était, dans le @media de cette largeur ; une
+   fenêtre trop basse pour la colonne (un téléphone couché) garde la page
+   d'avant, qui défile : le premier @media y rend la carte et le volet, lui
+   réserve le bas de la page, et pose le plein écran sur la fenêtre. Les
+   classes d'état sont celles du contrat de la vague 3 (§ 5.2), et rien n'y
+   bouge : ni animation, ni opacité ; le dé tiré paraît et disparaît.
 
    Dans le code, la carte de 10 × 10 cases s'appelle « le plateau » : le mot
    « carte » désigne déjà la carte d'adversaire (§ 16.5). */
@@ -388,8 +392,10 @@
 /* Onze colonnes et onze lignes : une bande de repères, puis dix cases. Les
    pistes « minmax(0, 1fr) » et le rapport carré fixent la taille des cases :
    rien de ce qu'une case contient ne peut l'agrandir. Le placement dense
-   range les cases sous les repères que le document les entremêle ou non. */
+   range les cases sous les repères que le document les entremêle ou non. La
+   grille est le repère du dé en surimpression, qui ne prend aucune cellule. */
 .combat-grille {
+  position: relative;
   display: grid;
   grid-template-columns: var(--espace-4) repeat(10, minmax(0, 1fr));
   grid-template-rows: var(--espace-4) repeat(10, minmax(0, 1fr));
@@ -733,11 +739,15 @@
    dernier enfant de la grille, posé sur ses cases (les lignes et les
    colonnes 2 à la fin, celles des cases), au centre, ou au centre de la
    moitié gauche ou droite que la bulle laisse libre ; l'écran choisit la
-   classe, et rien d'autre. Il ne prend aucun clic, ne se lit pas, et
+   classe, et rien d'autre. Positionné, il prend ces lignes et ces colonnes
+   pour repère sans en occuper les cellules : dans le flux, il les prenait,
+   et les cases partaient dans des rangées de plus le temps qu'il
+   s'affichait (vague 4, mesuré). Il ne prend aucun clic, ne se lit pas, et
    n'arrête rien. Ni animation (il paraît, puis disparaît), ni transform, ni
    opacité : son cadre, sur le fond, de la couleur de son verdict, qui colore
    aussi sa valeur. */
 .combat-surimpression {
+  position: absolute;
   z-index: 2;
   display: flex;
   flex-direction: column;
@@ -1448,6 +1458,22 @@ html:has(.combat-bulle:not([hidden])) {
   background: var(--fond);
 }
 
+/* Ce qui défile au-dessus d'un pied collant n'a pas de marge basse : le pied
+   collait au bord de cette marge, et ce qui défilait se voyait et se
+   touchait dessous. Ce qui y reçoit le focus au clavier s'arrête au-dessus
+   du pied, d'une rangée de boutons (vague 4). */
+.combat-bulle-defile:has(> .combat-pied) {
+  padding-bottom: 0;
+  scroll-padding-bottom: calc(var(--cible-tactile) + var(--espace-2) * 2 + var(--trait));
+}
+
+/* Un pied qui prendrait plus de la moitié de ce qui défile ne colle plus :
+   il suit le contenu, et ce qu'on y lit reste visible ; la bulle en juge
+   (js/ecrans/combat_bulle.js pose data-libre). */
+.combat-bulle-defile > .combat-pied[data-libre] {
+  position: static;
+}
+
 /* La palette (lot 4.3, F4, E1) : son titre, la phrase de sa source, ses
    onglets, ses genres par groupe, l'aperçu de ce que le journal écrira, les
    effets en cours, puis son pied. Au téléphone, une feuille ; sur PC, une
@@ -1516,6 +1542,26 @@ html:has(.combat-bulle:not([hidden])) {
 
 .combat-palette-groupe h4 {
   flex: 1 1 100%;
+}
+
+/* « Toute la case » (F10) : une cible cochée se voit comme un genre choisi,
+   au trait et au fond de l'accent, et porte sa coche, que les lecteurs
+   d'écran ne lisent pas (aria-checked le dit) : jamais la couleur seule. La
+   première, fixe, garde le trait discontinu d'un bouton inactif. */
+.combat-capacite[role="checkbox"][aria-checked="true"] {
+  border-color: var(--accent);
+  background: var(--accent-doux);
+  box-shadow: inset 0 0 0 var(--trait) var(--accent);
+  color: var(--texte);
+  font-weight: var(--graisse-forte);
+}
+
+.combat-capacite[role="checkbox"][aria-checked="true"]::before {
+  content: "✓";
+  content: "✓" / "";
+  flex: none;
+  color: var(--accent);
+  font-weight: var(--graisse-forte);
 }
 
 /* « Le journal écrira : … », dans la police du journal. */
@@ -2749,13 +2795,22 @@ html:has(.combat-bulle:not([hidden])) {
   font-size: var(--taille-texte);
 }
 
-.combat-feuille-corps,
-.combat-feuille > .combat-palette {
+.combat-feuille-corps {
   flex: 1 1 auto;
   min-height: 0;
   padding: var(--espace-2) var(--espace-3);
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* La palette, au téléphone, est dans le corps de la feuille, qui défile
+   (js/ecrans/combat_menus.js) ; elle finit par son pied collant : rien ne
+   défile sous lui, et le focus s'arrête au-dessus de lui, comme dans le
+   volet. Écrite pour une palette enfant de la feuille, la règle ne touchait
+   rien (vague 4, mesuré : 8 px de contenu sous le pied). */
+.combat-feuille-corps:has(> .combat-palette) {
+  padding-bottom: 0;
+  scroll-padding-bottom: calc(var(--cible-tactile) + var(--espace-2) * 2 + var(--trait));
 }
 
 .combat-feuille-pied {
@@ -2812,7 +2867,13 @@ html:has(.combat-bulle:not([hidden])) {
   color: var(--texte-2);
 }
 
-.combat-menu-contexte {
+/* Ce que la ligne fait, sa seconde phrase, en petit et en gris, sur sa
+   propre rangée (maquette F7 et E4). À la vague 3, ces déclarations
+   portaient sur combat-menu-contexte, la classe du menu posé contre le
+   jeton sur PC (plus bas, à 56rem) : tout ce menu passait en petit (14 px
+   au lieu de 16, mesuré en E4 à 1 440), et la phrase d'une ligne jamais
+   (vague 4). */
+.combat-menu-ligne > span + span {
   display: block;
   flex: 1 1 100%;
   margin: 0;
@@ -2863,9 +2924,24 @@ html:has(.combat-bulle:not([hidden])) {
   border-bottom: var(--trait) solid var(--separateur);
 }
 
+/* Le libellé prend ce qui reste de sa rangée, sur la base « auto », la largeur
+   de sa phrase : dans « Changer l'équipement… », la saisie passe à la ligne
+   quand le nom de l'objet ne tient pas à côté d'elle, et le nom garde sa
+   largeur. */
 .combat-champ-mj > :first-child {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+/* Dans « Modifier une valeur… » (les rangées à « – » et « + »), le libellé sans
+   base (0 %) : « – », la saisie et « + » restent sur sa rangée, et il passe à
+   la ligne en lui-même (maquette F8). Sa base « auto » coupait les trois
+   commandes sur deux lignes au téléphone. Posée sur toutes les rangées, la base
+   de 0 % coupait le nom d'un objet lettre à lettre, à une fenêtre de 489 à
+   560 px (vague 4, relecture de fin). */
+.combat-champ-mj:has(> button) > :first-child {
+  flex: 1 1 0%;
+  overflow-wrap: anywhere;
 }
 
 .combat-champ-mj.change {
@@ -2891,10 +2967,13 @@ html:has(.combat-bulle:not([hidden])) {
   color: var(--texte);
 }
 
+/* Sa tête tient sur une rangée, à 320 px aussi : ses boutons serrés, ✕ au
+   bout ; le titre prend ce qui reste, coupé par « … » au besoin (vague 4 : ✕
+   passait seul dessous). */
 .combat-plein-tete {
   display: flex;
   flex: none;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: var(--espace-2);
   padding: var(--espace-2) var(--espace-2) var(--espace-2) var(--espace-3);
@@ -2905,6 +2984,20 @@ html:has(.combat-bulle:not([hidden])) {
   flex: 1 1 auto;
   min-width: 0;
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.combat-plein-tete > span {
+  display: flex;
+  flex: none;
+  gap: var(--espace-2);
+}
+
+.combat-plein-tete .bouton {
+  flex: none;
+  padding: 0 var(--espace-2);
 }
 
 .combat-plein .combat-journal {
@@ -2981,10 +3074,15 @@ html:has(.combat-bulle:not([hidden])) {
   white-space: nowrap;
 }
 
+/* La colonne étire ses enfants sur sa largeur : le « start » de la grille
+   du cadre, gardé, laissait à la carte (un conteneur de taille) la largeur
+   de son contenu, 18 px, et au bandeau celle de sa phrase, qui élargissait
+   la page (vague 4, mesuré dans Edge et Firefox). */
 .combat-en-jeu .combat-cadre {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
+  align-items: stretch;
   gap: var(--espace-1);
   min-height: 0;
 }
@@ -2995,6 +3093,37 @@ html:has(.combat-bulle:not([hidden])) {
 
 .combat-en-jeu .combat-cadre > .combat-camps,
 .combat-en-jeu > .combat-journal {
+  display: none;
+}
+
+/* La barre, sur une rangée (maquette A1, A7) : ☰, l'état du tour, puis les
+   commandes au bout, qui ne passent jamais à la ligne. L'état n'y réserve
+   aucune place (une base nulle) : il prend ce qui reste, jusqu'à sa phrase
+   entière, et se coupe par « … » au-delà. Seule la rangée de « ⋯ », ouverte
+   pour une question, prend la suivante. L'état de l'enregistrement n'est
+   plus dans la barre : le menu ⋯ le dit (vague 4). */
+.combat-en-jeu .combat-etat-court {
+  flex: 1 1 0;
+  max-width: max-content;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.combat-en-jeu .combat-commandes {
+  flex: none;
+  flex-wrap: nowrap;
+}
+
+.combat-en-jeu .combat-garde {
+  display: none;
+}
+
+/* La zone sous la carte, vide au téléphone (le geste se joue dans le
+   volet), ne garde pas son cadre : ses trois blocs vides la laissaient
+   dessinée sur 18 px, que « :empty » ne voyait pas. La liste d'une case
+   (« +k ») la rouvre. */
+.combat-en-jeu .combat-action:not(:has(> :not(:empty):not(.combat-infobulles))) {
   display: none;
 }
 
@@ -3130,9 +3259,13 @@ html:has(.combat-bulle:not([hidden])) {
   display: none;
 }
 
+/* Sans plancher de hauteur : la hauteur automatique d'une grille au rapport
+   carré est celle de son contenu, et l'allongeait (38 × 166 px à 360 × 640,
+   sous le volet). */
 .combat-en-jeu .combat-grille {
   flex: none;
   width: min(100cqi, calc(100cqb - var(--taille-petite) * var(--interligne) - var(--espace-1)));
+  min-height: 0;
   margin: 0;
 }
 
@@ -3154,6 +3287,89 @@ html:has(.combat-bulle:not([hidden])) {
   min-height: 0;
 }
 
+/* L'en-tête du volet sur une rangée, comme la maquette : le nom et ce qui
+   le suit, puis « Fiche » à côté, avant « – » ou ✕ dans le coin. Empilé,
+   « Fiche » prenait 44 px de plus à ce qui défile. « Fiche » caché (le
+   repos), la tête reste un bloc : sa grille mettait la phrase du repos dans
+   la colonne de « Fiche », et le titre, seul dans l'autre, passait un mot
+   par ligne (237 px à 360 × 640, la page défilait ; vague 4, mesuré). */
+.combat-en-jeu .combat-bulle-tete:has(> .bouton:not([hidden])) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--espace-2);
+}
+
+.combat-en-jeu .combat-bulle-tete > .bouton {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+}
+
+/* Le pied du geste sur une rangée : ses boutons se partagent la largeur,
+   leur texte passe à la ligne en eux. Sur deux rangées (113 px à 360 px),
+   il prenait plus que ce qui défile. */
+.combat-en-jeu .combat-bulle-defile > .combat-pied > .bouton {
+  flex: 1 1 0;
+  padding: 0 var(--espace-2);
+  text-align: center;
+}
+
+/* Une fenêtre basse (un téléphone couché, 844 × 390) n'a pas la hauteur de
+   la colonne : la carte s'y écrasait (une grille de 0 × 166 px, vague 4,
+   mesuré) et la page défilait d'elle-même. La page y reste celle d'avant,
+   qui défile : css/ecran.css n'y pose pas la colonne et y rend l'en-tête du
+   site, qui tient les liens de ☰ ; la carte prend sa largeur et la hauteur
+   de son contenu (part de la colonne, elle gardait 18 px, et sa grille de
+   768 px débordait sur ce qui la suit) ; le volet est de nouveau fixé au bas
+   de la fenêtre, la page gardant sa marge de défilement. Elle réserve en bas
+   la plus grande hauteur du volet : les 45 % de --hauteur-volet, pris sur la
+   fenêtre (une marge en pourcentage se prendrait sur la largeur) ; défilée
+   jusqu'au bout, la carte et sa légende passent au-dessus de lui. La page
+   finissait sur la carte, et le volet en couvrait le bas pour toujours
+   (jusqu'à 201 px de grille, vague 4, mesuré). Le plein écran (le journal,
+   les fiches) couvre la fenêtre, et non l'écran du combat, qui y a la
+   hauteur de la page : sa tête et ✕ restaient au-dessus de la fenêtre, ou la
+   dernière ligne du journal au-dessous (mesuré à 844 × 390). Le @media qui
+   suit rend chacune de ces règles à 56rem : écrit après, il l'emporte.
+
+   La hauteur, 30rem (480 px), est mesurée (vague 4, Edge) : un téléphone
+   tenu droit garde la colonne, qui ne défile pas (mission, § 3), même
+   petite ; de 360 × 520 à 390 × 664, chaque bouton s'y atteint, et la grille
+   fait 38,7 px à 520 le volet ouvert, 113,5 px le volet réduit. Un téléphone
+   couché (844 × 390, 740 × 360) prend la page. Les tailles des captures sont
+   des fenêtres : sous les barres du navigateur, un téléphone de 640 px
+   d'écran n'en a qu'environ 560, qu'un seuil de 36rem passait à la page qui
+   défile. */
+@media (max-height: 30rem) {
+  .combat-en-jeu .combat-site {
+    display: none;
+  }
+
+  .combat-en-jeu .combat-plateau {
+    display: block;
+    flex: none;
+    container-type: normal;
+  }
+
+  .combat-en-jeu .combat-grille {
+    width: auto;
+    min-height: auto;
+    margin: 0 auto;
+  }
+
+  .combat-en-jeu .combat-bulle {
+    position: fixed;
+  }
+
+  .combat-en-jeu {
+    padding-bottom: calc(var(--hauteur-fenetre) * 0.45);
+  }
+
+  .combat-en-jeu .combat-plein {
+    position: fixed;
+  }
+}
+
 /* De 56rem à 80rem : le bandeau, le plateau et la zone sous la carte à
    gauche, les deux camps à droite ; la bulle, posée sur le cadre, à côté de
    la case de qui joue. Un jeton montre son nom court à côté de son rond ;
@@ -3173,7 +3389,8 @@ html:has(.combat-bulle:not([hidden])) {
   /* Le combat en jeu, sur un grand écran (lot 4.3) : chaque règle du
      téléphone rendue à ce qu'elle était ; la page défile comme avant, le
      titre, l'aide, la carte entière, les fiches et le journal y sont. Ni ☰
-     ni vignettes : l'en-tête du site et les fiches les tiennent. */
+     ni vignettes : l'en-tête du site et les fiches les tiennent. Sans
+     marge, aussi celle du bas que la fenêtre basse réserve au volet. */
   .combat-en-jeu {
     display: block;
     padding: 0;
@@ -3208,11 +3425,36 @@ html:has(.combat-bulle:not([hidden])) {
 
   .combat-en-jeu .combat-cadre {
     display: grid;
+    align-items: start;
     gap: var(--espace-3);
   }
 
   .combat-en-jeu .combat-cadre > .combat-camps {
     display: grid;
+  }
+
+  .combat-en-jeu .combat-commandes {
+    flex: 0 1 auto;
+    flex-wrap: wrap;
+  }
+
+  .combat-en-jeu .combat-garde {
+    display: block;
+  }
+
+  .combat-en-jeu .combat-action:not(:has(> :not(:empty):not(.combat-infobulles))) {
+    display: block;
+  }
+
+  .combat-en-jeu .combat-bulle-defile > .combat-pied > .bouton {
+    flex: 0 1 auto;
+    padding: 0 var(--espace-4);
+  }
+
+  /* « MJ » se dit près de l'interrupteur, au-dessus de la carte (mission,
+     § 5) : pas une seconde fois dans la barre. */
+  .combat-barre .combat-mj {
+    display: none;
   }
 
   .combat-en-jeu > .combat-journal {
@@ -3221,6 +3463,7 @@ html:has(.combat-bulle:not([hidden])) {
 
   .combat-en-jeu .combat-plateau {
     display: block;
+    flex: 1 1 0;
     container-type: normal;
   }
 
@@ -3230,6 +3473,7 @@ html:has(.combat-bulle:not([hidden])) {
 
   .combat-en-jeu .combat-grille {
     width: auto;
+    min-height: auto;
     margin: 0 auto;
   }
 
@@ -3242,6 +3486,10 @@ html:has(.combat-bulle:not([hidden])) {
   }
 
   .combat-en-jeu .combat-bulle {
+    position: absolute;
+  }
+
+  .combat-en-jeu .combat-plein {
     position: absolute;
   }
 
@@ -3362,7 +3610,8 @@ html:has(.combat-bulle:not([hidden])) {
 
   .combat-bulle-large > .combat-palette {
     min-height: 0;
-    padding: var(--espace-2) var(--espace-3) var(--espace-3);
+    padding: var(--espace-2) var(--espace-3) 0;
+    scroll-padding-bottom: calc(var(--cible-tactile) + var(--espace-2) * 2 + var(--trait));
     overflow-y: auto;
     overscroll-behavior: contain;
     border-left: var(--trait) solid var(--separateur);
@@ -3639,5 +3888,22 @@ html:has(.combat-bulle:not([hidden])) {
 @media (pointer: fine) {
   .combat-bulle .combat-capacite[data-ligne] {
     min-height: var(--ligne-souris);
+  }
+}
+
+/* Vague 4, K2 */
+
+/* Sur PC, le menu du MJ et ses panneaux (« Modifier une valeur… ») se
+   posent contre le jeton, ou « Modifier… », qui les ouvre (mission, § 4.8,
+   E4 ; W1 n° 8), à la place que js/ecrans/echelle.js écrit, dans le repère
+   de la fenêtre, et ne descendent pas sous elle : leur corps défile en
+   lui-même, comme celui d'une feuille. */
+@media (min-width: 56rem) {
+  .combat-feuille.combat-menu-contexte {
+    top: var(--bulle-haut);
+    left: var(--bulle-gauche);
+    display: flex;
+    max-height: min(var(--bulle-hauteur), var(--hauteur-bulle-max));
+    transform: none;
   }
 }

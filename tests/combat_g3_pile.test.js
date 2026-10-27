@@ -556,3 +556,57 @@ test("plusieurs cibles : une cible morte entre-temps est sautée", () => {
   assert.equal(gestes.length, 2, "deux lignes : la cible sautée n'en a pas");
   assert.equal(gestes[0].mort, true, "la première dit la mort de Ciboulette");
 });
+
+// § 17.3 : un mort « ne joue plus ». Le Chef, à 1 de corps, vise Aubépine et
+// Ciboulette ; il meurt à la première cible.
+test("plusieurs cibles : l'auteur tué à une cible ne joue plus ; son geste finit avec elle, et la fin du combat se juge", () => {
+  const MJ = { genre: "mj" };
+  const unCorps = (etat) => jouer(etat, { type: "mj", genre: "valeurs", qui: "adv2", valeurs: [{ champ: "corps", valeur: 1 }] });
+
+  // Une contre-attaque : la face 20 contre Aubépine, qui contre-attaque par Frappe et tue le Chef, seul adversaire.
+  const seul = unCorps(combat(surD4(AUBEPINE, CHEF, CIBOULETTE), { quiCommence: "adv" }));
+  const contre = jouer(
+    seul,
+    moulinet(seul),
+    d8(2),
+    d20(20),
+    { type: "contre_attaquer", capacite: indice(seul, "pj1", "Frappe"), facon: 0 },
+    d8(8),
+    d8(2),
+    d20(5),
+    { type: "effet", genre: "directs", source: MJ, n: 5, nature: "corps" },
+    APPLIQUER,
+  );
+  assert.deepEqual(contre.protagonistes.adv2.mort, { tour: 1 });
+  assert.deepEqual(contre.pile, [], "pas de jet pour Ciboulette");
+  assert.deepEqual([contre.phase, contre.vainqueur], ["termine", "pj"]);
+  assert.deepEqual(textes(contre, seul.journal.length).slice(1), ["Combat terminé : victoire des PJ."], "une ligne, la première cible, puis la fin");
+  assert.match(textes(contre, seul.journal.length)[0], /, cible 1 sur 2\. .* Chef meurt\.$/u);
+  assert.deepEqual([contre.protagonistes.pj3.zones[1].armure, contre.protagonistes.pj3.zones[1].resistance], [10, 5], "Ciboulette n'a rien reçu");
+
+  // Une intervention : Ciboulette, par un jet prêté, tue le Chef avant ses dégâts. Un Marmiton reste : le combat continue.
+  const avecMarmiton = unCorps(combat(surD4(AUBEPINE, CHEF, CIBOULETTE, MARMITON), { quiCommence: "adv" }));
+  const suites = jouer(
+    avecMarmiton,
+    moulinet(avecMarmiton),
+    d8(5),
+    d8(1),
+    d20(5),
+    intervenir(avecMarmiton, "pj3", "Dressage minute"),
+    regler("jet_prete", true),
+    viser("adv2"),
+    d8(8),
+    d8(2),
+    { type: "degats", base: "arme", operations: [], nature: "normaux" },
+    { type: "effet", genre: "directs", source: MJ, n: 5, nature: "corps" },
+    d20(5),
+    APPLIQUER,
+  );
+  assert.deepEqual(suites.protagonistes.adv2.mort, { tour: 1 });
+  assert.deepEqual([gesteEnCours(suites).genre, gesteEnCours(suites).moment, gesteEnCours(suites).cible], ["geste", "suites", "pj1"]);
+  const fini = jouer(suites, APPLIQUER);
+  assert.deepEqual(fini.pile, [], "pas de jet pour Ciboulette");
+  assert.equal(fini.phase, "combat", "le Marmiton vit encore");
+  assert.equal(fini.journal.length, avecMarmiton.journal.length + 1, "une seule ligne, celle de la première cible");
+  assert.deepEqual([fini.protagonistes.pj3.zones[1].armure, fini.protagonistes.pj3.zones[1].resistance], [10, 5], "Ciboulette n'a rien reçu");
+});

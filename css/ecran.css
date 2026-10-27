@@ -3,7 +3,8 @@
    Pensée pour le téléphone d'abord : une colonne, des cibles tactiles de
    44 px au moins, un zoom jamais interdit. Sur un grand écran, la liste et
    la fiche se placent côte à côte. Toutes les valeurs viennent de
-   jetons.css ; seule la largeur de la condition @media est écrite ici, car
+   jetons.css ; seules la largeur des conditions @media, et la hauteur d'une
+   fenêtre trop basse pour l'écran du combat en jeu, sont écrites ici, car
    CSS ne lit pas de variable à cet endroit. */
 
 *,
@@ -164,7 +165,8 @@ dl {
    combat, dont ☰ ouvre les liens ; la page devient une colonne de la
    hauteur de la fenêtre, la bannière de la démonstration en tête, l'écran
    qui prend le reste, sans marge. css/combat.css y range le combat. À
-   56rem, tout revient comme avant (plus bas). */
+   56rem, et dans une fenêtre trop basse (30rem au plus : un téléphone
+   couché), tout revient comme avant (plus bas). */
 body:has(.combat-en-jeu) {
   display: flex;
   flex-direction: column;
@@ -1243,9 +1245,15 @@ body:has(.combat-en-jeu) .entete {
   .vignettes-themes {
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
+}
 
-  /* L'écran du combat en jeu, sur un grand écran : la page d'avant, son
-     en-tête, sa marge ; elle défile comme les autres. */
+/* L'écran du combat en jeu, sur un grand écran, ou dans une fenêtre trop
+   basse pour la colonne (un téléphone couché, 844 × 390 : la carte s'y
+   écrasait, vague 4, mesuré ; un téléphone tenu droit, dès 520 px de
+   fenêtre, garde la colonne) : la page d'avant, son en-tête, sa marge ; elle
+   défile comme les autres. css/combat.css y rend de même la carte et le
+   volet. */
+@media (min-width: 56rem), (max-height: 30rem) {
   body:has(.combat-en-jeu) {
     display: block;
     height: auto;

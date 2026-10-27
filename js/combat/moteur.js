@@ -59,7 +59,8 @@
 //   prochain tour de son camp ;
 // - une façon Centrée vise plusieurs cibles, un jet par cible, le coût payé
 //   une fois : chaque cible a sa ligne, sauf la dernière, qui est celle du
-//   geste ; une cible morte entre-temps est sautée ;
+//   geste ; une cible morte entre-temps est sautée ; un auteur mort à l'une
+//   d'elles ne joue plus, et son geste finit avec elle ;
 // - la blessure : une zone sans endurance qui perd du corps se choisit
 //   (capacité du bloc de blessure, ajoutée à la photographie, ou état
 //   libre) ; un adversaire n'a pas d'étape ;
@@ -509,9 +510,12 @@ const CHAMPS_D_UNE_CIBLE = {
 };
 
 // La prochaine cible d'un geste à plusieurs cibles, après celle en cours : la
-// première qui vit encore et que le jet peut viser. -1 s'il n'y en a plus.
+// première qui vit encore et que le jet peut viser. -1 s'il n'y en a plus, ou
+// si l'auteur du geste est mort à cette cible (une contre-attaque ou une
+// intervention l'a tué) : un mort ne joue plus (§ 17.3), son geste finit là.
 function cibleSuivante(etat, geste) {
   if (geste.cibles === null) return -1;
+  if (!vivant(etat, geste.acteur)) return -1;
   for (let rang = geste.rang + 1; rang < geste.cibles.length; rang += 1) {
     const cible = geste.cibles[rang];
     if (vivant(etat, cible) && !circonstances(etat, { ...geste, ...CHAMPS_D_UNE_CIBLE, cible }).manque) return rang;

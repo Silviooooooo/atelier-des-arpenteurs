@@ -30,6 +30,21 @@
 // fiches en plein écran sont des nœuds de l'écran, prêtés le temps de
 // l'ouverture : « apres », à la fermeture, les lui rend.
 //
+// À la vague 4 (relecture finale, R2 n° 5 et 6, W1 n° 8) : modale pour de
+// bon, la couche rend inerte (inert) le reste de ce qui la porte, sauf une
+// région d'annonce, et Tab et Maj+Tab bouclent dans ce qui est ouvert. Elle
+// garde aussi l'ancre du genre qu'une ouverture remplace : quand celle du
+// nouveau n'a plus de boîte à la fermeture (« Modifier… » d'une fiche rendue
+// à la page, que la feuille de style cache au téléphone), le focus va à
+// elle. Sur PC, le menu du MJ et ses panneaux se posent contre ce qui les
+// ouvre, à la place que l'écran calcule (placer) : seul js/ecrans/echelle.js
+// écrit un style.
+//
+// À la vague 4 encore (relecture des correctifs, C2 et C6) : une case
+// demandée à la carte depuis la palette d'une feuille efface la feuille,
+// sans la fermer, le temps du choix (suspendre, reprendre) ; et le menu du
+// MJ se replace quand la fenêtre change de taille (replacer).
+//
 // La phrase d'une seconde (genre « toast ») ne se lit pas : la région
 // d'annonce de l'écran la dit déjà. Ses états sont des classes (contrat,
 // § 5.2 : « change » sur un champ saisi) ; le code n'écrit jamais de mise en
@@ -92,11 +107,48 @@ function estDans(noeud, ancetre) {
 }
 
 /**
+ * Vrai quand l'élément est dans la page et s'y voit : il a une boîte, ni lui
+ * ni un ancêtre n'étant caché (par hidden ou par la feuille de style).
+ */
+export function aUneBoite(element) {
+  if (!element?.isConnected) return false;
+  return typeof element.getClientRects !== "function" || element.getClientRects().length > 0;
+}
+
+// Ce que Tab atteint, en plus de ce qui porte un tabindex positif ou nul.
+const PRENABLES = new Set(["A", "BUTTON", "INPUT", "SELECT", "TEXTAREA", "SUMMARY"]);
+
+/** Ce que Tab atteint sous « racine », dans l'ordre du document : ce qui se prend et se voit. */
+function prenablesDans(racine) {
+  const trouves = [];
+  const parcourir = (parent) => {
+    for (const enfant of parent.children) {
+      const rang = enfant.getAttribute("tabindex");
+      const prenable = rang !== null ? Number(rang) >= 0 : PRENABLES.has(enfant.tagName) && (enfant.tagName !== "A" || enfant.hasAttribute("href"));
+      if (prenable && aUneBoite(enfant)) trouves.push(enfant);
+      parcourir(enfant);
+    }
+  };
+  parcourir(racine);
+  return trouves;
+}
+
+/** Une région d'annonce : elle parle encore quand le reste dort sous le voile. */
+const parle = (element) => element.hasAttribute("aria-live") || ["alert", "status", "log"].includes(element.getAttribute("role"));
+
+/**
  * La couche des menus : { noeud, ouvrir(genre, options), fermer(), rendre(vues),
- * ouvert() }. « genre » : "site", "combat", "intervenir", "mj", "valeurs",
- * "etats", "equipement", "palette", "journal", "fiches", "toast". « minuteur » :
- * celui de la page, { poser(faire, ms) → numéro, retirer(numéro) }. ouvert()
- * rend le genre ouvert, ou null (la phrase d'une seconde n'en est pas un).
+ * ouvert(), secours() }. « genre » : "site", "combat", "intervenir", "mj",
+ * "valeurs", "etats", "equipement", "palette", "journal", "fiches", "toast".
+ * « minuteur » : celui de la page, { poser(faire, ms) → numéro,
+ * retirer(numéro) }. « placer(feuille, ancre) » : l'écran pose, sur PC, le
+ * menu du MJ et ses panneaux contre leur ancre (echelle.js). ouvert() rend le
+ * genre ouvert, ou null (la phrase d'une seconde n'en est pas un) ; secours(),
+ * l'ancre du genre que l'ouvert a remplacé (null sans lui), où l'écran rend
+ * le focus quand celle de la palette n'a plus de boîte. suspendre() efface
+ * la feuille ouverte, sans la fermer, le temps qu'une case se choisisse sur
+ * la carte, et reprendre() la rend ; replacer(), quand la fenêtre change de
+ * taille, replace le menu du MJ contre son ancre.
  *
  * « actions » vient de l'écran : executer(commande, origine) (l'origine
  * « menu »), basculerLeModeMj(), ouvrirFiches(id), ouvrirJournal(),
@@ -106,20 +158,29 @@ function estDans(noeud, ancetre) {
  * « options » d'ouvrir : ancre (à qui rendre le focus ; à défaut, l'élément
  * actif) ; « id » pour les genres du MJ ; « noeud » et « nom » pour la
  * palette ; « titre », « outils », « contenu » et « apres » pour un plein
- * écran ; « texte » pour la phrase d'une seconde. rendre(vues) reçoit
- * { barre (vueBarre), modeMj, etroit, menuMj(id, saisies), equipement(id) },
- * en partie ou en entier, et met à jour ce qui est ouvert.
+ * écran (« apres » aussi pour la palette, appelé quand sa feuille se ferme
+ * ou cède la place) ; « texte » pour la phrase d'une seconde. rendre(vues) reçoit
+ * { barre (vueBarre), modeMj, etroit, menuMj(id, saisies), equipement(id),
+ * garde (la phrase de l'enregistrement) }, en partie ou en entier, et met à
+ * jour ce qui est ouvert.
  */
-export function creer(actions, { minuteur = null } = {}) {
+export function creer(actions, { minuteur = null, placer = null } = {}) {
   const leMinuteur = minuteur ?? MINUTEUR_DE_LA_PAGE;
   // Ce que l'écran a donné au dernier rendu.
-  let vues = { barre: null, modeMj: false, etroit: false, menuMj: null, equipement: null };
-  // Ce qui est ouvert : son genre, ses options, à qui rendre le focus, ce
-  // qu'il faut rendre à l'écran en fermant.
+  let vues = { barre: null, modeMj: false, etroit: false, menuMj: null, equipement: null, garde: null };
+  // Ce qui est ouvert : son genre, ses options, à qui rendre le focus (et,
+  // s'il n'a plus de boîte, l'ancre du genre remplacé), ce qu'il faut rendre
+  // à l'écran en fermant.
   let genre = null;
   let options = {};
   let ancre = null;
+  let ancreDeSecours = null;
   let apres = null;
+  // Ce que l'ouverture a rendu inerte, sous le voile.
+  let inertes = [];
+  // La feuille ouverte s'est effacée le temps qu'une case se choisisse sur
+  // la carte (suspendre) : rien ne l'a fermée.
+  let suspendue = false;
   // Ce que le corps montre, pour ne le refaire que s'il change.
   let signature = null;
   // Les saisies de « Modifier une valeur… » : { [clé d'un champ]: valeur }.
@@ -146,21 +207,33 @@ export function creer(actions, { minuteur = null } = {}) {
   const tete = el("div", { classe: "combat-feuille-tete" }, titre, sous, croix);
   const corps = el("div", { classe: "combat-feuille-corps" });
   const pied = el("div", { classe: "combat-feuille-pied" });
-  const feuille = el("section", { classe: "combat-feuille", role: "dialog", "aria-modal": "true", "aria-labelledby": "combat-feuille-titre", hidden: true }, tete, corps, pied);
+  // La feuille prend elle-même le focus d'un clic sur ce qui ne le prend pas (sa
+  // phrase, sa marge) : il restait sur main#ecran, hors d'elle, et Échap ne la
+  // fermait plus (mesuré dans Edge, vague 4, M). Hors de l'ordre de Tab.
+  const feuille = el("section", { classe: "combat-feuille", role: "dialog", "aria-modal": "true", "aria-labelledby": "combat-feuille-titre", tabindex: "-1", hidden: true }, tete, corps, pied);
 
   const titreDuPlein = el("h2", { id: "combat-plein-titre", tabindex: "-1" });
   const outilsDuPlein = el("span", {});
   const croixDuPlein = el("button", { type: "button", classe: "bouton secondaire", "aria-label": FERMER, "data-repere": "fermer", onclick: () => fermer() }, SIGNES.fermer);
   const teteDuPlein = el("div", { classe: "combat-plein-tete" }, titreDuPlein, outilsDuPlein, croixDuPlein);
-  const plein = el("section", { classe: "combat-plein", role: "dialog", "aria-modal": "true", "aria-labelledby": "combat-plein-titre", hidden: true }, teteDuPlein);
+  // Le plein écran de même : un clic sur le texte d'une fiche (un details,
+  // hors de son summary) portait le focus sur main#ecran (relecture finale, R7).
+  const plein = el("section", { classe: "combat-plein", role: "dialog", "aria-modal": "true", "aria-labelledby": "combat-plein-titre", tabindex: "-1", hidden: true }, teteDuPlein);
 
-  const voile = el("div", { classe: "combat-voile", hidden: true, onclick: () => echap() });
+  // Un appui sur le voile n'y porte pas le focus (mousedown empêché) : l'appui
+  // long qui ouvre un menu sous le doigt le laisse dans la feuille (vague 4, M).
+  const voile = el("div", { classe: "combat-voile", hidden: true, onclick: () => echap(), onmousedown: (evenement) => evenement.preventDefault() });
   const toast = el("p", { classe: "combat-toast", "aria-hidden": "true", hidden: true });
   const noeud = el(
     "div",
     {
       onkeydown: (evenement) => {
-        if (evenement?.key !== "Escape" || genre === null || evenement.defaultPrevented) return;
+        if (genre === null || evenement?.defaultPrevented) return;
+        if (evenement.key === "Tab") {
+          boucler(evenement);
+          return;
+        }
+        if (evenement.key !== "Escape") return;
         evenement.preventDefault?.();
         echap();
       },
@@ -259,12 +332,14 @@ export function creer(actions, { minuteur = null } = {}) {
       ligne({ libelle: JOURNAL, repere: "journal", faire: () => actions.ouvrirJournal?.() }),
       ligne({ libelle: NOUVEAU_COMBAT, repere: "nouveau", faire: () => nouveauCombat() }),
     ];
+    // En tête, l'état de l'enregistrement (« Combat gardé sur cet appareil »),
+    // que la barre du téléphone ne montre plus (W1 n° 14).
     return {
       titre: TITRE_DU_COMBAT,
       sous: barre.etatCourt ?? null,
-      corps: [interrupteur, menu(lignes), el("p", {}, MJ_SE_GARDE)],
+      corps: [paragraphe(vues.garde), interrupteur, menu(lignes), el("p", {}, MJ_SE_GARDE)],
       pied: [],
-      signature: [barre.etatCourt ?? null, allume, intervenir],
+      signature: [barre.etatCourt ?? null, allume, intervenir, vues.garde ?? null],
     };
   }
 
@@ -762,14 +837,19 @@ export function creer(actions, { minuteur = null } = {}) {
       fermer();
       return;
     }
-    // Le menu d'un jeton, sur PC : un menu contre lui plutôt qu'une feuille
-    // du bas (la feuille de style en décide) ; la largeur peut changer
-    // sans que ce qu'il montre change.
-    const classe = genre === "mj" && vues.etroit !== true ? "combat-feuille combat-menu-contexte" : "combat-feuille";
-    if (feuille.className !== classe) feuille.className = classe;
+    // Le menu d'un jeton et ses panneaux, sur PC : contre ce qui les ouvre
+    // (le jeton, « Modifier… »), plutôt qu'une feuille du bas, à la place
+    // que l'écran calcule (mission, § 4.8, E4 ; W1 n° 8) ; une ancre qui ne
+    // se voit pas laisse le dialogue au milieu. La largeur peut changer sans
+    // que ce qu'il montre change.
+    const contre = DU_MJ.has(genre) && vues.etroit !== true && aUneBoite(ancre);
+    const classe = contre ? "combat-feuille combat-menu-contexte" : "combat-feuille";
+    const classeChangee = feuille.className !== classe;
+    if (classeChangee) feuille.className = classe;
     const neuve = JSON.stringify([genre, compose.signature]);
     if (neuve === signature) {
       compose.apres?.();
+      if (contre && classeChangee) placer?.(feuille, ancre);
       return;
     }
     const premiere = signature === null;
@@ -793,6 +873,8 @@ export function creer(actions, { minuteur = null } = {}) {
     pied.replaceChildren(...[compose.pied].flat(Infinity).filter(present));
     compose.apres?.();
     feuille.hidden = false;
+    // Montrée et remplie, elle se mesure : sa place se calcule maintenant.
+    if (contre) placer?.(feuille, ancre);
     // Refaite pendant qu'elle avait le focus : il revient à l'élément de
     // même repère, ou au titre.
     if (premiere) return;
@@ -822,6 +904,35 @@ export function creer(actions, { minuteur = null } = {}) {
     plein.hidden = false;
   }
 
+  // Sous le voile, rien ne se prend : les autres enfants de ce qui porte la
+  // couche (la page de l'écran) deviennent inertes, sauf une région
+  // d'annonce, qui doit parler encore ; la fermeture les réveille (R2 n° 5).
+  function endormirLeReste() {
+    const parent = noeud.parentNode;
+    if (!parent || inertes.length > 0) return;
+    inertes = [...parent.children].filter((enfant) => enfant !== noeud && !enfant.hasAttribute("inert") && !parle(enfant));
+    for (const enfant of inertes) enfant.setAttribute("inert", "");
+  }
+
+  function reveillerLeReste() {
+    for (const enfant of inertes) enfant.removeAttribute("inert");
+    inertes = [];
+  }
+
+  // Tab sur le dernier élément de ce qui est ouvert mène au premier, Maj+Tab
+  // sur le premier au dernier ; hors d'eux (le titre, que seul le code
+  // focalise), Tab mène au premier et Maj+Tab au dernier. Au milieu, Tab
+  // suit son cours (R2 n° 5).
+  function boucler(evenement) {
+    const liste = prenablesDans(EN_PLEIN.has(genre) ? plein : feuille);
+    if (liste.length === 0) return;
+    const actif = globalThis.document?.activeElement ?? null;
+    const arriere = evenement.shiftKey === true;
+    if (liste.includes(actif) && actif !== (arriere ? liste[0] : liste.at(-1))) return;
+    evenement.preventDefault?.();
+    (arriere ? liste.at(-1) : liste[0]).focus({ preventScroll: true });
+  }
+
   /**
    * Ouvre un genre, à la place de ce qui était ouvert. La phrase d'une
    * seconde (« toast ») se montre à côté, sans rien fermer.
@@ -834,10 +945,14 @@ export function creer(actions, { minuteur = null } = {}) {
     }
     const actif = globalThis.document?.activeElement ?? null;
     const ancreNeuve = optionsNeuves.ancre ?? (genre !== null ? ancre : actif);
+    // L'ancre du genre remplacé, s'il se voit encore (sinon, son propre
+    // secours) : le focus ira à elle si la nouvelle n'a plus de boîte.
+    const secoursNeuf = genre === null ? null : aUneBoite(ancre) ? ancre : ancreDeSecours;
     vider();
     genre = genreNeuf;
     options = optionsNeuves;
     ancre = ancreNeuve;
+    ancreDeSecours = secoursNeuf;
     apres = typeof optionsNeuves.apres === "function" ? optionsNeuves.apres : null;
     signature = null;
     saisies = {};
@@ -853,17 +968,22 @@ export function creer(actions, { minuteur = null } = {}) {
       dessiner();
       if (genre === null) return;
     }
+    endormirLeReste();
     focaliserALOuverture();
   }
 
-  // Ferme sans rendre le focus : ce qui était prêté revient à l'écran.
+  // Ferme sans rendre le focus : ce qui était prêté revient à l'écran, et
+  // ce qui dormait sous le voile se réveille.
   function vider() {
     if (genre === null) return;
     const rendre = apres;
     genre = null;
     options = {};
     ancre = null;
+    ancreDeSecours = null;
     apres = null;
+    suspendue = false;
+    reveillerLeReste();
     signature = null;
     champsDesValeurs = [];
     corps.replaceChildren();
@@ -876,12 +996,19 @@ export function creer(actions, { minuteur = null } = {}) {
     rendre?.();
   }
 
-  /** Ferme ce qui est ouvert ; le focus revient à ce qui l'avait ouvert, s'il est encore dans la page. */
+  /**
+   * Ferme ce qui est ouvert ; le focus revient à ce qui l'avait ouvert, s'il
+   * est encore dans la page. Sans boîte (caché depuis), il va à l'ancre du
+   * genre remplacé, si elle se voit (R2 n° 6).
+   */
   function fermer({ focus = true } = {}) {
     if (genre === null) return;
     const retour = ancre;
+    const secours = ancreDeSecours;
     vider();
-    if (focus && retour?.isConnected) retour.focus({ preventScroll: true });
+    if (!focus) return;
+    const cible = !aUneBoite(retour) && aUneBoite(secours) ? secours : retour;
+    if (cible?.isConnected) cible.focus({ preventScroll: true });
   }
 
   // Échap, ou un appui sur le voile : la palette se ferme par l'écran, qui
@@ -889,6 +1016,49 @@ export function creer(actions, { minuteur = null } = {}) {
   function echap() {
     if (genre === "palette") actions.fermerLaPalette?.();
     else fermer();
+  }
+
+  /**
+   * Une case à choisir sur la carte, demandée de la feuille ouverte (la case
+   * d'arrivée de la palette, au téléphone, ou sur PC hors d'un geste) : la
+   * feuille s'efface le temps du choix, avec le voile, et ce qui dormait sous
+   * lui se réveille, car la carte en était (vague 4, C2). Rien ne se ferme :
+   * le genre, l'ancre et le secours restent, et reprendre() rend la feuille
+   * telle quelle. La phrase d'une seconde dit quoi toucher. Rend vrai si la
+   * feuille s'est effacée.
+   */
+  function suspendre() {
+    if (genre === null || EN_PLEIN.has(genre) || suspendue) return false;
+    suspendue = true;
+    reveillerLeReste();
+    feuille.hidden = true;
+    voile.hidden = true;
+    actions.dire?.(CASE_D_ARRIVEE);
+    return true;
+  }
+
+  /** La case choisie, ou Échap : la feuille effacée revient, et le reste se rendort sous le voile. */
+  function reprendre() {
+    if (!suspendue) return;
+    suspendue = false;
+    voile.hidden = false;
+    feuille.hidden = false;
+    endormirLeReste();
+  }
+
+  /**
+   * La fenêtre a changé de taille, ou de zoom : sur PC, le menu du MJ et ses
+   * panneaux se replacent contre leur ancre, que la carte a pu déplacer, comme
+   * la bulle ; jamais à un rendu, ni à un dé (vague 4, C6). « Modifier une
+   * valeur… » compris, que rendre() ne redessine pas.
+   */
+  function replacer() {
+    if (genre === null || !DU_MJ.has(genre) || suspendue) return;
+    const contre = vues.etroit !== true && aUneBoite(ancre);
+    const classe = contre ? "combat-feuille combat-menu-contexte" : "combat-feuille";
+    if (feuille.className !== classe) feuille.className = classe;
+    if (!contre) return;
+    placer?.(feuille, ancre);
   }
 
   function direUneSeconde(texte) {
@@ -919,5 +1089,5 @@ export function creer(actions, { minuteur = null } = {}) {
     dessiner();
   }
 
-  return { noeud, ouvrir, fermer, rendre, ouvert: () => genre };
+  return { noeud, ouvrir, fermer, rendre, suspendre, reprendre, replacer, ouvert: () => genre, secours: () => (genre === null ? null : ancreDeSecours) };
 }

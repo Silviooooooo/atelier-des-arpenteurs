@@ -37,24 +37,29 @@ test("échelle — un seul module de js/ écrit un style : l'échelle d'un papie
   const fichiers = readdirSync(new URL("js/", RACINE), { recursive: true }).map((chemin) => `js/${chemin.replaceAll("\\", "/")}`).filter((chemin) => chemin.endsWith(".js"));
   assert.ok(fichiers.length > 40, `${fichiers.length} modules lus`);
   const ecritures = fichiers.flatMap((chemin) => [...lire(chemin).matchAll(ECRITURE)].map(([trouve]) => [chemin, trouve]));
-  // Dans echelle.js seul : poserEchelle, puis les quatre écritures de placerBulle.
+  // Dans echelle.js seul : poserEchelle, puis, dans placerBulle, le retrait
+  // de la plus grande hauteur d'avant (libre ; vague 4, C5) et les quatre
+  // écritures.
   const bulle = [[ECHELLE, ".style."], [ECHELLE, "setProperty("]];
-  assert.deepEqual(ecritures, [[ECHELLE, ".style?."], [ECHELLE, "setProperty("], ...bulle, ...bulle, ...bulle, ...bulle]);
+  assert.deepEqual(ecritures, [[ECHELLE, ".style?."], [ECHELLE, "setProperty("], [ECHELLE, ".style."], ...bulle, ...bulle, ...bulle, ...bulle]);
 
-  // Cinq .style, chacun suivi de setProperty( : aucun alias ne garde le
-  // style d'un nœud pour l'écrire ailleurs.
+  // Six .style, chacun suivi de setProperty( ou, une fois, de removeProperty( :
+  // aucun alias ne garde le style d'un nœud pour l'écrire ailleurs.
   const source = lire(ECHELLE);
-  const styles = [...source.matchAll(/\.style\b(\??\.setProperty\()?/g)];
-  assert.equal(styles.length, 5, "cinq .style");
-  assert.deepEqual(styles.map(([, suite]) => suite), ["?.setProperty(", ".setProperty(", ".setProperty(", ".setProperty(", ".setProperty("]);
+  const styles = [...source.matchAll(/\.style\b(\??\.(?:set|remove)Property\()?/g)];
+  assert.equal(styles.length, 6, "six .style");
+  assert.deepEqual(styles.map(([, suite]) => suite), ["?.setProperty(", ".removeProperty(", ".setProperty(", ".setProperty(", ".setProperty(", ".setProperty("]);
   assert.equal([...source.matchAll(/setProperty\(/g)].length, 5);
+  // Le seul retrait : la plus grande hauteur, dans placerBulle, quand on le lui demande.
+  assert.deepEqual([...source.matchAll(/removeProperty\(([^)]*)\)/g)].map(([, nom]) => nom), ['"--bulle-hauteur"']);
+  assert.match(corpsDe(source, "placerBulle"), /^ {2}if \(libre\) noeud\.style\.removeProperty\("--bulle-hauteur"\);\r?\n {2}const boite = noeud\.getBoundingClientRect\(\);/m);
   // Les noms : --echelle par poserEchelle ; les quatre de la bulle par placerBulle, et nulle part ailleurs.
   assert.deepEqual(nomsPoses(source), ['"--echelle"', '"--bulle-gauche"', '"--bulle-haut"', '"--bulle-fleche"', '"--bulle-hauteur"']);
   const placer = corpsDe(source, "placerBulle");
   assert.deepEqual(nomsPoses(placer), ['"--bulle-gauche"', '"--bulle-haut"', '"--bulle-fleche"', '"--bulle-hauteur"']);
   // Le plafond (le bas du bandeau) passe de placerBulle à calculerPlace.
   assert.match(source, /^export function calculerPlace\(\{ ancre, taille, fenetre, cotes, ecart, pointe, marge = 16, coin = 12, plafond = marge \}\) \{/m);
-  assert.match(source, /^export function placerBulle\(noeud, \{ ancre, repere, fenetre, cotes, ecart, pointe, plafond \}\) \{/m);
+  assert.match(source, /^export function placerBulle\(noeud, \{ ancre, repere, fenetre, cotes, ecart, pointe, plafond, libre = false \}\) \{/m);
   assert.deepEqual(nomsPoses(corpsDe(source, "poserEchelle")), ['"--echelle"']);
   assert.deepEqual(nomsPoses(source.replace(placer, "")), ['"--echelle"']);
 
@@ -257,6 +262,41 @@ test("placerBulle — quatre propriétés, en px entiers : la place relative au 
     ligne.rectangle = { left: 960, top: 600, width: 288, height: 36 };
     assert.deepEqual(placerBulle(infobulle, vers), { cote: "gauche", entiere: true });
     assert.deepEqual(infobulle.style.ecritures.slice(8), [["--bulle-gauche", "-296px"], ["--bulle-haut", "220px"], ["--bulle-fleche", "134px"], ["--bulle-hauteur", "300px"]]);
+  } finally {
+    retirer();
+  }
+});
+
+test("placerBulle — libre (le menu du MJ, puis « Modifier une valeur… » dans le même nœud) : la plus grande hauteur d'avant s'ôte avant la mesure, et le panneau plus haut remonte (vague 4, C5)", () => {
+  const retirer = installerDom();
+  try {
+    // Un nœud dont la hauteur mesurée suit --bulle-hauteur, comme le max-height de css/combat.css.
+    let naturelle = 280;
+    const feuille = document.createElement("section");
+    Object.defineProperty(feuille, "rectangle", {
+      get: () => {
+        const borne = Number.parseInt(feuille.style.getPropertyValue("--bulle-hauteur"), 10);
+        return { left: 0, top: 0, width: 472, height: Number.isFinite(borne) ? Math.min(naturelle, borne) : naturelle };
+      },
+    });
+    const jeton = Object.assign(document.createElement("button"), { rectangle: { left: 600, top: 600, width: 40, height: 40 } });
+    const coin = { getBoundingClientRect: () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }) };
+    document.body.append(jeton, feuille);
+    const usage = { ancre: jeton, repere: coin, fenetre: FENETRE, cotes: QUATRE, ecart: FLECHE, pointe: 22 };
+    const px = (nom) => feuille.style.getPropertyValue(nom);
+
+    // Le menu (280 px), contre un jeton bas : collé au bas de la fenêtre, sa plus grande hauteur, 280.
+    placerBulle(feuille, { ...usage, libre: true });
+    assert.deepEqual([px("--bulle-haut"), px("--bulle-hauteur")], ["504px", "280px"]);
+    // « Modifier une valeur… » (600 px), sans libre : mesuré sous la borne du menu, il reste à sa place et à sa hauteur.
+    naturelle = 600;
+    placerBulle(feuille, usage);
+    assert.deepEqual([px("--bulle-haut"), px("--bulle-hauteur")], ["504px", "280px"], "sans libre, la borne d'avant tient le panneau");
+    // Libre : mesuré entier, il remonte, et tient sur toute sa hauteur.
+    const avant = feuille.style.ecritures.length;
+    placerBulle(feuille, { ...usage, libre: true });
+    assert.deepEqual([px("--bulle-haut"), px("--bulle-hauteur")], ["184px", "600px"]);
+    assert.deepEqual(feuille.style.ecritures.slice(avant), [["--bulle-hauteur", null], ["--bulle-gauche", "648px"], ["--bulle-haut", "184px"], ["--bulle-fleche", "436px"], ["--bulle-hauteur", "600px"]], "le retrait, puis les quatre écritures");
   } finally {
     retirer();
   }

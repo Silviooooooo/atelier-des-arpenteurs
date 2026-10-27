@@ -252,6 +252,42 @@ test("l'appui long d'une demi-seconde : hors Mode MJ la phrase, en Mode MJ le me
   }
 });
 
+test("l'appui long qui aboutit demande à l'écran d'avaler le clic qui le suit, où qu'il tombe (vague 4, W1 n° 5, R2 n° 11) : une fois, après le menu ; relâché avant, rien ; la vignette n'avale alors rien elle-même (C4)", () => {
+  const { partie, appels, minuteur, retirer } = monter({ camp: "pj", vignettes: [aubepine()] }, { modeMj: true });
+  try {
+    const avales = [];
+    // L'action que l'écran donne en plus (actions.avalerLeClicSuivant) : la partie la demande, si elle est là.
+    const actions = { executer: (commande, origine) => appels.push(["executer", commande, origine]), ouvrirMenuMj: (id) => appels.push(["ouvrirMenuMj", id]), dire: () => {}, avalerLeClicSuivant: () => avales.push(appels.length) };
+    const autre = creer(actions, { minuteur });
+    document.body.append(autre.noeud);
+    autre.rendre({ camp: "pj", vignettes: [aubepine()] }, { modeMj: true });
+    const a = boutonDe(autre, "Aubépine Crèmebrûlée");
+    a.declencher("pointerdown", { pointerType: "touch", button: 0 });
+    a.declencher("pointerup");
+    assert.deepEqual(avales, [], "relâché avant la demi-seconde : rien à avaler");
+    a.declencher("pointerdown", { pointerType: "touch", button: 0 });
+    minuteur.avancer();
+    assert.deepEqual(appels.map(([nom]) => nom), ["ouvrirMenuMj"]);
+    assert.deepEqual(avales, [1], "une fois, le menu ouvert");
+    // L'écran avale ce clic-là : la vignette n'avale rien elle-même. Le menu fermé, Entrée sur elle (un clic
+    // sans pointerdown, qui n'a pas suivi l'appui) choisit (vague 4, C4).
+    a.click();
+    assert.deepEqual(appels.at(-1), ["executer", { choisir: "pj1" }, "vignette"], "Entrée après le menu : le choix, pas un clic avalé");
+    // Sans l'action (une partie montée seule), l'appui long ne lève rien ; la vignette avale elle-même le clic qui le suit, une fois.
+    const seule = boutonDe(partie, "Aubépine Crèmebrûlée");
+    seule.declencher("pointerdown", { pointerType: "touch", button: 0 });
+    minuteur.avancer();
+    assert.equal(avales.length, 1);
+    const nombre = appels.length;
+    seule.click();
+    assert.equal(appels.length, nombre, "le clic qui suit l'appui long est avalé");
+    seule.click();
+    assert.deepEqual(appels.at(-1), ["executer", { choisir: "pj1" }, "vignette"], "le suivant choisit");
+  } finally {
+    retirer();
+  }
+});
+
 test("d'un rendu à l'autre : chaque protagoniste garde son bouton (et le focus) ; une vue égale ne récrit rien ; un retiré s'en va", () => {
   const { partie, retirer } = monter({ camp: "adv", vignettes: [chef(), marmiton2()] });
   try {

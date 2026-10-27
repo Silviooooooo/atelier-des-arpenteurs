@@ -497,6 +497,25 @@ test("La source : une capacité de l'acteur, du jeté ou du porteur d'un état ;
   accepte(jugerEffet(porte, rendre({ genre: "etat", effet: 7 })));
 });
 
+// La mission, § 4.6 : « une autre capacité de l'auteur ou de la cible » ; § 7 :
+// « Aubépine : souffle 4 → 7 (Boire le bouillon). », un effet hors d'un geste.
+test("La source, hors d'un geste : une capacité du protagoniste que l'effet vise, qui en est l'auteur ; pas celle d'un autre", () => {
+  // Aubépine ne porte aucun état, et a perdu un point de corps.
+  const blesse = combat({ retoucher: (brut) => brut.protagonistes.pj1.corps-- });
+  assert.equal(blesse.effets.length, 0, "personne ne porte d'état");
+  const flambage = deCapacite(blesse, "pj1", "Flambage");
+  const { etat: rendu, effet: fait } = appliquer(blesse, effet("rendre", { sur: "pj1", ressource: "corps", n: 1 }, flambage));
+  assert.deepEqual([fait.auteur, fait.camp, courantDe(rendu, "pj1").corps], ["pj1", "pj", courantDe(blesse, "pj1").corps + 1]);
+  // L'écart d'un adversaire, par l'une de ses capacités : il en est l'auteur, son camp dit la durée.
+  const { effet: parLeMarmiton } = appliquer(blesse, effet("attaque", { sur: "adv2", n: 1, duree: "tour" }, deCapacite(blesse, "adv2", "Frappe")));
+  assert.deepEqual([parLeMarmiton.auteur, parLeMarmiton.camp], ["adv2", "adv"]);
+  // La capacité d'un autre que le visé, non.
+  refuse(jugerEffet(blesse, effet("defense", { sur: "adv2", n: -1, duree: "tour" }, flambage)), "hors_bornes", "Cette capacité ne peut pas être la source de cet effet.");
+  // Pendant un geste, le visé n'y suffit pas : l'acteur et le jeté seuls.
+  const dans = avecGestes(combat(), auBilan());
+  refuse(jugerEffet(dans, effet("defense", { sur: "adv3", n: -1, duree: "tour" }, deCapacite(dans, "adv3", "Frappe"))), "hors_bornes", "Cette capacité ne peut pas être la source de cet effet.");
+});
+
 test("L'auteur et le camp : l'acteur du geste ; hors d'un geste, le porteur, ou le camp qui joue", () => {
   const dans = avecGestes(combat({ camp: "adv" }), auBilan());
   const { effet: duGeste } = appliquer(dans, effet("ajouter", { n: 1 }));

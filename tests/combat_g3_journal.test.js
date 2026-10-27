@@ -4,7 +4,8 @@
 // la contre-attaque dans la ligne du geste qu'elles suivent, « Intervenir… »,
 // attendre et la capacité gardée, le coup critique, les dés, la zone et les
 // dégâts de la palette, le report, l'attaque en plus, rendre, ±N, les états,
-// déplacer, la blessure choisie, plusieurs cibles, les échéances, le MJ, et
+// déplacer, l'ordre des phrases d'un jet de caractéristique, la blessure
+// choisie, plusieurs cibles et « toute la case », les échéances, le MJ, et
 // l'annulation des gestes neufs.
 //
 // Les lignes sortent de combats joués par le moteur (js/combat/moteur.js),
@@ -530,6 +531,34 @@ test("pendant un geste, les phrases d'effet : « pour ce jet » après les sourc
   assert.equal(fin.texte, "Combat terminé : victoire des PJ.");
 });
 
+// La mission, § 7 : « avant le premier dé, elles viennent après la phrase des
+// sources ». Un jet de caractéristique qui en a garde l'acteur en tête de
+// ligne : son début fait sa propre phrase (gabarit à confirmer).
+test("un jet de caractéristique : la phrase des sources, puis un effet « pour ce jet », avant son premier dé ; son début a alors sa phrase ; sans elles, une seule phrase", () => {
+  const depart = combat(surD4(AUBEPINE, MARMITON));
+  const gouter = source(depart, "pj1", "Goûter");
+  const preparer = (...effets) => [capacite(depart, "pj1", "Goûter"), regler("caracteristiques", ["sens"]), regler("difficulte", 6), ...effets];
+  const ouvert = jouer(depart, preparer(regler("avantages", 1, "Minutie"), effet("desavantages", { nombre: 1 }, gouter), effet("etat", { sur: "pj1", capacite: ETOURDI, duree: "jet" }, gouter)), d8(7));
+  const DEBUT =
+    "Aubépine : Goûter. Son avantage (à la main : Minutie) et son désavantage (Goûter) s'annulent. Aubépine : état Étourdi (Goûter), pour ce jet. d8 (Sens) contre 6 (compliqué) → 7 ✓";
+  assert.equal(verifier(ligneEnCours(ouvert)).texte, `${DEBUT}${SUITE}`, "la ligne en cours en est le début exact");
+  const [ligne] = ecrites(depart, jouer(ouvert, d8(2), APPLIQUER));
+  assert.equal(ligne.texte, `${DEBUT}, 2 ✗ : 1 réussite.`);
+  assert.deepEqual(ligne.phrases, ["ouverture", "sources", "etat", "jet"]);
+  assert.deepEqual(phrase(ligne, 0), [
+    ["acteur", "Aubépine", "pj"],
+    ["texte", " : ", null],
+    ["capacite", "Goûter", null],
+    ["texte", ".", null],
+  ]);
+
+  // L'effet seul, sans phrase des sources ; puis sans rien : la phrase d'aujourd'hui.
+  const seul = jouer(depart, preparer(effet("etat", { sur: "pj1", capacite: ETOURDI, duree: "jet" }, gouter)), d8(7), d8(2), APPLIQUER);
+  assert.deepEqual(textes(depart, seul), ["Aubépine : Goûter. Aubépine : état Étourdi (Goûter), pour ce jet. d8 (Sens) contre 6 (compliqué) → 7 ✓, 2 ✗ : 1 réussite."]);
+  const sans = jouer(depart, preparer(), d8(7), d8(2), APPLIQUER);
+  assert.deepEqual(textes(depart, sans), ["Aubépine : Goûter, d8 (Sens) contre 6 (compliqué) → 7 ✓, 2 ✗ : 1 réussite."]);
+});
+
 // Le seul gabarit écrit aussi sur un geste retouché : l'effet ±N d'un
 // adversaire appliqué pendant un geste porte sa valeur avant et après
 // (js/combat/effets.js) ; le journal les lit dans l'effet, et ne les
@@ -614,6 +643,28 @@ test("plusieurs cibles : une ligne par cible, son rang, la première porte le co
   );
   const seule = jouer(isolee, capacite(isolee, "adv2", "Moulinet farineux"), d8(8), d8(8), d8(8), APPLIQUER);
   assert.equal(textes(isolee, seule)[0], "Chef : Moulinet farineux [1] (5 souffle) contre Aubépine. Aubépine lance sa défense, d8 contre 5 → 8 ✓, 8 ✓, 8 ✓ : 3 réussites, aucun dégât.");
+});
+
+// La mission, § 4.6 : « Chaque effet appliqué […] s'écrit au journal ». Le
+// gabarit est neuf, à confirmer : « , toute la case (Frappe) ».
+test("toute la case : à la fin du bilan de la première cible, après les opérations, avec sa source et le prix d'un passif ; la cible suivante n'en dit rien", () => {
+  const depart = combat(surD4(AUBEPINE, MARMITON, MARMITON));
+  const frappe = source(depart, "pj1", "Frappe");
+  const premiere = (depuis, ...avant) =>
+    jouer(depart, capacite(depart, "pj1", "Frappe"), viser("adv2"), d8(8), d8(7), d8(2), ...avant, effet("toute_la_case", { cibles: ["adv2", "adv3"] }, depuis), d20(5), APPLIQUER);
+  const fini = jouer(premiere(frappe, effet("multiplier", { k: 2 }, frappe)), d8(8), d8(2), d20(5), APPLIQUER);
+  const [ligne, suivante] = ecrites(depart, fini);
+  assert.equal(
+    ligne.texte,
+    "Aubépine : Frappe contre Marmiton n° 1, cible 1 sur 2. d8 contre 5 → 8 ✓, 7 ✓, 2 ✗ : 2 réussites, B = 10, ×2 (Frappe) : 20, toute la case (Frappe). " +
+      "Localisation d20 → 5 : torse. Armure 10 → 0, endurance 5 → 0, corps 10 → 5. Blessure (torse), sans effet calculé.",
+  );
+  assert.deepEqual(ligne.phrases, ["ouverture", "jet", "localisation", "degats", "blessures"]);
+  assert.equal(suivante.texte, "Aubépine : Frappe contre Marmiton n° 2, cible 2 sur 2. d8 contre 5 → 8 ✓, 2 ✗ : 1 réussite, A = 5. Localisation d20 → 5 : torse. Armure 10 → 5.");
+
+  const bilan = (etat) => ecrites(depart, etat)[0].texte.split(" Localisation")[0];
+  assert.equal(bilan(premiere(source(depart, "pj1", "Nez fin"))), "Aubépine : Frappe contre Marmiton n° 1, cible 1 sur 2. d8 contre 5 → 8 ✓, 7 ✓, 2 ✗ : 2 réussites, B = 10, toute la case (Nez fin, 1 souffle).");
+  assert.equal(bilan(premiere(MJ)), "Aubépine : Frappe contre Marmiton n° 1, cible 1 sur 2. d8 contre 5 → 8 ✓, 7 ✓, 2 ✗ : 2 réussites, B = 10, toute la case (MJ).");
 });
 
 // ─── Les échéances ──────────────────────────────────────────────────────────

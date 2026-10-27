@@ -263,8 +263,11 @@ test("le module — son en-tête ; dom.js seul ; ni style, ni défilement, ni st
   assert.match(enTete, /SPECIFICATION\.md, § 17/);
   assert.match(enTete, /Pourquoi il existe/);
   assert.deepEqual([...SOURCE.matchAll(/^import .* from "(.*)";$/gm)].map(([, chemin]) => chemin), ["./dom.js"]);
-  assert.match(SOURCE, /^export function creer\(actions, \{ minuteur = null \} = \{\}\) \{$/m);
-  assert.match(SOURCE, /return \{ noeud, ouvrir, fermer, rendre, ouvert: \(\) => genre \};/);
+  // À la vague 4 : « placer » (W1 n° 8), secours() et aUneBoite (R2 n° 6).
+  assert.match(SOURCE, /^export function creer\(actions, \{ minuteur = null, placer = null \} = \{\}\) \{$/m);
+  // Puis (relecture des correctifs, C2 et C6) : suspendre(), reprendre() et replacer().
+  assert.match(SOURCE, /return \{ noeud, ouvrir, fermer, rendre, suspendre, reprendre, replacer, ouvert: \(\) => genre, secours: \(\) => \(genre === null \? null : ancreDeSecours\) \};/);
+  assert.deepEqual([...SOURCE.matchAll(/^export (?:function|const) (\w+)/gm)].map(([, nom]) => nom), ["aUneBoite", "creer"]);
   const INTERDITS = {
     "une écriture de style": /\.style\s*(?:\?\.|\.|\[|=(?!=))|\bsetProperty\s*\(|\bcssText\b|setAttribute\(\s*["'`]style/,
     "un défilement": /scrollIntoView|scrollTo|scrollBy|\.scroll\s*\(|scrollTop\s*=/,
@@ -272,7 +275,8 @@ test("le module — son en-tête ; dom.js seul ; ni style, ni défilement, ni st
     "une insertion de HTML": /innerHTML|outerHTML|insertAdjacentHTML/,
     "un écouteur global": /(?:globalThis|window|document)\.addEventListener/,
     "un bouton sorti de l'ordre du clavier": /\.disabled\s*=|disabled:\s*true/,
-    "une région polie de plus": /aria-live|role: "status"|role: "alert"/,
+    // Écrire aria-live, jamais ; le lire, oui : la couche épargne la région d'annonce quand elle endort le reste (vague 4, R2 n° 5).
+    "une région polie de plus": /["'`]aria-live["'`]\s*[:,]|role: "status"|role: "alert"/,
   };
   for (const [quoi, motif] of Object.entries(INTERDITS)) assert.doesNotMatch(SOURCE, motif, quoi);
   // Chaque focus, sans défiler.
@@ -367,6 +371,55 @@ dansUnDocument("⋯ — ✕, Échap et le voile ferment, et le focus revient à 
   const avant = globalThis.document.focalisations.length;
   menus.fermer();
   assert.equal(globalThis.document.focalisations.length, avant);
+});
+
+// Mesuré dans Edge (vague 4, M) : l'appui long ouvre le menu du MJ, le voile paraît sous le doigt, et le
+// mousedown que le navigateur tire de l'appui y tombait ; son défaut portait le focus sur main#ecran,
+// hors de la feuille : Échap n'était plus pris, ni Tab retenu.
+dansUnDocument("la couche — un appui sur le voile n'y porte pas le focus : son mousedown est empêché, et rien ne se ferme avant le clic", () => {
+  const { menus, voile, ancre } = couche();
+  menus.ouvrir("combat", { ancre });
+  let empeche = false;
+  voile.declencher("mousedown", { preventDefault() { empeche = true; } });
+  assert.equal(empeche, true, "le mousedown du voile est empêché");
+  assert.equal(menus.ouvert(), "combat", "l'appui seul ne ferme rien");
+  voile.click();
+  assert.equal(menus.ouvert(), null, "le clic ferme, comme avant");
+});
+
+// Mesuré dans Edge (vague 4, M) : un clic sur ce qui ne prend pas le focus dans la feuille (sa phrase, sa marge),
+// ou l'appui long quand la feuille monte sous le doigt (320 px), portait le focus sur main#ecran, hors du dialogue,
+// et Échap ne la fermait plus. La feuille le prend elle-même (tabindex -1), sans entrer dans l'ordre de Tab.
+dansUnDocument("la couche — la feuille prend le focus d'un clic sur ce qui ne le prend pas (tabindex -1), hors de l'ordre de Tab", () => {
+  const { menus, feuille, ancre } = couche();
+  assert.equal(feuille.getAttribute("tabindex"), "-1");
+  menus.ouvrir("combat", { ancre });
+  feuille.focus({ preventScroll: true });
+  focusSur(feuille);
+  // Tab depuis la feuille elle-même mène à sa première commande, et Échap la ferme.
+  let retenu = false;
+  menus.noeud.declencher("keydown", { key: "Tab", shiftKey: false, preventDefault() { retenu = true; } });
+  assert.equal(retenu, true, "Tab est retenu dans la feuille");
+  assert.equal(echapSur(menus.noeud), true);
+  assert.equal(menus.ouvert(), null);
+});
+
+// Relecture finale (R7) : le plein écran restait sans tabindex. Un clic sur le texte d'une fiche (un details,
+// hors de son summary et de ses boutons) portait le focus sur main#ecran, hors du dialogue, et Échap ne le
+// fermait plus. Il le prend lui aussi (tabindex -1), sans entrer dans l'ordre de Tab.
+dansUnDocument("la couche — le plein écran prend lui aussi le focus d'un clic sur ce qui ne le prend pas (tabindex -1), hors de l'ordre de Tab (relecture finale, R7)", () => {
+  const { menus, plein, ancre } = couche();
+  assert.equal(plein.getAttribute("tabindex"), "-1");
+  const texte = globalThis.document.createElement("p");
+  menus.ouvrir("fiches", { ancre, titre: "Fiches", contenu: [texte] });
+  plein.focus({ preventScroll: true });
+  focusSur(plein);
+  let retenu = false;
+  menus.noeud.declencher("keydown", { key: "Tab", shiftKey: false, preventDefault() { retenu = true; } });
+  assert.equal(retenu, true, "Tab est retenu dans le plein écran");
+  assert.equal(echapSur(menus.noeud), true);
+  assert.equal(menus.ouvert(), null);
+  focusSur(ancre, "Échap : le focus revient à ce qui l'avait ouvert");
 });
 
 dansUnDocument("☰ — les liens de la navigation du site, relus à l'ouverture, tels quels ; « L'Atelier des Arpenteurs » ; un lien suivi ferme la feuille", () => {
@@ -1063,10 +1116,11 @@ dansUnePage("⋯ et le Mode MJ (F13) — la feuille du combat ; l'interrupteur, 
   assert.deepEqual(stockage.ecrits.at(-1), ["atelier.mode-mj", "0"]);
   assert.equal(annonce(ecran), "Mode MJ éteint.");
   assert.equal(cache(un(barre(ecran), "span.combat-mj")), true);
-  // « Journal » et « Fiches » ouvrent le plein écran ; « ⋯ » se referme.
+  // « Journal » et « Fiches » ouvrent le plein écran, à la place de la feuille. « ⋯ », au téléphone, ouvre un dialogue
+  // et ne se dit jamais développé (vague 4, R2 n° 15).
   await cliquer(boutonDit(feuille, "Journal"));
   assert.equal(texteDe(un(pleinDe(ecran), "#combat-plein-titre")), "Journal");
-  assert.equal(plus.getAttribute("aria-expanded"), "false");
+  assert.deepEqual([cache(feuille), plus.getAttribute("aria-expanded"), plus.getAttribute("aria-haspopup")], [true, null, "dialog"]);
 
   // Sur PC, l'interrupteur est dans l'en-tête de la carte, avec la ligne du clic droit quand il est allumé.
   const { ecran: large } = await ouvrirLEcran(await pageNeuve(), {});
@@ -1382,3 +1436,965 @@ dansUnePage("le plein écran au téléphone (A8) — la dernière ligne et ⋯ o
   assert.equal(cache(plein), false);
   focusSur(un(fiche(ecran, "pj1"), "summary"));
 });
+
+// ─── La vague 4 : le focus, l'écran et le menu du MJ ────────────────────────
+//
+// Les défauts de la relecture finale (R2, W1), chacun vu avant d'être
+// corrigé : la feuille modale qui retient le focus, le focus rendu quand
+// l'ancre n'a plus de boîte, la fiche complète et « Jouer » depuis les fiches
+// en plein écran, « Terminer » au téléphone, le journal en plein écran sur sa
+// dernière ligne, le clic qui suit l'appui long, la bulle qui s'élargit, le
+// menu du MJ près du jeton sur PC, « ⋯ » au téléphone et l'état de la garde.
+
+/** Tab (ou Maj+Tab) sur la couche : rend vrai si elle l'a pris. */
+function tabSur(noeud, { shift = false } = {}) {
+  let pris = false;
+  noeud.declencher("keydown", {
+    key: "Tab",
+    shiftKey: shift,
+    preventDefault() {
+      pris = true;
+    },
+  });
+  return pris;
+}
+
+dansUnDocument("la couche, modale (vague 4, R2 n° 5) — ouverte, le reste de la page est inerte, sauf une région d'annonce ; Tab et Maj+Tab bouclent dans la feuille ou le plein écran ; fermée, plus rien d'inerte", () => {
+  const { menus, feuille, plein, ancre } = couche();
+  const annonce = globalThis.document.createElement("p");
+  annonce.setAttribute("aria-live", "polite");
+  const alerte = globalThis.document.createElement("div");
+  alerte.setAttribute("role", "alert");
+  globalThis.document.body.append(annonce, alerte);
+  menus.ouvrir("combat", { ancre });
+  assert.equal(ancre.hasAttribute("inert"), true, "ce qui est sous le voile est inerte");
+  assert.deepEqual([annonce.hasAttribute("inert"), alerte.hasAttribute("inert"), menus.noeud.hasAttribute("inert")], [false, false, false], "une région d'annonce parle toujours ; la couche reste vivante");
+  const prenables = tous(feuille, "button").filter((bouton) => !cache(bouton.parentNode));
+  const premier = prenables[0];
+  const dernier = prenables.at(-1);
+  memeNoeud(premier, repere(feuille, "fermer"), "le premier : ✕");
+  memeNoeud(dernier, repere(feuille, "nouveau"), "le dernier : « Nouveau combat »");
+  dernier.focus({ preventScroll: true });
+  assert.equal(tabSur(menus.noeud), true, "Tab, sur le dernier, est pris");
+  focusSur(premier, "Tab, sur le dernier : le premier");
+  assert.equal(tabSur(menus.noeud, { shift: true }), true);
+  focusSur(dernier, "Maj+Tab, sur le premier : le dernier");
+  repere(feuille, "fiches").focus({ preventScroll: true });
+  assert.equal(tabSur(menus.noeud), false, "au milieu, Tab suit son cours");
+  un(feuille, "#combat-feuille-titre").focus({ preventScroll: true });
+  assert.equal(tabSur(menus.noeud, { shift: true }), true);
+  focusSur(dernier, "Maj+Tab, sur le titre : le dernier");
+  premier.click();
+  assert.equal(ancre.hasAttribute("inert"), false, "fermée, plus rien d'inerte");
+  focusSur(ancre);
+  // Le plein écran boucle de même, de ✕ à son dernier bouton.
+  const fin = globalThis.document.createElement("button");
+  menus.ouvrir("journal", { titre: "Journal", contenu: [fin], ancre });
+  assert.equal(ancre.hasAttribute("inert"), true);
+  fin.focus({ preventScroll: true });
+  assert.equal(tabSur(menus.noeud), true);
+  focusSur(repere(plein, "fermer"));
+  menus.fermer();
+  assert.equal(ancre.hasAttribute("inert"), false);
+});
+
+dansUnDocument("le focus rendu quand l'ancre n'a plus de boîte (vague 4, R2 n° 6) — il va à l'ancre du genre remplacé, gardée à l'ouverture ; l'ancre elle-même quand elle se voit ; secours() la rend à l'écran", () => {
+  const { menus, ancre } = couche();
+  const fiches = globalThis.document.createElement("div");
+  const modifier = globalThis.document.createElement("button");
+  fiches.append(modifier);
+  // Les fiches prêtées au plein écran ; rendues à la page, la feuille de style les y cache (au téléphone).
+  const ouvrirLesFiches = (cachees) =>
+    menus.ouvrir("fiches", {
+      titre: "Fiches",
+      contenu: [fiches],
+      ancre,
+      apres: () => {
+        globalThis.document.body.append(fiches);
+        fiches.sansBoite = cachees;
+      },
+    });
+  ouvrirLesFiches(true);
+  menus.ouvrir("mj", { id: "adv4", ancre: modifier });
+  assert.equal(menus.ouvert(), "mj");
+  assert.ok(menus.secours() === ancre, "le secours : l'ancre des fiches remplacées");
+  menus.fermer();
+  focusSur(ancre, "« Modifier… » caché avec les fiches : le focus va à ce qui les avait ouvertes");
+  // Les fiches visibles : le focus revient à « Modifier… ».
+  ouvrirLesFiches(false);
+  menus.ouvrir("mj", { id: "adv4", ancre: modifier });
+  menus.fermer();
+  focusSur(modifier, "l'ancre se voit : elle reprend le focus");
+  // Un genre ouvert sans en remplacer un autre n'a pas de secours.
+  menus.ouvrir("combat", { ancre });
+  assert.equal(menus.secours(), null);
+  menus.fermer();
+});
+
+dansUnDocument("le menu du MJ sur PC (vague 4, W1 n° 8) — placé contre ce qui l'ouvre (placer, que l'écran donne : echelle.js seul écrit le style), ses panneaux aussi ; au téléphone, ou l'ancre sans boîte, la feuille du bas ou le dialogue du milieu", () => {
+  const places = [];
+  const espion = espionDActions();
+  const menus = creerLesMenus(espion.actions, { minuteur: minuteurSimule(), placer: (noeud, ancre) => places.push([noeud, ancre]) });
+  const ancre = globalThis.document.createElement("button");
+  globalThis.document.body.append(ancre, menus.noeud);
+  menus.rendre({ barre: barreDuTour(), modeMj: true, etroit: false, menuMj: (id, saisies) => (id === "adv4" ? menuDuMarmiton(saisies) : null), equipement: () => null });
+  const feuille = un(menus.noeud, "section.combat-feuille");
+  menus.ouvrir("mj", { id: "adv4", ancre });
+  assert.equal(feuille.className, "combat-feuille combat-menu-contexte");
+  assert.equal(places.length, 1, "placé une fois, à l'ouverture");
+  assert.ok(places[0][0] === feuille && places[0][1] === ancre, "la feuille, contre l'ancre");
+  repere(feuille, "mj-valeurs").click();
+  assert.equal(menus.ouvert(), "valeurs");
+  assert.equal(feuille.className, "combat-feuille combat-menu-contexte", "« Modifier une valeur… » : son panneau à côté");
+  assert.ok(places.at(-1)[0] === feuille && places.at(-1)[1] === ancre, "contre la même ancre");
+  menus.fermer();
+  // Au téléphone : la feuille du bas, rien de placé.
+  const avant = places.length;
+  menus.rendre({ etroit: true });
+  menus.ouvrir("mj", { id: "adv4", ancre });
+  assert.deepEqual([feuille.className, places.length], ["combat-feuille", avant]);
+  menus.fermer();
+  // Sur PC, une ancre sans boîte : le dialogue du milieu, rien de placé.
+  menus.rendre({ etroit: false });
+  ancre.sansBoite = true;
+  menus.ouvrir("mj", { id: "adv4", ancre });
+  assert.deepEqual([feuille.className, places.length], ["combat-feuille", avant]);
+  menus.fermer();
+});
+
+dansUnDocument("la couche — suspendre() efface la feuille ouverte, sans la fermer, le temps qu'une case se choisisse : ni voile, ni inerte, la phrase dite ; reprendre() la rend telle quelle ; remplacée ou fermée entre-temps, rien ne revient (vague 4, C2)", () => {
+  const { menus, feuille, voile, ancre, appels } = couche();
+  const palette = globalThis.document.createElement("section");
+  palette.append(globalThis.document.createElement("h2"));
+  const ouvrirLaPalette = () => menus.ouvrir("palette", { noeud: palette, nom: "Effet de Frappe", ancre });
+  ouvrirLaPalette();
+  assert.equal(ancre.hasAttribute("inert"), true, "sous le voile, la page est inerte");
+  assert.equal(menus.suspendre(), true);
+  assert.equal(menus.ouvert(), "palette", "rien ne s'est fermé");
+  assert.deepEqual([cache(feuille), cache(voile), ancre.hasAttribute("inert")], [true, true, false], "ni feuille, ni voile, ni inerte : la carte se touche et se prend au clavier");
+  assert.ok(feuille.contains(palette), "la palette reste dans sa feuille");
+  assert.deepEqual(appels.at(-1), ["dire", "Touchez la case d'arrivée."]);
+  assert.equal(tabSur(menus.noeud), false, "Tab ne boucle plus dans la feuille effacée");
+  assert.equal(menus.suspendre(), false, "une seule fois");
+  menus.reprendre();
+  assert.deepEqual([menus.ouvert(), cache(feuille), cache(voile), ancre.hasAttribute("inert")], ["palette", false, false, true], "rendue telle quelle");
+  // Remplacée pendant le choix : le genre neuf se montre, sous son voile ; reprendre n'y change rien.
+  menus.suspendre();
+  menus.ouvrir("combat", { ancre });
+  menus.reprendre();
+  assert.deepEqual([menus.ouvert(), cache(feuille), cache(voile), ancre.hasAttribute("inert")], ["combat", false, false, true]);
+  menus.fermer();
+  // Fermée pendant le choix : reprendre ne rouvre rien.
+  ouvrirLaPalette();
+  menus.suspendre();
+  menus.fermer({ focus: false });
+  menus.reprendre();
+  assert.deepEqual([menus.ouvert(), cache(feuille), cache(voile), ancre.hasAttribute("inert")], [null, true, true, false]);
+  // Un plein écran ne s'efface pas ; rien d'ouvert non plus.
+  assert.equal(menus.suspendre(), false);
+  menus.ouvrir("journal", { titre: "Journal", contenu: [], ancre });
+  assert.equal(menus.suspendre(), false);
+  menus.fermer();
+});
+
+dansUnDocument("le menu du MJ sur PC se replace quand la fenêtre change de taille (replacer ; vague 4, C6) — contre la même ancre, « Modifier une valeur… » compris ; au téléphone, l'ancre sans boîte, un autre genre : rien de placé", () => {
+  const places = [];
+  const espion = espionDActions();
+  const menus = creerLesMenus(espion.actions, { minuteur: minuteurSimule(), placer: (noeud, ancre) => places.push([noeud, ancre]) });
+  const ancre = globalThis.document.createElement("button");
+  globalThis.document.body.append(ancre, menus.noeud);
+  menus.rendre({ barre: barreDuTour(), modeMj: true, etroit: false, menuMj: (id, saisies) => (id === "adv4" ? menuDuMarmiton(saisies) : null), equipement: () => null });
+  const feuille = un(menus.noeud, "section.combat-feuille");
+  menus.replacer();
+  assert.equal(places.length, 0, "rien d'ouvert : rien à replacer");
+  menus.ouvrir("mj", { id: "adv4", ancre });
+  assert.equal(places.length, 1);
+  menus.replacer();
+  assert.equal(places.length, 2, "replacé");
+  assert.ok(places[1][0] === feuille && places[1][1] === ancre, "la feuille, contre la même ancre");
+  repere(feuille, "mj-valeurs").click();
+  const n = places.length;
+  menus.replacer();
+  assert.equal(places.length, n + 1, "« Modifier une valeur… » aussi, que rendre() ne redessine pas");
+  assert.ok(places.at(-1)[1] === ancre);
+  // Passé au téléphone : la feuille du bas, rien de placé ; revenu sur PC, contre l'ancre de nouveau.
+  menus.rendre({ etroit: true });
+  menus.replacer();
+  assert.deepEqual([feuille.className, places.length], ["combat-feuille", n + 1]);
+  menus.rendre({ etroit: false });
+  menus.replacer();
+  assert.deepEqual([feuille.className, places.length], ["combat-feuille combat-menu-contexte", n + 2]);
+  // L'ancre sans boîte : le dialogue du milieu.
+  ancre.sansBoite = true;
+  menus.replacer();
+  assert.deepEqual([feuille.className, places.length], ["combat-feuille", n + 2]);
+  ancre.sansBoite = false;
+  menus.fermer();
+  // Un genre qui n'est pas du MJ (⋯) ne se place jamais.
+  menus.ouvrir("combat", { ancre });
+  menus.replacer();
+  assert.deepEqual([feuille.className, places.length], ["combat-feuille", n + 2]);
+  menus.fermer();
+});
+
+/** Un clic du doigt, comme un navigateur : la capture de l'écran d'abord ; arrêté là (stopPropagation), ce qu'il touche ne l'entend pas. Rend vrai s'il y est arrivé. */
+async function toucher(noeud) {
+  let ecran = noeud;
+  while (ecran && !(ecran.tagName === "SECTION" && ecran.className.split(" ").includes("combat"))) ecran = ecran.parentNode;
+  assert.ok(ecran, "dans l'écran");
+  let arrete = false;
+  await Promise.all(
+    ecran.declencher("click", {
+      target: noeud,
+      stopPropagation() {
+        arrete = true;
+      },
+    }),
+  );
+  if (arrete) return false;
+  await Promise.all(noeud.click());
+  return true;
+}
+
+/** Un appui long du doigt, au minuteur : pointerdown (la capture de l'écran, puis ce qu'il touche), une demi-seconde, puis pointerup. */
+function appuiLong(ecran, noeud, minuteur) {
+  ecran.declencher("pointerdown", { target: noeud, pointerType: "touch", button: 0 });
+  noeud.declencher("pointerdown", { pointerType: "touch", button: 0 });
+  minuteur.lancer(500);
+  noeud.declencher("pointerup", { pointerType: "touch", button: 0 });
+}
+
+/** Le premier appui d'un geste neuf : la capture de l'écran le voit. */
+const appuyer = (ecran, noeud) => ecran.declencher("pointerdown", { target: noeud, pointerType: "touch", button: 0 });
+
+/** Le titre de la feuille ouverte. */
+const titreDeLaFeuille = (ecran) => texteDe(un(feuilleDe(ecran), "#combat-feuille-titre"));
+
+const vignetteDe = (ecran, entier) => boutonOu(ecran, (b) => b.className.split(" ")[0] === "combat-vignette" && (b.getAttribute("aria-label") ?? "").startsWith(entier), `la vignette de ${entier}`);
+
+dansUnePage(
+  "l'appui long (Mode MJ) qui ouvre le menu avale le clic qui le suit, où qu'il tombe (vague 4, W1 n° 5, R2 n° 11) : le voile ne le referme pas ; l'appui suivant agit, qu'un clic soit venu ou non",
+  async (page) => {
+    const { ecran, minuteur } = await combatLance(page, { etroit: true });
+    const feuille = feuilleDe(ecran);
+    const voile = un(ecran, "div.combat-voile");
+    // La vignette : le menu s'ouvre, le voile paraît sous le doigt ; le clic qui suit tombe sur lui.
+    appuiLong(ecran, vignetteDe(ecran, "Aubépine Crèmebrûlée"), minuteur);
+    assert.equal(cache(feuille), false, "l'appui long ouvre le menu");
+    assert.equal(await toucher(voile), false, "le clic qui suit l'appui long est avalé");
+    assert.equal(cache(feuille), false, "le menu reste ouvert");
+    // L'appui suivant touche la première entrée : elle agit.
+    appuyer(ecran, repere(feuille, "mj-valeurs"));
+    assert.equal(await toucher(repere(feuille, "mj-valeurs")), true);
+    assert.equal(texteDe(un(feuille, "#combat-feuille-titre")), "Modifier — Aubépine Crèmebrûlée");
+    ecran.declencher("keydown", { key: "Escape", preventDefault() {} });
+    // Le jeton : le menu s'ouvre ; aucun clic ne suit (le navigateur n'en envoie pas toujours) : l'appui suivant agit.
+    appuiLong(ecran, jeton(ecran, "Marmiton de corvée n° 2"), minuteur);
+    assert.equal(texteDe(un(feuille, "#combat-feuille-titre")), "Marmiton de corvée n° 2");
+    appuyer(ecran, repere(feuille, "mj-valeurs"));
+    assert.equal(await toucher(repere(feuille, "mj-valeurs")), true, "un appui neuf n'est jamais avalé");
+    assert.equal(titreDeLaFeuille(ecran), "Modifier — Marmiton de corvée n° 2");
+    // Au clavier aussi : une touche, et rien ne reste à avaler.
+    ecran.declencher("keydown", { key: "Escape", preventDefault() {} });
+    appuiLong(ecran, jeton(ecran, "Marmiton de corvée n° 2"), minuteur);
+    ecran.declencher("keydown", { key: "ArrowDown" });
+    assert.equal(await toucher(repere(feuille, "mj-valeurs")), true, "une touche du clavier finit l'attente du clic");
+  },
+  { modeMj: "1" },
+);
+
+dansUnePage("au téléphone, « Fiche complète » depuis les fiches en plein écran (vague 4, R2 n° 2) — elle s'ouvre dans le plein écran, jamais dans la page ; Échap la ferme, et le focus revient à « ⋯ »", async (page) => {
+  const { ecran } = await combatLance(page, { etroit: true });
+  const plus = un(barre(ecran), "button.combat-plus-bouton");
+  const panneau = un(ecran, "section.combat-panneau");
+  await cliquer(plus);
+  await cliquer(boutonDit(feuilleDe(ecran), "Fiches"));
+  const plein = pleinDe(ecran);
+  await cliquer(repere(fiche(ecran, "pj1"), "fiche-complete"));
+  assert.equal(panneau.children.length, 0, "rien dans la page");
+  assert.equal(cache(plein), false);
+  assert.equal(texteDe(un(plein, "#combat-plein-titre")), "Fiche complète : Aubépine Crèmebrûlée");
+  assert.ok(plein.children.length > 1, "la fiche, sous la tête du plein écran");
+  focusSur(un(plein, "#combat-plein-titre"));
+  ecran.declencher("keydown", { key: "Escape", preventDefault() {} });
+  assert.equal(cache(plein), true);
+  assert.equal(panneau.children.length, 0);
+  focusSur(plus, "le focus revient à « ⋯ », qui avait ouvert les fiches");
+  assert.equal(un(ecran, ".combat-cadre").children.at(-1).className.split(" ")[0], "combat-camps", "les fiches rendues au cadre");
+});
+
+dansUnePage("la fiche complète ouverte dans la page sur PC se ferme quand la fenêtre passe au téléphone (vague 4, R2 n° 2) : la page n'y défile plus", async (page) => {
+  let etroit = false;
+  const { ecran } = await combatLance(page, { etroit: () => etroit });
+  const panneau = un(ecran, "section.combat-panneau");
+  await cliquer(repere(fiche(ecran, "pj1"), "fiche-complete"));
+  assert.ok(panneau.children.length > 0, "sur PC, dans la page");
+  etroit = true;
+  await cliquer(vignetteDe(ecran, "Aubépine Crèmebrûlée"));
+  assert.equal(panneau.children.length, 0, "au téléphone, plus rien dans la page");
+});
+
+dansUnePage("au téléphone, « Jouer » depuis les fiches en plein écran (vague 4, R2 n° 7) — le plein écran se ferme, le volet s'ouvre sur qui joue, et prend le focus", async (page) => {
+  const { ecran } = await combatLance(page, { etroit: true });
+  await cliquer(un(barre(ecran), "button.combat-plus-bouton"));
+  await cliquer(boutonDit(feuilleDe(ecran), "Fiches"));
+  await cliquer(repere(fiche(ecran, "pj1"), "jouer"));
+  assert.equal(cache(pleinDe(ecran)), true, "le plein écran se ferme");
+  assert.equal(un(ecran, ".combat-cadre").children.at(-1).className.split(" ")[0], "combat-camps", "les fiches rendues au cadre");
+  assert.equal(vignetteDe(ecran, "Aubépine Crèmebrûlée").getAttribute("aria-pressed"), "true", "Aubépine joue");
+  assert.ok(laBulle(ecran).contains(globalThis.document.activeElement), "le focus dans le volet");
+});
+
+dansUnePage(
+  "au téléphone, le focus rendu par le menu du MJ et la palette ouverts depuis les fiches en plein écran (vague 4, R2 n° 6) — « Modifier… » et « Appliquer l'effet de… » cachés avec les fiches : le focus va à « ⋯ »",
+  async (page) => {
+    const { ecran } = await combatLance(page, { etroit: true });
+    const plus = un(barre(ecran), "button.combat-plus-bouton");
+    const camps = un(ecran, ".combat-camps");
+    const fichesEnPlein = async () => {
+      camps.sansBoite = false;
+      await cliquer(plus);
+      await cliquer(boutonDit(feuilleDe(ecran), "Fiches"));
+    };
+    // « Modifier… » : le menu du MJ prend la place des fiches, qui retournent au cadre, où la feuille de style les cache.
+    await fichesEnPlein();
+    await cliquer(repere(fiche(ecran, "adv4"), "modifier"));
+    assert.equal(titreDeLaFeuille(ecran), "Marmiton de corvée n° 2");
+    camps.sansBoite = true;
+    ecran.declencher("keydown", { key: "Escape", preventDefault() {} });
+    assert.equal(cache(feuilleDe(ecran)), true);
+    focusSur(plus, "le focus va à « ⋯ », qui avait ouvert les fiches");
+    // Un état sur le Marmiton, pour que sa fiche offre « Appliquer l'effet d'Étourdi… ».
+    await fichesEnPlein();
+    await cliquer(repere(fiche(ecran, "adv4"), "modifier"));
+    await cliquer(repere(feuilleDe(ecran), "mj-etats"));
+    await cliquer(tous(feuilleDe(ecran), "button").find((b) => libelleDe(b) === "Étourdi"));
+    await cliquer(repere(feuilleDe(ecran), "appliquer-etat"));
+    // La palette, depuis la fiche en plein écran : Échap la replie.
+    await fichesEnPlein();
+    await cliquer(boutonCommencant(fiche(ecran, "adv4"), "Appliquer l'effet d"));
+    assert.ok(feuilleDe(ecran).contains(paletteDe(ecran)), "la palette, dans une feuille");
+    camps.sansBoite = true;
+    ecran.declencher("keydown", { key: "Escape", preventDefault() {} });
+    assert.equal(cache(feuilleDe(ecran)), true);
+    focusSur(plus, "la palette repliée : le focus va à « ⋯ »");
+  },
+  { modeMj: "1" },
+);
+
+dansUnePage(
+  "au téléphone, la palette appliquée depuis une fiche en plein écran (vague 4, R2 n° 6) — la commande acceptée la replie (executer, origine « palette ») ; « Appliquer l'effet de… » caché avec les fiches : le focus va à « ⋯ », le secours gardé à l'ouverture",
+  async (page) => {
+    const { ecran } = await combatLance(page, { etroit: true });
+    const plus = un(barre(ecran), "button.combat-plus-bouton");
+    const camps = un(ecran, ".combat-camps");
+    const fichesEnPlein = async () => {
+      camps.sansBoite = false;
+      await cliquer(plus);
+      await cliquer(boutonDit(feuilleDe(ecran), "Fiches"));
+    };
+    // Un état sur le Marmiton, pour que sa fiche offre « Appliquer l'effet d'Étourdi… ».
+    await fichesEnPlein();
+    await cliquer(repere(fiche(ecran, "adv4"), "modifier"));
+    await cliquer(repere(feuilleDe(ecran), "mj-etats"));
+    await cliquer(tous(feuilleDe(ecran), "button").find((b) => libelleDe(b) === "Étourdi"));
+    await cliquer(repere(feuilleDe(ecran), "appliquer-etat"));
+    // La palette, depuis la fiche en plein écran : les fiches retournent au cadre, où la feuille de style les cache.
+    await fichesEnPlein();
+    const ouvreur = boutonCommencant(fiche(ecran, "adv4"), "Appliquer l'effet d");
+    await cliquer(ouvreur);
+    const palette = paletteDe(ecran);
+    assert.ok(feuilleDe(ecran).contains(palette), "la palette, dans une feuille");
+    camps.sansBoite = true;
+    // Un genre, puis « Appliquer » : la commande passe par executer, qui replie la palette. L'effet appliqué refait la
+    // fiche : le bouton qui l'avait ouverte quitte la page, sans pareil dans la bulle.
+    const genre = tous(palette, "button").find((b) => (b.getAttribute("data-cle") ?? "").startsWith("genre:") && !inactif(b));
+    assert.ok(genre, "un genre à choisir");
+    await cliquer(genre);
+    const appliquer = un(palette, "[data-cle=appliquer]");
+    assert.equal(inactif(appliquer), false, `« Appliquer » actif après « ${texteDe(genre)} »`);
+    await cliquer(appliquer);
+    assert.equal(paletteMontree(ecran), false, "appliquée, elle se replie");
+    assert.equal(cache(feuilleDe(ecran)), true);
+    assert.equal(ouvreur.isConnected, false, "la fiche refaite");
+    focusSur(plus, "la palette appliquée : le focus va à « ⋯ », qui avait ouvert les fiches");
+  },
+  { modeMj: "1" },
+);
+
+dansUnePage("au téléphone, « Terminer » referme le volet, même quand une action reste (vague 4, R2 n° 9 ; mission, § 3, A6) ; sur PC, la bulle reste sur qui joue", async (page) => {
+  const finirLaFrappe = async (ecran) => {
+    await frappeDAubepine(ecran);
+    for (let pas = 0; pas < 10 && deACliquer(ecran); pas += 1) await cliquer(deACliquer(ecran));
+    const dernier = tous(corps(ecran), "button").find((b) => ["Terminer", "Appliquer"].includes(texteDe(b)) || texteDe(b).startsWith("Passer : "));
+    assert.ok(dernier, `le dernier bouton du geste : ${tous(corps(ecran), "button").map(texteDe).join(" | ")}`);
+    await cliquer(dernier);
+  };
+  const { ecran } = await combatLance(page, { etroit: true, des: [1, 1, 1, 1, 1, 1] });
+  await finirLaFrappe(ecran);
+  const aubepine = vignetteDe(ecran, "Aubépine Crèmebrûlée");
+  assert.match(aubepine.getAttribute("aria-label"), /actions restantes : 1 sur 2/, "une action reste");
+  assert.equal(aubepine.getAttribute("aria-pressed"), "false", "personne n'est plus choisi");
+  assert.equal(texteDe(un(laBulle(ecran), "h2.combat-bulle-titre")), "À qui le tour ?", "le volet au repos");
+  // Sur PC, rien ne change : la bulle reste sur Aubépine.
+  page.oublier();
+  const { ecran: large } = await combatLance(await pageNeuve(), { des: [1, 1, 1, 1, 1, 1] });
+  await finirLaFrappe(large);
+  assert.equal(vignetteDe(large, "Aubépine Crèmebrûlée").getAttribute("aria-pressed"), "true", "Aubépine reste choisie");
+  assert.equal(bulleMontree(large), true);
+});
+
+dansUnePage("au téléphone, le journal en plein écran s'ouvre sur sa dernière ligne (vague 4, W1 n° 6, R2 n° 10)", async (page) => {
+  const { ecran } = await combatLance(page, { etroit: true });
+  const lignes = un(ecran, "ol.combat-lignes");
+  // Cachée dans la page, la liste n'avait pas de hauteur : sa fin ne se voyait pas.
+  lignes.scrollTop = 0;
+  lignes.scrollHeight = 4321;
+  await cliquer(un(ecran, "button.combat-bandeau-journal"));
+  assert.ok(pleinDe(ecran).contains(lignes));
+  assert.equal(lignes.scrollTop, 4321, "la liste portée à sa fin");
+  assert.deepEqual(globalThis.document.defilements, [], "la page ne défile pas");
+});
+
+dansUnePage("sur PC, la bulle qui s'élargit pour la palette se replace (vague 4, W1 n° 4 ; E6, comme en E1) ; repliée, elle se replace encore", async (page) => {
+  const { ecran } = await combatLance(page, { des: [6, 9, 8] });
+  await frappeDAubepine(ecran);
+  const bulle = laBulle(ecran);
+  const places = () => bulle.style.ecritures.filter(([nom]) => nom === "--bulle-gauche").length;
+  const avant = places();
+  await cliquer(boutonDit(corps(ecran), `Appliquer l'effet de Frappe${POINTS}`));
+  assert.ok(bulle.className.split(" ").includes("combat-bulle-large"), "la bulle s'élargit");
+  assert.ok(places() > avant, "élargie, elle se replace");
+  const large = places();
+  await cliquer(un(paletteDe(ecran), "[data-cle=fermer]"));
+  assert.ok(!bulle.className.split(" ").includes("combat-bulle-large"));
+  assert.ok(places() > large, "repliée, elle se replace");
+});
+
+dansUnePage(
+  "sur PC, le menu du MJ s'ouvre près du jeton, et « Modifier une valeur… » à côté (vague 4, W1 n° 8 ; mission, § 4.8, E4) : la place écrite par echelle.js",
+  async (page) => {
+    const { ecran } = await combatLance(page);
+    const marmiton = jeton(ecran, "Marmiton de corvée n° 2");
+    marmiton.rectangle = { left: 600, top: 300, width: 40, height: 40 };
+    const feuille = feuilleDe(ecran);
+    feuille.rectangle = { left: 0, top: 0, width: 320, height: 280 };
+    const px = (nom) => Number.parseInt(feuille.style.getPropertyValue(nom), 10);
+    assert.equal(clicDroit(marmiton), true);
+    assert.equal(feuille.className, "combat-feuille combat-menu-contexte");
+    // À droite du jeton, contre lui (la flèche d'écart), à sa hauteur, dans la fenêtre (1 280 × 800).
+    assert.equal(px("--bulle-gauche"), 648);
+    assert.ok(px("--bulle-haut") <= 300 && px("--bulle-haut") + 280 >= 340, `à la hauteur du jeton : ${px("--bulle-haut")}`);
+    feuille.rectangle = { left: 0, top: 0, width: 472, height: 600 };
+    await cliquer(repere(feuille, "mj-valeurs"));
+    assert.equal(feuille.className, "combat-feuille combat-menu-contexte");
+    assert.equal(px("--bulle-gauche"), 648, "son panneau, à côté du jeton");
+    assert.ok(px("--bulle-haut") + 600 <= 800 - 16, "dans la fenêtre");
+  },
+  { modeMj: "1" },
+);
+
+dansUnePage("« ⋯ » (vague 4, R2 n° 15 et W1 n° 14) — au téléphone, il ouvre un dialogue (aria-haspopup), sans rien de développé ; la feuille dit en tête l'état de la garde, que la barre ne montre plus ; le reste de l'écran est inerte, sauf la région d'annonce ; sur PC, la rangée qu'il développe", async (page) => {
+  const { ecran } = await combatLance(page, { etroit: true });
+  const plus = un(barre(ecran), "button.combat-plus-bouton");
+  const aria = () => ["aria-haspopup", "aria-controls", "aria-expanded"].map((nom) => plus.getAttribute(nom));
+  assert.deepEqual(aria(), ["dialog", null, null]);
+  await cliquer(plus);
+  assert.deepEqual(aria(), ["dialog", null, null], "ouvert, rien n'est développé : un dialogue l'est");
+  const feuille = feuilleDe(ecran);
+  const garde = texteDe(un(barre(ecran), "p.combat-garde"));
+  assert.ok(garde !== "", "la garde a sa phrase");
+  assert.equal(texteDe(un(feuille, ".combat-feuille-corps").children[0]), garde, "en tête de la feuille");
+  assert.equal(un(ecran, ".combat-cadre").hasAttribute("inert"), true, "sous le voile, la carte et le volet sont inertes");
+  assert.equal(un(ecran, "p.combat-annonce").hasAttribute("inert"), false, "la région d'annonce parle");
+  assert.equal(barre(ecran).hasAttribute("inert"), true);
+  await cliquer(repere(feuille, "fermer"));
+  assert.equal(un(ecran, ".combat-cadre").hasAttribute("inert"), false);
+  focusSur(plus);
+  // Sur PC : il développe la rangée des autres commandes.
+  page.oublier();
+  const { ecran: large } = await combatLance(await pageNeuve(), {});
+  const surPc = un(barre(large), "button.combat-plus-bouton");
+  assert.deepEqual(["aria-haspopup", "aria-controls", "aria-expanded"].map((nom) => surPc.getAttribute(nom)), [null, "combat-autres", "false"]);
+});
+
+// ─── Relecture des correctifs de la vague 4 (C2 à C6) ───────────────────────
+
+const laCaseDe = (ecran, nom) => {
+  const trouvee = tous(ecran, ".combat-case").find((noeud) => noeud.getAttribute("data-case") === nom);
+  assert.ok(trouvee, `la case ${nom}`);
+  return trouvee;
+};
+const casesOffertes = (ecran) => tous(ecran, "button.combat-case-choix");
+const toastDe = (ecran) => texteDe(un(ecran, "p.combat-toast"));
+
+/** « Déplacer, sans action » dans l'onglet Cible de la palette ouverte, puis « Case d'arrivée ». */
+async function demanderLaCaseDArrivee(ecran) {
+  await cliquer(un(paletteDe(ecran), "[data-cle=onglet:cible]"));
+  await cliquer(un(paletteDe(ecran), "[data-cle=genre:deplacer]"));
+  await cliquer(un(paletteDe(ecran), "[data-cle=champ:vers]"));
+}
+
+dansUnePage(
+  "« Déplacer, sans action » de la palette en feuille (vague 4, C2) — « Case d'arrivée » efface la feuille : ni voile, ni carte inerte, la phrase dite, le focus sur une case ; la case touchée revient dans la palette, qui reparaît, le focus sur « Case d'arrivée D5 » ; Échap la rend, sans case ; au téléphone, et sur PC hors d'un geste",
+  async (page) => {
+    // Au téléphone : la palette d'« Appliquer l'effet de Frappe… », dans une feuille, le geste payé (un dé lancé).
+    const { ecran } = await combatLance(page, { etroit: true, des: [6, 9, 8] });
+    await frappeDAubepine(ecran);
+    await cliquer(deACliquer(ecran));
+    await cliquer(boutonDit(corps(ecran), `Appliquer l'effet de Frappe${POINTS}`));
+    const feuille = feuilleDe(ecran);
+    const voile = un(ecran, "div.combat-voile");
+    const cadre = un(ecran, ".combat-cadre");
+    const vers = () => un(paletteDe(ecran), "[data-cle=champ:vers]");
+    assert.ok(feuille.contains(paletteDe(ecran)), "la palette, dans une feuille");
+    await demanderLaCaseDArrivee(ecran);
+    assert.deepEqual([cache(feuille), cache(voile), cadre.hasAttribute("inert")], [true, true, false], "ni feuille, ni voile, ni carte inerte : la case se touche, et se prend au clavier");
+    assert.equal(toastDe(ecran), "Touchez la case d'arrivée.");
+    assert.ok(casesOffertes(ecran).length > 0, "les cases s'offrent");
+    focusSur(casesOffertes(ecran)[0], "le focus sur la première case offerte");
+    // La case D5 touchée : la palette la reçoit, sa feuille reparaît, le focus sur le bouton qui l'avait demandée.
+    await cliquer(un(laCaseDe(ecran, "D5"), "button.combat-case-choix"));
+    assert.deepEqual([cache(feuille), cache(voile), cadre.hasAttribute("inert")], [false, false, true], "la feuille revient, sous son voile");
+    assert.equal(casesOffertes(ecran).length, 0, "la demande est finie");
+    assert.equal(texteDe(vers()), "Case d'arrivée D5");
+    focusSur(vers(), "le focus sur « Case d'arrivée D5 »");
+    assert.equal(inactif(un(paletteDe(ecran), "[data-cle=appliquer]")), false, "« Appliquer » est actif");
+    // Échap pendant le choix : la feuille revient, la case d'avant gardée, et la carte n'offre plus rien.
+    await cliquer(vers());
+    assert.equal(cache(feuille), true);
+    ecran.declencher("keydown", { key: "Escape", preventDefault() {} });
+    assert.deepEqual([cache(feuille), cache(voile), cadre.hasAttribute("inert"), casesOffertes(ecran).length], [false, false, true, 0]);
+    assert.equal(texteDe(vers()), "Case d'arrivée D5");
+    focusSur(vers(), "Échap : le focus revient au bouton");
+    // Une autre feuille ouverte pendant le choix (« ⋯ ») : la palette lui cède la place, et la demande finit avec elle.
+    await cliquer(vers());
+    await cliquer(un(barre(ecran), "button.combat-plus-bouton"));
+    assert.deepEqual([titreDeLaFeuille(ecran), paletteMontree(ecran), casesOffertes(ecran).length], ["Le combat", false, 0], "la demande finit avec la feuille de la palette");
+    ecran.declencher("keydown", { key: "Escape", preventDefault() {} });
+
+    // Sur PC, hors d'un geste : la palette d'un état, dans une feuille ; la même chose.
+    page.oublier();
+    const { ecran: large } = await combatLance(await pageNeuve());
+    const feuilleLarge = feuilleDe(large);
+    await cliquer(repere(fiche(large, "adv4"), "modifier"));
+    await cliquer(repere(feuilleLarge, "mj-etats"));
+    await cliquer(tous(feuilleLarge, "button").find((b) => libelleDe(b) === "Étourdi"));
+    await cliquer(repere(feuilleLarge, "appliquer-etat"));
+    await cliquer(boutonCommencant(fiche(large, "adv4"), "Appliquer l'effet d"));
+    assert.ok(feuilleLarge.contains(paletteDe(large)), "sur PC, hors d'un geste, une feuille");
+    await demanderLaCaseDArrivee(large);
+    assert.deepEqual([cache(feuilleLarge), un(large, ".combat-cadre").hasAttribute("inert")], [true, false]);
+    await cliquer(un(laCaseDe(large, "E5"), "button.combat-case-choix"));
+    assert.equal(cache(feuilleLarge), false);
+    assert.equal(texteDe(un(paletteDe(large), "[data-cle=champ:vers]")), "Case d'arrivée E5");
+    focusSur(un(paletteDe(large), "[data-cle=champ:vers]"));
+
+    // Sur PC, pendant un geste, la palette dans la bulle : la case se demande sans rien effacer ; « Fermer » y met fin.
+    page.oublier();
+    const { ecran: geste } = await combatLance(await pageNeuve(), { des: [6, 9, 8] });
+    await frappeDAubepine(geste);
+    await cliquer(deACliquer(geste));
+    await cliquer(boutonDit(corps(geste), `Appliquer l'effet de Frappe${POINTS}`));
+    assert.ok(laBulle(geste).contains(paletteDe(geste)), "dans la bulle");
+    await demanderLaCaseDArrivee(geste);
+    assert.ok(casesOffertes(geste).length > 0);
+    await cliquer(un(paletteDe(geste), "[data-cle=fermer]"));
+    assert.equal(casesOffertes(geste).length, 0, "la palette fermée, la carte n'offre plus rien");
+  },
+  { modeMj: "1" },
+);
+
+/** Le geste en cours, mené jusqu'à ce que rien ne reste à jouer : chaque dé ; « Laisser passer » ; « Passer : … » ; la blessure nommée. */
+async function menerLeGeste(ecran, { blessure = null, laisser = true } = {}) {
+  for (let pas = 0; pas < 20; pas += 1) {
+    const boutons = tous(corps(ecran), "button");
+    const laisserPasser = laisser ? boutons.find((b) => texteDe(b) === "Laisser passer") : null;
+    const passer = boutons.find((b) => texteDe(b).startsWith("Passer : "));
+    const choix = blessure === null ? null : boutons.find((b) => texteDe(b) === blessure);
+    if (deACliquer(ecran)) await cliquer(deACliquer(ecran));
+    else if (laisserPasser) await cliquer(laisserPasser);
+    else if (passer) await cliquer(passer);
+    else if (choix) await cliquer(choix);
+    else return;
+  }
+  assert.fail("le geste ne finit pas");
+}
+
+const aubepinePressee = (ecran) => vignetteDe(ecran, "Aubépine Crèmebrûlée").getAttribute("aria-pressed");
+const titreDuVolet = (ecran) => texteDe(un(laBulle(ecran), "h2.combat-bulle-titre"));
+
+dansUnePage(
+  "au téléphone, le geste fini par « Laisser passer », par le d20 de contre-attaque, ou par la blessure choisie referme le volet, comme « Terminer », même quand une action reste (vague 4, C3) ; sur PC, la bulle reste sur qui joue",
+  async (page) => {
+    // Aubépine frappe le Chef, sur sa case : 1 réussite, d20 → 1, la face de contre-attaque ; elle la laisse passer.
+    const { ecran } = await combatLance(page, { etroit: true, places: { adv2: "C3" }, des: [9, 1, 1] });
+    await frappeDAubepine(ecran, "Chef de partie");
+    await menerLeGeste(ecran);
+    assert.match(journal(ecran).at(-1), /ne contre-attaque pas/, "laissée passer");
+    assert.match(vignetteDe(ecran, "Aubépine Crèmebrûlée").getAttribute("aria-label"), /actions restantes : 1 sur 2/, "une action reste");
+    assert.deepEqual([aubepinePressee(ecran), titreDuVolet(ecran)], ["false", "À qui le tour ?"], "« Laisser passer » : le volet au repos");
+
+    // Le Chef à une case : la face de contre-attaque, sans contre-attaque possible, finit le geste au d20.
+    page.oublier();
+    const { ecran: auDe } = await combatLance(await pageNeuve(), { etroit: true, places: { adv2: "D4", adv3: "F6", adv4: "F6" }, des: [9, 9, 1, 1, 1] });
+    await frappeDAubepine(auDe, "Chef de partie");
+    await menerLeGeste(auDe, { laisser: false });
+    assert.match(journal(auDe).at(-1), /contre-attaque, l'attaque est annulée/);
+    assert.deepEqual([aubepinePressee(auDe), titreDuVolet(auDe)], ["false", "À qui le tour ?"], "le d20 qui finit le geste : le volet au repos");
+
+    // Au tour adverse, le MJ donne deux actions au Chef, qui frappe Aubépine au bras gauche : la blessure finit le geste.
+    page.oublier();
+    const { ecran: blesse } = await combatLance(await pageNeuve(), { etroit: true, places: { adv2: "C3" }, des: [1, 16] });
+    await cliquer(boutonDit(barre(blesse), "Fin de tour"));
+    await cliquer(repere(fiche(blesse, "adv2"), "modifier"));
+    await cliquer(repere(feuilleDe(blesse), "mj-valeurs"));
+    for (const [champ, valeur] of [["actionsMax", "2"], ["actions", "2"]]) {
+      const saisie = repere(feuilleDe(blesse), `valeur-${champ}`);
+      saisie.value = valeur;
+      saisie.declencher("input");
+    }
+    await cliquer(repere(feuilleDe(blesse), "enregistrer"));
+    await cliquer(jeton(blesse, "Chef de partie"));
+    await cliquer(boutonDeCapacite(blesse, "Frappe"));
+    await cliquer(boutonDit(un(corps(blesse), ".combat-cibles"), "Aubépine Crèmebrûlée"));
+    await menerLeGeste(blesse, { blessure: "Cheville tordue" });
+    assert.match(journal(blesse).at(-1), /Cheville tordue/);
+    const chef = vignetteDe(blesse, "Chef de partie");
+    assert.match(chef.getAttribute("aria-label"), /actions restantes : 1 sur 2/, "une action reste au Chef");
+    assert.equal(chef.getAttribute("aria-pressed"), "false", "la blessure choisie : le volet au repos");
+
+    // Sur PC, rien ne change : « Laisser passer », et la bulle reste sur Aubépine.
+    page.oublier();
+    const { ecran: large } = await combatLance(await pageNeuve(), { places: { adv2: "C3" }, des: [9, 1, 1] });
+    await frappeDAubepine(large, "Chef de partie");
+    await menerLeGeste(large);
+    assert.match(journal(large).at(-1), /ne contre-attaque pas/);
+    assert.equal(bulleMontree(large), true, "sur PC, la bulle reste sur qui joue");
+  },
+  { modeMj: "1" },
+);
+
+dansUnePage(
+  "l'appui long qui a ouvert le menu du MJ n'arme rien sur la vignette ni sur le jeton (vague 4, C4) : Échap, puis Entrée sur eux (un clic sans pointerdown) choisit ; seul le clic qui suit l'appui est avalé",
+  async (page) => {
+    const { ecran, minuteur } = await combatLance(page, { etroit: true });
+    const vignette = vignetteDe(ecran, "Aubépine Crèmebrûlée");
+    appuiLong(ecran, vignette, minuteur);
+    assert.equal(cache(feuilleDe(ecran)), false, "l'appui long ouvre le menu");
+    assert.equal(await toucher(un(ecran, "div.combat-voile")), false, "le clic qui suit l'appui est avalé");
+    ecran.declencher("keydown", { key: "Escape", preventDefault() {} });
+    focusSur(vignette, "Échap : le focus revient à la vignette");
+    ecran.declencher("keydown", { key: "Enter" });
+    assert.equal(await toucher(vignette), true);
+    assert.equal(vignette.getAttribute("aria-pressed"), "true", "Entrée sur la vignette choisit Aubépine");
+
+    // Sur PC, le jeton, à la souris : de même.
+    page.oublier();
+    const { ecran: large, minuteur: leMinuteur } = await combatLance(await pageNeuve());
+    const aubepine = jeton(large, "Aubépine Crèmebrûlée");
+    large.declencher("pointerdown", { target: aubepine, pointerType: "mouse", button: 0 });
+    aubepine.declencher("pointerdown", { pointerType: "mouse", button: 0 });
+    leMinuteur.lancer(500);
+    aubepine.declencher("pointerup", { pointerType: "mouse", button: 0 });
+    assert.equal(cache(feuilleDe(large)), false, "l'appui long ouvre le menu");
+    assert.equal(await toucher(un(large, "div.combat-voile")), false, "le clic qui suit l'appui est avalé");
+    large.declencher("keydown", { key: "Escape", preventDefault() {} });
+    focusSur(aubepine, "Échap : le focus revient au jeton");
+    large.declencher("keydown", { key: "Enter" });
+    assert.equal(await toucher(aubepine), true);
+    assert.equal(bulleMontree(large), true, "Entrée sur le jeton choisit Aubépine : sa bulle s'ouvre");
+  },
+  { modeMj: "1" },
+);
+
+dansUnePage(
+  "sur PC, « Modifier une valeur… » après le menu d'un jeton bas se mesure libre de la hauteur du menu (vague 4, C5) : il remonte et tient sur toute sa hauteur",
+  async (page) => {
+    const { ecran } = await combatLance(page);
+    const marmiton = jeton(ecran, "Marmiton de corvée n° 2");
+    marmiton.rectangle = { left: 600, top: 600, width: 40, height: 40 };
+    const feuille = feuilleDe(ecran);
+    // La hauteur mesurée suit --bulle-hauteur, comme le max-height de la feuille de style.
+    let naturelle = 280;
+    Object.defineProperty(feuille, "rectangle", {
+      configurable: true,
+      get: () => {
+        const borne = Number.parseInt(feuille.style.getPropertyValue("--bulle-hauteur"), 10);
+        return { left: 0, top: 0, width: 472, height: Number.isFinite(borne) ? Math.min(naturelle, borne) : naturelle };
+      },
+    });
+    const px = (nom) => Number.parseInt(feuille.style.getPropertyValue(nom), 10);
+    assert.equal(clicDroit(marmiton), true);
+    assert.deepEqual([px("--bulle-haut"), px("--bulle-hauteur")], [504, 280], "le menu, collé au bas de la fenêtre (1 280 × 800)");
+    naturelle = 600;
+    await cliquer(repere(feuille, "mj-valeurs"));
+    assert.equal(feuille.className, "combat-feuille combat-menu-contexte");
+    assert.deepEqual([px("--bulle-haut"), px("--bulle-hauteur")], [184, 600], "le panneau remonte, et tient sur ses 600 px");
+  },
+  { modeMj: "1" },
+);
+
+/** La fenêtre qui change de taille : les écouteurs « resize » posés pendant le contrôle, relevés, puis rendus. */
+function guetterLaFenetre() {
+  const avant = { ajouter: globalThis.addEventListener, retirer: globalThis.removeEventListener };
+  const ecoutes = [];
+  globalThis.addEventListener = (type, f) => ecoutes.push([type, f]);
+  globalThis.removeEventListener = (type, f) => {
+    const rang = ecoutes.findIndex(([t, g]) => t === type && g === f);
+    if (rang >= 0) ecoutes.splice(rang, 1);
+  };
+  return {
+    redimensionner({ largeur, hauteur } = {}) {
+      const page = globalThis.document.documentElement;
+      if (largeur !== undefined) page.clientWidth = largeur;
+      if (hauteur !== undefined) page.clientHeight = hauteur;
+      for (const [type, f] of [...ecoutes]) if (type === "resize") f();
+    },
+    retirer() {
+      if (avant.ajouter === undefined) delete globalThis.addEventListener;
+      else globalThis.addEventListener = avant.ajouter;
+      if (avant.retirer === undefined) delete globalThis.removeEventListener;
+      else globalThis.removeEventListener = avant.retirer;
+    },
+  };
+}
+
+dansUnePage(
+  "sur PC, le menu du MJ et « Modifier une valeur… » se replacent quand la fenêtre change de taille, ou de hauteur seule (vague 4, C6) : contre le jeton, que la carte a déplacé",
+  async (page) => {
+    const fenetre = guetterLaFenetre();
+    try {
+      const { ecran } = await combatLance(page);
+      const marmiton = jeton(ecran, "Marmiton de corvée n° 2");
+      marmiton.rectangle = { left: 600, top: 300, width: 40, height: 40 };
+      const feuille = feuilleDe(ecran);
+      feuille.rectangle = { left: 0, top: 0, width: 320, height: 280 };
+      const gauche = () => Number.parseInt(feuille.style.getPropertyValue("--bulle-gauche"), 10);
+      assert.equal(clicDroit(marmiton), true);
+      assert.equal(gauche(), 648);
+      // La hauteur seule change (le zoom, une barre qui paraît) : la carte a déplacé le jeton.
+      marmiton.rectangle = { left: 300, top: 300, width: 40, height: 40 };
+      fenetre.redimensionner({ hauteur: 700 });
+      assert.equal(gauche(), 348, "le menu suit le jeton");
+      // « Modifier une valeur… », puis la largeur change.
+      feuille.rectangle = { left: 0, top: 0, width: 472, height: 400 };
+      await cliquer(repere(feuille, "mj-valeurs"));
+      assert.equal(gauche(), 348);
+      marmiton.rectangle = { left: 200, top: 250, width: 40, height: 40 };
+      fenetre.redimensionner({ largeur: 1000 });
+      assert.equal(feuille.className, "combat-feuille combat-menu-contexte");
+      assert.equal(gauche(), 248, "le panneau suit le jeton");
+    } finally {
+      fenetre.retirer();
+    }
+  },
+  { modeMj: "1" },
+);
+
+// ─── Relecture finale (R1 à R5) ─────────────────────────────────────────────
+
+/** Au téléphone, la palette d'« Appliquer l'effet de Frappe… », dans une feuille, le geste payé (un dé lancé) : rend l'écran. */
+async function paletteEnFeuille(page, des = [6, 9, 8]) {
+  const { ecran } = await combatLance(page, { etroit: true, des });
+  await frappeDAubepine(ecran);
+  await cliquer(deACliquer(ecran));
+  await cliquer(boutonDit(corps(ecran), `Appliquer l'effet de Frappe${POINTS}`));
+  assert.ok(feuilleDe(ecran).contains(paletteDe(ecran)), "la palette, dans une feuille");
+  return ecran;
+}
+
+dansUnePage(
+  "au téléphone, la palette remplacée par ⋯ pendant le choix d'une case est oubliée : elle ne remonte pas au rendu suivant (relecture finale, R1)",
+  async (page) => {
+    // Au téléphone : « Case d'arrivée », puis ⋯, refermé par Échap ; puis un dé du volet, qui refait l'écran.
+    const ecran = await paletteEnFeuille(page, [6, 9, 8, 7]);
+    await demanderLaCaseDArrivee(ecran);
+    const plus = un(barre(ecran), "button.combat-plus-bouton");
+    await cliquer(plus);
+    assert.equal(titreDeLaFeuille(ecran), "Le combat");
+    ecran.declencher("keydown", { key: "Escape", preventDefault() {} });
+    focusSur(plus, "Échap : le focus revient à ⋯");
+    await cliquer(deACliquer(ecran));
+    assert.deepEqual([cache(feuilleDe(ecran)), paletteMontree(ecran), casesOffertes(ecran).length], [true, false, 0], "le dé lancé, la palette ne remonte pas");
+  },
+  { modeMj: "1" },
+);
+
+dansUnePage(
+  "sur PC, hors d'un geste, la palette remplacée par le menu du MJ pendant le choix d'une case est oubliée : elle ne remonte pas au rendu suivant (relecture finale, R1)",
+  async (page) => {
+    // La palette d'Étourdi ; le menu du MJ d'un jeton pendant le choix, refermé par Échap ; puis un clic sur un jeton.
+    const { ecran: large } = await combatLance(page);
+    const feuilleLarge = feuilleDe(large);
+    await cliquer(repere(fiche(large, "adv4"), "modifier"));
+    await cliquer(repere(feuilleLarge, "mj-etats"));
+    await cliquer(tous(feuilleLarge, "button").find((b) => libelleDe(b) === "Étourdi"));
+    await cliquer(repere(feuilleLarge, "appliquer-etat"));
+    await cliquer(boutonCommencant(fiche(large, "adv4"), "Appliquer l'effet d"));
+    await demanderLaCaseDArrivee(large);
+    assert.equal(cache(feuilleLarge), true);
+    assert.equal(clicDroit(jeton(large, "Chef de partie")), true);
+    assert.deepEqual([cache(feuilleLarge), paletteMontree(large), casesOffertes(large).length], [false, false, 0], "le menu du MJ remplace la palette");
+    large.declencher("keydown", { key: "Escape", preventDefault() {} });
+    await cliquer(jeton(large, "Aubépine Crèmebrûlée"));
+    assert.equal(bulleMontree(large), true, "la bulle d'Aubépine s'ouvre");
+    assert.deepEqual([cache(feuilleLarge), paletteMontree(large), casesOffertes(large).length], [true, false, 0], "la palette d'Étourdi ne remonte pas");
+  },
+  { modeMj: "1" },
+);
+
+dansUnePage(
+  "la feuille de la palette effacée pour une case, l'écran passé sur PC pendant le geste : la case ne l'est plus, et la palette passe dans la bulle, son choix gardé, sans être oubliée (relecture finale, R1)",
+  async (page) => {
+    let etroit = true;
+    const { ecran } = await combatLance(page, { etroit: () => etroit, des: [6, 9, 8, 7, 5, 4] });
+    await frappeDAubepine(ecran);
+    await cliquer(deACliquer(ecran));
+    await cliquer(boutonDit(corps(ecran), `Appliquer l'effet de Frappe${POINTS}`));
+    await demanderLaCaseDArrivee(ecran);
+    assert.equal(cache(feuilleDe(ecran)), true);
+    // La fenêtre s'élargit (une tablette tournée) ; le rendu suivant, un dé, puis un autre.
+    etroit = false;
+    await cliquer(deACliquer(ecran));
+    assert.ok(laBulle(ecran).contains(paletteDe(ecran)) && paletteMontree(ecran), "la palette, dans la bulle");
+    assert.equal(casesOffertes(ecran).length, 0, "la case n'est plus demandée");
+    await cliquer(deACliquer(ecran));
+    assert.equal(paletteMontree(ecran), true);
+    assert.equal(un(paletteDe(ecran), "[data-cle=genre:deplacer]").getAttribute("aria-pressed"), "true", "son choix gardé : « Déplacer, sans action »");
+  },
+  { modeMj: "1" },
+);
+
+dansUnePage(
+  "rouvrir la palette pendant que sa feuille est effacée pour une case (relecture finale, R2) : la demande finit, la feuille revient sous son voile, le focus sur son titre ; la case suivante se pose",
+  async (page) => {
+    const ecran = await paletteEnFeuille(page);
+    await demanderLaCaseDArrivee(ecran);
+    assert.equal(cache(feuilleDe(ecran)), true);
+    // « Appliquer l'effet de Frappe… » du volet, touché de nouveau.
+    await cliquer(boutonDit(corps(ecran), `Appliquer l'effet de Frappe${POINTS}`));
+    assert.deepEqual([cache(feuilleDe(ecran)), cache(un(ecran, "div.combat-voile")), un(ecran, ".combat-cadre").hasAttribute("inert"), casesOffertes(ecran).length], [false, false, true, 0], "la feuille revient, et la carte n'offre plus rien");
+    focusSur(un(paletteDe(ecran), "h2"), "le focus sur le titre de la palette");
+    // La palette rouverte marche : la case demandée se pose.
+    await demanderLaCaseDArrivee(ecran);
+    await cliquer(un(laCaseDe(ecran, "D5"), "button.combat-case-choix"));
+    assert.equal(texteDe(un(paletteDe(ecran), "[data-cle=champ:vers]")), "Case d'arrivée D5");
+  },
+  { modeMj: "1" },
+);
+
+/** Sur PC, la palette d'« Appliquer l'effet de Frappe… », dans la bulle, le geste payé (un dé lancé) : rend l'écran. */
+async function paletteDansLaBulle(page) {
+  const { ecran } = await combatLance(page, { des: [6, 9, 8] });
+  await frappeDAubepine(ecran);
+  await cliquer(deACliquer(ecran));
+  await cliquer(boutonDit(corps(ecran), `Appliquer l'effet de Frappe${POINTS}`));
+  assert.ok(laBulle(ecran).contains(paletteDe(ecran)), "dans la bulle");
+  return ecran;
+}
+
+dansUnePage(
+  "sur PC, pendant un geste, la case que la palette de la bulle demande ne l'est plus quand « Appliquer » replie la palette (relecture finale, R3)",
+  async (page) => {
+    const ecran = await paletteDansLaBulle(page);
+    // « vers » posé (D5), puis redemandé ; « Appliquer » replie la palette.
+    await demanderLaCaseDArrivee(ecran);
+    await cliquer(un(laCaseDe(ecran, "D5"), "button.combat-case-choix"));
+    await cliquer(un(paletteDe(ecran), "[data-cle=champ:vers]"));
+    assert.ok(casesOffertes(ecran).length > 0, "la case est redemandée");
+    await cliquer(un(paletteDe(ecran), "[data-cle=appliquer]"));
+    assert.equal(casesOffertes(ecran).length, 0, "« Appliquer » : la carte n'offre plus rien");
+  },
+  { modeMj: "1" },
+);
+
+dansUnePage(
+  "sur PC, pendant un geste, la case que la palette de la bulle demande ne l'est plus quand le Mode MJ s'éteint (relecture finale, R3)",
+  async (page) => {
+    // La palette du geste, que la bulle porte d'elle-même en Mode MJ (sans « Appliquer l'effet de… ») : sa case demandée, puis le Mode MJ éteint par l'interrupteur de la carte.
+    const { ecran } = await combatLance(page, { des: [6, 9, 8] });
+    await frappeDAubepine(ecran);
+    await cliquer(deACliquer(ecran));
+    assert.ok(laBulle(ecran).contains(paletteDe(ecran)) && paletteMontree(ecran), "la palette du geste, dans la bulle");
+    await demanderLaCaseDArrivee(ecran);
+    assert.ok(casesOffertes(ecran).length > 0, "la case est demandée");
+    await cliquer(tous(ecran, "button.combat-interrupteur").find((b) => b.getAttribute("aria-checked") === "true"));
+    assert.equal(paletteMontree(ecran), false, "le Mode MJ éteint : la palette se replie");
+    assert.equal(casesOffertes(ecran).length, 0, "le Mode MJ éteint : la carte n'offre plus rien");
+  },
+  { modeMj: "1" },
+);
+
+dansUnePage(
+  "sur PC, pendant un geste, la case que la palette de la bulle demande ne l'est plus quand une autre source est choisie (relecture finale, R3) : le choix repart de zéro",
+  async (page) => {
+    const { ecran } = await combatLance(page, { des: [6, 9, 8] });
+    await frappeDAubepine(ecran);
+    await cliquer(deACliquer(ecran));
+    assert.ok(laBulle(ecran).contains(paletteDe(ecran)) && paletteMontree(ecran), "la palette du geste, dans la bulle");
+    await demanderLaCaseDArrivee(ecran);
+    assert.ok(casesOffertes(ecran).length > 0, "la case est demandée");
+    await cliquer(un(paletteDe(ecran), "[data-cle=source:changer]"));
+    const autre = tous(paletteDe(ecran), "button").find((b) => /^source:\d+$/.test(b.getAttribute("data-cle") ?? "") && b.getAttribute("aria-pressed") === "false" && !inactif(b));
+    assert.ok(autre, "une autre source");
+    await cliquer(autre);
+    assert.equal(paletteMontree(ecran), true, "la palette reste, à l'autre source");
+    assert.equal(casesOffertes(ecran).length, 0, "l'autre source : la carte n'offre plus rien");
+  },
+  { modeMj: "1" },
+);
+
+dansUnePage(
+  "sur PC, pendant un geste, la case que la palette de la bulle demande ne l'est plus quand « Appliquer l'effet de… » la rouvre, son choix à zéro (relecture finale, R3)",
+  async (page) => {
+    const { ecran } = await combatLance(page, { des: [6, 9, 8] });
+    await frappeDAubepine(ecran);
+    await cliquer(deACliquer(ecran));
+    assert.ok(laBulle(ecran).contains(paletteDe(ecran)) && paletteMontree(ecran), "la palette du geste, dans la bulle");
+    await demanderLaCaseDArrivee(ecran);
+    assert.ok(casesOffertes(ecran).length > 0, "la case est demandée");
+    await cliquer(boutonDit(corps(ecran), `Appliquer l'effet de Frappe${POINTS}`));
+    assert.equal(paletteMontree(ecran), true, "la palette, rouverte");
+    assert.equal(casesOffertes(ecran).length, 0, "rouverte : la carte n'offre plus rien");
+  },
+  { modeMj: "1" },
+);
+
+dansUnePage(
+  "au téléphone, le d20 qui finit le geste referme le volet et rend le focus au jeton de qui jouait, comme « Terminer » (relecture finale, R4)",
+  async (page) => {
+    // Le Chef à une case : la face de contre-attaque, sans contre-attaque possible, finit le geste au d20.
+    const { ecran } = await combatLance(page, { etroit: true, places: { adv2: "D4", adv3: "F6", adv4: "F6" }, des: [9, 9, 1, 1, 1] });
+    await frappeDAubepine(ecran, "Chef de partie");
+    await menerLeGeste(ecran, { laisser: false });
+    assert.match(journal(ecran).at(-1), /contre-attaque, l'attaque est annulée/);
+    assert.deepEqual([aubepinePressee(ecran), titreDuVolet(ecran)], ["false", "À qui le tour ?"]);
+    focusSur(jeton(ecran, "Aubépine Crèmebrûlée"), "le d20 : le focus sur le jeton d'Aubépine");
+  },
+  { modeMj: "1" },
+);
+
+dansUnePage(
+  "le bouton qui a demandé la case reprend le focus quand le toucher ne le lui a pas donné, comme sous Safari (relecture finale, R5) : la palette dit sa clé à l'écran ; la case touchée, puis Échap",
+  async (page) => {
+    const ecran = await paletteEnFeuille(page);
+    const feuille = feuilleDe(ecran);
+    const vers = () => un(paletteDe(ecran), "[data-cle=champ:vers]");
+    await cliquer(un(paletteDe(ecran), "[data-cle=onglet:cible]"));
+    await cliquer(un(paletteDe(ecran), "[data-cle=genre:deplacer]"));
+    // Sous Safari, un bouton touché ne prend pas le focus : il va au premier ancêtre qui le prend, la feuille (tabindex -1).
+    feuille.focus({ preventScroll: true });
+    assert.equal(await toucher(vers()), true);
+    assert.equal(cache(feuille), true, "la feuille s'efface");
+    assert.equal(await toucher(un(laCaseDe(ecran, "D5"), "button.combat-case-choix")), true);
+    assert.equal(texteDe(vers()), "Case d'arrivée D5");
+    focusSur(vers(), "la case touchée : le focus sur « Case d'arrivée D5 »");
+    feuille.focus({ preventScroll: true });
+    assert.equal(await toucher(vers()), true);
+    ecran.declencher("keydown", { key: "Escape", preventDefault() {} });
+    assert.equal(cache(feuille), false);
+    focusSur(vers(), "Échap : le focus sur « Case d'arrivée D5 »");
+  },
+  { modeMj: "1" },
+);

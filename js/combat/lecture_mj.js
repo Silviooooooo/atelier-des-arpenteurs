@@ -144,11 +144,13 @@ function texteDeLaSource(etat, geste, source, nom) {
 }
 
 // L'événement qui éprouve une source, hors de tout champ : un ±N sur le
-// premier vivant, de la durée que le moment permet. Son refus, s'il ne tient
-// pas au moment, est celui de la source (avant le paiement, un passif qui a
-// déjà servi, son prix).
+// premier vivant, de la durée que le moment permet ; hors d'un geste, sur le
+// porteur d'une capacité, s'il vit, puisqu'elle vaut source quand l'effet le
+// vise (js/combat/effets.js, quiPeutEtreSource). Son refus, s'il ne tient pas
+// au moment, est celui de la source (avant le paiement, un passif qui a déjà
+// servi, son prix).
 function epreuveDeLaSource(contexte, source, x = null) {
-  const sur = contexte.vivants[0] ?? null;
+  const sur = preferer(contexte, contexte.geste === null && source.genre === "capacite" ? source.qui : null);
   if (sur === null) return null;
   const duree = contexte.geste?.moment === "preparation" ? "jet" : "tour";
   return { type: "effet", genre: "attaque", source, sur, n: 1, duree, ...(x === null ? {} : { x }) };

@@ -23,7 +23,8 @@
 // dépasse défile à l'intérieur d'elle.
 //
 // Ce sont les seules écritures de style du code, et elles vivent ici :
-// poserEchelle et placerBulle, rien d'autre. Un contrôle vérifie qu'aucun
+// poserEchelle et placerBulle (qui peut aussi ôter la plus grande hauteur
+// avant de mesurer : vague 4, C5), rien d'autre. Un contrôle vérifie qu'aucun
 // autre module de js/ n'en fait (tests/echelle.test.js).
 
 /**
@@ -145,8 +146,14 @@ export function calculerPlace({ ancre, taille, fenetre, cotes, ecart, pointe, ma
  * (absent : la marge). Écrit quatre propriétés, en px entiers : la place,
  * relative au repère, puis la plus grande hauteur ; rien d'autre : la classe
  * du côté, c'est l'appelant qui la pose.
+ *
+ * libre (le menu du MJ et ses panneaux, que l'écran replace dans le même
+ * nœud) : la plus grande hauteur du placement d'avant s'ôte avant la mesure,
+ * sans quoi le panneau se mesurerait sous elle, à la hauteur du menu, et ne
+ * remonterait jamais (vague 4, C5) ; c'est le seul retrait de style.
  */
-export function placerBulle(noeud, { ancre, repere, fenetre, cotes, ecart, pointe, plafond }) {
+export function placerBulle(noeud, { ancre, repere, fenetre, cotes, ecart, pointe, plafond, libre = false }) {
+  if (libre) noeud.style.removeProperty("--bulle-hauteur");
   const boite = noeud.getBoundingClientRect();
   const a = ancre.getBoundingClientRect();
   const r = repere.getBoundingClientRect();

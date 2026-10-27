@@ -65,8 +65,13 @@
 // exploser. Au groupe 3 : la fin d'une attaque en plus, une arme ou une
 // qualité retirées par le MJ, une cellule vidée, la garde à côté d'un coût,
 // plusieurs sources de « +1 réussite », l'ordre de l'armure et du report dans
-// le bilan, la fin d'un état libre, l'annulation d'une valeur de zone. Ils
-// restent à lui faire confirmer.
+// le bilan, la fin d'un état libre, l'annulation d'une valeur de zone, une
+// échéance ou une annulation dont la source est le MJ (« Fin de MJ pour
+// Aubépine : … », « Annulé : effet de MJ sur Marmiton n° 2. »), « toute la
+// case » à la fin du bilan de la première cible (« , toute la case
+// (Frappe) »), l'ouverture d'un jet de caractéristique en sa propre phrase
+// quand les sources ou un effet « pour ce jet » précèdent son premier dé
+// (« Aubépine : Goûter. »). Ils restent à lui faire confirmer.
 
 import { CARACTERISTIQUES } from "../personnage/regles.js";
 import { degatsFixes, imputerEsquive, localisationsDuGeste, nombreDeD20, reussitesDeLAttaque, victimeDe } from "./degats.js";
@@ -560,13 +565,25 @@ function segmentsDeLaPalette(etat, geste, fixes) {
   return enTexte(textes.join(""));
 }
 
-// Le bilan en segments : du texte, sauf chaque « {L} = {v} » (lettre) et le
-// seul nombre qui suit « ajusté à » (ajuste).
-function segmentsDuBilan(etat, geste) {
-  const { jet } = geste;
-  const tete = reussitesDuBilan(etat, geste);
-  if (jet.genre === "caracteristique") return enTexte(tete);
+// « Toute la case » (mission, § 4.6 et § 4.9) : à la fin du bilan de la
+// première cible, avec sa source et le prix d'un passif, comme les autres
+// parenthèses d'effet : « , toute la case (Frappe) ». Elle s'écrit même si la
+// palette fait ensuite manquer le jet : les cibles restent. Gabarit à
+// confirmer.
+const ecrireTouteLaCase = (etat, geste) => effetsDeGenre(geste, "toute_la_case").map((effet) => `, toute la case (${sourceEtPrix(etat, effet)})`).join("");
 
+// Le bilan en segments : du texte, sauf chaque « {L} = {v} » (lettre) et le
+// seul nombre qui suit « ajusté à » (ajuste) ; « toute la case » le finit.
+function segmentsDuBilan(etat, geste) {
+  const tete = reussitesDuBilan(etat, geste);
+  if (geste.jet.genre === "caracteristique") return enTexte(tete);
+  return pousser(segmentsDesDegats(etat, geste, tete), "texte", ecrireTouteLaCase(etat, geste));
+}
+
+// Le bilan d'une attaque, d'une défense ou d'un jet prêté, sans « toute la
+// case » : ses réussites (« tete »), puis ce qu'elles font.
+function segmentsDesDegats(etat, geste, tete) {
+  const { jet } = geste;
   const enDefense = jet.genre === "defense";
   if (reussitesDeLAttaque(jet.genre, reussites(jet)) === 0) return enTexte(`${tete}, ${enDefense ? "aucun dégât" : "manqué"}`);
 
@@ -897,9 +914,9 @@ const ecrireDeplacement = (etat, effet) =>
   `${court(etat, effet.sur)} : déplacé, ${effet.depart ?? "?"} ${SIGNES.fleche} ${effet.vers}, sans action (${sourceEtPrix(etat, effet)}).`;
 
 // Les effets qui ont leur phrase, et le genre de cette phrase ; les autres
-// s'écrivent dans le jet, la localisation ou le bilan (ou nulle part :
-// « toute la case » se lit au rang des cibles, l'attaque en plus dans la ligne
-// de l'attaque qui la prend).
+// s'écrivent dans le jet, la localisation ou le bilan (« toute la case » à la
+// fin du bilan de la première cible), ou dans la ligne de l'attaque qui la
+// prend (l'attaque en plus).
 const PHRASES_D_EFFET = {
   rendre: { genre: "effet", ecrire: ecrireRendre },
   attaque: { genre: "effet", ecrire: ecrireEcart },
@@ -1088,24 +1105,36 @@ const phraseDeTexte = (genre, texte) => (texte === null ? [] : [{ genre, segment
 // « intervention » ou « contre_attaque » pour un geste emboîté.
 const genreDeTete = (geste, contexte, defaut) => (contexte.emboite ? (geste.genre ?? defaut) : defaut);
 
+// Ce qui vient avant le premier dé, après l'ouverture (mission, § 7) : la
+// phrase des sources, puis les effets « pour ce jet ».
+const phrasesAvantLeJet = (etat, geste) => [...phraseDeTexte("sources", ecrireSources(geste.jet)), ...phrasesDEffets(etat, geste, "avant")];
+
 // Le jet de caractéristique tient en une phrase : le début de l'ouverture,
-// puis le jet, joints par une virgule.
+// puis le jet, joints par une virgule. Quand une phrase vient avant son
+// premier dé (les sources, un effet « pour ce jet »), le début fait sa propre
+// phrase, close par un point, et le jet suit : « Aubépine : Goûter.
+// Aubépine : état Étourdi (Goûter), pour ce jet. d8 (Sens) contre 6
+// (compliqué) → … ». Ce gabarit reste à confirmer.
+const debutAPart = (etat, geste) => geste.mode === "caracteristique" && phrasesAvantLeJet(etat, geste).length > 0;
+
 const phraseDeCaracteristique = (etat, geste, contexte, jusqua = null) => ({
   genre: genreDeTete(geste, contexte, "jet"),
   segments: joindre(pousser(segmentsDuDebut(etat, geste), "texte", ", "), segmentsDuJet(etat, geste, jusqua)),
 });
 
 // Ce que la ligne d'un geste dit avant son jet : pour une attaque,
-// l'ouverture, la phrase des sources, et les effets « pour ce jet » ; rien
-// pour un jet de caractéristique, dont l'ouverture est dans la phrase du jet.
+// l'ouverture, la phrase des sources, et les effets « pour ce jet » ; pour un
+// jet de caractéristique, rien, son ouverture est dans la phrase du jet, sauf
+// quand une phrase vient avant son premier dé : son début, puis elle.
 function phrasesDeTete(etat, geste, contexte) {
-  if (geste.mode === "caracteristique") return [];
-  return [{ genre: genreDeTete(geste, contexte, "ouverture"), segments: segmentsDeLOuverture(etat, geste) }, ...phraseDeTexte("sources", ecrireSources(geste.jet)), ...phrasesDEffets(etat, geste, "avant")];
+  if (geste.mode !== "caracteristique") return [{ genre: genreDeTete(geste, contexte, "ouverture"), segments: segmentsDeLOuverture(etat, geste) }, ...phrasesAvantLeJet(etat, geste)];
+  if (!debutAPart(etat, geste)) return [];
+  return [{ genre: genreDeTete(geste, contexte, "ouverture"), segments: pousser(segmentsDuDebut(etat, geste), "texte", ".") }, ...phrasesAvantLeJet(etat, geste)];
 }
 
 // La phrase du jet, entière ou arrêtée plus tôt (voir segmentsDuJet).
 const phraseDuJet = (etat, geste, contexte, jusqua = null) =>
-  geste.mode === "caracteristique" ? phraseDeCaracteristique(etat, geste, contexte, jusqua) : { genre: "jet", segments: segmentsDuJet(etat, geste, jusqua) };
+  geste.mode === "caracteristique" && !debutAPart(etat, geste) ? phraseDeCaracteristique(etat, geste, contexte, jusqua) : { genre: "jet", segments: segmentsDuJet(etat, geste, jusqua) };
 
 // Le geste et ceux qui s'y sont emboîtés, dans l'ordre de la ligne : sa
 // contre-attaque jouée, ses interventions jouées, et ce qui s'est emboîté en
@@ -1146,7 +1175,7 @@ function phrasesDesInterventions(etat, geste, contexte) {
 // après les dégâts appliqués.
 function phrasesDuBloc(etat, geste, contexte, { arret = null } = {}) {
   const avecJet = (geste.jet ?? null) !== null;
-  if (geste.mode === "caracteristique" && avecJet) return [phraseDeCaracteristique(etat, geste, contexte), ...phrasesDEffets(etat, geste, "avant"), ...phrasesDEffets(etat, geste, "apres")];
+  if (geste.mode === "caracteristique" && avecJet) return [...phrasesDeTete(etat, geste, contexte), phraseDuJet(etat, geste, contexte), ...phrasesDEffets(etat, geste, "apres")];
   const ouverture = { genre: genreDeTete(geste, contexte, "ouverture"), segments: segmentsDeLOuverture(etat, geste) };
   if ((geste.mode !== "attaque" && geste.mode !== "jet_prete") || !avecJet) return [ouverture, ...phrasesDEffets(etat, geste, "avant"), ...phrasesDEffets(etat, geste, "apres")];
 
@@ -1182,7 +1211,9 @@ const numeroterLesPhrases = (phrases) => phrases.map(({ genre, segments }, rang)
  * localisation, la contre-attaque et les interventions (les phrases de chaque
  * geste emboîté, la première de son genre), les dégâts, les blessures, les
  * autres effets, la mort. Un jet de caractéristique tient en une phrase,
- * « jet », l'ouverture et le jet joints par une virgule.
+ * « jet », l'ouverture et le jet joints par une virgule ; quand la phrase des
+ * sources ou un effet « pour ce jet » précède son premier dé, son ouverture
+ * a sa phrase, puis viennent celles-là, puis le jet.
  */
 export function phrasesDuGeste(etat, geste) {
   return numeroterLesPhrases(phrasesBrutes(etat, geste));

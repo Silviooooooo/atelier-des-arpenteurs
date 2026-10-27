@@ -1866,8 +1866,9 @@ dansUnePage("téléphone — seule la fiche de qui joue est ouverte ; le menu «
   const autres = un(barre(ecran), "div.combat-autres");
   assert.equal(texteDe(plus), "⋯");
   assert.equal(plus.getAttribute("aria-label"), "Autres commandes");
-  assert.equal(plus.getAttribute("aria-controls"), autres.id);
-  assert.deepEqual([plus.getAttribute("aria-expanded"), autres.className], ["false", "combat-autres"]);
+  // Au téléphone, « ⋯ » ouvre un dialogue, sans rien qu'il développe (vague 4, R2 n° 15) : ni aria-controls ni aria-expanded.
+  const aria = () => ["aria-haspopup", "aria-controls", "aria-expanded"].map((nom) => plus.getAttribute(nom));
+  assert.deepEqual([...aria(), autres.className], ["dialog", null, null, "combat-autres"]);
   // La rangée des autres commandes (sur PC) : au tour des PJ, « Intervenir… » s'y ajoute (lot 4.3).
   assert.deepEqual(tous(autres, "button").map(texteDe), [ANNULER_LE_DERNIER, "Nouveau combat", INTERVENIR]);
   assert.equal(boutonDit(barre(ecran), "Fin de tour").parentNode.className, "combat-commandes");
@@ -1877,18 +1878,20 @@ dansUnePage("téléphone — seule la fiche de qui joue est ouverte ; le menu «
   // Au lot 4.3 (F13), « ⋯ » ouvre la feuille du combat, par-dessus lui ; la rangée des autres commandes reste fermée.
   await cliquer(plus);
   const feuille = un(ecran, "section.combat-feuille");
-  assert.deepEqual([plus.getAttribute("aria-expanded"), autres.className, cache(feuille)], ["true", "combat-autres", false]);
+  assert.deepEqual([...aria(), autres.className, cache(feuille)], ["dialog", null, null, "combat-autres", false]);
   assert.deepEqual([feuille.getAttribute("role"), feuille.getAttribute("aria-modal"), texteDe(un(ecran, `#${feuille.getAttribute("aria-labelledby")}`))], ["dialog", "true", "Le combat"]);
   assert.deepEqual(tous(feuille, ".combat-menu-ligne").map((b) => texteDe(b.children[0])), [INTERVENIR, "Fiches", "Journal", "Nouveau combat"]);
   const croix = un(feuille, "[data-repere=fermer]");
   assert.equal(croix.getAttribute("aria-label"), "Fermer");
   await cliquer(croix);
-  assert.deepEqual([plus.getAttribute("aria-expanded"), autres.className, cache(feuille)], ["false", "combat-autres", true]);
+  assert.deepEqual([...aria(), autres.className, cache(feuille)], ["dialog", null, null, "combat-autres", true]);
   focusSur(plus, "le focus revient à « ⋯ »");
 
-  // Sur un grand écran, toutes les fiches des vivants sont ouvertes.
+  // Sur un grand écran, toutes les fiches des vivants sont ouvertes ; « ⋯ » développe la rangée des autres commandes.
   const { ecran: large } = await ouvrirLEcran(page, { magasin: magasinCombatMemoire(), etroit: false });
   assert.deepEqual(ouvertes(large), ["pj1", "adv2", "adv3", "adv4"]);
+  const surPc = un(barre(large), "button.combat-plus-bouton");
+  assert.deepEqual(["aria-haspopup", "aria-controls", "aria-expanded"].map((nom) => surPc.getAttribute(nom)), [null, un(barre(large), "div.combat-autres").id, "false"]);
 });
 
 // ─── Le journal qui sort de l'écran ─────────────────────────────────────────

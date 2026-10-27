@@ -35,6 +35,9 @@
 // - l'auteur d'un effet est celui qui joue le geste ; hors d'un geste, le
 //   porteur de l'état ou de la capacité dont la palette porte le nom ; la
 //   source « MJ » hors d'un geste se dit du camp qui joue ;
+// - une capacité est la source d'un effet si son porteur porte un état, ou,
+//   pendant un geste, s'il le joue ou en est le jeté ; hors d'un geste, s'il
+//   est celui que l'effet vise (« sur », mission, § 4.6) ;
 // - un effet durable « tour » finit au début du prochain tour du camp de son
 //   auteur (echeances) ; « combat », jamais ; celui que porte un mort ou un
 //   retiré s'en va avec lui (sansEffetsDesAbsents).
@@ -280,21 +283,26 @@ export function offreDesEffets(etat) {
 const etatPorte = (etat, id) => effetsDe(etat).find((effet) => effet.genre === "etat" && effet.id === id) ?? null;
 
 // Ceux dont une capacité peut être la source d'un effet (contrat, § 5) : les
-// porteurs d'un état ; pendant un geste, aussi son acteur et le jeté.
-function quiPeutEtreSource(etat, geste) {
+// porteurs d'un état ; pendant un geste, aussi son acteur et le jeté ; hors
+// d'un geste, aussi le protagoniste que l'effet vise, « sur » (mission,
+// § 4.6 : « une autre capacité de l'auteur ou de la cible » ; « Aubépine :
+// souffle 4 → 7 (Boire le bouillon). », § 7). L'auteur d'un effet dont la
+// source est une capacité reste son porteur (auteurDe).
+function quiPeutEtreSource(etat, geste, sur) {
   const qui = new Set(effetsDe(etat).filter((effet) => effet.genre === "etat").map((effet) => effet.porteur));
   if (geste !== null) {
     qui.add(geste.acteur);
     if (geste.cible !== null) qui.add(geste.cible);
   }
+  if (geste === null && sur !== null) qui.add(sur);
   return qui;
 }
 
-function jugerSource(etat, geste, source) {
+function jugerSource(etat, geste, source, sur) {
   if (source.genre === "mj") return null;
   if (source.genre === "etat") return etatPorte(etat, source.effet) === null ? horsBornes("Cet état n'est porté par personne.") : null;
   if (capaciteDe(etat, source.qui, source.capacite) === null) return horsBornes("Cette capacité n'existe pas.");
-  return quiPeutEtreSource(etat, geste).has(source.qui) ? null : horsBornes("Cette capacité ne peut pas être la source de cet effet.");
+  return quiPeutEtreSource(etat, geste, sur).has(source.qui) ? null : horsBornes("Cette capacité ne peut pas être la source de cet effet.");
 }
 
 /**
@@ -537,7 +545,7 @@ export function jugerEffet(etat, evenement) {
   const geste = gesteEnCours(etat);
   const moment = raisonDuMoment(etat, geste, evenement);
   if (moment !== null) return horsMoment(moment);
-  const source = jugerSource(etat, geste, evenement.source);
+  const source = jugerSource(etat, geste, evenement.source, evenement.sur ?? null);
   if (source !== null) return source;
   if (enPreparation(geste) && !sourceAvantLePaiement(etat, geste, evenement.source)) return interdit(SOURCE_AVANT_LE_PAIEMENT);
   if (geste !== null && passifDe(etat, evenement.source) !== null && dejaServi(geste, evenement.source)) return interdit("Ce passif a déjà servi pour ce jet.");

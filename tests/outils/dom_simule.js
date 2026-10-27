@@ -26,6 +26,11 @@
 // toute la page ; et la navigation de index.html (l'en-tête du site et ses
 // liens a[data-route]), qu'un contrôle pose quand il en a besoin
 // (poserLaNavigation) : le menu ☰ de l'écran du combat la relit.
+//
+// À la vague 4, un ajout encore : getClientRects, vide hors de la page et
+// pour un élément caché (hidden, lui ou un ancêtre) ou qu'un contrôle marque
+// sans boîte (sansBoite), comme ce que cache la feuille de style ; l'écran y
+// voit si l'élément à qui rendre le focus se voit encore.
 
 import { readFileSync } from "node:fs";
 
@@ -265,6 +270,20 @@ class Element extends Noeud {
   getBoundingClientRect() {
     const { left = 0, top = 0, width = 0, height = 0 } = this.rectangle ?? {};
     return { left, top, width, height, right: left + width, bottom: top + height, x: left, y: top };
+  }
+
+  /**
+   * Les boîtes de l'élément, comme un navigateur : aucune hors de la page, ni
+   * quand lui ou l'un de ses ancêtres est caché (hidden), ou marqué sans
+   * boîte par un contrôle (sansBoite : ce que la feuille de style cache) ;
+   * sinon la sienne.
+   */
+  getClientRects() {
+    if (!this.isConnected) return [];
+    for (let noeud = this; noeud; noeud = noeud.parentNode) {
+      if (noeud instanceof Element && (noeud.hidden || noeud.sansBoite === true)) return [];
+    }
+    return [this.getBoundingClientRect()];
   }
 
   *descendants() {

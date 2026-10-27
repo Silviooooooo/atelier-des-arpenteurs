@@ -381,6 +381,15 @@ test("palette — chaque sorte de champ : une option (et le tuple de « rendre �
     ]);
     assert.equal(raisonDe(noeud, coches[2]), JET_CONTRE_UN_ALLIE);
     assert.equal(texteDe(panneau(noeud).querySelector(".combat-jets-par-cible")), "Un jet par cible : 2 cibles");
+    // L'ordre des jets, sous les cases et avant « Un jet par cible », comme dans le volet (F10) : dans l'ordre du choix,
+    // chacun à venir (vague 4 : il ne se montrait pas).
+    const ordre = () => tous(panneau(noeud), "ol.combat-progression li").map((li) => [texteDe(li), li.className]);
+    assert.deepEqual(ordre(), [["1 · Marmiton de corvée n° 2", "a-venir"], ["2 · Marmiton de corvée n° 3", "a-venir"]]);
+    const groupeDesCases = tous(panneau(noeud), "[role=checkbox]")[0].parentNode;
+    const suite = [...groupeDesCases.parentNode.children];
+    const rang = suite.indexOf(groupeDesCases);
+    memeNoeud(suite[rang + 1], panneau(noeud).querySelector("ol.combat-progression"), "l'ordre, sous les cases");
+    memeNoeud(suite[rang + 2], panneau(noeud).querySelector(".combat-jets-par-cible"), "puis « Un jet par cible »");
     const avant = appels.length;
     coches[0].click();
     coches[2].click();
@@ -388,6 +397,7 @@ test("palette — chaque sorte de champ : une option (et le tuple de « rendre �
     tous(panneau(noeud), "[role=checkbox]")[1].click();
     assert.deepEqual(dernier().valeurs, { cibles: ["adv4"] });
     assert.equal(panneau(noeud).querySelector(".combat-jets-par-cible"), null, "une seule cible : une attaque ordinaire");
+    assert.deepEqual(ordre(), [], "ni ordre des jets");
   });
 });
 
@@ -413,20 +423,73 @@ test("palette — X (un passif au coût X) : saisi avant le genre, il entre dans
   }, { vue: (choisi) => vuePalette(choisi, { x: { libelle: "X", min: 0, max: 4, valeur: choisi?.x ?? 0 } }) });
 });
 
-test("palette — la source : sa phrase hors Mode MJ ; en Mode MJ, la phrase du MJ et les sources au choix, qui changent la source par l'écran ; la choisie ne fait rien", () => {
-  avecLaPalette(({ noeud, rendre, appels }) => {
+test("palette — la source : sa phrase hors Mode MJ ; en Mode MJ, la phrase du MJ et les sources au choix, fermées tant que « changer » n'est pas appuyé, qui changent la source par l'écran ; la choisie ne fait rien", () => {
+  avecLaPalette(({ noeud, rendre, appels, palette }) => {
     rendre();
     assert.equal(texteDe(noeud.children[3]), "Source : Frappe, la capacité jouée (en Mode MJ, elle se change).");
     assert.equal(boutons(noeud, "MJ").length, 0, "hors Mode MJ, pas de source au choix");
+    assert.equal(boutons(noeud, "changer").length, 0, "hors Mode MJ, rien à changer");
     rendre(undefined, { modeMj: true });
     assert.equal(texteDe(noeud.children[3]), "Source : Frappe (par défaut) · changer");
-    const groupe = noeud.children[4];
-    assert.equal(groupe.getAttribute("role"), "group");
-    assert.equal(groupe.getAttribute("aria-labelledby"), noeud.children[3].id);
-    assert.deepEqual(tous(groupe, "button").map((b) => [texteDe(b), presse(b)]), [["Frappe (Aubépine)", "true"], ["MJ", "false"]]);
-    leBouton(groupe, "Frappe").click();
-    leBouton(groupe, "MJ").click();
+    // « changer », le dernier mot de la phrase, est un bouton qui ouvre la liste ; fermée d'abord (E1, vague 4 : ouverte
+    // d'office, elle repoussait les onglets hors de la vue).
+    const changer = () => leBouton(noeud.children[3], "changer");
+    assert.equal(texteDe(changer()), "changer");
+    const groupe = () => noeud.children[4];
+    assert.equal(groupe().getAttribute("role"), "group");
+    assert.equal(groupe().getAttribute("aria-labelledby"), noeud.children[3].id);
+    assert.equal(changer().getAttribute("aria-controls"), groupe().id);
+    assert.deepEqual([changer().getAttribute("aria-expanded"), groupe().hidden], ["false", true]);
+    changer().focus({ preventScroll: true });
+    changer().click();
+    assert.deepEqual([changer().getAttribute("aria-expanded"), groupe().hidden], ["true", false]);
+    memeNoeud(globalThis.document.activeElement, changer(), "le focus reste sur « changer »");
+    assert.deepEqual(appels, [], "ouvrir la liste ne change rien");
+    assert.deepEqual(tous(groupe(), "button").map((b) => [texteDe(b), presse(b)]), [["Frappe (Aubépine)", "true"], ["MJ", "false"]]);
+    leBouton(groupe(), "Frappe").click();
+    leBouton(groupe(), "MJ").click();
     assert.deepEqual(appels, [{ source: { genre: "mj" } }]);
+    // Un rendu de la même vue la garde ouverte ; « changer » la referme ; la palette rouverte la montre fermée.
+    rendre(undefined, { modeMj: true });
+    assert.equal(groupe().hidden, false);
+    changer().click();
+    assert.equal(groupe().hidden, true);
+    changer().click();
+    palette.rendre(null);
+    rendre(undefined, { modeMj: true });
+    assert.deepEqual([changer().getAttribute("aria-expanded"), groupe().hidden], ["false", true]);
+  });
+});
+
+test("palette — les onglets au clavier (le motif d'onglets de l'ARIA) : seul l'ouvert est dans l'ordre de Tab ; les flèches vont au suivant et au précédent, en boucle, Début et Fin aux bouts ; l'onglet atteint s'ouvre et prend le focus, sans défiler ; une autre touche ne fait rien", () => {
+  avecLaPalette(({ noeud, rendre }) => {
+    rendre();
+    const liste = () => noeud.querySelector(".combat-palette-onglets");
+    const ouvert = () => tous(noeud, "[role=tab]").find((tab) => tab.getAttribute("aria-selected") === "true");
+    const rangs = () => tous(noeud, "[role=tab]").map((tab) => tab.getAttribute("tabindex"));
+    assert.equal(texteDe(ouvert()), "Dés");
+    assert.deepEqual(rangs(), ["0", "-1", "-1", "-1", "-1"]);
+    // L'appui, relevé : son défaut empêché ou non (une flèche ferait défiler la page).
+    const appuyer = (key) => {
+      let empeche = false;
+      liste().declencher("keydown", { key, target: ouvert(), preventDefault: () => (empeche = true) });
+      return empeche;
+    };
+    for (const [touche, attendu] of [["ArrowRight", "Zone"], ["ArrowRight", "Dégâts"], ["ArrowLeft", "Zone"], ["End", "Durée"], ["ArrowRight", "Dés"], ["ArrowLeft", "Durée"], ["Home", "Dés"]]) {
+      assert.equal(appuyer(touche), true, `${touche} : son défaut empêché`);
+      assert.equal(texteDe(ouvert()), attendu, touche);
+      assert.equal(panneau(noeud).getAttribute("aria-labelledby"), ouvert().id);
+      memeNoeud(globalThis.document.activeElement, ouvert(), `${touche} : le focus sur l'onglet ouvert`);
+      assert.deepEqual(globalThis.document.focalisations.at(-1).options, { preventScroll: true });
+      assert.deepEqual(rangs().filter((rang) => rang === "0").length, 1, "un seul onglet dans l'ordre de Tab");
+    }
+    assert.deepEqual(rangs(), ["0", "-1", "-1", "-1", "-1"]);
+    // Une autre touche : ni onglet ouvert, ni focus, ni défaut empêché.
+    const focalisations = globalThis.document.focalisations.length;
+    assert.equal(appuyer("Enter"), false);
+    assert.equal(appuyer("ArrowDown"), false);
+    assert.equal(texteDe(ouvert()), "Dés");
+    assert.equal(globalThis.document.focalisations.length, focalisations);
   });
 });
 
@@ -513,7 +576,7 @@ test("combat_palette.js — dom.js seul ; sa signature ; tout focus sans défile
   assert.doesNotMatch(source, /localStorage|sessionStorage|matchMedia|lecture_mj|\.\.\/combat\//, "aucune règle, aucune vue, aucun stockage : la vue vient de l'écran");
   // Ses classes : celles du contrat (§ 5.1), et celles du site et du combat d'avant.
   const classes = [...source.matchAll(/classe(?:: |\s*=\s*)"([^"]+)"/g)].flatMap(([, liste]) => liste.split(" "));
-  const PERMISES = new Set(["combat-palette", "combat-palette-texte", "combat-palette-onglets", "combat-palette-groupe", "combat-palette-apercu", "combat-palette-effets", "combat-pied", "combat-jets-par-cible", "combat-cible-detail", "combat-capacite", "combat-sous", "combat-raison", "combat-refus", "bouton", "secondaire", "champ"]);
+  const PERMISES = new Set(["combat-palette", "combat-palette-texte", "combat-palette-onglets", "combat-palette-groupe", "combat-palette-apercu", "combat-palette-effets", "combat-pied", "combat-jets-par-cible", "combat-progression", "a-venir", "combat-cible-detail", "combat-capacite", "combat-sous", "combat-raison", "combat-refus", "bouton", "secondaire", "champ"]);
   assert.deepEqual(classes.filter((classe) => !PERMISES.has(classe)), []);
   for (const code of [0xa0, 0x202f, 0x2715, 0x2212]) assert.equal(source.includes(String.fromCodePoint(code)), false, `U+${code.toString(16)} par son code`);
   assert.ok(source.includes(`"${"\\"}u2715"`), "la croix écrite par son code");

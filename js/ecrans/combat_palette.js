@@ -12,9 +12,11 @@
 //
 // Le nœud porte tout (contrat, R n° 35) : son titre et son sous-titre, le
 // texte de la source, la phrase de la source (et, en Mode MJ, les sources au
-// choix), X quand la vue en a un, les onglets et le corps de celui qui est
-// ouvert, les effets en cours, l'aperçu (« Le journal écrira : … »), puis le
-// pied. La feuille ou la colonne qui l'accueille n'ont ni tête ni pied.
+// choix, fermées tant que « changer » n'est pas appuyé), X quand la vue en a
+// un, les onglets (les flèches, Début et Fin vont de l'un à l'autre ; seul
+// l'ouvert est dans l'ordre de Tab) et le corps de celui qui est ouvert, les
+// effets en cours, l'aperçu (« Le journal écrira : … »), puis le pied. La
+// feuille ou la colonne qui l'accueille n'ont ni tête ni pied.
 //
 // Ce qu'on choisit (Choisi : { genre, valeurs, x }) se tient ici, le temps
 // que la palette reste ouverte : un genre, puis les valeurs de ses champs
@@ -47,6 +49,15 @@ const SANS_DUREE = "La durée se choisit pour un effet de l'onglet Cible.";
 // nom accessible vient de la vue (« Retirer l'état Étourdi »).
 const SIGNE_RETIRER = "\u2715";
 const SIGNE_MOINS = "\u2212";
+// Le point médian (U+00B7) qui sépare le rang d'une cible de son nom
+// (« 1 · Marmiton n° 2 »), écrit par son code.
+const SIGNE_POINT = "\u00b7";
+// Le mot de la phrase du Mode MJ qui ouvre la liste des sources (E1 :
+// « Source : Frappe (par défaut) · changer »).
+const CHANGER = "changer";
+// Les touches des onglets : la flèche à droite et à gauche (en boucle), Début
+// et Fin (le motif d'onglets de l'ARIA).
+const TOUCHES_DES_ONGLETS = new Set(["ArrowRight", "ArrowLeft", "Home", "End"]);
 
 const present = (valeur) => valeur !== null && valeur !== undefined;
 const rempli = (texte) => present(texte) && texte !== "";
@@ -130,6 +141,9 @@ export function creer(actions) {
   let ongletOuvert = null;
   // X, saisi avant qu'un genre soit choisi : il entre dans le choix qui suit.
   let xSaisi = null;
+  // La liste des sources (Mode MJ), fermée tant que « changer » n'est pas
+  // appuyé ; elle se referme avec la palette.
+  let sourcesOuvertes = false;
   let rendue = null;
 
   /** Le choix part à l'écran, qui rend la vue de ce choix. */
@@ -241,10 +255,17 @@ export function creer(actions) {
     });
   }
 
-  /** Les cibles de « toute la case » (F10) : la cible en cours en tête, cochée et fixe ; les autres se cochent ; puis « Un jet par cible ». */
+  /**
+   * Les cibles de « toute la case » (F10) : la cible en cours en tête, cochée
+   * et fixe ; les autres se cochent ; puis, deux cibles ou plus, l'ordre des
+   * jets (« 1 · Marmiton de corvée n° 2 », dans l'ordre du choix, celui où le
+   * moteur les joue), chacun à venir comme dans le volet (F10), et « Un jet
+   * par cible ».
+   */
   function casesACocher(champ, parent) {
     const cochees = choix?.valeurs?.cibles ?? [];
     const options = champ.options ?? [];
+    const nomDe = (id) => options.find((option) => option.valeur === id)?.libelle ?? String(id);
     return [
       el(
         "div",
@@ -270,6 +291,7 @@ export function creer(actions) {
           ];
         }),
       ),
+      cochees.length >= 2 ? el("ol", { classe: "combat-progression" }, cochees.map((id, rang) => el("li", { classe: "a-venir" }, `${rang + 1} ${SIGNE_POINT} ${nomDe(id)}`))) : null,
       cochees.length >= 2 ? el("p", { classe: "combat-jets-par-cible" }, `Un jet par cible : ${cochees.length} cibles`) : null,
     ];
   }
@@ -311,13 +333,16 @@ export function creer(actions) {
       const sur = (parent.champs ?? []).find((autre) => autre.nom === "sur");
       const nomDuSur = (sur?.options ?? []).find((option) => option.valeur === valeurs.sur)?.libelle ?? null;
       const nommer = (nomDeCase) => (rempli(nomDuSur) ? `Case ${nomDeCase} : y déplacer ${sansSensForce(nomDuSur)}` : `Case ${nomDeCase}`);
+      // La clé du bouton part avec la demande : le focus y revient quand la
+      // feuille reparaît, même si le toucher ne le lui a pas donné (Safari ;
+      // relecture finale, R5).
       return bouton({
         cle: `champ:${champ.nom}`,
         contenu: rempli(valeurs[champ.nom]) ? `${champ.libelle ?? ""} ${valeurs[champ.nom]}` : (champ.libelle ?? ""),
         actif,
         raison,
         faire: () =>
-          actions.demanderUneCase?.({ exclue: champ.exclue ?? null, nommer }, (nomDeCase) =>
+          actions.demanderUneCase?.({ exclue: champ.exclue ?? null, nommer, cleDuBouton: `champ:${champ.nom}` }, (nomDeCase) =>
             changerLaValeur((lesValeurs) => {
               lesValeurs[champ.nom] = nomDeCase;
             }),
@@ -353,6 +378,22 @@ export function creer(actions) {
     return (offert ?? onglets[0])?.cle ?? null;
   }
 
+  /**
+   * Ouvre un onglet au clavier, et y met le focus : la flèche à droite ou à
+   * gauche (en boucle), Début, Fin. L'onglet suivi s'ouvre aussitôt, comme
+   * d'un appui (le motif d'onglets de l'ARIA, à activation immédiate).
+   */
+  function ongletAuClavier(evenement, liste) {
+    if (!TOUCHES_DES_ONGLETS.has(evenement.key)) return;
+    evenement.preventDefault();
+    const rang = liste.findIndex((onglet) => onglet.cle === ongletOuvert);
+    const vers = { ArrowRight: rang + 1, ArrowLeft: rang - 1, Home: 0, End: liste.length - 1 }[evenement.key];
+    const suivi = liste[(vers + liste.length) % liste.length];
+    ongletOuvert = suivi.cle;
+    refaire();
+    [...noeud.querySelectorAll("[data-cle]")].find((element) => element.getAttribute("data-cle") === `onglet:${suivi.cle}`)?.focus({ preventScroll: true });
+  }
+
   function onglets(liste) {
     if (liste.length === 0) return [];
     const ids = liste.map((onglet) => [onglet.cle, identifiant("onglet")]);
@@ -362,7 +403,7 @@ export function creer(actions) {
     return [
       el(
         "div",
-        { classe: "combat-palette-onglets", role: "tablist" },
+        { classe: "combat-palette-onglets", role: "tablist", onkeydown: (evenement) => ongletAuClavier(evenement, liste) },
         liste.map((onglet) =>
           el(
             "button",
@@ -373,6 +414,8 @@ export function creer(actions) {
               "data-cle": `onglet:${onglet.cle}`,
               "aria-selected": String(onglet.cle === ongletOuvert),
               "aria-controls": idPanneau,
+              // Seul l'onglet ouvert est dans l'ordre de Tab ; les flèches mènent aux autres.
+              tabindex: onglet.cle === ongletOuvert ? "0" : "-1",
               onclick: () => {
                 if (ongletOuvert === onglet.cle) return;
                 ongletOuvert = onglet.cle;
@@ -387,31 +430,53 @@ export function creer(actions) {
     ];
   }
 
-  /** La source : sa phrase ; en Mode MJ, la phrase du MJ et les sources au choix. */
+  /**
+   * La source : sa phrase ; en Mode MJ, la phrase du MJ et les sources au
+   * choix, fermées tant que « changer », le dernier mot de la phrase, n'est
+   * pas appuyé (E1 : la liste ouverte d'office repoussait les onglets hors de
+   * la vue).
+   */
   function source(s) {
     if (!s) return null;
     const mj = ecran.modeMj === true;
     const idPhrase = identifiant("source");
+    const phrase = mj && rempli(s.phraseMj) ? s.phraseMj : s.phrase;
+    if (!(mj && s.choix?.length)) return paragrapheOuRien(phrase, null, idPhrase);
+    const idListe = identifiant("sources");
+    const debut = rempli(phrase) && phrase.endsWith(CHANGER) ? phrase.slice(0, -CHANGER.length) : rempli(phrase) ? `${phrase} ` : "";
+    const changer = el(
+      "button",
+      {
+        type: "button",
+        classe: "bouton secondaire",
+        "data-cle": "source:changer",
+        "aria-expanded": String(sourcesOuvertes),
+        "aria-controls": idListe,
+        onclick: () => {
+          sourcesOuvertes = !sourcesOuvertes;
+          refaire();
+        },
+      },
+      CHANGER,
+    );
     return [
-      paragrapheOuRien(mj && rempli(s.phraseMj) ? s.phraseMj : s.phrase, null, idPhrase),
-      mj && s.choix?.length
-        ? el(
-            "div",
-            { role: "group", "aria-labelledby": idPhrase },
-            s.choix.map((une, rang) =>
-              bouton({
-                cle: `source:${rang}`,
-                contenu: une.libelle,
-                presse: une.choisie === true,
-                actif: une.actif,
-                raison: une.raison,
-                faire: () => {
-                  if (une.choisie !== true) actions.changerLaSource?.(une.source);
-                },
-              }),
-            ),
-          )
-        : null,
+      el("p", { id: idPhrase }, debut, changer),
+      el(
+        "div",
+        { id: idListe, role: "group", "aria-labelledby": idPhrase, hidden: !sourcesOuvertes },
+        s.choix.map((une, rang) =>
+          bouton({
+            cle: `source:${rang}`,
+            contenu: une.libelle,
+            presse: une.choisie === true,
+            actif: une.actif,
+            raison: une.raison,
+            faire: () => {
+              if (une.choisie !== true) actions.changerLaSource?.(une.source);
+            },
+          }),
+        ),
+      ),
     ];
   }
 
@@ -512,6 +577,7 @@ export function creer(actions) {
       choix = null;
       ongletOuvert = null;
       xSaisi = null;
+      sourcesOuvertes = false;
       rendue = null;
       noeud.replaceChildren();
       noeud.hidden = true;
@@ -523,7 +589,7 @@ export function creer(actions) {
     if (!vue.appliquer) choix = null;
     if (!vue.x) xSaisi = null;
     ongletOuvert = ongletDe(vue.onglets ?? []);
-    const signature = JSON.stringify([vue, ecran.etroit === true, ecran.modeMj === true, ongletOuvert, choix, xSaisi]);
+    const signature = JSON.stringify([vue, ecran.etroit === true, ecran.modeMj === true, ongletOuvert, choix, xSaisi, sourcesOuvertes]);
     noeud.hidden = false;
     if (signature === rendue) return;
     rendue = signature;

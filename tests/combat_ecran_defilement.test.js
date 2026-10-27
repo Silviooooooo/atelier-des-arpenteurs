@@ -16,7 +16,12 @@
 // - hors de la bulle, un ou deux « scrollTop = », tous dans la liste du
 //   journal (creerListe, combat_journal.js), qui défile en elle-même pour
 //   montrer sa dernière ligne, et, au lot 4.3, garde la ligne lue à sa place
-//   quand « Lignes précédentes » en pose 500 au-dessus (contrat, § 5.5) ;
+//   quand « Lignes précédentes » en pose 500 au-dessus (contrat, § 5.5) ; à
+//   la vague 4 (W1 n° 6, R2 n° 10), la première écriture vit dans
+//   allerALaFin(), que rendre appelle quand des lignes arrivent et l'écran
+//   quand le journal s'ouvre en plein écran (la liste, cachée dans la page
+//   au téléphone, n'avait pas de hauteur) : le compte reste de deux, la
+//   même écriture servant aux deux ;
 // - dans la bulle, les seules écritures de defile.scrollTop, dans
 //   montrerDansLaBulle (combat_bulle.js) : ce qui défile en elle repart du
 //   haut à chaque ouverture et y amène le focus et l'aperçu (relecture du
@@ -165,6 +170,9 @@ test("défilement — montrerLeJournal() : au téléphone, le journal en plein �
   const plein = etendueDe(SOURCES[ECRAN], "ouvrirLeJournalEnPlein");
   assert.ok(plein, "ouvrirLeJournalEnPlein() existe");
   assert.match(SOURCES[ECRAN].slice(plein.debut, plein.fin), /menus\.ouvrir\("journal", \{/);
+  // Montrée, la liste descend en elle-même à sa dernière ligne, par l'écriture de la liste (vague 4, W1 n° 6).
+  assert.match(SOURCES[ECRAN].slice(plein.debut, plein.fin), /menus\.ouvrir\("journal", \{[\s\S]*\}\);\s*liste\.allerALaFin\(\);\s*\}$/);
+  assert.match(SOURCES[JOURNAL], /function allerALaFin\(\) \{\s*noeud\.scrollTop = noeud\.scrollHeight;\s*\}/);
   // Elle est le seul moyen du bandeau : « Journal ↓ », ou un clic à la souris sur lui.
   assert.match(SOURCES[ECRAN], /creerBandeau\(\{ montrerLeJournal, tient: services\.tient, surveiller: services\.surveiller \}\)/);
   // Le titre qu'elle focalise ne prend le focus que s'il le peut, sans entrer dans l'ordre du clavier.
@@ -196,14 +204,14 @@ test("défilement — le contrôle voit chaque faute, une à la fois, sur des so
     ["un « scrollTop += » de la bulle hors de montrerDansLaBulle (focaliser)", fautive(BULLE, "cible.focus({ preventScroll: true });", "cible.focus({ preventScroll: true });\n    defile.scrollTop += 10;"), /le « scrollTop = » est hors de la liste du journal \(js\/ecrans\/combat_bulle\.js/],
     [
       "des « scrollTop = » de trop dans la liste du journal",
-      fautive(JOURNAL, "    if (ajoutees > 0 || !suite) noeud.scrollTop = noeud.scrollHeight;\n", "    if (ajoutees > 0 || !suite) noeud.scrollTop = noeud.scrollHeight;\n    noeud.scrollTop = 0;\n    noeud.scrollTop = 1;\n"),
+      fautive(JOURNAL, "    noeud.scrollTop = noeud.scrollHeight;\n", "    noeud.scrollTop = noeud.scrollHeight;\n    noeud.scrollTop = 0;\n    noeud.scrollTop = 1;\n"),
       /[34] « scrollTop = » hors de montrerDansLaBulle\(\) au lieu d'un ou deux/,
     ],
     ["montrerDansLaBulle qui fait défiler la page", fautive(BULLE, "    if (duHaut) defile.scrollTop = 0;", "    if (duHaut) globalThis.document.documentElement.scrollTop = 0;"), /combat_bulle\.js, ligne \d+ : montrerDansLaBulle\(\) fait défiler autre chose que la bulle/],
     [
       "le « scrollTop = » déplacé dans l'écran",
       fautives([
-        [JOURNAL, "    if (ajoutees > 0 || !suite) noeud.scrollTop = noeud.scrollHeight;\n", ""],
+        [JOURNAL, "    noeud.scrollTop = noeud.scrollHeight;\n", ""],
         [ECRAN, "    journal.scrollIntoView", "    liste.noeud.scrollTop = liste.noeud.scrollHeight;\n    journal.scrollIntoView"],
       ]),
       /le « scrollTop = » est hors de la liste du journal \(js\/ecrans\/combat\.js/,
@@ -211,7 +219,7 @@ test("défilement — le contrôle voit chaque faute, une à la fois, sur des so
     [
       "le « scrollTop = » hors de creerListe",
       fautives([
-        [JOURNAL, "    if (ajoutees > 0 || !suite) noeud.scrollTop = noeud.scrollHeight;\n", ""],
+        [JOURNAL, "    noeud.scrollTop = noeud.scrollHeight;\n", ""],
         [JOURNAL, "export function creerBandeau(", "const remonter = (noeud) => {\n  noeud.scrollTop = 0;\n};\n\nexport function creerBandeau("],
       ]),
       /le « scrollTop = » est hors de la liste du journal \(js\/ecrans\/combat_journal\.js/,

@@ -231,6 +231,29 @@ test("palette : au nom d'un état porté, hors d'un geste ; sa durée se dit de 
   assert.equal(dureeDe(palette(etat, MJ, { genre: "etat", valeurs: {} })).options[1].libelle, "jusqu'au prochain tour des PJ");
 });
 
+// La vague 4 (relecture R1 n° 3) : hors d'un geste, une capacité vaut source
+// quand son porteur est celui que l'effet vise (js/combat/effets.js). Ses
+// sources au choix s'éprouvent donc sur lui, jamais sur le premier vivant :
+// le moteur accepte ce qu'elles disent, et refuse ce qu'elles refusent.
+test("palette : hors d'un geste, au nom d'une capacité de qui ne porte aucun état — ses sources au choix valent sur lui, comme le moteur le juge", () => {
+  assert.equal(ENTRE_DEUX.effets.filter((effet) => effet.genre === "etat").length, 0, "personne ne porte d'état");
+  const vivants = ENTRE_DEUX.ordre.filter((id) => !ENTRE_DEUX.protagonistes[id].mort);
+  assert.notEqual(vivants.at(-1), vivants[0], "le dernier vivant n'est pas le premier");
+  for (const qui of [vivants[0], vivants.at(-1)]) {
+    const vue = palette(ENTRE_DEUX, { genre: "capacite", qui, capacite: 0 });
+    const { choix } = vue.source;
+    // Ses capacités, puis « MJ ».
+    assert.equal(choix.length, ENTRE_DEUX.photos[qui].capacites.length + 1, qui);
+    for (const un of choix) {
+      const surLui = { type: "effet", genre: "attaque", source: un.source, sur: qui, n: -1, duree: "tour" };
+      assert.equal(un.actif, accepte(ENTRE_DEUX, surLui), `${qui}, ${un.libelle} : ${un.raison}`);
+    }
+    assert.ok(choix.every((un) => un.actif && un.raison === null), `${qui} : chacune vaut source sur lui`);
+    // « Sur » : lui seul.
+    assert.deepEqual(optionsDe(champDe(genreDe(vue, "attaque"), "sur")).filter((option) => option.actif).map((option) => option.valeur), [qui]);
+  }
+});
+
 test("palette : X, pour un passif au coût X : de 0 au plus grand que le juge accepte ; dans le gabarit et la commande", () => {
   const zeste = aubepineEssai((valeurs) => {
     valeurs.capacites.push(capaciteEssai({ nom: "Zeste", groupe: { genre: "capacites", titre: "Saucier" }, facons: [faconEssai({ cout: { souffle: "X", lien: 0 }, description: "Retirez X points.", passif: true, elements: ["Passif"] })] }));

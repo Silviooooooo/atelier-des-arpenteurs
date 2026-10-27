@@ -375,10 +375,14 @@ test("jetons — ecran.css, personnage.css et combat.css tirent toutes leurs val
   for (const feuille of FEUILLES_A_JETONS) assert.deepEqual(valeursEnDur(lire(feuille), definisPour(feuille)), [], feuille);
   assert.doesNotMatch(JETONS, /@font-face|@import|url\(/);
   // La feuille du combat est bien lue : elle emploie ses jetons et les quatre propriétés de la bulle, et ses deux largeurs
-  // sont écrites là où elles sont permises ; sa troisième condition, la souris, n'en a pas.
+  // sont écrites là où elles sont permises ; la condition de la souris n'en a pas. Au lot 4.3 (vague 4), une hauteur de
+  // plus, la première : la fenêtre trop basse pour la colonne du téléphone (un téléphone couché) ; et un second bloc à
+  // 56rem, en fin de feuille (tests/combat_styles.test.js tient leur ordre).
   const combat = lire("css/combat.css");
   for (const nom of [...COULEURS_DU_COMBAT, "largeur-combat", ...deLaBulle]) assert.ok(combat.includes(`var(--${nom})`), `--${nom} ne sert pas dans css/combat.css`);
-  assert.deepEqual(combat.split("\n").map((ligne) => ligne.trim()).filter((ligne) => ligne.startsWith("@")), ["@media (min-width: 56rem) {", "@media (min-width: 80rem) {", "@media (pointer: fine) {"]);
+  const arobases = combat.split("\n").map((ligne) => ligne.trim()).filter((ligne) => ligne.startsWith("@"));
+  assert.deepEqual(arobases.slice(0, 4), ["@media (max-height: 30rem) {", "@media (min-width: 56rem) {", "@media (min-width: 80rem) {", "@media (pointer: fine) {"]);
+  assert.deepEqual(arobases.slice(4), arobases.length === 5 ? ["@media (min-width: 56rem) {"] : []);
   // Les --bulle-* ne sont admises que d'après placerBulle : une autre est refusée, dans combat.css comme ailleurs.
   assert.match(valeursEnDur(".combat-bulle { left: var(--bulle-x); }", definisPour("css/combat.css")).join("\n"), /^--bulle-x n'est pas défini/);
   assert.match(valeursEnDur(".bulle { left: var(--bulle-gauche); }", definisPour("css/ecran.css")).join("\n"), /^--bulle-gauche n'est pas défini/);

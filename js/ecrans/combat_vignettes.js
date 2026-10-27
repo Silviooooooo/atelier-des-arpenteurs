@@ -77,13 +77,17 @@ export function creer(actions, { minuteur = null } = {}) {
   let avaler = null;
   let parLAppui = null;
 
-  /** Le menu du MJ : ouvert en Mode MJ, sa raison s'il est inactif ; hors Mode MJ, la phrase. */
+  /** Le menu du MJ : ouvert en Mode MJ, sa raison s'il est inactif ; hors Mode MJ, la phrase. Rend vrai s'il l'a ouvert. */
   function ouvrirLeMenu(fiche) {
     const menu = fiche.etat?.menuMj ?? null;
-    if (menu === null) return;
+    if (menu === null) return false;
     if (!modeMj) actions.dire?.(MENU_EN_MODE_MJ);
     else if (menu.actif === false) actions.dire?.(menu.raison);
-    else actions.ouvrirMenuMj?.(fiche.id, fiche.noeud);
+    else {
+      actions.ouvrirMenuMj?.(fiche.id, fiche.noeud);
+      return true;
+    }
+    return false;
   }
 
   function finirLAppui() {
@@ -93,7 +97,14 @@ export function creer(actions, { minuteur = null } = {}) {
   }
 
   // L'appui se pose au pointerdown du bouton principal, et s'oublie au
-  // pointerup, au pointercancel et au pointerleave (contrat, § 4.2).
+  // pointerup, au pointercancel et au pointerleave (contrat, § 4.2). Le
+  // menu ouvert, le clic qui suit tombe sur ce qui vient de paraître sous
+  // le doigt (le voile, une entrée), et non sur la vignette : l'écran
+  // l'avale, où qu'il tombe (vague 4, W1 n° 5, R2 n° 11). La vignette
+  // n'avale alors rien elle-même : ce clic ne lui arrive pas, et elle
+  // avalerait le suivant, une touche Entrée sur elle, menu fermé (C4).
+  // Sans menu ouvert (la phrase, la raison), ou sans l'écran (une partie
+  // montée seule), c'est elle qui avale le clic qui suit l'appui.
   function auDebutDeLAppui(fiche, evenement) {
     finirLAppui();
     avaler = null;
@@ -103,9 +114,9 @@ export function creer(actions, { minuteur = null } = {}) {
       id: fiche.id,
       numero: leMinuteur.poser(() => {
         appui = null;
-        avaler = fiche.id;
         parLAppui = fiche.id;
-        ouvrirLeMenu(fiche);
+        if (ouvrirLeMenu(fiche) && typeof actions.avalerLeClicSuivant === "function") actions.avalerLeClicSuivant();
+        else avaler = fiche.id;
       }, APPUI_LONG),
     };
   }
