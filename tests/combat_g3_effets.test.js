@@ -2,8 +2,8 @@
 // 4.3, § 4.5 à § 4.8 et § 5 ; contrat de la vague 1, § 3, § 5, § 6.3 et
 // § 7.5) : js/combat/effets.js. La palette (chaque genre, son moment et sa
 // raison), la source, l'auteur et le camp, le prix d'un passif payant et son
-// X, « un passif sert une fois par jet », rendre borné au maximum, ±N, les
-// états, déplacer, les gestes du MJ et leurs bornes, l'échéance, les effets
+// X, « un passif sert une fois par jet », rendre borné au maximum, ±N (et la
+// valeur d'un adversaire avant et après), les états, déplacer, les gestes du MJ et leurs bornes, l'échéance, les effets
 // des absents, l'attaque en plus et la garde jouable. Et les choix de l'agent
 // principal (contrat, § 12) : la préparation d'un geste et le prix rendu
 // (11), ni allié ni soi dans « toute la case » (10), la puissance d'un passif
@@ -685,6 +685,41 @@ test("±N : « pour ce jet » dans le geste, avant tout dé ; « tour » et « c
     effetsDurablesDe(combatEntier, "pj1").map(({ genre, valeur, n, duree }) => [genre, valeur, n, duree]),
     [["modif", "defense", 1, "combat"]],
   );
+});
+
+// Le journal lit dans l'effet la valeur d'un adversaire avant et après un ±N
+// appliqué pendant un geste : sans elles, il écrivait « ? → ? ».
+test("±N sur un adversaire, pendant un geste : l'effet rendu porte sa valeur avant et après, lue avec le geste ; l'effet durable posé ne la porte pas ; rien pour un personnage, ni hors d'un geste", () => {
+  const prepare = avecGestes(combat(), geste());
+  const { etat: duJet, effet: premier } = appliquer(prepare, effet("defense", { sur: "adv2", n: -2, duree: "jet" }, FRAPPE));
+  assert.deepEqual([premier.avant, premier.apres], [5, 3], "pour ce jet");
+  const { effet: second } = appliquer(duJet, effet("defense", { sur: "adv2", n: -1, duree: "jet" }, FRAPPE));
+  assert.deepEqual([second.avant, second.apres], [3, 2], "le second part de la valeur que le premier a écartée, dans le geste");
+  assert.deepEqual(sommet(duJet).effets.map(({ avant, apres }) => [avant, apres]), [[5, 3]], "le geste garde l'effet tel que rendu");
+
+  const { etat: tour, effet: fait } = appliquer(avecGestes(combat(), auxSuites()), effet("attaque", { sur: "adv2", n: 2, duree: "tour" }));
+  assert.deepEqual([fait.avant, fait.apres, fait.durable], [4, 6, 2], "durée « tour »");
+  const pose = effetsDurablesDe(tour, "adv2")[0];
+  assert.deepEqual([Object.hasOwn(pose, "avant"), Object.hasOwn(pose, "apres")], [false, false], "l'effet durable « modif » ne les porte pas");
+  const chef = attaqueDe(combat(), "adv3").valeur;
+  const { effet: entier } = appliquer(avecGestes(combat(), auxSuites()), effet("attaque", { sur: "adv3", n: -1, duree: "combat" }));
+  assert.deepEqual([entier.avant, entier.apres], [chef, chef - 1], "durée « combat »");
+
+  // Un durable se lit sans les ±N « pour ce jet » du geste : son échéance
+  // rendra la valeur sans eux (contrat du lot 4.3, choix 24).
+  const garde = avecGestes(combat(), auxSuites({ effets: [premier] }));
+  assert.equal(defenseDe(garde, "adv2", sommet(garde)).valeur, 3, "le geste garde son −2 pour ce jet");
+  const { effet: durableSurJet } = appliquer(garde, effet("defense", { sur: "adv2", n: -1, duree: "tour" }));
+  assert.deepEqual([durableSurJet.avant, durableSurJet.apres], [5, 4], "un durable sur une valeur déjà écartée pour ce jet");
+
+  const { effet: horsGeste } = appliquer(combat(), effet("defense", { sur: "adv2", n: 1, duree: "tour" }));
+  assert.deepEqual([Object.hasOwn(horsGeste, "avant"), Object.hasOwn(horsGeste, "apres")], [false, false], "hors d'un geste, le journal les lit sur l'état d'avant et d'après");
+
+  for (const duree of ["jet", "tour"]) {
+    const ou = duree === "jet" ? prepare : avecGestes(combat(), auxSuites());
+    const { effet: surPj } = appliquer(ou, effet("defense", { sur: "pj1", n: -1, duree }, duree === "jet" ? FRAPPE : MJ));
+    assert.deepEqual([Object.hasOwn(surPj, "avant"), Object.hasOwn(surPj, "apres")], [false, false], `un personnage, « ${duree} »`);
+  }
 });
 
 test("Un état : une capacité figée ou un nom libre, durable, ou pour ce jet", () => {

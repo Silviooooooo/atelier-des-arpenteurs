@@ -72,7 +72,7 @@ import { lettreDuGeste, localisationsDuGeste, victimeDe } from "./degats.js";
 import { ajouterReussite, evaluerEssai, inversable, inverserDernier, jetFini, relancable, relancerParPalette, reussites } from "./jet.js";
 import { prixDuGeste } from "./offre.js";
 import { BORNES_PHOTO, GENRES_EFFET, REUSSITES_MAX } from "./regles.js";
-import { campDe, capaciteDe, courantDe, gesteEnCours, photoDe, vivant } from "./valeurs.js";
+import { attaqueDe, campDe, capaciteDe, courantDe, defenseDe, gesteEnCours, photoDe, vivant } from "./valeurs.js";
 
 const accorder = (nombre, mot) => `${nombre} ${mot}${nombre > 1 ? "s" : ""}`;
 const element = (liste, indice) => (Array.isArray(liste) && Number.isInteger(indice) && indice >= 0 && indice < liste.length ? liste[indice] : null);
@@ -591,8 +591,8 @@ const APPLICATIONS = {
     return { etat: changer(etat, effet.sur, lue.champs(apres)), effet: { ...effet, avant: lue.valeur, apres } };
   },
 
-  attaque: (etat, geste, effet, id) => ecarter(etat, effet, id),
-  defense: (etat, geste, effet, id) => ecarter(etat, effet, id),
+  attaque: (etat, geste, effet, id) => ecarter(etat, geste, effet, id),
+  defense: (etat, geste, effet, id) => ecarter(etat, geste, effet, id),
 
   // Un état : celui « pour ce jet » reste dans le geste ; les autres sont
   // durables. Seul l'événement « blessure » pose une blessure.
@@ -612,9 +612,18 @@ const APPLICATIONS = {
 const poser = (etat, effet, pose) => ({ etat: ajouterDurable(etat, pose), effet: { ...effet, durable: pose.id } });
 
 // ±N : « pour ce jet », dans le geste seul (valeurs.js et circonstances.js
-// l'y lisent) ; sinon un effet durable « modif » porté par « sur ».
-function ecarter(etat, effet, id) {
-  return effet.duree === "jet" ? {} : poser(etat, effet, durable(id, "modif", { ...effet, porteur: effet.sur }, { valeur: effet.genre, n: effet.n }));
+// l'y lisent) ; sinon un effet durable « modif » porté par « sur ». Pendant
+// un geste, chez un adversaire, l'effet rendu porte sa valeur d'avant et
+// celle d'après : le journal les lit dans l'effet. Pour ce jet, elle se lit
+// avec le geste (ses ±N « pour ce jet » déjà appliqués) ; pour un durable,
+// sans eux, comme son échéance la rendra (contrat du lot 4.3, choix 24). Hors
+// d'un geste, le journal les lit sur l'état d'avant et d'après (journal.js).
+// L'effet durable ne les porte pas ; un personnage n'en a pas (sa valeur est
+// null : ses ±N sont des modificateurs).
+function ecarter(etat, geste, effet, id) {
+  const avant = geste === null ? null : (effet.genre === "attaque" ? attaqueDe : defenseDe)(etat, effet.sur, effet.duree === "jet" ? geste : null).valeur;
+  const lu = avant === null ? effet : { ...effet, avant, apres: avant + effet.n };
+  return effet.duree === "jet" ? { effet: lu } : poser(etat, lu, durable(id, "modif", { ...effet, porteur: effet.sur }, { valeur: effet.genre, n: effet.n }));
 }
 
 /**
@@ -629,7 +638,9 @@ function ecarter(etat, effet, id) {
  *   hors d'un geste), « camp » (celui de l'auteur, ou le camp qui joue),
  *   « durable » (l'identifiant de l'effet durable posé, ou null), et ce que le
  *   journal dira : « avant » et « apres » d'une ressource rendue, d'une zone
- *   choisie, d'un dé inversé (sa valeur gardée), d'une réussite ajoutée ;
+ *   choisie, d'un dé inversé (sa valeur gardée), d'une réussite ajoutée, de
+ *   l'attaque ou de la défense d'un adversaire écartée par ±N pendant un
+ *   geste ;
  *   « avant », la victime d'avant un report ; « depart », la case d'avant un
  *   déplacement.
  * Hors d'un geste, le moteur écrit ensuite la ligne de l'effet.

@@ -26,8 +26,8 @@
 // - la source d'un effet se nomme ici (nomDeLaSource) : une capacité, un état
 //   porté, ou « MJ » ;
 // - le −1 par zone sans endurance a disparu (mission, § 4.10) : une blessure
-//   est un effet durable ; blessuresDe() ne compte plus que les zones sans
-//   endurance, pour le banc.
+//   est un effet durable, et le compte des zones sans endurance s'en est allé
+//   avec lui (personne ne le lisait plus).
 //
 // Ce fichier n'importe rien : l'offre, le journal et les vues y prennent le
 // geste en cours sans passer par le moteur, donc sans cycle d'import.
@@ -170,17 +170,6 @@ export function attaqueDe(etat, id, geste = null) {
  */
 export function defenseDe(etat, id, geste = null) {
   return ecartee(etat, id, "defense", geste);
-}
-
-/**
- * Le nombre de ses zones dont l'endurance est à 0. Depuis la fin du −1
- * (mission du lot 4.3, § 4.10), ce compte ne pèse plus sur aucun jet, et ce
- * n'est plus celui de ses blessures (l'endurance à 0 et du corps perdu,
- * degats.js) : il reste pour qui le lit, le banc sur le classeur réel.
- */
-export function blessuresDe(etat, id) {
-  const zones = courantDe(etat, id)?.zones ?? [];
-  return zones.filter((zone) => zone.resistance <= 0).length;
 }
 
 /**

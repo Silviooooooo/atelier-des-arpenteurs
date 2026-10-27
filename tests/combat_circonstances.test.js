@@ -31,7 +31,6 @@ import {
   aJoue,
   alliesSurLaCase,
   attaqueDe,
-  blessuresDe,
   campDe,
   capaciteDe,
   courantDe,
@@ -187,7 +186,6 @@ test("valeurs.js et circonstances.js exportent ce que dit le contrat, sans un no
     "aJoue",
     "alliesSurLaCase",
     "attaqueDe",
-    "blessuresDe",
     "campDe",
     "capaciteDe",
     "courantDe",
@@ -240,7 +238,6 @@ test("un identifiant inconnu ou piégé ne lève pas : null, faux, zéro, une li
     assert.deepEqual(attaqueDe(etat, id), { valeur: null, base: null, ecarts: [] });
     assert.deepEqual(defenseDe(etat, id), { valeur: null, base: null, ecarts: [] });
     assert.deepEqual(effetsDurablesDe(etat, id), []);
-    assert.equal(blessuresDe(etat, id), 0);
     assert.deepEqual(alliesSurLaCase(etat, id), []);
     assert.equal(capaciteDe(etat, id, 0), null);
     assert.deepEqual(passifsDe(etat, id), []);
@@ -286,17 +283,6 @@ test("attaqueDe, defenseDe : les nombres courants d'un adversaire, jamais ceux d
   assert.equal(change.photos.adv2.attaque, 4, "la photographie n'a pas bougé");
   assert.equal(attaqueDe(change, "adv2").valeur, 6);
   assert.equal(defenseDe(change, "adv2").valeur, 3);
-});
-
-test("blessuresDe : le nombre de zones dont l'endurance est à 0 (pour le banc ; il ne pèse plus sur les jets)", () => {
-  assert.equal(blessuresDe(duel(), "pj1"), 0);
-  const entamee = duel({ retoucher: (etat) => { etat.protagonistes.pj1.zones[2].resistance = 1; etat.protagonistes.pj1.zones[2].armure = 0; } });
-  assert.equal(blessuresDe(entamee, "pj1"), 0, "une endurance entamée, ou une armure à 0, ne comptent pas");
-  const une = duel({ retoucher: (etat) => { etat.protagonistes.pj1.zones[2].resistance = 0; } });
-  assert.equal(blessuresDe(une, "pj1"), 1);
-  assert.equal(blessuresDe(une, "adv2"), 0, "chacun les siennes");
-  const deux = duel({ retoucher: (etat) => { etat.protagonistes.pj1.zones[2].resistance = 0; etat.protagonistes.pj1.zones[4].resistance = 0; } });
-  assert.equal(blessuresDe(deux, "pj1"), 2);
 });
 
 test("alliesSurLaCase : les vivants de son camp sur sa case, autres que lui, dans l'ordre d'ajout", () => {

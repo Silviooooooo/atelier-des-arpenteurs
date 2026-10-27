@@ -13,8 +13,8 @@
 // sans jet), Guetter (attendre), Nez fin (un passif à 1 souffle) et Minutie
 // (un passif gratuit) ; « Ciboulette », Dressage minute à 2 souffle et Guetter
 // à 1 souffle ; le « Marmiton », Guetter. Tous sont en D4, sauf mention. Un
-// seul gabarit s'écrit sur un geste retouché : ±N sur un adversaire pendant un
-// geste, dont l'effet ne porte pas encore l'avant et l'après.
+// seul gabarit s'écrit aussi sur un geste retouché, pour ses trois durées : ±N
+// sur un adversaire pendant un geste, dont l'effet porte l'avant et l'après.
 //
 // Chaque ligne se compare par son texte, et ses segments se vérifient : la
 // règle d'or, leurs types, leurs phrases. Les états se comparent par leurs
@@ -530,10 +530,10 @@ test("pendant un geste, les phrases d'effet : « pour ce jet » après les sourc
   assert.equal(fin.texte, "Combat terminé : victoire des PJ.");
 });
 
-// Le seul gabarit écrit sur un geste retouché : l'effet ±N d'un adversaire
-// appliqué pendant un geste ne porte pas encore sa valeur avant et après
+// Le seul gabarit écrit aussi sur un geste retouché : l'effet ±N d'un
+// adversaire appliqué pendant un geste porte sa valeur avant et après
 // (js/combat/effets.js) ; le journal les lit dans l'effet, et ne les
-// recalcule pas.
+// recalcule pas. Le contrôle suivant le joue par le moteur.
 test("±N sur un adversaire, pendant un geste : sa valeur avant et après, que porte l'effet, et sa durée", () => {
   const depart = combat(surD4(AUBEPINE, MARMITON));
   const suites = jouer(depart, capacite(depart, "pj1", "Frappe"), viser("adv2"), d8(8), d8(2), d20(5));
@@ -545,6 +545,30 @@ test("±N sur un adversaire, pendant un geste : sa valeur avant et après, que p
   assert.equal(fini(ecart({ duree: "tour", durable: 7 })), `${DEBUT} ${JET} Attaque de Marmiton : 4 → 2 (Minutie), jusqu'au prochain tour d'Aubépine.`);
   assert.equal(fini(ecart({ duree: "combat", durable: 7 })), `${DEBUT} ${JET} Attaque de Marmiton : 4 → 2 (Minutie), jusqu'à la fin du combat.`);
   assert.equal(fini(ecart({ duree: "jet" })), `${DEBUT} Attaque de Marmiton : 4 → 2 (Minutie), pour ce jet. ${JET}`);
+});
+
+test("±N sur un adversaire, dans un geste joué : la ligne dit sa valeur avant et après, jamais « ? »", () => {
+  const depart = combat(surD4(AUBEPINE, MARMITON));
+  const minutie = source(depart, "pj1", "Minutie");
+  const joue = jouer(
+    depart,
+    capacite(depart, "pj1", "Frappe"),
+    viser("adv2"),
+    effet("defense", { sur: "adv2", n: -2, duree: "jet" }, minutie),
+    d8(8),
+    d8(2),
+    d20(5),
+    effet("attaque", { sur: "adv2", n: -1, duree: "tour" }),
+    APPLIQUER,
+  );
+  const [ligne] = ecrites(depart, joue);
+  assert.ok(!ligne.texte.includes("?"), ligne.texte);
+  assert.equal(
+    ligne.texte,
+    "Aubépine : Frappe contre Marmiton. Défense de Marmiton : 5 → 3 (Minutie), pour ce jet. d8 contre 3 → 8 ✓, 2 ✗ : 1 réussite, A = 5. " +
+      "Localisation d20 → 5 : torse. Armure 10 → 5. Attaque de Marmiton : 4 → 3 (MJ), jusqu'au prochain tour d'Aubépine.",
+  );
+  assert.deepEqual(ligne.phrases, ["ouverture", "effet", "jet", "localisation", "degats", "effet"]);
 });
 
 // ─── La blessure ────────────────────────────────────────────────────────────

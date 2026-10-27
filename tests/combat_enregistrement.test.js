@@ -30,8 +30,15 @@ import { simulerStockage } from "./outils/stockage_espion.js";
 
 // Une base, une transaction ou une file qui n'aboutit jamais ne doit pas
 // laisser un contrôle attendre sans fin (l'envoi passe par node --test) : au
-// bout de trente secondes, il échoue. Le fichier entier en prend vingt.
+// bout de trente secondes, il échoue.
 const test = (titre, corps) => controle(titre, { timeout: 30_000 }, corps);
+// Les trois contrôles lourds, qui chiffrent et déchiffrent des mégaoctets,
+// en prennent cent vingt : seuls, le 27/10, ils ont duré de 4 à 6 s, de 20 à
+// 35 s et de 21 à 30 s selon la charge du poste ; dans la suite complète du
+// même jour, mémoire du poste pleine, ils ont passé leurs trente sans que leur
+// code ait changé (contrat du lot 4.3, § 12, choix 22). Le garde-fou d'une
+// attente sans fin reste.
+const lourd = (titre, corps) => controle(titre, { timeout: 120_000 }, corps);
 // Et là où l'on sait qu'une casse ferait attendre, l'attente est bornée de près.
 function borner(promesse, quoi, delai = 5000) {
   let minuterie;
@@ -160,7 +167,7 @@ test("chiffrement — un appel mal fait rend une erreur, sans lever", async () =
   assert.equal((await chiffrerCombat(TEXTE, SECRET, { mode: "demo", revision: REVISION_MAX })).revision, REVISION_MAX);
 });
 
-test("borne — 8 Mo de clair passent, un octet de plus est refusé, à l'écriture comme à la lecture", async () => {
+lourd("borne — 8 Mo de clair passent, un octet de plus est refusé, à l'écriture comme à la lecture", async () => {
   assert.equal(TAILLE_MAX_COMBAT, 8 * 1024 * 1024);
   const plein = "a".repeat(TAILLE_MAX_COMBAT);
   const e = await chiffrer(plein);
@@ -298,7 +305,7 @@ const ABIME = { erreur: "Le combat gardé ne se déchiffre pas : il est abîmé.
 // Ce qu'un chiffré pèse au plus, étiquette comprise : la borne de la lecture.
 const OCTETS_CHIFFRE_MAX = TAILLE_MAX_COMBAT + 64 * 1024;
 
-test("enveloppe longue — un chiffré de plusieurs mégaoctets ne fait rien lever : abîmé, il est « illisible » ; sain, il se relit", async () => {
+lourd("enveloppe longue — un chiffré de plusieurs mégaoctets ne fait rien lever : abîmé, il est « illisible » ; sain, il se relit", async () => {
   const e = await chiffrer();
   // Du base64 valide, aux longueurs où l'examen du texte faisait déborder la
   // pile : sous la borne, il est examiné puis ne se déchiffre pas ; au-delà,
@@ -334,7 +341,7 @@ function deflateLeste(total) {
   return { corps, texte };
 }
 
-test("borne — un chiffré plus lourd que le plus gros combat est refusé avant tout examen, même s'il se déchiffrerait", async () => {
+lourd("borne — un chiffré plus lourd que le plus gros combat est refusé avant tout examen, même s'il se déchiffrerait", async () => {
   // Désarmé d'abord : léger, ce deflate lesté se lit.
   const leger = deflateLeste(64 * 1024);
   assert.deepEqual(await dechiffrerCombat(await forger(leger.corps, { compresser: false }), SECRET, { mode: "demo" }), { texte: leger.texte, revision: 3 });
